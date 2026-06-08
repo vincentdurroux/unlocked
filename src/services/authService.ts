@@ -68,29 +68,6 @@ export const authService = {
     return data;
   },
 
-  async signInWithPasskey(email?: string) {
-    if (!isSupabaseConfigured) throw new Error('Supabase is not configured');
-    
-    const options: { email?: string } = {};
-    if (email) {
-      options.email = email;
-    }
-    
-    const { data, error } = await (supabase.auth as any).signInWithPasskey(options);
-
-    if (error) throw error;
-    return data;
-  },
-
-  async registerPasskey() {
-    if (!isSupabaseConfigured) throw new Error('Supabase is not configured');
-    
-    const { data, error } = await (supabase.auth as any).registerPasskey();
-
-    if (error) throw error;
-    return data;
-  },
-
   async signOut() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
