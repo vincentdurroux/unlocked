@@ -1,0 +1,6 @@
+{
+  "name": "Unlocked",
+  "description": "MyCityUnlocked is a local discovery platform helping international residents find trusted recommendations, local events, and practical guides in the city.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
