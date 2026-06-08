@@ -30,6 +30,8 @@ import {
   Heart,
   Bell,
   Lock,
+  Key,
+  Fingerprint,
   CreditCard,
   Gift,
   Shield,
@@ -7246,6 +7248,36 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
     }
   };
 
+  const handlePasskeyLogin = async () => {
+    setIsLoading(true);
+    setMessage(null);
+
+    // Persist remember me preference
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('keep_me_signed_in', rememberMe ? 'true' : 'false');
+    }
+
+    try {
+      const data = await authService.signInWithPasskey();
+      if (data && data.user) {
+        onSetUser(data.user);
+        onLoginSuccess();
+      }
+    } catch (error: any) {
+      console.error('Passkey auth error:', error);
+      if (error.name === 'NotAllowedError' || error.message?.includes('operation was aborted') || error.message?.includes('NotAllowedError')) {
+        // User cancelled the credential prompt
+        return;
+      }
+      setMessage({ 
+        type: 'error', 
+        text: error.message || 'Passkey login failed. Please register a Passkey in your settings first or sign in using an alternative method.' 
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const [showEmailForm, setShowEmailForm] = useState(false);
 
   return (
@@ -7349,6 +7381,19 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
                   </svg>
                   <span className="font-semibold text-slate-700">
                     {isNewUser ? 'Sign up with Google' : 'Sign in with Google'}
+                  </span>
+                </button>
+
+                {/* 1.5 Continue with Passkey */}
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={handlePasskeyLogin}
+                  className="w-full h-14 bg-white hover:bg-slate-50/60 border border-slate-200/90 hover:border-slate-300 text-slate-850 rounded-[24px] font-normal text-sm sm:text-base hover:shadow-xs transition-all disabled:opacity-50 flex items-center justify-center gap-3.5 overflow-hidden active:scale-[0.985] cursor-pointer"
+                >
+                  <Fingerprint className="w-5.5 h-5.5 text-indigo-600 animate-pulse shrink-0" />
+                  <span className="font-semibold text-slate-700">
+                    {isNewUser ? 'Sign up with Passkey' : 'Sign in with Passkey'}
                   </span>
                 </button>
 
@@ -12428,6 +12473,9 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
+  const [passkeyRegError, setPasskeyRegError] = useState<string | null>(null);
+  const [passkeyRegSuccess, setPasskeyRegSuccess] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showSqlInstruction, setShowSqlInstruction] = useState(false);
@@ -12518,6 +12566,24 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
       setPasswordError(err?.message || "Failed to update password. Make sure you are signed in.");
     } finally {
       setIsUpdatingPassword(false);
+    }
+  };
+
+  const handleRegisterPasskey = async () => {
+    setIsRegisteringPasskey(true);
+    setPasskeyRegError(null);
+    setPasskeyRegSuccess(null);
+    try {
+      await authService.registerPasskey();
+      setPasskeyRegSuccess("Your Passkey (WebAuthn) was successfully registered! You can now sign in using Touch ID, Face ID, or your device master passcode.");
+    } catch (error: any) {
+      console.error('Passkey registration error:', error);
+      if (error.name === 'NotAllowedError' || error.message?.includes('operation was aborted') || error.message?.includes('NotAllowedError')) {
+        return;
+      }
+      setPasskeyRegError(error.message || 'Passkey registration failed. Please ensure your browser supports WebAuthn and that your device supports biometrics.');
+    } finally {
+      setIsRegisteringPasskey(false);
     }
   };
 
@@ -13194,6 +13260,47 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Passkeys Security Section */}
+              <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
+                <div className="flex items-center gap-2">
+                  <Fingerprint className="w-6 h-6 text-indigo-600 animate-pulse" />
+                  <p className="font-bold text-slate-900">Passkeys (WebAuthn)</p>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Passkeys allow you to sign in securely to your account using biometrics (Touch ID OR Face ID) or device credentials. They are highly secure and protect against phishing.
+                </p>
+
+                {passkeyRegError && (
+                  <div className="p-3 bg-rose-50 text-rose-700 text-xs font-semibold rounded-xl border border-rose-100">
+                    {passkeyRegError}
+                  </div>
+                )}
+                {passkeyRegSuccess && (
+                  <div className="p-3 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-xl border border-emerald-100">
+                    {passkeyRegSuccess}
+                  </div>
+                )}
+
+                <button 
+                  type="button"
+                  onClick={handleRegisterPasskey}
+                  disabled={isRegisteringPasskey}
+                  className="w-full sm:w-auto px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md shadow-indigo-600/10"
+                >
+                  {isRegisteringPasskey ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Registering Passkey...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Key className="w-3.5 h-3.5 shrink-0" />
+                      <span>Register a New Passkey</span>
+                    </>
+                  )}
+                </button>
               </div>
 
               {/* Change Password Section */}

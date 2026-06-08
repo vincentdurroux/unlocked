@@ -42,7 +42,10 @@ export const supabase = createClient(finalUrl, finalKey, {
     storage: customStorage,
     persistSession: true,
     detectSessionInUrl: true,
-    autoRefreshToken: true
+    autoRefreshToken: true,
+    experimental: {
+      passkey: true
+    }
   }
 });
 
