@@ -4117,7 +4117,7 @@ function AdminView({
 
   return (
     <div className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12 text-left w-full overflow-x-hidden">
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
+      <div className="flex flex-col mb-8 gap-6">
         <div className="space-y-1">
            <h2 className="text-xl md:text-2xl font-medium font-display text-brand-navy flex items-center gap-2">
              <ShieldCheck className="w-6 h-6 md:w-8 md:h-8 text-brand-blue" />
@@ -4133,7 +4133,7 @@ function AdminView({
            </h3>
         </div>
 
-        <div className="grid grid-cols-3 md:flex md:flex-wrap bg-slate-100/80 p-1.5 rounded-[22px] w-full border border-slate-200/50 gap-1.5">
+        <div className="grid grid-cols-3 sm:grid-cols-6 bg-slate-100/80 p-1.5 rounded-[22px] w-full border border-slate-200/50 gap-1.5">
           <button 
             onClick={() => {
               setDashboardCategory('pros');
