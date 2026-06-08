@@ -34,14 +34,14 @@
   "screenshots": [
     {
       "src": "/screenshot-mobile.png",
-      "sizes": "750x1334",
+      "sizes": "828x1792",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Unlocked Mobile Experience"
     },
     {
       "src": "/screenshot-desktop.png",
-      "sizes": "1280x720",
+      "sizes": "1366x657",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Unlocked Desktop Experience"
