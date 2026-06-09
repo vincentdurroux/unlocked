@@ -11920,17 +11920,28 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
             </div>
 
             {/* Modern Search */}
-            <div className="relative max-w-xl lg:mx-0 mx-auto">
-              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-slate-400" />
+            <div className="flex items-center gap-2.5 max-w-xl lg:mx-0 mx-auto">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-slate-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search guides, legal checklists, neighborhoods..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-normal text-sm"
+                />
               </div>
-              <input
-                type="text"
-                placeholder="Search guides, legal checklists, neighborhoods..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-normal text-sm"
-              />
+              <button
+                onClick={() => {
+                  document.getElementById('all-guides-section')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="bg-brand-blue text-white font-semibold text-sm px-5 py-3.5 rounded-2xl flex items-center gap-2 hover:bg-brand-blue/90 active:scale-95 transition-all duration-200 shadow-sm whitespace-nowrap"
+              >
+                <Search className="h-4 w-4" />
+                <span>Search</span>
+              </button>
             </div>
           </div>
 
