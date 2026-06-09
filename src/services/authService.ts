@@ -106,6 +106,21 @@ export const authService = {
   async updateProfile(profile: Partial<Profile>) {
     if (!profile.id) throw new Error('User ID is required');
 
+    // 1. If modifying full_name, find the previous name so we can update testimonies
+    let oldName: string | undefined = undefined;
+    if (profile.full_name !== undefined) {
+      const oldProfile = await this.getProfile(profile.id);
+      if (oldProfile?.full_name) {
+        oldName = oldProfile.full_name;
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.email) {
+          oldName = user.email.split('@')[0];
+        }
+      }
+    }
+
+    // 2. Perform the update
     const { data, error } = await supabase
       .from('profiles')
       .update({
@@ -117,6 +132,24 @@ export const authService = {
       .single();
 
     if (error) throw error;
+
+    // 3. Propagate the new name to testimonies if they are modified
+    if (profile.full_name !== undefined && oldName && oldName !== profile.full_name) {
+      try {
+        console.log(`[Profile Update] Propagating name change from "${oldName}" to "${profile.full_name}" in testimonies...`);
+        const { error: testimoniesError } = await supabase
+          .from('testimonies')
+          .update({ author: profile.full_name })
+          .eq('author', oldName);
+          
+        if (testimoniesError) {
+          console.warn('[Profile Update] Failed to update testimonies authors:', testimoniesError);
+        }
+      } catch (err) {
+        console.warn('[Profile Update] Error propagating name to testimonies:', err);
+      }
+    }
+
     return data;
   },
 
