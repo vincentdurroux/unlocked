@@ -7145,79 +7145,6 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
     }
   }, []);
 
-  // Dynamically initialize Google Sign-In with ID Token if Google Client ID is configured
-  useEffect(() => {
-    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!googleClientId) return;
-
-    let buttonRendered = false;
-
-    const initializeGoogleSignIn = () => {
-      const g = (window as any).google;
-      if (g?.accounts?.id) {
-        g.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: async (response: any) => {
-            setIsLoading(true);
-            setMessage(null);
-            
-            // Persist preference
-            if (typeof window !== "undefined") {
-              window.localStorage.setItem("keep_me_signed_in", rememberMe ? "true" : "false");
-            }
-
-            try {
-              console.log("[Google Direct SignIn] Received ID Token. Logging into Supabase...");
-              await authService.signInWithGoogleIdToken(response.credential);
-              console.log("[Google Direct SignIn] Supabase session established successfully!");
-            } catch (err: any) {
-              console.error("[Google Direct SignIn] Connection error:", err);
-              setMessage({ type: "error", text: err.message || "Google Authentication failed" });
-            } finally {
-              setIsLoading(false);
-            }
-          },
-          auto_select: false,
-          itp_support: true,
-        });
-
-        const btnContainer = document.getElementById("google-signin-btn-container");
-        if (btnContainer && !buttonRendered) {
-          buttonRendered = true;
-          btnContainer.innerHTML = "";
-          
-          // Calculate a perfectly responsive width matching parent bounds
-          const parentWidth = btnContainer.getBoundingClientRect().width || btnContainer.parentElement?.getBoundingClientRect().width || 340;
-          const finalWidth = Math.min(400, Math.max(200, Math.round(parentWidth)));
-
-          g.accounts.id.renderButton(
-            btnContainer,
-            {
-              type: "standard",
-              theme: "outline",
-              size: "large",
-              width: finalWidth,
-              text: isNewUser ? "signup_with" : "signin_with",
-              shape: "pill",
-              logo_alignment: "left",
-              locale: "en",
-            }
-          );
-        }
-      }
-    };
-
-    const interval = setInterval(() => {
-      const g = (window as any).google;
-      if (g?.accounts?.id && document.getElementById("google-signin-btn-container")) {
-        initializeGoogleSignIn();
-        clearInterval(interval);
-      }
-    }, 400);
-
-    return () => clearInterval(interval);
-  }, [isNewUser, rememberMe]);
-
   const handleContinue = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
@@ -7396,43 +7323,34 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
               <div className="space-y-6">
                 
                 {/* 1. Continue with Google */}
-                {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
-                  <div className="w-full flex justify-center py-1">
-                    <div 
-                      id="google-signin-btn-container" 
-                      className="w-full min-h-[40px] flex items-center justify-center overflow-visible"
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={handleGoogleLogin}
+                  className="w-full h-14 bg-white hover:bg-slate-50/60 border border-slate-200/90 hover:border-slate-300 text-slate-850 rounded-[24px] font-normal text-sm sm:text-base hover:shadow-xs transition-all disabled:opacity-50 flex items-center justify-center gap-3.5 overflow-hidden active:scale-[0.985] cursor-pointer"
+                >
+                  <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.68 1.54 14.98 1 12 1 7.35 1 3.37 3.68 1.48 7.58l3.9 3.03C6.31 7.55 8.94 5.04 12 5.04z"
                     />
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={isLoading}
-                    onClick={handleGoogleLogin}
-                    className="w-full h-14 bg-white hover:bg-slate-50/60 border border-slate-200/90 hover:border-slate-300 text-slate-850 rounded-[24px] font-normal text-sm sm:text-base hover:shadow-xs transition-all disabled:opacity-50 flex items-center justify-center gap-3.5 overflow-hidden active:scale-[0.985] cursor-pointer"
-                  >
-                    <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
-                      <path
-                        fill="#EA4335"
-                        d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.68 1.54 14.98 1 12 1 7.35 1 3.37 3.68 1.48 7.58l3.9 3.03C6.31 7.55 8.94 5.04 12 5.04z"
-                      />
-                      <path
-                        fill="#4285F4"
-                        d="M23.49 12.27c0-.81-.07-1.59-.2-2.35H12v4.46h6.44c-.28 1.47-1.11 2.72-2.36 3.56l3.66 2.84c2.14-1.97 3.38-4.88 3.38-8.51z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M5.38 14.45a7.16 7.16 0 0 1 0-4.9l-3.9-3.03a11.96 11.96 0 0 0 0 10.96l3.9-3.03z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M12 23c3.24 0 5.97-1.08 7.96-2.91l-3.66-2.84c-1.01.68-2.31 1.09-4.3 1.09-3.06 0-5.69-2.51-6.62-5.57l-3.9 3.03C3.37 20.32 7.35 23 12 23z"
-                      />
-                    </svg>
-                    <span className="font-semibold text-slate-700">
-                      {isNewUser ? 'Sign up with Google' : 'Sign in with Google'}
-                    </span>
-                  </button>
-                )}
+                    <path
+                      fill="#4285F4"
+                      d="M23.49 12.27c0-.81-.07-1.59-.2-2.35H12v4.46h6.44c-.28 1.47-1.11 2.72-2.36 3.56l3.66 2.84c2.14-1.97 3.38-4.88 3.38-8.51z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.38 14.45a7.16 7.16 0 0 1 0-4.9l-3.9-3.03a11.96 11.96 0 0 0 0 10.96l3.9-3.03z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c3.24 0 5.97-1.08 7.96-2.91l-3.66-2.84c-1.01.68-2.31 1.09-4.3 1.09-3.06 0-5.69-2.51-6.62-5.57l-3.9 3.03C3.37 20.32 7.35 23 12 23z"
+                    />
+                  </svg>
+                  <span className="font-semibold text-slate-700">
+                    {isNewUser ? 'Sign up with Google' : 'Sign in with Google'}
+                  </span>
+                </button>
 
                 {/* 2. OR divider */}
                 <div className="relative flex items-center justify-center">
