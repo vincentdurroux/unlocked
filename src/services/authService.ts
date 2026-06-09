@@ -68,6 +68,18 @@ export const authService = {
     return data;
   },
 
+  async signInWithGoogleIdToken(idToken: string) {
+    if (!isSupabaseConfigured) throw new Error('Supabase is not configured');
+
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: idToken,
+    });
+
+    if (error) throw error;
+    return data;
+  },
+
   async signOut() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
