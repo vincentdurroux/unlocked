@@ -677,8 +677,19 @@ export default function App() {
   const initialViewRef = useRef<View | null>(null);
   const [activeView, setActiveView] = useState<View>(() => {
     let initial: View = 'login';
+    const hash = window.location.hash;
+    const cleanHash = hash.replace('#', '').split('?')[0]; // Remove hash symbol and query params
+    const validViews: View[] = [
+      'home', 'explore', 'events', 'guides', 'profile', 'community', 'marketplace', 
+      'community-thread', 'messages', 'admin', 'login', 'complete-profile', 
+      'update-password', 'privacy-policy', 'user-terms', 'provider-terms', 
+      'community-guidelines', 'cookie-policy'
+    ];
+
     if (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
       initial = 'update-password';
+    } else if (cleanHash && validViews.includes(cleanHash as View)) {
+      initial = cleanHash as View;
     } else {
       const keepSignedIn = localStorage.getItem('keep_me_signed_in') === 'true';
       if (keepSignedIn) {
