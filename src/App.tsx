@@ -4331,7 +4331,7 @@ function AdminView({
                   setEditingEventId(null);
                 }}
                 className={cn(
-                  "px-6 py-2.5 rounded-xl text-[10px] lg:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap",
+                  "flex-1 lg:flex-none px-4 lg:px-6 py-2.5 rounded-xl text-[10px] lg:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap",
                   activeTab === 'all_events' || activeTab === 'edit_event' ? "bg-white text-emerald-500 shadow-sm" : "text-slate-400 hover:text-slate-600"
                 )}
               >
@@ -4358,7 +4358,7 @@ function AdminView({
                   setPreviewUrl(null);
                 }}
                 className={cn(
-                  "px-6 py-2.5 rounded-xl text-[10px] lg:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap",
+                  "flex-1 lg:flex-none px-4 lg:px-6 py-2.5 rounded-xl text-[10px] lg:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap",
                   activeTab === 'add_event' && !editingEventId ? "bg-white text-emerald-500 shadow-sm" : "text-slate-400 hover:text-slate-600"
                 )}
               >
@@ -5089,8 +5089,8 @@ function AdminView({
                             <span className="text-[10px] uppercase font-bold text-emerald-600 tracking-wider bg-emerald-50 px-2 py-0.5 rounded-full inline-block mb-1">
                               {event.category || 'Event'}
                             </span>
-                            <h4 className="font-bold text-slate-900 truncate leading-snug">{event.title}</h4>
-                            <p className="text-xs text-slate-500 truncate mt-0.5">{event.start_date} {event.start_time ? `• ${event.start_time}` : ''}</p>
+                            <h4 className="font-bold text-slate-900 leading-snug break-words">{event.title}</h4>
+                            <p className="text-xs text-slate-500 mt-0.5 whitespace-normal break-words">{event.start_date} {event.start_time ? `• ${event.start_time}` : ''}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -5227,7 +5227,7 @@ function AdminView({
                   />
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Start Date</label>
                     <input 
@@ -5260,7 +5260,7 @@ function AdminView({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center px-1">
                       <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Start Time (Optional)</label>
