@@ -676,7 +676,7 @@ export default function App() {
   const { professionals: allPros, loading: prosLoading, refetch: refetchPros } = useProfessionals([]);
   const initialViewRef = useRef<View | null>(null);
   const [activeView, setActiveView] = useState<View>(() => {
-    let initial: View = 'login';
+    let initial: View = 'home';
     const hash = window.location.hash;
     const cleanHash = hash.replace('#', '').split('?')[0]; // Remove hash symbol and query params
     const validViews: View[] = [
@@ -694,9 +694,9 @@ export default function App() {
       const keepSignedIn = localStorage.getItem('keep_me_signed_in') === 'true';
       if (keepSignedIn) {
         const saved = localStorage.getItem('unlocked_active_view');
-        initial = (saved as View) || 'login';
+        initial = (saved as View) || 'home';
       } else {
-        initial = 'login';
+        initial = 'home';
       }
     }
     
@@ -1556,15 +1556,24 @@ export default function App() {
           setCurrentUser(null);
           setUserProfile(null);
           setAuthLoading(false);
-          setActiveView('login');
+          const protectedViews: View[] = ['profile', 'messages', 'complete-profile', 'admin'];
+          if (protectedViews.includes(activeViewRef.current)) {
+            setActiveView('login');
+          }
         }
       } else {
         setAuthLoading(false);
-        setActiveView('login');
+        const protectedViews: View[] = ['profile', 'messages', 'complete-profile', 'admin'];
+        if (protectedViews.includes(activeViewRef.current)) {
+          setActiveView('login');
+        }
       }
     }).catch(() => {
       setAuthLoading(false);
-      setActiveView('login');
+      const protectedViews: View[] = ['profile', 'messages', 'complete-profile', 'admin'];
+      if (protectedViews.includes(activeViewRef.current)) {
+        setActiveView('login');
+      }
     });
 
     return () => {
