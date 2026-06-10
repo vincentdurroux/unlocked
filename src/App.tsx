@@ -694,9 +694,9 @@ export default function App() {
       const keepSignedIn = localStorage.getItem('keep_me_signed_in') === 'true';
       if (keepSignedIn) {
         const saved = localStorage.getItem('unlocked_active_view');
-        initial = (saved as View) || 'login';
+        initial = (saved as View) || 'home';
       } else {
-        initial = 'login';
+        initial = 'home';
       }
     }
     
