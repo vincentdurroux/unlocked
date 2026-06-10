@@ -1638,7 +1638,10 @@ export default function App() {
 
   useEffect(() => {
     if (mainRef.current) {
-      // Defer the scroll-to-top to let the previous view finish its exit animation
+      // Scroll to top immediately to prevent any visual jerk/saccade
+      mainRef.current.scrollTo(0, 0);
+      
+      // Defer a secondary scroll-to-top to let the previous view finish its exit animation
       // before resetting the scroll position of the shared container.
       const timer = setTimeout(() => {
         if (mainRef.current) {
@@ -1790,9 +1793,9 @@ export default function App() {
         )}
       >
               <motion.div 
-                animate={activeView === 'home' ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 12, scale: 0.995 }}
-                initial={{ opacity: 0, y: 12, scale: 0.995 }}
-                transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                animate={activeView === 'home' ? { opacity: 1 } : { opacity: 0 }}
+                initial={{ opacity: 0 }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
                 className={activeView === 'home' ? 'block w-full' : 'hidden w-full'}
               >
                 <HomeView 
