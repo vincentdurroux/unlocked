@@ -13439,9 +13439,9 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
                   <p className="text-xs text-slate-500 max-w-sm">
                     Questions? Feedback? A recommendation we should know about? We’re all ears.
                   </p>
-                  <p className="text-sm font-bold text-brand-blue select-all">
-                    hello.unlockd@gmail.com
-                  </p>
+                  <a href="mailto:hello@mycityunlocked.app" className="text-sm font-bold text-brand-blue hover:underline cursor-pointer inline-block transition-all">
+                    hello@mycityunlocked.app
+                  </a>
                   <p className="text-[10px] text-slate-400 font-medium">
                     We read every message and love hearing from our community.
                   </p>
@@ -13771,7 +13771,7 @@ function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
               <Instagram className="w-4 h-4" />
             </a>
             <a 
-              href="mailto:hello.unlockd@gmail.com"
+              href="mailto:hello@mycityunlocked.app"
               className="w-9 h-9 rounded-full bg-[#0A0F2C]/10 flex items-center justify-center hover:bg-[#0A0F2C]/20 transition-all cursor-pointer"
             >
               <Mail className="w-4 h-4" />
