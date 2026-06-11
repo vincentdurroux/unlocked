@@ -3134,6 +3134,7 @@ function AdminView({
   const [completedPros, setCompletedPros] = useState<Professional[]>([]);
   const [activeProSort, setActiveProSort] = useState<'alphabet' | 'created_at'>('created_at');
   const [allTestimonies, setAllTestimonies] = useState<any[]>([]);
+  const [testimoniesFilter, setTestimoniesFilter] = useState<'pending' | 'processed'>('pending');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
 
@@ -4367,14 +4368,27 @@ function AdminView({
             </div>
           </div>
         ) : dashboardCategory === 'testimonies' ? (
-          <div className="flex items-center gap-1 overflow-x-auto pb-2 no-scrollbar -mx-4 md:-mx-6 px-4 md:px-6">
-            <div className="flex shrink-0 w-full min-w-max lg:w-auto gap-1 bg-slate-100 p-1.5 rounded-2xl">
+          <div className="flex items-center gap-1 pb-1">
+            <div className="flex w-full sm:w-auto gap-1 bg-slate-100 p-1 rounded-2xl">
               <button 
+                onClick={() => setTestimoniesFilter('pending')}
                 className={cn(
-                  "w-full lg:w-auto px-6 py-2.5 rounded-xl text-[10px] lg:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap bg-white text-indigo-500 shadow-sm"
+                  "flex-1 sm:flex-none px-4 sm:px-6 py-2 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap",
+                  testimoniesFilter === 'pending' ? "bg-white text-indigo-500 shadow-sm" : "text-slate-400 hover:text-slate-600"
                 )}
               >
-                All Testimonies
+                <span className="hidden sm:inline">Awaiting Moderation</span>
+                <span className="sm:hidden">Awaiting</span> ({allTestimonies.filter(t => t.status === 'pending' || !t.status).length})
+              </button>
+              <button 
+                onClick={() => setTestimoniesFilter('processed')}
+                className={cn(
+                  "flex-1 sm:flex-none px-4 sm:px-6 py-2 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap",
+                  testimoniesFilter === 'processed' ? "bg-white text-indigo-500 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                <span className="hidden sm:inline">Processed & Archived</span>
+                <span className="sm:hidden">Processed</span> ({allTestimonies.filter(t => t.status === 'approved' || t.status === 'refused' || t.status === 'rejected').length})
               </button>
             </div>
           </div>
@@ -5350,15 +5364,23 @@ function AdminView({
       ) : dashboardCategory === 'testimonies' ? (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex items-center justify-between">
-            <h3 className="text-xl font-bold text-slate-900 font-display">Moderation Testimonies</h3>
+            <h3 className="text-xl font-bold text-slate-900 font-display">
+              {testimoniesFilter === 'pending' ? 'Pending Testimonies' : 'Processed Testimonies'}
+            </h3>
             <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-bold uppercase tracking-widest border border-indigo-100">
-              {allTestimonies.length} Total
+              {allTestimonies.filter(t => testimoniesFilter === 'pending' ? (t.status === 'pending' || !t.status) : (t.status === 'approved' || t.status === 'refused' || t.status === 'rejected')).length} of {allTestimonies.length}
             </span>
           </div>
 
           <div className="grid gap-4">
-            {allTestimonies.length > 0 ? (
-              allTestimonies.map((testimony) => {
+            {allTestimonies.filter(testimony => {
+              const isPending = testimony.status === 'pending' || !testimony.status;
+              return testimoniesFilter === 'pending' ? isPending : !isPending;
+            }).length > 0 ? (
+              allTestimonies.filter(testimony => {
+                const isPending = testimony.status === 'pending' || !testimony.status;
+                return testimoniesFilter === 'pending' ? isPending : !isPending;
+              }).map((testimony) => {
                 const isProcessing = deletingId === testimony.id;
                 
                 return (
@@ -5562,7 +5584,11 @@ function AdminView({
                 <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-300">
                   <MessageSquare className="w-8 h-8" />
                 </div>
-                <p className="text-slate-400 text-sm font-medium">No testimonies found in the system.</p>
+                <p className="text-slate-400 text-sm font-medium">
+                  {testimoniesFilter === 'pending' 
+                    ? 'No pending reviews awaiting moderation.' 
+                    : 'No processed / moderated reviews found here.'}
+                </p>
               </div>
             )}
           </div>
@@ -10872,6 +10898,35 @@ function ProfessionalDetailView({
   usersWhoBlockedMe?: string[]
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Swipe gesture support for testimonials carousel
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchEndX.current = null;
+    touchStartX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX.current || !touchEndX.current) return;
+    const distance = touchStartX.current - touchEndX.current;
+    const minSwipeDistance = 50;
+    const totalPages = Math.ceil(localReviews.length / 3);
+    
+    if (distance > minSwipeDistance) {
+      // Swiped left -> show next reviews
+      setReviewCarouselIndex((prev) => Math.min(totalPages - 1, prev + 1));
+    } else if (distance < -minSwipeDistance) {
+      // Swiped right -> show previous reviews
+      setReviewCarouselIndex((prev) => Math.max(0, prev - 1));
+    }
+  };
+
   const [isWritingReview, setIsWritingReview] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState(false);
   const [rating, setRating] = useState(0);
@@ -10879,6 +10934,7 @@ function ProfessionalDetailView({
   const [hoveredRating, setHoveredRating] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localReviews, setLocalReviews] = useState<any[]>([]);
+  const [reviewCarouselIndex, setReviewCarouselIndex] = useState(0);
   const [hasAlreadyReviewed, setHasAlreadyReviewed] = useState(false);
   const [checkingReview, setCheckingReview] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -10902,6 +10958,7 @@ function ProfessionalDetailView({
     setReviewSuccess(false);
     setRating(0);
     setComment('');
+    setReviewCarouselIndex(0);
     // Fetch real reviews from Supabase
     const fetchReviews = async () => {
       try {
@@ -11177,22 +11234,29 @@ function ProfessionalDetailView({
 
               {/* Reviews Section */}
               <section className="space-y-6 pt-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-brand-yellow" />
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-2 h-2 rounded-full bg-brand-yellow shrink-0" />
                     <h4 className="text-lg font-semibold text-slate-900 font-display uppercase tracking-wider">Testimonials</h4>
+                    <span className="text-xs bg-slate-100/80 border border-slate-200 text-slate-500 px-2 py-0.5 rounded-full font-bold font-mono">
+                      {localReviews.length}
+                    </span>
                   </div>
-                  <span className="text-sm font-bold text-slate-400">{localReviews.length} reviews</span>
                 </div>
 
                 <div className="relative">
-                  <div className={cn(
-                    "space-y-4 transition-all duration-300",
-                    !currentUser && "filter blur-[7px] select-none pointer-events-none"
-                  )}>
+                  <div 
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    className={cn(
+                      "space-y-4 transition-all duration-300 touch-pan-y",
+                      !currentUser && "filter blur-[7px] select-none pointer-events-none"
+                    )}
+                  >
                     {localReviews.length > 0 ? (
-                      localReviews.map((review) => (
-                        <div key={review.id} className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100 space-y-3">
+                      localReviews.slice(reviewCarouselIndex * 3, reviewCarouselIndex * 3 + 3).map((review) => (
+                        <div key={review.id} className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100 space-y-3 animate-in fade-in duration-300">
                           <div className="flex justify-between items-start">
                             <div className="space-y-1">
                               <div 
@@ -11249,6 +11313,33 @@ function ProfessionalDetailView({
                       </div>
                     )}
                   </div>
+
+                  {localReviews.length > 3 && (
+                    <div className="flex justify-center mt-6 animate-in fade-in duration-300">
+                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 p-1 rounded-xl shadow-sm">
+                        <button
+                          onClick={() => setReviewCarouselIndex((prev) => Math.max(0, prev - 1))}
+                          disabled={reviewCarouselIndex === 0}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-950 hover:bg-white disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-500 transition-all shadow-none disabled:shadow-none hover:shadow-xs active:scale-95 animate-none"
+                          title="Previous reviews"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-[11px] font-bold text-slate-600 px-2.5 font-mono tracking-tight whitespace-nowrap select-none">
+                          {reviewCarouselIndex + 1} / {Math.ceil(localReviews.length / 3)}
+                        </span>
+                        <button
+                          onClick={() => setReviewCarouselIndex((prev) => Math.min(Math.ceil(localReviews.length / 3) - 1, prev + 1))}
+                          disabled={reviewCarouselIndex + 1 >= Math.ceil(localReviews.length / 3)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-950 hover:bg-white disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-500 transition-all shadow-none disabled:shadow-none hover:shadow-xs active:scale-95 animate-none"
+                          title="Next reviews"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {!currentUser && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/45 backdrop-blur-[4px] rounded-3xl p-6 text-center z-10 transition-all">
                       <div className="w-11 h-11 rounded-full bg-brand-blue/10 flex items-center justify-center text-brand-blue mb-2 shadow-sm animate-pulse">
