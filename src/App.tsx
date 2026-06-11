@@ -8859,6 +8859,19 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
         if (response.status === 404 || response.status === 405) {
           serverFailed = true;
         } else if (!response.ok) {
+          if (response.status === 429) {
+            throw new Error("Jane is very busy right now! Please wait a few seconds and try again.");
+          }
+          try {
+            const errJson = await response.json();
+            if (errJson && errJson.error) {
+              throw new Error(errJson.error);
+            }
+          } catch (e: any) {
+            if (e.message && (e.message.includes("Jane is very busy") || e.message.includes("Jane est très sollicitée"))) {
+              throw e;
+            }
+          }
           throw new Error("Sorry, an error occurred during AI search.");
         } else {
           data = await response.json();
@@ -8949,7 +8962,22 @@ ${JSON.stringify(proListBrief, null, 2)}`,
       setAiResults(resultsDict);
     } catch (err: any) {
       console.error("[Search] AI matching error:", err);
-      setAiError(err.message || "Connection error with the AI service.");
+      const errMsg = err.message || "";
+      const errorLower = errMsg.toLowerCase();
+      if (
+        errorLower.includes("quota") || 
+        errorLower.includes("limit") || 
+        errorLower.includes("exhausted") || 
+        errorLower.includes("429") || 
+        errorLower.includes("too many requests") ||
+        errorLower.includes("sollicitée") ||
+        errorLower.includes("busy") ||
+        errorLower.includes("rate limit")
+      ) {
+        setAiError("Jane is very busy right now! Please wait a few seconds and try again.");
+      } else {
+        setAiError(err.message || "Connection error with the AI service.");
+      }
       // Fallback: clear AI results
       setAiResults(null);
     } finally {

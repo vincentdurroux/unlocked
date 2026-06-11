@@ -168,6 +168,18 @@ ${JSON.stringify(proListBrief, null, 2)}`,
       return res.json({ results: parsedResults });
     } catch (error: any) {
       console.error("[api] Gemini AI Search matching error:", error);
+      const errorMsg = error.message || "";
+      const errorLower = errorMsg.toLowerCase();
+      if (
+        errorLower.includes("quota") ||
+        errorLower.includes("limit") ||
+        errorLower.includes("exhausted") ||
+        errorLower.includes("429") ||
+        errorLower.includes("too many requests") ||
+        errorLower.includes("rate limit")
+      ) {
+        return res.status(429).json({ error: "Jane is very busy right now! Please wait a few seconds and try again." });
+      }
       return res.status(500).json({ error: error.message || "Failed to process matching" });
     }
   });
