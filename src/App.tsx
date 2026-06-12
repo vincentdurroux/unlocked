@@ -9107,10 +9107,26 @@ ${JSON.stringify(proListBrief, null, 2)}`,
       }
     }
   }, [initialProId, allPros]);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [hasRealLocation, setHasRealLocation] = useState(false);
-  const [showLocationBanner, setShowLocationBanner] = useState(true);
-  const [maxDistance, setMaxDistance] = useState<number | 'All'>('All');
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(() => {
+    try {
+      const saved = localStorage.getItem('unlocked_user_location');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [hasRealLocation, setHasRealLocation] = useState(() => {
+    return localStorage.getItem('unlocked_has_real_location') === 'true';
+  });
+  const [showLocationBanner, setShowLocationBanner] = useState(() => {
+    return localStorage.getItem('unlocked_show_location_banner') !== 'false';
+  });
+  const [maxDistance, setMaxDistance] = useState<number | 'All'>(() => {
+    const saved = localStorage.getItem('unlocked_max_distance');
+    if (saved === 'All' || !saved) return 'All';
+    const num = parseFloat(saved);
+    return isNaN(num) ? 'All' : num;
+  });
 
   const distanceSteps: (number | 'All')[] = [0.5, 2, 5, 10, 20, 50, 'All'];
 
@@ -9124,16 +9140,33 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           };
           setUserLocation(loc);
           setHasRealLocation(true);
+          setShowLocationBanner(false);
+          try {
+            localStorage.setItem('unlocked_user_location', JSON.stringify(loc));
+            localStorage.setItem('unlocked_has_real_location', 'true');
+            localStorage.setItem('unlocked_show_location_banner', 'false');
+          } catch (e) {
+            console.error(e);
+          }
           onSuccess?.(loc);
         },
         () => {
           // Default to Valencia center if denied or error
-          setUserLocation({ lat: 39.4699, lng: -0.3763 });
+          const loc = { lat: 39.4699, lng: -0.3763 };
+          setUserLocation(loc);
           setHasRealLocation(false);
+          setShowLocationBanner(false);
+          try {
+            localStorage.setItem('unlocked_show_location_banner', 'false');
+            localStorage.setItem('unlocked_has_real_location', 'false');
+          } catch (e) {
+            console.error(e);
+          }
         }
       );
     } else {
-      setUserLocation({ lat: 39.4699, lng: -0.3763 });
+      const loc = { lat: 39.4699, lng: -0.3763 };
+      setUserLocation(loc);
       setHasRealLocation(false);
     }
   };
@@ -9445,6 +9478,11 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                         onChange={(e) => {
                           const index = parseInt(e.target.value);
                           const val = distanceSteps[index];
+                          try {
+                            localStorage.setItem('unlocked_max_distance', String(val));
+                          } catch (e) {
+                            console.error(e);
+                          }
                           if (!hasRealLocation) {
                             requestGeolocation(() => {
                               setMaxDistance(val);
@@ -9536,7 +9574,14 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                     </div>
                     {/* Top Right Close Button */}
                     <button
-                      onClick={() => setShowLocationBanner(false)}
+                      onClick={() => {
+                        setShowLocationBanner(false);
+                        try {
+                          localStorage.setItem('unlocked_show_location_banner', 'false');
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
                       className="absolute right-4 top-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-blue-100/30 transition-all cursor-pointer"
                       title="Dismiss location prompt"
                     >
@@ -9801,7 +9846,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                     
                     <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-50 gap-4">
                       <div className="flex flex-wrap gap-2 flex-shrink-0">
-                        {pro.languages && Array.isArray(pro.languages) && pro.languages.slice(0, 2).map(lang => (
+                        {pro.languages && Array.isArray(pro.languages) && pro.languages.map(lang => (
                           <span key={lang} className="px-2 py-1 bg-slate-50/80 text-slate-400 rounded-lg text-[10px] font-medium border border-slate-100">
                             {lang}
                           </span>
