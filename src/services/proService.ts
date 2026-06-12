@@ -21,6 +21,7 @@ export interface SupabaseProfessional {
   lng?: number;
   created_at?: string;
   top_qualities?: string[];
+  has_filled_form?: boolean;
 }
 
 export function parseEmbeddedQualities(text: string): { qualities: string[], cleanText: string } {
@@ -122,6 +123,7 @@ export const proService = {
         rating: item.rating ?? 0,
         review_count: item.review_count ?? item.reviews_count ?? 0, // Fallback to 0 if column is missing
         languages: typeof item.languages === 'string' ? JSON.parse(item.languages) : item.languages || [],
+        has_filled_form: item.has_filled_form ?? false,
         coordinates: (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng) && (Math.abs(lat) > 0.0001 || Math.abs(lng) > 0.0001)) ? 
           { lat, lng } : null
       };
@@ -173,7 +175,8 @@ export const proService = {
           lat: lat,
           lng: lng,
           location: cleanLocation,
-          top_qualities: topQuals
+          top_qualities: topQuals,
+          has_filled_form: pro.has_filled_form || false
         };
 
         // Remove undefined values to avoid Supabase errors
@@ -216,7 +219,8 @@ export const proService = {
           facebook: pro.facebook,
           lat: lat,
           lng: lng,
-          location: cleanLocation
+          location: cleanLocation,
+          has_filled_form: pro.has_filled_form || false
         };
 
         // Remove undefined values to avoid Supabase errors
@@ -420,6 +424,7 @@ export const proService = {
     setIfChanged('lat', lat, existingRecord.lat);
     setIfChanged('lng', lng, existingRecord.lng);
     setIfChanged('location', cleanLocation, existingRecord.location);
+    setIfChanged('has_filled_form', pro.has_filled_form ?? false, existingRecord.has_filled_form);
 
     // Remove undefined
     Object.keys(updatePayload).forEach(key => {

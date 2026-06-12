@@ -456,6 +456,7 @@ interface Professional {
   coordinates?: { lat: number; lng: number };
   is_highlighted?: boolean;
   top_qualities?: string[];
+  has_filled_form?: boolean;
 }
 
 interface Event {
@@ -3682,7 +3683,8 @@ function AdminView({
     location: '',
     lat: 0,
     lng: 0,
-    top_qualities: [] as string[]
+    top_qualities: [] as string[],
+    has_filled_form: false
   });
 
   const [newEvent, setNewEvent] = useState({
@@ -3745,7 +3747,8 @@ function AdminView({
       email: rec.pro_email || '',
       image: rec.pro_image_url || '',
       languages: rec.pro_languages || [],
-      top_qualities: rec.top_qualities || []
+      top_qualities: rec.top_qualities || [],
+      has_filled_form: false
     });
     if (rec.pro_image_url) {
       setPreviewUrl(rec.pro_image_url);
@@ -3784,7 +3787,8 @@ function AdminView({
       location: pro.location || '',
       lat: Number(latValue),
       lng: Number(lngValue),
-      top_qualities: pro.top_qualities || []
+      top_qualities: pro.top_qualities || [],
+      has_filled_form: pro.has_filled_form || false
     });
     setPreviewUrl(imageValue || null);
     setActiveTab('edit_pro');
@@ -3969,7 +3973,8 @@ function AdminView({
         location: newPro.location,
         lat: finalLat,
         lng: finalLng,
-        top_qualities: newPro.top_qualities || []
+        top_qualities: newPro.top_qualities || [],
+        has_filled_form: newPro.has_filled_form || false
       };
 
       console.log('[handleAddPro] Final payload to service:', {
@@ -4664,13 +4669,28 @@ function AdminView({
                       className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all font-display text-sm"
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 font-display text-sm">
                     <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Facebook (URL or username)</label>
                     <input 
                       value={newPro.facebook || ''}
                       onChange={e => setNewPro({...newPro, facebook: e.target.value})}
                       className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all font-display text-sm"
                     />
+                  </div>
+                  <div className="md:col-span-2 p-5 bg-amber-500/5 rounded-2xl border border-amber-500/10 flex items-center justify-between gap-4 font-display text-sm">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wide">Form Filled</label>
+                      <p className="text-[11px] text-slate-500 font-medium">Check this box if this professional has completed the onboarding/registration form.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={newPro.has_filled_form} 
+                        onChange={e => setNewPro({...newPro, has_filled_form: e.target.checked})}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
                   </div>
                 </div>
 
@@ -4912,7 +4932,7 @@ function AdminView({
                       className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-display text-sm"
                     />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 font-display text-sm">
                     <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Facebook (URL or username)</label>
                     <input 
                       value={newPro.facebook || ''}
@@ -4920,6 +4940,21 @@ function AdminView({
                       placeholder=""
                       className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-display text-sm"
                     />
+                  </div>
+                  <div className="md:col-span-2 p-5 bg-brand-blue/5 rounded-2xl border border-brand-blue/10 flex items-center justify-between gap-4 font-display text-sm">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wide">Form Filled</label>
+                      <p className="text-[11px] text-slate-500 font-medium">Check this box if this professional has completed the onboarding/registration form.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={newPro.has_filled_form} 
+                        onChange={e => setNewPro({...newPro, has_filled_form: e.target.checked})}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
+                    </label>
                   </div>
                 </div>
 
@@ -5055,7 +5090,20 @@ function AdminView({
                         <div className="flex items-center gap-4">
                           <img src={pro.image} alt="" className="w-12 h-12 rounded-full object-cover shadow-sm border border-slate-100" referrerPolicy="no-referrer" />
                           <div className="min-w-0">
-                            <h4 className="font-bold text-slate-900 truncate">{pro.name}</h4>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="font-bold text-slate-900 truncate">{pro.name}</h4>
+                              {pro.has_filled_form ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 shrink-0 select-none">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-500 fill-emerald-50/50" />
+                                  Form Filled
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 shrink-0 select-none">
+                                  <AlertCircle className="w-3 h-3 text-slate-400" />
+                                  Form Pending
+                                </span>
+                              )}
+                            </div>
                             {pro.company_name && (
                               <p className="text-xs font-semibold text-slate-600 truncate">{pro.company_name}</p>
                             )}
