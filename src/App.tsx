@@ -1797,7 +1797,7 @@ export default function App() {
                 </defs>
                 <text className="text-[19px] font-black fill-brand-yellow tracking-[0.08em] uppercase">
                   <textPath xlinkHref="#circlePath">
-                    Recommend a Pro •
+                    Recommend a Pro
                   </textPath>
                 </text>
               </svg>
@@ -10072,44 +10072,64 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                       )}
                     </div>
                     
-                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-50 gap-4">
-                      <div className="flex flex-wrap gap-2 flex-shrink-0">
-                        {pro.languages && Array.isArray(pro.languages) && pro.languages.map(lang => (
-                          <span key={lang} className="px-2 py-1 bg-slate-50/80 text-slate-400 rounded-lg text-[10px] font-medium border border-slate-100">
-                            {lang}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="flex flex-col items-end gap-1 min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-300 uppercase tracking-widest w-full overflow-hidden justify-end">
-                           {hasRealLocation && userLocation && pro.coordinates && (
-                             <div className="flex items-center gap-1 text-rose-500 mr-2 shrink-0">
-                               <MapPin className="w-3 h-3" />
-                               <span className="font-bold">
-                                 {(() => {
-                                   const d = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
-                                   return d < 1 ? `${Math.round(d * 1000)}m` : `${d.toFixed(1)}km`;
-                                 })()}
-                               </span>
-                             </div>
-                           )}
-                           <MapPin className="w-3 h-3 flex-shrink-0" />
-                           <span className={currentUser ? "truncate" : "filter blur-[4.5px] select-none text-slate-300 inline-block pointer-events-none truncate"}>
-                             {pro.location || "Carrer Sorní, 12, 46004 Valencia"}
-                           </span>
+                    <div className="mt-6 pt-4 border-t border-slate-50/80 space-y-3.5">
+                      {/* Languages Row */}
+                      {pro.languages && Array.isArray(pro.languages) && pro.languages.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <div className="flex items-center gap-1 mr-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none shrink-0">
+                            <Globe className="w-3 h-3 text-slate-400" />
+                            <span>Languages:</span>
+                          </div>
+                          {pro.languages.map(lang => (
+                            <span key={lang} className="px-2 py-0.5 bg-slate-50 text-slate-500 rounded-lg text-[10px] font-semibold border border-slate-100/60 transition-colors hover:bg-slate-100/50">
+                              {lang}
+                            </span>
+                          ))}
                         </div>
-                        {!currentUser && (
+                      )}
+
+                      {/* Location & Distance Row */}
+                      <div className="flex items-center justify-between gap-3 min-w-0 w-full">
+                        <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest min-w-0 flex-1">
+                          <MapPin className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+                          <span className={cn(
+                            "truncate font-medium text-slate-500 normal-case",
+                            !currentUser && "filter blur-[4.5px] select-none text-slate-300 inline-block pointer-events-none"
+                          )}>
+                            {pro.location || "Carrer Sorní, 12, 46004 Valencia"}
+                          </span>
+                        </div>
+
+                        {hasRealLocation && userLocation && pro.coordinates && (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-50/70 border border-rose-100 text-rose-600 rounded-full text-[10px] font-semibold shrink-0 shadow-[0_1px_2px_rgba(244,63,94,0.02)] select-none">
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
+                            </span>
+                            <span>
+                              {(() => {
+                                const d = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
+                                return d < 1 ? `${Math.round(d * 1000)}m` : `${d.toFixed(1)} km`;
+                              })()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Sign up prompt for visitors */}
+                      {!currentUser && (
+                        <div className="pt-0.5">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               onNavigate('login');
                             }}
-                            className="text-[9px] font-medium text-brand-blue uppercase tracking-widest hover:underline flex items-center gap-1 mt-1 transition-all active:scale-95"
+                            className="text-[9px] font-bold text-brand-blue uppercase tracking-widest hover:underline flex items-center gap-1.5 transition-all active:scale-95"
                           >
-                            <Lock className="w-2.5 h-2.5 text-brand-blue" /> Sign up to Unlocked
+                            <Lock className="w-2.5 h-2.5 text-brand-blue" /> Join Unlocked to view location & map
                           </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -12390,7 +12410,7 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
                 </div>
                 <input
                   type="text"
-                  placeholder="Search guides, legal checklists, neighborhoods..."
+                  placeholder="Search guides"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-normal text-sm"
