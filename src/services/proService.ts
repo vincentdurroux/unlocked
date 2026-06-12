@@ -22,6 +22,7 @@ export interface SupabaseProfessional {
   created_at?: string;
   top_qualities?: string[];
   has_filled_form?: boolean;
+  categories?: string[];
 }
 
 export function parseEmbeddedQualities(text: string): { qualities: string[], cleanText: string } {
@@ -112,10 +113,23 @@ export const proService = {
         cleanDescription = parsed.cleanText;
       }
 
+      // Normalize categories
+      let categoriesList: string[] = [];
+      const rawProfession = item.profession || item.category || '';
+      if (typeof rawProfession === 'string' && rawProfession.trim()) {
+        categoriesList = rawProfession.split(',').map((s: string) => s.trim()).filter(Boolean);
+      } else if (Array.isArray(rawProfession)) {
+        categoriesList = rawProfession.map((s: any) => String(s).trim()).filter(Boolean);
+      }
+      if (categoriesList.length === 0 && rawProfession) {
+        categoriesList = [rawProfession.trim()];
+      }
+
       return {
         ...item,
         location: displayLocation,
-        category: item.profession || item.category, // Map profession to category for frontend compatibility
+        category: categoriesList.join(', '), // Map profession to category string for frontend compatibility
+        categories: categoriesList,
         image: item.image_url || item.image, // Map image_url or image for frontend compatibility
         bio: cleanDescription, // Map stripped description to bio
         description: cleanDescription,
@@ -154,7 +168,12 @@ export const proService = {
     // Capture top qualities from multiple possible field names
     const topQuals = pro.top_qualities || pro.topQualities || [];
     const finalDescription = pro.description || pro.bio || '';
-    const proProfession = pro.profession || pro.category || pro.job || '';
+    let proProfession = '';
+    if (Array.isArray(pro.categories) && pro.categories.length > 0) {
+      proProfession = pro.categories.join(', ');
+    } else {
+      proProfession = pro.profession || pro.category || pro.job || '';
+    }
     const proImage = pro.image_url || pro.image || '';
 
     try {
@@ -395,7 +414,13 @@ export const proService = {
 
     setIfChanged('name', pro.name, existingRecord.name);
     setIfChanged('company_name', pro.company_name, existingRecord.company_name);
-    setIfChanged('profession', pro.profession || pro.category, existingRecord.profession || existingRecord.category);
+    let updatedProfession = '';
+    if (Array.isArray(pro.categories) && pro.categories.length > 0) {
+      updatedProfession = pro.categories.join(', ');
+    } else {
+      updatedProfession = pro.profession || pro.category || '';
+    }
+    setIfChanged('profession', updatedProfession, existingRecord.profession || existingRecord.category);
     setIfChanged('rating', pro.rating, existingRecord.rating);
     setIfChanged('review_count', pro.review_count || pro.reviews_count, existingRecord.review_count || existingRecord.reviews_count);
     setIfChanged('languages', Array.isArray(pro.languages) ? pro.languages : [], existingRecord.languages);

@@ -457,6 +457,7 @@ interface Professional {
   is_highlighted?: boolean;
   top_qualities?: string[];
   has_filled_form?: boolean;
+  categories?: string[];
 }
 
 interface Event {
@@ -2114,7 +2115,7 @@ export default function App() {
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Profession</label>
+                          <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Category</label>
                           <input 
                             type="text" 
                             placeholder="e.g. Attorney, Plumber, Doctor" 
@@ -3074,6 +3075,160 @@ function RecommendationItem({ rec, onUpdate, onStartAdding }: { rec: any, onUpda
   );
 }
 
+interface CategorySelectorProps {
+  categories: string[];
+  onChange: (cats: string[]) => void;
+  primaryColorClass: string;
+  ringColorClass: string;
+  borderColorClass: string;
+  tagBgClass: string;
+}
+
+function CategorySelector({ 
+  categories = [], 
+  onChange, 
+  ringColorClass,
+  tagBgClass
+}: CategorySelectorProps) {
+  const [inputValue, setInputValue] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const popular = [
+    "Dance School",
+    "Yoga Studio",
+    "Gym & Fitness",
+    "Hairdresser",
+    "Nursery School",
+    "Coworking Space",
+    "Real Estate Agent",
+    "Tax Advisor / Gestor",
+    "Dentist",
+    "Physiotherapist",
+    "General Practitioner",
+    "Therapist / Psychologist",
+    "Web Developer",
+    "Electrician",
+    "Plumber",
+    "Locksmith"
+  ];
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const addCategory = (cat: string) => {
+    const trimmed = cat.trim();
+    if (trimmed && !categories.includes(trimmed)) {
+      onChange([...categories, trimmed]);
+    }
+    setInputValue('');
+  };
+
+  const removeCategory = (catToRemove: string) => {
+    onChange(categories.filter(c => c !== catToRemove));
+  };
+
+  const filteredSuggestions = popular.filter(
+    s => s.toLowerCase().includes(inputValue.toLowerCase()) && !categories.includes(s)
+  );
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <div 
+        onClick={() => setIsOpen(true)}
+        className={`min-h-12 w-full bg-slate-50 border border-slate-100 rounded-2xl p-2 flex flex-wrap items-center gap-2 cursor-pointer focus-within:outline-none focus-within:ring-2 ${ringColorClass} transition-all`}
+      >
+        {categories.map(cat => (
+          <span 
+            key={cat} 
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold font-display cursor-default select-none ${tagBgClass}`}
+          >
+            {cat}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeCategory(cat);
+              }}
+              className="text-slate-400 hover:text-slate-600 font-bold ml-1 flex items-center justify-center p-0.5"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        ))}
+        <input
+          type="text"
+          value={inputValue}
+          onChange={(e) => {
+            setInputValue(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (inputValue.trim()) {
+                addCategory(inputValue);
+              }
+            }
+          }}
+          placeholder={categories.length === 0 ? "e.g. Dance School, Yoga Gym" : "Add more..."}
+          className="flex-1 bg-transparent min-w-[120px] outline-none text-slate-900 border-none px-2 py-1 font-medium text-sm focus:ring-0"
+        />
+        <div className="text-slate-400 px-2 flex items-center self-stretch justify-center h-full pointer-events-none">
+          <ChevronDown className="w-4 h-4 ml-auto" />
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden divide-y divide-slate-50 font-display">
+          {filteredSuggestions.map((suggestion) => (
+            <button
+              type="button"
+              key={suggestion}
+              onClick={() => {
+                addCategory(suggestion);
+                setIsOpen(false);
+              }}
+              className="w-full text-left px-4 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-3.5 h-3.5 text-slate-200" />
+              {suggestion}
+            </button>
+          ))}
+          {inputValue.trim() && !categories.includes(inputValue.trim()) && (
+            <button
+              type="button"
+              onClick={() => {
+                addCategory(inputValue);
+                setIsOpen(false);
+              }}
+              className="w-full text-left px-4 py-3 text-xs md:text-sm font-bold text-slate-900 hover:bg-slate-50 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-3.5 h-3.5 text-slate-200" />
+              Add "{inputValue.trim()}"
+            </button>
+          )}
+          {filteredSuggestions.length === 0 && !inputValue.trim() && (
+            <div className="px-4 py-3 text-xs text-slate-400 font-medium text-center">
+              No recommendations left. Type to add custom category.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminView({ 
   scrollToTop, 
   onRefetchPros, 
@@ -3670,6 +3825,7 @@ function AdminView({
     name: '',
     company_name: '',
     category: '',
+    categories: [] as string[],
     rating: 0,
     review_count: 0,
     languages: [] as string[],
@@ -3738,11 +3894,13 @@ function AdminView({
     setActiveRecId(rec.id);
     setEditingProId(null);
     setSelectedFile(null);
+    const initialCategories = rec.pro_category ? rec.pro_category.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
     setNewPro({
       ...newPro,
       name: rec.pro_name || '',
       company_name: rec.company_name || '',
       category: rec.pro_category || '',
+      categories: initialCategories,
       phone: rec.pro_phone || '',
       email: rec.pro_email || '',
       image: rec.pro_image_url || '',
@@ -3767,6 +3925,7 @@ function AdminView({
     const bioValue = pro.bio || '';
     const imageValue = pro.image || '';
     const categoryValue = pro.category || '';
+    const categoriesValue = pro.categories || (pro.category ? pro.category.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
     const latValue = pro.coordinates?.lat ?? 0;
     const lngValue = pro.coordinates?.lng ?? 0;
 
@@ -3774,6 +3933,7 @@ function AdminView({
       name: pro.name || '',
       company_name: pro.company_name || '',
       category: categoryValue,
+      categories: categoriesValue,
       rating: pro.rating ?? 0,
       review_count: pro.review_count || 0,
       languages: Array.isArray(pro.languages) ? pro.languages : [],
@@ -3957,7 +4117,8 @@ function AdminView({
       const formattedPro = {
         name: newPro.name,
         company_name: newPro.company_name,
-        profession: newPro.category,
+        profession: (newPro.categories || []).join(', ') || newPro.category,
+        categories: newPro.categories,
         rating: newPro.rating || 0,
         review_count: newPro.review_count || 0,
         languages: newPro.languages,
@@ -4609,12 +4770,14 @@ function AdminView({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Profession</label>
-                    <input 
-                      required
-                      value={newPro.category}
-                      onChange={e => setNewPro({...newPro, category: e.target.value})}
-                      className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all font-display text-sm"
+                    <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Category (indicate one or more)</label>
+                    <CategorySelector 
+                      categories={newPro.categories || []}
+                      onChange={cats => setNewPro({ ...newPro, categories: cats })}
+                      primaryColorClass="amber-500"
+                      ringColorClass="focus-within:ring-amber-500/20"
+                      borderColorClass="border-amber-500"
+                      tagBgClass="bg-amber-500/10 text-amber-800 border border-amber-500/10"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -4866,13 +5029,14 @@ function AdminView({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Profession</label>
-                    <input 
-                      required
-                      value={newPro.category}
-                      onChange={e => setNewPro({...newPro, category: e.target.value})}
-                      placeholder=""
-                      className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-display text-sm"
+                    <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Category (indicate one or more)</label>
+                    <CategorySelector 
+                      categories={newPro.categories || []}
+                      onChange={cats => setNewPro({ ...newPro, categories: cats })}
+                      primaryColorClass="brand-blue"
+                      ringColorClass="focus-within:ring-brand-blue/20"
+                      borderColorClass="border-brand-blue"
+                      tagBgClass="bg-brand-blue/10 text-brand-blue border border-brand-blue/10"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -9121,7 +9285,17 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   }, [allPros]);
 
   const allProfessions = useMemo(() => {
-    return Array.from(new Set(allPros.map(p => p.category))).sort();
+    const list = new Set<string>();
+    allPros.forEach(p => {
+      if (p.categories && Array.isArray(p.categories)) {
+        p.categories.forEach(c => {
+          if (c) list.add(c);
+        });
+      } else if (p.category) {
+        list.add(p.category);
+      }
+    });
+    return Array.from(list).sort();
   }, [allPros]);
 
   const scrollToPro = (pro: Professional) => {
@@ -9242,12 +9416,15 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   const checkMatches = (text: string) => {
     if (!text.trim()) return true;
     return allPros.some(pro => {
-      const matchesCategory = selectedCategory === 'All' || pro.category === selectedCategory;
+      const matchesCategory = selectedCategory === 'All' || 
+                              (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
+                              pro.category === selectedCategory;
       const matchesLanguage = selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
       const matchesRating = pro.rating >= minRating;
       
       const searchLower = text.toLowerCase().trim();
       let matchesSearch = (pro.name || '').toLowerCase().includes(searchLower) || 
+                          (pro.categories && Array.isArray(pro.categories) && pro.categories.some(c => c.toLowerCase().includes(searchLower))) ||
                           (pro.category || '').toLowerCase().includes(searchLower) ||
                           (pro.company_name && pro.company_name.toLowerCase().includes(searchLower)) ||
                           (pro.bio || '').toLowerCase().includes(searchLower);
@@ -9274,7 +9451,9 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
   const filteredPros = hasActiveFilter 
     ? allPros.filter(pro => {
-        const matchesCategory = searchMode === 'ai' || selectedCategory === 'All' || pro.category === selectedCategory;
+        const matchesCategory = searchMode === 'ai' || selectedCategory === 'All' || 
+                                (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
+                                pro.category === selectedCategory;
         const matchesLanguage = searchMode === 'ai' || selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
         const matchesRating = searchMode === 'ai' || pro.rating >= minRating;
         
@@ -9286,6 +9465,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
             matchesSearch = !!matchInfo && matchInfo.score > 0;
           } else {
             matchesSearch = (pro.name || '').toLowerCase().includes(deferredSearch.toLowerCase()) || 
+                            (pro.categories && Array.isArray(pro.categories) && pro.categories.some(c => c.toLowerCase().includes(deferredSearch.toLowerCase()))) ||
                             (pro.category || '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
                             (pro.bio || '').toLowerCase().includes(deferredSearch.toLowerCase());
           }
@@ -9468,10 +9648,10 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Refine your search</p>
                 
                 <div className="grid grid-cols-2 gap-4 md:gap-x-6 md:gap-y-4">
-                  {/* Profession Dropdown */}
+                  {/* Category Dropdown */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <Filter className="w-3.5 h-3.5 text-brand-blue" /> Profession
+                      <Filter className="w-3.5 h-3.5 text-brand-blue" /> Category
                     </label>
                     <div className="relative">
                       <select
@@ -9479,7 +9659,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                         onChange={(e) => setSelectedCategory(e.target.value)}
                         className="w-full pl-4 pr-10 py-3.5 bg-white rounded-2xl border border-slate-200/70 hover:border-slate-300 focus:ring-4 focus:ring-brand-blue/5 focus:border-brand-blue/20 outline-none shadow-sm hover:shadow-md transition-all text-slate-700 font-bold text-xs md:text-sm appearance-none cursor-pointer"
                       >
-                        <option value="All">All Professions</option>
+                        <option value="All">All Categories</option>
                         {allProfessions.map(prof => (
                           <option key={prof} value={prof}>{prof}</option>
                         ))}
