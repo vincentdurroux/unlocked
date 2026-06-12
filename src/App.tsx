@@ -89,6 +89,7 @@ import {
   Copy,
   AlertTriangle,
   Dog,
+  Navigation,
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
@@ -1852,21 +1853,23 @@ export default function App() {
                 transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
                 className={activeView === 'explore' ? 'block w-full' : 'hidden w-full'}
               >
-                <ExploreView 
-                  allPros={allPros}
-                  onNavigate={handleNavigate} 
-                  initialProId={initialProId}
-                  initialSearch={initialSearch}
-                  onModalClose={() => {
-                    setInitialProId(null);
-                    setInitialSearch(null);
-                  }}
-                  scrollToTop={scrollToTop}
-                  onProUpdate={refetchPros}
-                  currentUser={currentUser}
-                  userProfile={userProfile}
-                  isActive={activeView === 'explore'}
-                />
+                {activeView === 'explore' && (
+                  <ExploreView 
+                    allPros={allPros}
+                    onNavigate={handleNavigate} 
+                    initialProId={initialProId}
+                    initialSearch={initialSearch}
+                    onModalClose={() => {
+                      setInitialProId(null);
+                      setInitialSearch(null);
+                    }}
+                    scrollToTop={scrollToTop}
+                    onProUpdate={refetchPros}
+                    currentUser={currentUser}
+                    userProfile={userProfile}
+                    isActive={activeView === 'explore'}
+                  />
+                )}
               </motion.div>
               {activeView === 'events' && (
                 <EventsView 
@@ -9106,19 +9109,22 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   }, [initialProId, allPros]);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [hasRealLocation, setHasRealLocation] = useState(false);
+  const [showLocationBanner, setShowLocationBanner] = useState(true);
   const [maxDistance, setMaxDistance] = useState<number | 'All'>('All');
 
   const distanceSteps: (number | 'All')[] = [0.5, 2, 5, 10, 20, 50, 'All'];
 
-  const requestGeolocation = () => {
+  const requestGeolocation = (onSuccess?: (coords: { lat: number, lng: number }) => void) => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setUserLocation({
+          const loc = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
-          });
+          };
+          setUserLocation(loc);
           setHasRealLocation(true);
+          onSuccess?.(loc);
         },
         () => {
           // Default to Valencia center if denied or error
@@ -9139,12 +9145,6 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     }
     window.scrollTo(0, 0);
   }, [selectedPro]);
-
-  useEffect(() => {
-    if (isActive) {
-      requestGeolocation();
-    }
-  }, [isActive]);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371; // km
@@ -9443,10 +9443,13 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                         step="1"
                         value={distanceSteps.indexOf(maxDistance)}
                         onChange={(e) => {
+                          const index = parseInt(e.target.value);
+                          const val = distanceSteps[index];
                           if (!hasRealLocation) {
-                            requestGeolocation();
+                            requestGeolocation(() => {
+                              setMaxDistance(val);
+                            });
                           } else {
-                            const val = distanceSteps[parseInt(e.target.value)];
                             setMaxDistance(val);
                           }
                         }}
@@ -9504,6 +9507,44 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                     </div>
                   </div>
                 </div>
+
+                {/* Geolocation Explanation Banner styled exactly as requested and shown in image */}
+                {!hasRealLocation && showLocationBanner && (
+                  <div className="mt-4 p-4.5 rounded-[24px] border border-blue-100 bg-blue-50/50 flex flex-col md:flex-row items-center md:items-start gap-4 hover:border-blue-200/50 transition-all relative overflow-hidden shadow-xs animate-in fade-in duration-300">
+                    {/* Left Icon container */}
+                    <div className="w-11 h-11 bg-white border border-blue-100/50 text-blue-600 rounded-full flex items-center justify-center shrink-0 shadow-xs">
+                      <Navigation className="w-5 h-5 fill-blue-600 rotate-45" />
+                    </div>
+                    {/* Main content block */}
+                    <div className="flex-1 text-center md:text-left min-w-0 pr-0 md:pr-10 space-y-1">
+                      <h4 className="text-xs md:text-sm font-bold text-slate-800 leading-snug">
+                        Use location to find professionals near you.
+                      </h4>
+                      <p className="text-[10px] md:text-xs text-slate-500 leading-relaxed max-w-lg">
+                        We'll use your location only to show relevant results nearby.
+                      </p>
+                    </div>
+                    {/* Blue Action Button */}
+                    <div className="shrink-0 flex items-center w-full md:w-auto justify-center">
+                      <button
+                        onClick={() => requestGeolocation()}
+                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[10px] md:text-xs font-bold tracking-wide transition-all flex items-center gap-2 shadow-xs hover:shadow-md hover:brightness-105 active:scale-95 cursor-pointer w-full md:w-auto justify-center"
+                      >
+                        <Navigation className="w-3.5 h-3.5 fill-white" />
+                        Use my location
+                      </button>
+                    </div>
+                    {/* Top Right Close Button */}
+                    <button
+                      onClick={() => setShowLocationBanner(false)}
+                      className="absolute right-4 top-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-blue-100/30 transition-all cursor-pointer"
+                      title="Dismiss location prompt"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
               </div>
             </div>
           ) : (
@@ -9768,7 +9809,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                       </div>
                       <div className="flex flex-col items-end gap-1 min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-300 uppercase tracking-widest w-full overflow-hidden justify-end">
-                           {userLocation && pro.coordinates && (
+                           {hasRealLocation && userLocation && pro.coordinates && (
                              <div className="flex items-center gap-1 text-rose-500 mr-2 shrink-0">
                                <MapPin className="w-3 h-3" />
                                <span className="font-bold">
