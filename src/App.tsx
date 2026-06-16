@@ -1826,7 +1826,7 @@ export default function App() {
         ref={mainRef} 
         className={cn(
           "flex-1 overflow-y-auto overflow-x-hidden no-scrollbar relative",
-          activeView === 'login' ? "pb-0" : "pb-24"
+          activeView === 'login' ? "pb-0" : "pb-24 lg:pb-0"
         )}
       >
               <motion.div 
@@ -2565,8 +2565,8 @@ export default function App() {
             />
           )}
         </AnimatePresence>
-      </main>
       {activeView !== 'login' && <SEOFooter onNavigate={handleNavigate} />}
+      </main>
 
       {/* Bottom Navigation */}
       {activeView !== 'login' && (
