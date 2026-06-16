@@ -90,6 +90,8 @@ import {
   AlertTriangle,
   Dog,
   Navigation,
+  Megaphone,
+  Database,
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
@@ -766,6 +768,7 @@ export default function App() {
     return legacy ? [legacy] : [];
   });
 
+
   useEffect(() => {
     if (globalAlert) {
       const timer = setTimeout(() => setGlobalAlert(null), 3500);
@@ -1052,6 +1055,7 @@ export default function App() {
       }
     }
   }, [allArticles]);
+
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
   const [city, setCity] = useState('Valencia');
@@ -1279,7 +1283,7 @@ export default function App() {
     
     try {
       await proService.submitRecommendation({
-        user_email: "vincentdurroux@gmail.com",
+        user_email: currentUser?.email || "anonymous@community.unlocked",
         pro_name: proName,
         company_name: proCompany,
         pro_category: proCategory,
@@ -1399,6 +1403,16 @@ export default function App() {
   };
 
   const isAdmin = proService.isAdmin(currentUser?.email || "") || userProfile?.is_admin;
+
+  const handleContactAdmin = async () => {
+    if (!currentUser) {
+      // Direct mailto fallback with beautiful context pre-filled
+      window.location.href = "mailto:vincentdurroux@gmail.com?subject=Unlocked%20Valencia%20-%2520Contact%20Communautaire&body=Bonjour%20Vincent,%0A%0AJe%20souhaiterais%20partager%2520un%20retour%20ou%20recommander%2520un%20professionnel%20manquant...";
+      return;
+    }
+    setInitialChat({ targetName: "vincentdurroux@gmail.com" });
+    setShowMessagesModal(true);
+  };
 
   const handleNavigate = async (view: View | 'back', params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => {
     if (view === 'back') {
@@ -1847,6 +1861,7 @@ export default function App() {
                   highlightedArticleIds={highlightedArticleIds}
                   highlightedTestimoniesIds={highlightedTestimoniesIds}
                   allArticles={allArticles}
+                  onContactAdmin={handleContactAdmin}
                 />
               </motion.div>
               <motion.div 
@@ -1961,6 +1976,7 @@ export default function App() {
                   guideCategories={guideCategories}
                   setGuideCategories={setGuideCategories}
                   allArticles={allArticles}
+                  setGlobalAlert={setGlobalAlert}
                 />
               )}
               {activeView === 'marketplace' && (
@@ -2549,8 +2565,8 @@ export default function App() {
             />
           )}
         </AnimatePresence>
-        {activeView !== 'login' && <SEOFooter onNavigate={handleNavigate} />}
       </main>
+      {activeView !== 'login' && <SEOFooter onNavigate={handleNavigate} />}
 
       {/* Bottom Navigation */}
       {activeView !== 'login' && (
@@ -3254,7 +3270,8 @@ function AdminView({
   setHighlightedTestimoniesIds,
   guideCategories = [],
   setGuideCategories,
-  allArticles = []
+  allArticles = [],
+  setGlobalAlert
 }: { 
   scrollToTop?: () => void, 
   onRefetchPros?: () => Promise<void>, 
@@ -3280,7 +3297,30 @@ function AdminView({
   setHighlightedTestimoniesIds: React.Dispatch<React.SetStateAction<string[]>>,
   guideCategories?: any[],
   setGuideCategories: React.Dispatch<React.SetStateAction<any[]>>,
-  allArticles?: any[]
+  allArticles?: any[],
+  adminAnnContent?: string,
+  setAdminAnnContent?: React.Dispatch<React.SetStateAction<string>>,
+  adminAnnActive?: boolean,
+  setAdminAnnActive?: React.Dispatch<React.SetStateAction<boolean>>,
+  adminAnnCtaText?: string,
+  setAdminAnnCtaText?: React.Dispatch<React.SetStateAction<string>>,
+  adminAnnCtaType?: string,
+  setAdminAnnCtaType?: React.Dispatch<React.SetStateAction<string>>,
+  savingAnnouncement?: boolean,
+  setSavingAnnouncement?: React.Dispatch<React.SetStateAction<boolean>>,
+  setAnnouncement?: React.Dispatch<React.SetStateAction<any>>,
+  adminAnnContent: string,
+  setAdminAnnContent: React.Dispatch<React.SetStateAction<string>>,
+  adminAnnActive: boolean,
+  setAdminAnnActive: React.Dispatch<React.SetStateAction<boolean>>,
+  adminAnnCtaText: string,
+  setAdminAnnCtaText: React.Dispatch<React.SetStateAction<string>>,
+  adminAnnCtaType: string,
+  setAdminAnnCtaType: React.Dispatch<React.SetStateAction<string>>,
+  savingAnnouncement: boolean,
+  setSavingAnnouncement: React.Dispatch<React.SetStateAction<boolean>>,
+  setAnnouncement: React.Dispatch<React.SetStateAction<any>>,
+  setGlobalAlert: React.Dispatch<React.SetStateAction<any>>
 }) {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3564,7 +3604,7 @@ function AdminView({
             if (setError.message?.includes('policy') || setError.message?.includes('security') || setError.message?.includes('permission') || String(setError.code) === '42501') {
               setMsg({ 
                 type: 'success', 
-                text: 'Highlight updated locally! However, the database update was restricted by RLS policy. To allow non-vincent admin profiles to manage highlights, run the SQL script under the Landing Page Highlights header.'
+                text: 'Highlight updated locally! However, the database update was restricted by RLS policy. To allow admin profiles to manage highlights, run the SQL script under the Landing Page Highlights header.'
               });
             } else {
               setMsg({ type: 'error', text: 'Database error: ' + setError.message });
@@ -3603,7 +3643,7 @@ function AdminView({
             if (setError.message?.includes('policy') || setError.message?.includes('security') || setError.message?.includes('permission') || String(setError.code) === '42501') {
               setMsg({ 
                 type: 'success', 
-                text: 'Highlight updated locally! However, the database update was restricted by RLS policy. To allow non-vincent admin profiles to manage highlights, run the SQL script under the Landing Page Highlights header.'
+                text: 'Highlight updated locally! However, the database update was restricted by RLS policy. To allow admin profiles to manage highlights, run the SQL script under the Landing Page Highlights header.'
               });
             } else {
               setMsg({ type: 'error', text: 'Database error: ' + setError.message });
@@ -3650,7 +3690,7 @@ function AdminView({
             } else if (setError.message?.includes('policy') || setError.message?.includes('security') || setError.message?.includes('permission') || String(setError.code) === '42501') {
               setMsg({ 
                 type: 'success', 
-                text: 'Highlight updated locally! However, the database update was restricted by RLS policy. To allow non-vincent admin profiles to manage highlights, run the SQL script under the Landing Page Highlights header.'
+                text: 'Highlight updated locally! However, the database update was restricted by RLS policy. To allow admin profiles to manage highlights, run the SQL script under the Landing Page Highlights header.'
               });
             } else {
               setMsg({ type: 'error', text: 'Failed to update: ' + setError.message });
@@ -3695,7 +3735,7 @@ function AdminView({
             if (setError.message?.includes('policy') || setError.message?.includes('security') || setError.message?.includes('permission') || String(setError.code) === '42501') {
               setMsg({ 
                 type: 'success', 
-                text: 'Highlight updated locally! However, the database update was restricted by RLS policy. To allow non-vincent admin profiles to manage highlights, run the SQL script under the Landing Page Highlights header.'
+                text: 'Highlight updated locally! However, the database update was restricted by RLS policy. To allow admin profiles to manage highlights, run the SQL script under the Landing Page Highlights header.'
               });
             } else {
               setMsg({ type: 'error', text: 'Database error: ' + setError.message });
@@ -6021,6 +6061,7 @@ function AdminView({
             <p className="text-xs text-slate-400 font-medium">Select what cards are displayed in the Discover section on the main landing page.</p>
           </div>
 
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Pro Highlight Selector */}
             <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4">
@@ -7870,7 +7911,9 @@ function HomeView({
   highlightedEventIds = [],
   highlightedArticleIds = [],
   highlightedTestimoniesIds = [],
-  allArticles = []
+  allArticles = [],
+  announcement,
+  onContactAdmin
 }: { 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   allPros: Professional[], 
@@ -7890,7 +7933,14 @@ function HomeView({
   highlightedEventIds?: string[],
   highlightedArticleIds?: string[],
   highlightedTestimoniesIds?: string[],
-  allArticles?: any[]
+  allArticles?: any[],
+  announcement?: {
+    content: string;
+    is_active: boolean;
+    cta_text?: string;
+    cta_type?: string;
+  },
+  onContactAdmin?: () => void
 }) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [localSearch, setLocalSearch] = useState('');
@@ -7916,6 +7966,7 @@ function HomeView({
   
   return (
     <div className="px-6 pt-12 md:pt-20 pb-6 space-y-12 md:space-y-20 lg:space-y-28 max-w-7xl mx-auto w-full overflow-hidden">
+
       {/* Welcome & Search Group */}
       <div className="space-y-0">
         {/* Welcome & Illustration Section */}
