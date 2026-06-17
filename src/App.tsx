@@ -9005,7 +9005,7 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
           mapId="e8677c77d4677732"
           className="w-full h-full"
           gestureHandling={'greedy'}
-          disableDefaultUI={false}
+          disableDefaultUI={true}
           scrollwheel={true}
           internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
         >
