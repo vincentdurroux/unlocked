@@ -9421,12 +9421,9 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           onSuccess?.(loc);
         },
         () => {
-          // Default to Valencia center if denied or error
-          const loc = { lat: 39.4699, lng: -0.3763 };
-          setUserLocation(loc);
+          // Do not set fallback location, just mark that we do not have real location
           setHasRealLocation(false);
           setShowLocationBanner(false);
-          setMapCenterTrigger((prev) => prev + 1);
           try {
             localStorage.setItem('unlocked_show_location_banner', 'false');
             localStorage.setItem('unlocked_has_real_location', 'false');
@@ -9436,10 +9433,8 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         }
       );
     } else {
-      const loc = { lat: 39.4699, lng: -0.3763 };
-      setUserLocation(loc);
+      // If navigator.geolocation is not available, just set hasRealLocation to false
       setHasRealLocation(false);
-      setMapCenterTrigger((prev) => prev + 1);
     }
   };
 
