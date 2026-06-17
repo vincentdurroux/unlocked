@@ -1743,10 +1743,11 @@ export default function App() {
                 key={item.id}
                 onClick={() => handleNavigate(item.id as View)}
                 className={cn(
-                  "text-xs lg:text-[13px] font-bold uppercase tracking-[0.1em] transition-all hover:text-brand-blue relative py-2",
+                  "text-[10px] lg:text-[11px] font-bold uppercase tracking-[0.1em] transition-all hover:text-brand-blue relative py-2 flex flex-col items-center gap-1.5",
                   activeView === item.id ? "text-brand-blue" : "text-slate-500"
                 )}
               >
+                <item.icon className={cn("w-5 h-5", activeView === item.id ? "text-brand-blue" : "text-slate-400")} />
                 {item.label}
                 {activeView === item.id && (
                   <motion.div 
@@ -14180,6 +14181,14 @@ function ProfileSubPage({ title, onBack, children, className }: { title: string,
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ duration: 0.3, ease: "easeOut" }}
+      drag="x"
+      dragConstraints={{ right: 0 }}
+      dragElastic={0.2}
+      onDragEnd={(e, info) => {
+        if (info.offset.x < -100) {
+          onBack();
+        }
+      }}
       className={cn("fixed inset-0 z-[60] flex flex-col", className || "bg-slate-50")}
     >
       <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center">
@@ -14196,6 +14205,9 @@ function ProfileSubPage({ title, onBack, children, className }: { title: string,
           </button>
         </div>
         {children}
+        <footer className="mt-10 pt-10 border-t border-slate-200 text-center text-slate-400 text-xs">
+          © {new Date().getFullYear()} MYCITYUNLOCKED. ALL RIGHTS RESERVED.
+        </footer>
       </div>
     </motion.div>
   );
