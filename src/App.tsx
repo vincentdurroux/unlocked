@@ -9400,6 +9400,9 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   const distanceSteps: (number | 'All')[] = [0.5, 2, 5, 10, 20, 50, 'All'];
 
   const requestGeolocation = (onSuccess?: (coords: { lat: number, lng: number }) => void) => {
+    if (!hasRealLocation) {
+        setShowLocationBanner(true);
+    }
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -9423,9 +9426,8 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         () => {
           // Do not set fallback location, just mark that we do not have real location
           setHasRealLocation(false);
-          setShowLocationBanner(false);
+          // Do not hide the banner if denied, so users can try again
           try {
-            localStorage.setItem('unlocked_show_location_banner', 'false');
             localStorage.setItem('unlocked_has_real_location', 'false');
           } catch (e) {
             console.error(e);
