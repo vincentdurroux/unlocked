@@ -9403,6 +9403,12 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
   const distanceSteps: (number | 'All')[] = [0.5, 2, 5, 10, 20, 50, 'All'];
 
+  useEffect(() => {
+    if (!hasRealLocation) {
+      setMaxDistance('All');
+    }
+  }, [hasRealLocation]);
+
   const requestGeolocation = (onSuccess?: (coords: { lat: number, lng: number }) => void) => {
     if (!hasRealLocation) {
         setShowLocationBanner(true);
@@ -9770,7 +9776,11 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                             setMaxDistance(val);
                           }
                         }}
-                        className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-rose-500 relative z-10"
+                        disabled={!hasRealLocation}
+                        className={cn(
+                          "w-full h-1.5 bg-slate-100 rounded-lg appearance-none relative z-10",
+                          hasRealLocation ? "cursor-pointer accent-rose-500" : "cursor-not-allowed opacity-50"
+                        )}
                       />
                       
                       {/* Static Centered Label and Moving Tick */}
