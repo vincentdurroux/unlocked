@@ -3309,17 +3309,6 @@ function AdminView({
   savingAnnouncement?: boolean,
   setSavingAnnouncement?: React.Dispatch<React.SetStateAction<boolean>>,
   setAnnouncement?: React.Dispatch<React.SetStateAction<any>>,
-  adminAnnContent: string,
-  setAdminAnnContent: React.Dispatch<React.SetStateAction<string>>,
-  adminAnnActive: boolean,
-  setAdminAnnActive: React.Dispatch<React.SetStateAction<boolean>>,
-  adminAnnCtaText: string,
-  setAdminAnnCtaText: React.Dispatch<React.SetStateAction<string>>,
-  adminAnnCtaType: string,
-  setAdminAnnCtaType: React.Dispatch<React.SetStateAction<string>>,
-  savingAnnouncement: boolean,
-  setSavingAnnouncement: React.Dispatch<React.SetStateAction<boolean>>,
-  setAnnouncement: React.Dispatch<React.SetStateAction<any>>,
   setGlobalAlert: React.Dispatch<React.SetStateAction<any>>
 }) {
   const [recommendations, setRecommendations] = useState<any[]>([]);
@@ -10013,17 +10002,30 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         <div className="space-y-12">
           {/* Map View always on top - only for members */}
           {currentUser && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="w-full h-[300px] md:h-[400px] rounded-[40px] overflow-hidden border border-slate-100 shadow-2xl relative bg-slate-50"
-            >
-               <ProMap 
-                 pros={filteredPros} 
-                 onSelectPro={(pro) => scrollToPro(pro)} 
-                 center={userLocation || { lat: 39.4699, lng: -0.3763 }} 
-               />
-            </motion.div>
+            <div className="space-y-3">
+              <div className="flex justify-end px-2">
+                <button
+                  type="button"
+                  onClick={() => requestGeolocation()}
+                  className="flex items-center gap-1.5 text-xs font-bold text-brand-blue hover:text-[#002BE6] bg-blue-50/80 hover:bg-blue-100/90 active:scale-95 px-3.5 py-2 rounded-full border border-blue-100/60 shadow-sm transition-all cursor-pointer group"
+                  title="Locate me on the map"
+                >
+                  <Navigation className="w-3.5 h-3.5 group-hover:rotate-45 transition-transform text-brand-blue" />
+                  <span>Locate Me</span>
+                </button>
+              </div>
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full h-[300px] md:h-[400px] rounded-[40px] overflow-hidden border border-slate-100 shadow-2xl relative bg-slate-50"
+              >
+                 <ProMap 
+                   pros={filteredPros} 
+                   onSelectPro={(pro) => scrollToPro(pro)} 
+                   center={userLocation || { lat: 39.4699, lng: -0.3763 }} 
+                 />
+              </motion.div>
+            </div>
           )}
 
           {/* List View below the map */}
