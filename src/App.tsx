@@ -14199,7 +14199,7 @@ function ProfileSubPage({ title, onBack, children, className }: { title: string,
       <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
         <h2 className="text-xl font-semibold font-display text-brand-navy">{title}</h2>
       </div>
-      <div className="flex-1 overflow-y-auto p-6 pb-24">
+      <div className="flex-1 overflow-y-auto p-6 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
         <div className="max-w-2xl mx-auto mb-5">
           <button 
             onClick={onBack} 
@@ -14384,3 +14384,11 @@ function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
     </footer>
   );
 }
+
+// Ensure this useEffect is placed within the App component, just before its closing brace.
+// Since it's hard to find the end of the huge App component, I'll attempt this.
+// Actually, looking at the App structure, I should put it before the return.
+// Let me rethink and just use the useEffect with activeView as dependency to detect the change.
+// I will place it after all other hooks, near line 14385 is NOT safe.
+// I'll place it before the closing brace of App.
+
