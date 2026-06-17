@@ -1743,11 +1743,14 @@ export default function App() {
                 key={item.id}
                 onClick={() => handleNavigate(item.id as View)}
                 className={cn(
-                  "text-[10px] lg:text-[11px] font-bold uppercase tracking-[0.1em] transition-all hover:text-brand-blue relative py-2 flex flex-col items-center gap-1.5",
+                  "flex flex-col items-center gap-1.5 text-[10px] lg:text-[11px] font-bold uppercase tracking-[0.1em] transition-all hover:text-brand-blue relative py-2",
                   activeView === item.id ? "text-brand-blue" : "text-slate-500"
                 )}
               >
-                <item.icon className={cn("w-5 h-5", activeView === item.id ? "text-brand-blue" : "text-slate-400")} />
+                <item.icon className={cn(
+                  "w-5 h-5 transition-all text-current",
+                  activeView === item.id ? "stroke-[2.5px]" : "stroke-[1.5px]"
+                )} />
                 {item.label}
                 {activeView === item.id && (
                   <motion.div 
@@ -2033,7 +2036,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-x-0 top-[60px] bottom-[80px] md:inset-0 bg-slate-900/80 backdrop-blur-xl z-[100] overflow-y-auto overscroll-contain"
+              className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/80 backdrop-blur-xl z-[100] overflow-y-auto overscroll-contain" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
               onClick={() => setShowAddPro(false)}
             >
               <div className="min-h-full flex items-start justify-center p-4">
@@ -2274,7 +2277,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-x-0 top-[60px] bottom-[80px] md:inset-0 bg-slate-900/80 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain touch-pan-y"
+              className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/80 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain touch-pan-y" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
               onClick={() => setShowAddAd(false)}
             >
               <div className="min-h-full flex items-start justify-center p-4 sm:p-6">
@@ -2666,7 +2669,7 @@ function AdDetailModal({ ad, onClose }: { ad: Ad | any, onClose: () => void }) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       ref={scrollContainerRef}
-      className="fixed inset-x-0 top-[60px] bottom-[80px] md:inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y"
+      className="fixed inset-x-0 bottom-[80px] md:inset-0 z-50 overflow-y-auto overscroll-contain touch-pan-y" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
     >
       <div 
         className="min-h-full flex items-start justify-center p-4 py-12"
@@ -6896,7 +6899,7 @@ function AdminView({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-x-0 top-[60px] bottom-[80px] md:inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+            className="fixed inset-x-0 bottom-[80px] md:inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
             onClick={() => setShowConfirmModal(false)}
           >
             <motion.div
@@ -8555,7 +8558,7 @@ function ExpertGuideModal({ isOpen, onClose, article }: { isOpen: boolean, onClo
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-x-0 top-[60px] bottom-[80px] md:inset-0 z-[100] flex items-center justify-center p-3.5 sm:p-6 lg:p-8">
+      <div className="fixed inset-x-0 bottom-[80px] md:inset-0 z-[100] flex items-center justify-center p-3.5 sm:p-6 lg:p-8" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}>
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -11423,7 +11426,7 @@ function ProfessionalDetailView({
   return (
     <div 
       ref={scrollRef}
-      className="fixed inset-x-0 top-[60px] bottom-[80px] md:inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] overflow-y-auto overscroll-contain flex justify-center" 
+      className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] overflow-y-auto overscroll-contain flex justify-center" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
       onClick={onClose}
     >
       <div className="min-h-full w-full max-w-5xl flex items-start p-4 md:p-12">
@@ -12154,7 +12157,7 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
   return (
     <div 
       ref={scrollRef}
-      className="fixed inset-x-0 top-[60px] bottom-[80px] md:inset-0 z-[100] overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex justify-center p-4 py-8 md:py-16" 
+      className="fixed inset-x-0 bottom-[80px] md:inset-0 z-[100] overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex justify-center p-4 py-8 md:py-16" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
       onClick={onClose}
     >
       <motion.div
@@ -14181,17 +14184,9 @@ function ProfileSubPage({ title, onBack, children, className }: { title: string,
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      drag="x"
-      dragConstraints={{ right: 0 }}
-      dragElastic={0.2}
-      onDragEnd={(e, info) => {
-        if (info.offset.x < -100) {
-          onBack();
-        }
-      }}
       className={cn("fixed inset-0 z-[60] flex flex-col", className || "bg-slate-50")}
     >
-      <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center">
+      <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
         <h2 className="text-xl font-semibold font-display text-brand-navy">{title}</h2>
       </div>
       <div className="flex-1 overflow-y-auto p-6 pb-24">
@@ -14205,9 +14200,6 @@ function ProfileSubPage({ title, onBack, children, className }: { title: string,
           </button>
         </div>
         {children}
-        <footer className="mt-10 pt-10 border-t border-slate-200 text-center text-slate-400 text-xs">
-          © {new Date().getFullYear()} MYCITYUNLOCKED. ALL RIGHTS RESERVED.
-        </footer>
       </div>
     </motion.div>
   );
