@@ -8943,26 +8943,32 @@ function HighlightCarousel({ onNavigate, allPros, events }: { onNavigate: (view:
   );
 }
 
-function MapCenterController({ center }: { center: { lat: number; lng: number } }) {
+function MapCenterController({ center, resetTrigger }: { center: { lat: number; lng: number }; resetTrigger?: number }) {
   const map = useMap();
   const lastCenteredRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastResetRef = useRef<number>(0);
 
   useEffect(() => {
     if (!map) return;
-    const hasChanged = !lastCenteredRef.current || 
+    const hasCoordsChanged = !lastCenteredRef.current || 
       Math.abs(lastCenteredRef.current.lat - center.lat) > 0.0001 || 
       Math.abs(lastCenteredRef.current.lng - center.lng) > 0.0001;
+    
+    const hasTriggered = resetTrigger !== undefined && resetTrigger !== lastResetRef.current;
 
-    if (hasChanged) {
+    if (hasCoordsChanged || hasTriggered) {
       lastCenteredRef.current = center;
+      if (resetTrigger !== undefined) {
+        lastResetRef.current = resetTrigger;
+      }
       map.panTo(center);
     }
-  }, [map, center]);
+  }, [map, center, resetTrigger]);
 
   return null;
 }
 
-function ProMap({ pros, onSelectPro, center }: { pros: Professional[], onSelectPro: (pro: Professional) => void, center: { lat: number, lng: number } }) {
+function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professional[], onSelectPro: (pro: Professional) => void, center: { lat: number, lng: number }, resetTrigger?: number }) {
   const hasValidKey = Boolean(GOOGLE_MAPS_KEY) && GOOGLE_MAPS_KEY.length > 10;
 
   if (!hasValidKey) {
@@ -9003,7 +9009,7 @@ function ProMap({ pros, onSelectPro, center }: { pros: Professional[], onSelectP
           scrollwheel={true}
           internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
         >
-          <MapCenterController center={center} />
+          <MapCenterController center={center} resetTrigger={resetTrigger} />
           {pros.map((pro, index) => pro.coordinates && (
             <AdvancedMarker
               key={pro.id}
@@ -9377,6 +9383,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
       return null;
     }
   });
+  const [mapCenterTrigger, setMapCenterTrigger] = useState(0);
   const [hasRealLocation, setHasRealLocation] = useState(() => {
     return localStorage.getItem('unlocked_has_real_location') === 'true';
   });
@@ -9403,6 +9410,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           setUserLocation(loc);
           setHasRealLocation(true);
           setShowLocationBanner(false);
+          setMapCenterTrigger((prev) => prev + 1);
           try {
             localStorage.setItem('unlocked_user_location', JSON.stringify(loc));
             localStorage.setItem('unlocked_has_real_location', 'true');
@@ -9418,6 +9426,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           setUserLocation(loc);
           setHasRealLocation(false);
           setShowLocationBanner(false);
+          setMapCenterTrigger((prev) => prev + 1);
           try {
             localStorage.setItem('unlocked_show_location_banner', 'false');
             localStorage.setItem('unlocked_has_real_location', 'false');
@@ -9430,6 +9439,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
       const loc = { lat: 39.4699, lng: -0.3763 };
       setUserLocation(loc);
       setHasRealLocation(false);
+      setMapCenterTrigger((prev) => prev + 1);
     }
   };
 
@@ -10023,6 +10033,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                    pros={filteredPros} 
                    onSelectPro={(pro) => scrollToPro(pro)} 
                    center={userLocation || { lat: 39.4699, lng: -0.3763 }} 
+                   resetTrigger={mapCenterTrigger}
                  />
               </motion.div>
             </div>
