@@ -1791,7 +1791,7 @@ export default function App() {
 
           {/* Desktop Navigation Links - Centered */}
           <nav className={cn(
-            isAppShell ? "hidden lg:flex" : "flex order-3 w-full lg:w-auto lg:order-none",
+            isAppShell ? "hidden" : "flex order-3 w-full lg:w-auto lg:order-none",
             "items-center justify-center gap-4 lg:gap-8 lg:flex-1 py-1 lg:py-0 overflow-x-auto no-scrollbar"
           )}>
             {navItems.filter(item => item.id !== 'profile').map((item) => (
@@ -1822,7 +1822,7 @@ export default function App() {
             {/* Desktop Profile Link */}
             <div className={cn(
               "items-center gap-2 sm:gap-4 border-r border-slate-100 pr-2 sm:pr-4 mr-1 sm:mr-2",
-              isAppShell ? "hidden lg:flex" : "flex"
+              isAppShell ? "hidden" : "flex"
             )}>
                <button 
                  onClick={() => handleNavigate('profile')}
@@ -1892,7 +1892,7 @@ export default function App() {
         ref={mainRef} 
         className={cn(
           "flex-1 overflow-y-auto overflow-x-hidden no-scrollbar relative",
-          activeView === 'login' ? "pb-0" : (isAppShell ? "pb-24 lg:pb-0" : "pb-0")
+          activeView === 'login' ? "pb-0" : (isAppShell ? "pb-24" : "pb-0")
         )}
       >
               <motion.div 
@@ -2638,7 +2638,7 @@ export default function App() {
       {activeView !== 'login' && isAppShell && (
         <nav 
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2px)' }}
-          className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-100 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] lg:hidden"
+          className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-100 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]"
         >
           <div className="flex items-center justify-between px-2 py-2 max-w-xl mx-auto">
             {navItems.map((item) => (
