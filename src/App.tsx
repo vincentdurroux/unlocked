@@ -9837,13 +9837,13 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
                 {/* Geolocation Explanation Banner styled exactly as requested and shown in image */}
                 {!hasRealLocation && showLocationBanner && (
-                  <div className="mt-4 p-4.5 rounded-[24px] border border-blue-100 bg-blue-50/50 flex flex-col md:flex-row items-center md:items-start gap-4 hover:border-blue-200/50 transition-all relative overflow-hidden shadow-xs animate-in fade-in duration-300">
+                  <div className="mt-4 p-4.5 pr-10 md:pr-14 rounded-[24px] border border-blue-100 bg-blue-50/50 flex flex-col md:flex-row items-center md:items-start gap-4 hover:border-blue-200/50 transition-all relative overflow-hidden shadow-xs animate-in fade-in duration-300">
                     {/* Left Icon container */}
                     <div className="w-11 h-11 bg-white border border-blue-100/50 text-blue-600 rounded-full flex items-center justify-center shrink-0 shadow-xs">
                       <Navigation className="w-5 h-5 fill-blue-600" />
                     </div>
                     {/* Main content block */}
-                    <div className="flex-1 text-center md:text-left min-w-0 pr-0 md:pr-10 space-y-1">
+                    <div className="flex-1 text-center md:text-left min-w-0 pr-0 md:pr-2 space-y-1">
                       <h4 className="text-xs md:text-sm font-bold text-slate-800 leading-snug">
                         Use location to find professionals near you.
                       </h4>
