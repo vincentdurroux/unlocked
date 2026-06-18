@@ -663,6 +663,56 @@ function OrientationLock() {
 export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
+  const [isAppShell, setIsAppShell] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    
+    // 1. Standalone display-mode check (PWA)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                          (window.navigator as any).standalone === true;
+                          
+    // 2. Query param checks (useful for native wrapper start_urls)
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasAppParam = urlParams.get('app') === 'true' || 
+                         urlParams.get('platform') === 'pwa' || 
+                         urlParams.get('standalone') === 'true' ||
+                         urlParams.get('mode') === 'app' || 
+                         urlParams.get('mode') === 'standalone';
+
+    // 3. User agent checks for iOS WKWebView and Android WebView shells
+    const ua = window.navigator.userAgent.toLowerCase();
+    const isWebView = (ua.includes('iphone') || ua.includes('ipad') || ua.includes('ipod') || ua.includes('android')) && 
+                      (ua.includes('wv') || (ua.includes('applewebkit') && !ua.includes('safari')));
+
+    return isStandalone || hasAppParam || isWebView;
+  });
+
+  useEffect(() => {
+    const checkAppShell = () => {
+      if (typeof window === 'undefined') return;
+      
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                            (window.navigator as any).standalone === true;
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasAppParam = urlParams.get('app') === 'true' || 
+                           urlParams.get('platform') === 'pwa' || 
+                           urlParams.get('standalone') === 'true' ||
+                           urlParams.get('mode') === 'app' || 
+                           urlParams.get('mode') === 'standalone';
+      const ua = window.navigator.userAgent.toLowerCase();
+      const isWebView = (ua.includes('iphone') || ua.includes('ipad') || ua.includes('ipod') || ua.includes('android')) && 
+                        (ua.includes('wv') || (ua.includes('applewebkit') && !ua.includes('safari')));
+      
+      setIsAppShell(isStandalone || hasAppParam || isWebView);
+    };
+
+    checkAppShell();
+    
+    const mql = window.matchMedia('(display-mode: standalone)');
+    if (mql.addEventListener) {
+      mql.addEventListener('change', checkAppShell);
+      return () => mql.removeEventListener('change', checkAppShell);
+    }
+  }, []);
 
   useEffect(() => {
     const lockOrientation = async () => {
@@ -1725,7 +1775,10 @@ export default function App() {
       {activeView !== 'login' && (
         <header 
           style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
-          className="bg-white px-4 md:px-6 pb-2 md:pt-3 md:pb-3 flex justify-between items-center border-b border-slate-100 flex-shrink-0 z-30 relative"
+          className={cn(
+            "bg-white px-2 sm:px-4 md:px-6 pb-2 md:pt-3 md:pb-3 flex border-b border-slate-100 flex-shrink-0 z-30 relative",
+            isAppShell ? "justify-between items-center" : "flex-wrap justify-between items-center gap-y-2"
+          )}
         >
           <div className="flex items-center lg:flex-1">
             <div 
@@ -1737,7 +1790,10 @@ export default function App() {
           </div>
 
           {/* Desktop Navigation Links - Centered */}
-          <nav className="hidden lg:flex items-center justify-center gap-6 lg:gap-8 lg:flex-1">
+          <nav className={cn(
+            isAppShell ? "hidden lg:flex" : "flex order-3 w-full lg:w-auto lg:order-none",
+            "items-center justify-center gap-4 lg:gap-8 lg:flex-1 py-1 lg:py-0 overflow-x-auto no-scrollbar"
+          )}>
             {navItems.filter(item => item.id !== 'profile').map((item) => (
               <button
                 key={item.id}
@@ -1764,7 +1820,10 @@ export default function App() {
           
           <div className="flex items-center justify-end gap-2 md:gap-6 lg:flex-1">
             {/* Desktop Profile Link */}
-            <div className="hidden lg:flex items-center gap-4 border-r border-slate-100 pr-4 mr-2">
+            <div className={cn(
+              "items-center gap-2 sm:gap-4 border-r border-slate-100 pr-2 sm:pr-4 mr-1 sm:mr-2",
+              isAppShell ? "hidden lg:flex" : "flex"
+            )}>
                <button 
                  onClick={() => handleNavigate('profile')}
                  className={cn(
@@ -1778,7 +1837,10 @@ export default function App() {
                       <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5 bg-rose-600 rounded-full border-2 border-white" />
                     )}
                  </div>
-                 <span className="text-[11px] font-extrabold uppercase tracking-widest hidden lg:block">My Account</span>
+                 <span className={cn(
+                   "text-[11px] font-extrabold uppercase tracking-widest",
+                   isAppShell ? "hidden lg:block" : "hidden sm:block"
+                 )}>My Account</span>
                </button>
             </div>
             <motion.button 
@@ -1830,7 +1892,7 @@ export default function App() {
         ref={mainRef} 
         className={cn(
           "flex-1 overflow-y-auto overflow-x-hidden no-scrollbar relative",
-          activeView === 'login' ? "pb-0" : "pb-24 lg:pb-0"
+          activeView === 'login' ? "pb-0" : (isAppShell ? "pb-24 lg:pb-0" : "pb-0")
         )}
       >
               <motion.div 
@@ -2569,11 +2631,11 @@ export default function App() {
             />
           )}
         </AnimatePresence>
-      {activeView !== 'login' && <SEOFooter onNavigate={handleNavigate} />}
+      {activeView !== 'login' && <SEOFooter onNavigate={handleNavigate} isAppShell={isAppShell} />}
       </main>
 
       {/* Bottom Navigation */}
-      {activeView !== 'login' && (
+      {activeView !== 'login' && isAppShell && (
         <nav 
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2px)' }}
           className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-100 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] lg:hidden"
@@ -8511,7 +8573,7 @@ function HomeView({
                 <div className="flex items-start gap-2.5">
                   <div className="w-4 h-4 rounded-full bg-brand-yellow/20 text-amber-700 flex items-center justify-center font-black text-[10px] mt-0.5 select-none shrink-0 border border-brand-yellow/30">2</div>
                   <p className="leading-tight" style={{ textAlign: 'left' }}>
-                    <strong className="text-slate-700">Validation</strong>: Our team validates directly with the pro to approve their profile on Unlocked.
+                    <strong className="text-slate-700">Validation</strong>: Our team validates directly with the pro to approve their profile on MyCityUnlocked.
                   </p>
                 </div>
                 
@@ -14280,9 +14342,12 @@ function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void 
   );
 }
 
-function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
+function SEOFooter({ onNavigate, isAppShell }: { onNavigate: (view: View) => void, isAppShell: boolean }) {
   return (
-    <footer className="hidden lg:block bg-[#E9ECFF] text-[#0A0F2C] py-16 px-8 border-t border-[#0A0F2C]/5 mt-20 mb-0">
+    <footer className={cn(
+      "bg-[#E9ECFF] text-[#0A0F2C] py-16 px-8 border-t border-[#0A0F2C]/5 mt-20 mb-0",
+      isAppShell ? "hidden lg:block" : "block"
+    )}>
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-12">
         <div className="space-y-6 col-span-1 lg:col-span-1 flex flex-col items-center text-center">
           <Logo />
