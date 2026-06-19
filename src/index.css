@@ -113,6 +113,18 @@ input, textarea, [contenteditable="true"] {
   }
 }
 
+/* Force mobile layout on iPad App Shell */
+body.ipad-app-force-mobile .my-seo-footer {
+  display: none !important;
+}
+
+body.ipad-app-force-mobile .app-container {
+  max-width: 450px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: 100% !important;
+}
+
 .orientation-lock-overlay {
   display: none;
   position: fixed;

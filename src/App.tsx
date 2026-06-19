@@ -682,6 +682,14 @@ export default function App() {
       }
     };
     lockOrientation();
+
+    // Force mobile layout on iPad Shell if detected
+    const isiPad = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isApp = navigator.userAgent.includes("PWAShell");
+
+    if (isiPad && isApp) {
+      document.body.classList.add('ipad-app-force-mobile');
+    }
   }, []);
 
   const mainRef = useRef<HTMLElement>(null);
