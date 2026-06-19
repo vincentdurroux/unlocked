@@ -682,14 +682,6 @@ export default function App() {
       }
     };
     lockOrientation();
-
-    // Force mobile layout on iPad Shell if detected
-    const isiPad = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isApp = navigator.userAgent.includes("PWAShell");
-
-    if (isiPad && isApp) {
-      document.body.classList.add('ipad-app-force-mobile');
-    }
   }, []);
 
   const mainRef = useRef<HTMLElement>(null);
@@ -1753,7 +1745,7 @@ export default function App() {
           </div>
 
           {/* Desktop Navigation Links - Centered */}
-          <nav className="hidden lg:flex items-center justify-center gap-6 lg:gap-8 lg:flex-1">
+          <nav className="hidden xl:flex items-center justify-center gap-6 xl:gap-8 xl:flex-1">
             {navItems.filter(item => item.id !== 'profile').map((item) => (
               <button
                 key={item.id}
@@ -2616,7 +2608,7 @@ export default function App() {
       {activeView !== 'login' && (
         <nav 
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2px)' }}
-          className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-100 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] lg:hidden"
+          className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-100 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] xl:hidden"
         >
           <div className="flex items-center justify-between px-2 py-2 max-w-xl mx-auto">
             {navItems.map((item) => (
@@ -14219,7 +14211,7 @@ function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void 
 
 function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
   return (
-    <footer className="hidden lg:block bg-[#E9ECFF] text-[#0A0F2C] py-16 px-8 border-t border-[#0A0F2C]/5 mt-20 mb-0">
+    <footer className="hidden xl:block bg-[#E9ECFF] text-[#0A0F2C] py-16 px-8 border-t border-[#0A0F2C]/5 mt-20 mb-0">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-12">
         <div className="space-y-6 col-span-1 lg:col-span-1 flex flex-col items-center text-center">
           <Logo />
