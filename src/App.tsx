@@ -11214,14 +11214,36 @@ function ProfessionalDetailView({
       try {
         const reviews = await proService.getTestimonies(pro.id);
         if (reviews && reviews.length > 0) {
-          setLocalReviews(reviews.map((r: any) => ({
-            id: r.id,
-            author: r.author,
-            userId: r.user_id || r.author_id || r.profile_id || r.creator_id,
-            rating: r.rating,
-            comment: r.comment,
-            date: new Date(r.created_at).toLocaleDateString()
-          })));
+          // Get all non-null user_ids from reviews
+          const reviewUserIds = reviews.map((r: any) => r.user_id || r.author_id || r.profile_id || r.creator_id).filter(Boolean);
+          
+          let activeProfileMap: Record<string, { chat_enabled: boolean }> = {};
+          if (reviewUserIds.length > 0) {
+            const { data: activeProfiles } = await supabase
+              .from('profiles')
+              .select('id, chat_enabled')
+              .in('id', reviewUserIds);
+            if (activeProfiles) {
+              activeProfiles.forEach((p: any) => {
+                activeProfileMap[p.id] = { chat_enabled: p.chat_enabled !== false };
+              });
+            }
+          }
+
+          setLocalReviews(reviews.map((r: any) => {
+            const uId = r.user_id || r.author_id || r.profile_id || r.creator_id;
+            const profileInfo = uId ? activeProfileMap[uId] : null;
+            return {
+              id: r.id,
+              author: r.author,
+              userId: uId,
+              rating: r.rating,
+              comment: r.comment,
+              date: new Date(r.created_at).toLocaleDateString(),
+              hasActiveProfile: !!profileInfo,
+              chatEnabled: profileInfo ? profileInfo.chat_enabled : false
+            };
+          }));
         } else {
           setLocalReviews([]);
         }
@@ -11509,40 +11531,46 @@ function ProfessionalDetailView({
                         <div key={review.id} className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100 space-y-3 animate-in fade-in duration-300">
                           <div className="flex justify-between items-start">
                             <div className="space-y-1">
-                              <div 
-                                className="font-bold text-slate-900 flex items-center gap-2 cursor-pointer hover:text-brand-blue transition-colors group/author"
-                                onClick={() => {
-                                  onNavigate('messages', { 
-                                    chat: {
-                                      id: `chat-${review.id}`,
-                                      userId: review.userId, // Direct user ID mapping if available
-                                      name: review.author, // RAW NAME for lookup as backup
-                                      displayName: formatName(review.author), // Formatted name for display
-                                      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formatName(review.author))}&background=random`,
-                                      online: true,
-                                      time: 'just now',
-                                      lastMsg: `Hello ${formatName(review.author)}! I saw your review for ${pro.name}.`,
-                                      returnToProId: pro.id
-                                    }
-                                  });
-                                  onClose();
-                                }}
-                              >
-                                {formatName(review.author)}
-                                <div className={cn(
-                                  "w-6 h-6 rounded-full flex items-center justify-center transition-colors",
-                                  (review.userId && (blockedUsers.includes(review.userId) || usersWhoBlockedMe.includes(review.userId)))
-                                    ? "bg-slate-50 cursor-not-allowed"
-                                    : "bg-slate-100 group-hover/author:bg-brand-blue/10"
-                                )}>
-                                  <MessageSquare className={cn(
-                                    "w-3.5 h-3.5 transition-all",
-                                    (review.userId && (blockedUsers.includes(review.userId) || usersWhoBlockedMe.includes(review.userId)))
-                                      ? "text-slate-250"
-                                      : "text-slate-400 group-hover/author:text-brand-blue"
-                                  )} />
-                                </div>
-                              </div>
+                              {(() => {
+                                const isBlocked = review.userId && (blockedUsers.includes(review.userId) || usersWhoBlockedMe.includes(review.userId));
+                                const isMe = review.userId && currentUser && review.userId === currentUser.id;
+                                const isChatAllowed = !!review.userId && !isMe && !isBlocked && review.hasActiveProfile && review.chatEnabled;
+
+                                if (isChatAllowed) {
+                                  return (
+                                    <div 
+                                      className="font-bold text-slate-900 flex items-center gap-2 cursor-pointer hover:text-brand-blue transition-colors group/author"
+                                      onClick={() => {
+                                        onNavigate('messages', { 
+                                          chat: {
+                                            id: `chat-${review.id}`,
+                                            userId: review.userId,
+                                            name: review.author,
+                                            displayName: formatName(review.author),
+                                            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formatName(review.author))}&background=random`,
+                                            online: true,
+                                            time: 'just now',
+                                            lastMsg: `Hello ${formatName(review.author)}! I saw your review for ${pro.name}.`,
+                                            returnToProId: pro.id
+                                          }
+                                        });
+                                        onClose();
+                                      }}
+                                    >
+                                      {formatName(review.author)}
+                                      <div className="w-6 h-6 rounded-full flex items-center justify-center bg-slate-100 group-hover/author:bg-brand-blue/10 transition-colors">
+                                        <MessageSquare className="w-3.5 h-3.5 text-slate-400 group-hover/author:text-brand-blue" />
+                                      </div>
+                                    </div>
+                                  );
+                                } else {
+                                  return (
+                                    <div className="font-bold text-slate-900 flex items-center gap-2">
+                                      {formatName(review.author)}
+                                    </div>
+                                  );
+                                }
+                              })()}
                               <div className="flex items-center gap-0.5">
                                 {[1, 2, 3, 4, 5].map((s) => (
                                   <Star key={s} className={cn("w-3 h-3", s <= review.rating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200")} />
