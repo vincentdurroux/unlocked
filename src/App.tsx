@@ -1838,7 +1838,7 @@ export default function App() {
         ref={mainRef} 
         className={cn(
           "flex-1 overflow-y-auto overflow-x-hidden no-scrollbar relative",
-          activeView === 'login' ? "pb-0" : "pb-24 lg:pb-0"
+          activeView === 'login' ? "pb-0" : "pb-24 xl:pb-0"
         )}
       >
               <motion.div 
@@ -7806,7 +7806,7 @@ function HomeView({
   }, [allPros]);
   
   return (
-    <div className="px-6 pt-12 md:pt-20 pb-6 space-y-12 md:space-y-20 lg:space-y-28 max-w-7xl mx-auto w-full overflow-hidden">
+    <div className="px-6 pt-12 md:pt-20 pb-12 md:pb-24 xl:pb-6 space-y-12 md:space-y-20 lg:space-y-28 max-w-7xl mx-auto w-full overflow-hidden">
 
       {/* Welcome & Search Group */}
       <div className="space-y-0">
