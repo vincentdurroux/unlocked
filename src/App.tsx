@@ -105,6 +105,7 @@ import { proService } from './services/proService';
 import { eventService } from './services/eventService';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
+import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
 
 const QUALITY_CONFIGS = [
   { name: "Reliable", icon: ShieldCheck, color: "bg-emerald-500/10 text-emerald-800 border-emerald-500/25 hover:bg-emerald-500/20", iconColor: "text-emerald-500", rawTheme: "emerald" },
@@ -1939,9 +1940,32 @@ export default function App() {
               )}
 
               {activeView === 'update-password' && (
-                <UpdatePasswordView 
-                  onPasswordUpdated={() => navigateTo('home')}
-                />
+                <div className="flex-1 flex flex-col min-h-full bg-slate-50/40 relative" id="legacy-recovery-redirect-wrapper">
+                  <div className="relative flex-1 flex flex-col items-center justify-center pt-16 px-5 pb-8 min-h-screen">
+                    <div className="w-full max-w-sm space-y-8">
+                      <div className="flex flex-col items-center text-center">
+                        <Logo className="scale-115" />
+                      </div>
+                      <div className="w-full bg-white p-7 sm:p-9 rounded-[32px] sm:rounded-[40px] border border-slate-100/80 shadow-[0_15px_45px_rgba(51,65,85,0.05)] relative z-10">
+                        <div className="text-center space-y-3 mb-8">
+                          <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Reset Password</h2>
+                          <p className="text-slate-400 font-normal text-xs sm:text-[13px] leading-relaxed max-w-xs mx-auto">
+                            Enter your email to receive a 6-digit verification code.
+                          </p>
+                        </div>
+                        <ForgotPasswordOTP 
+                          onBackToLogin={() => navigateTo('login')}
+                          onSuccess={() => {
+                            supabase.auth.getUser().then(({ data: { user } }) => {
+                              if (user) setCurrentUser(user);
+                              navigateTo('home');
+                            });
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {activeView === 'complete-profile' && (
@@ -7252,164 +7276,7 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
   );
 }
 
-function UpdatePasswordView({ onPasswordUpdated }: { onPasswordUpdated: () => void }) {
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!password) return;
-    if (password !== confirmPassword) {
-      setMessage({ type: 'error', text: 'Passwords do not match.' });
-      return;
-    }
-    if (password.length < 6) {
-      setMessage({ type: 'error', text: 'Password must be at least 6 characters.' });
-      return;
-    }
-
-    setIsLoading(true);
-    setMessage(null);
-
-    try {
-      await authService.updatePassword(password);
-      setMessage({ type: 'success', text: 'Your password has been successfully updated!' });
-      if (window.history && window.history.replaceState) {
-        window.history.replaceState(null, '', window.location.pathname);
-      }
-      setTimeout(() => {
-        onPasswordUpdated();
-      }, 2000);
-    } catch (err: any) {
-      console.error('Password update error:', err);
-      setMessage({ type: 'error', text: err.message || 'Failed to update password.' });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="flex-1 flex flex-col min-h-full bg-slate-50/40 relative">
-      {/* Decorative Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[10%] -right-[10%] w-[40%] h-[40%] bg-brand-blue/5 rounded-full blur-3xl animate-float" />
-        <div className="absolute top-[20%] -left-[5%] w-[30%] h-[30%] bg-brand-yellow/5 rounded-full blur-3xl animate-float" style={{ animationDelay: '-5s' }} />
-        <div className="absolute bottom-[10%] right-[5%] w-[25%] h-[25%] bg-brand-blue/5 rounded-full blur-3xl animate-float" style={{ animationDelay: '-10s' }} />
-      </div>
-
-      <div className="relative flex-1 flex flex-col items-center justify-center pt-16 px-5 pb-8 min-h-screen">
-        <div className="w-full max-w-sm space-y-8">
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center text-center"
-          >
-            <Logo className="scale-115" />
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 }}
-            className="w-full bg-white p-7 sm:p-9 rounded-[32px] sm:rounded-[40px] border border-slate-100/80 shadow-[0_15px_45px_rgba(51,65,85,0.05)] relative z-10"
-          >
-            <div className="text-center space-y-3 mb-8">
-              <h2 className="text-3xl font-bold text-slate-800 tracking-tight">
-                Update Password
-              </h2>
-              <p className="text-slate-400 font-normal text-xs sm:text-[13px] leading-relaxed max-w-xs mx-auto">
-                Please enter a secure new password for your account.
-              </p>
-            </div>
-
-            {message && (
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={cn(
-                  "p-4 rounded-2xl text-sm font-normal flex items-center gap-3 mb-6",
-                  message.type === 'success' 
-                    ? "bg-emerald-50 text-emerald-600 border border-emerald-100" 
-                    : "bg-rose-50 text-rose-600 border border-rose-100"
-                )}
-              >
-                {message.type === 'success' ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
-                <span className="text-xs sm:text-sm">{message.text}</span>
-              </motion.div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-2">
-                <label className="text-[10px] font-medium uppercase tracking-[0.15em] text-slate-400 px-1">New Password</label>
-                <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 group-focus-within:bg-brand-blue/5 transition-colors">
-                    <Lock className={cn(
-                      "w-5 h-5 transition-colors",
-                      password ? "text-brand-blue" : "text-slate-300"
-                    )} />
-                  </div>
-                  <input 
-                    required
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full h-14 bg-slate-50 border border-slate-100 rounded-2xl pl-16 pr-14 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all placeholder:text-slate-300 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-lg"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-medium uppercase tracking-[0.15em] text-slate-400 px-1">Confirm New Password</label>
-                <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 group-focus-within:bg-brand-blue/5 transition-colors">
-                    <Lock className={cn(
-                      "w-5 h-5 transition-colors",
-                      confirmPassword ? "text-brand-blue" : "text-slate-300"
-                    )} />
-                  </div>
-                  <input 
-                    required
-                    type={showPassword ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full h-14 bg-slate-50 border border-slate-100 rounded-2xl pl-16 pr-14 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all placeholder:text-slate-300 text-sm"
-                  />
-                </div>
-              </div>
-
-              <button 
-                disabled={isLoading}
-                type="submit"
-                className="w-full h-14 bg-brand-blue text-white rounded-2xl font-semibold text-sm uppercase tracking-widest shadow-xl shadow-brand-blue/20 hover:shadow-2xl hover:shadow-brand-blue/30 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-3 mt-4"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    Update Password
-                    <ArrowRight className="w-4 h-4" />
-                  </span>
-                )}
-              </button>
-            </form>
-          </motion.div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack: () => void, onLoginSuccess: () => void, onSetUser: (user: any) => void, currentUser?: any }) {
   const [email, setEmail] = useState('');
@@ -7447,23 +7314,6 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
     e.preventDefault();
     if (!email) return;
     setStep('password');
-  };
-
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) return;
-    setIsLoading(true);
-    setMessage(null);
-    try {
-      await authService.resetPassword(email);
-      setMessage({ type: 'success', text: 'Password reset link sent successfully! Please check your inbox configuration.' });
-      setStep('password');
-    } catch (error: any) {
-      console.error('Password reset error:', error);
-      setMessage({ type: 'error', text: error.message || 'Failed to send password reset link.' });
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -7593,7 +7443,7 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
               </h2>
               <p className="text-slate-400 font-normal text-xs sm:text-[13px] leading-relaxed max-w-xs mx-auto">
                 {step === 'forgot_password' 
-                  ? 'Enter your email address and we will send you a password reset link.' 
+                  ? 'Enter your email to receive a 6-digit verification code.' 
                   : isNewUser 
                     ? "Sign up to continue discovering and connecting with trusted local pros." 
                     : "Sign in to continue discovering and connecting with trusted local pros."}
@@ -7706,31 +7556,36 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
                 </div>
               </div>
 
+              ) : step === 'forgot_password' ? (
+                <ForgotPasswordOTP
+                  initialEmail={email}
+                  onBackToLogin={() => {
+                    setStep('password');
+                    if (message) setMessage(null);
+                  }}
+                  onSuccess={() => {
+                    supabase.auth.getUser().then(({ data: { user } }) => {
+                      if (user) {
+                        onSetUser(user);
+                      }
+                      onLoginSuccess();
+                    });
+                  }}
+                />
               ) : (
                 /* Email Credentials Input State */
                 <form 
                   onSubmit={
                   step === 'email' 
                     ? handleContinue 
-                    : step === 'forgot_password' 
-                      ? handleResetPassword 
-                      : handleAuth
+                    : handleAuth
                 } 
                 className="space-y-5 animate-in fade-in duration-200"
               >
-                {step === 'email' || step === 'forgot_password' ? (
+                {step === 'email' ? (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between px-1">
                       <label className="text-[10px] font-medium uppercase tracking-[0.15em] text-slate-400 px-1">Email Address</label>
-                      {step === 'forgot_password' && (
-                        <button 
-                          type="button"
-                          onClick={() => setStep('password')}
-                          className="text-[10px] font-medium uppercase tracking-wider text-brand-blue hover:underline cursor-pointer"
-                        >
-                          Back to Password
-                        </button>
-                      )}
                     </div>
                     <div className="relative group">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 group-focus-within:bg-brand-blue/5 transition-colors">
@@ -7826,44 +7681,29 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
                     <span className="flex items-center justify-center gap-2">
-                      {step === 'email' ? 'Continue' : step === 'forgot_password' ? 'Send Reset Link' : isNewUser ? 'Sign up' : 'Sign In'} 
+                      {step === 'email' ? 'Continue' : isNewUser ? 'Sign up' : 'Sign In'} 
                       <ArrowRight className="w-4 h-4" />
                     </span>
                   )}
                 </button>
 
-                {step === 'forgot_password' ? (
-                  <div className="text-center border-t border-slate-100/80 pt-4 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStep('password');
-                        if (message) setMessage(null);
-                      }}
-                      className="text-xs font-semibold text-brand-blue hover:underline cursor-pointer"
-                    >
-                      Back to Sign In
-                    </button>
-                  </div>
-                ) : (
-                  /* Switch button between Sign In and Sign Up inside credentials form */
-                  <div className="text-center border-t border-slate-100/80 pt-4 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsNewUser(!isNewUser);
-                        if (message) setMessage(null);
-                      }}
-                      className="text-xs font-normal text-slate-450 hover:text-slate-600 transition-colors cursor-pointer"
-                    >
-                      {isNewUser ? (
-                        <>Already have an account? <span className="text-brand-blue font-semibold hover:underline">Sign in</span></>
-                      ) : (
-                        <>Don't have an account? <span className="text-brand-blue font-semibold hover:underline">Sign up</span></>
-                      )}
-                    </button>
-                  </div>
-                )}
+                {/* Switch button between Sign In and Sign Up inside credentials form */}
+                <div className="text-center border-t border-slate-100/80 pt-4 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsNewUser(!isNewUser);
+                      if (message) setMessage(null);
+                    }}
+                    className="text-xs font-normal text-slate-450 hover:text-slate-600 transition-colors cursor-pointer"
+                  >
+                    {isNewUser ? (
+                      <>Already have an account? <span className="text-brand-blue font-semibold hover:underline">Sign in</span></>
+                    ) : (
+                      <>Don't have an account? <span className="text-brand-blue font-semibold hover:underline">Sign up</span></>
+                    )}
+                  </button>
+                </div>
 
                 {/* Back Link to choice selection */}
                 <div className="text-center pt-1">
