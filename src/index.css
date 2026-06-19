@@ -105,7 +105,6 @@ input, textarea, [contenteditable="true"] {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
 /* Orientation restriction for mobile */
 @media (max-width: 932px) and (orientation: landscape) {
   .orientation-lock-overlay {
@@ -113,6 +112,30 @@ input, textarea, [contenteditable="true"] {
   }
 }
 
+/* 🌟 APPLIQUÉ UNIQUEMENT SUR L'IPAD DANS XCODE */
+body.ipad-app-force-mobile {
+    background-color: #f8fafc !important; /* Couleur pour habiller les côtés vides en paysage */
+    display: flex !important;
+    justify-content: center !important;
+    align-items: stretch !important;
+    min-height: 100vh !important;
+    margin: 0 !important;
+}
+
+/* 1. On fait disparaître le footer SEO instantanément */
+body.ipad-app-force-mobile .my-seo-footer {
+    display: none !important;
+}
+
+/* 2. On force le site à garder une largeur de smartphone (ex: 450px) au centre de l'iPad */
+body.ipad-app-force-mobile .app-container {
+    width: 100% !important;
+    max-width: 450px !important; /* Largeur d'un gros téléphone pour un look d'app native */
+    margin: 0 auto !important;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.1) !important; /* Ombre élégante sur les bords */
+    background-color: #ffffff !important; /* Fond blanc pour l'app */
+    min-height: 100vh !important;
+}
 .orientation-lock-overlay {
   display: none;
   position: fixed;

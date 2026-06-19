@@ -668,6 +668,20 @@ function OrientationLock() {
 }
 
 export default function App() {
+  useEffect(() => {
+    // 1. Détection de l'iPad (reprise de ta capture d'écran)
+    const isiPad = /iPad/.test(navigator.userAgent) || 
+                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                   
+    // 2. Détection de ton application iOS (grâce à ton Xcode actuel)
+    const isInsideApp = navigator.userAgent.includes("PWAShell");
+
+    // 3. Si on est sur iPad DANS l'app, on applique la classe magique
+    if (isiPad && isInsideApp) {
+      document.body.classList.add("ipad-app-force-mobile");
+    }
+  }, []);
+
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
 
@@ -1924,6 +1938,7 @@ export default function App() {
                   onProfileUpdate={() => currentUser && loadProfile(currentUser.id)}
                   onAddPro={() => setShowAddPro(true)}
                   allPros={allPros}
+                  refetchPros={refetchPros}
                   unreadConversations={unreadConversations}
                 />
               )}
@@ -12859,7 +12874,7 @@ function FeedbackSubPage({ currentUser, onBack }: { currentUser: any, onBack: ()
   );
 }
 
-function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProfileUpdate, onAddPro, allPros, unreadConversations = [] }: { scrollToTop?: () => void, onNavigate?: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, currentUser?: any, userProfile?: Profile | null, onProfileUpdate?: () => void, onAddPro?: () => void, allPros?: any[], unreadConversations?: string[] }) {
+function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProfileUpdate, onAddPro, allPros, refetchPros, unreadConversations = [] }: { scrollToTop?: () => void, onNavigate?: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, currentUser?: any, userProfile?: Profile | null, onProfileUpdate?: () => void, onAddPro?: () => void, allPros?: any[], refetchPros?: () => void, unreadConversations?: string[] }) {
   const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -13443,6 +13458,7 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
                                       const success = await proService.deleteTestimony(review.id);
                                       if (success) {
                                         await fetchMyTestimonies();
+                                        refetchPros?.();
                                         setMsg({ type: 'success', text: 'Testimonial deleted successfully.' });
                                       }
                                     } catch (err) {
