@@ -662,14 +662,40 @@ export const chatService = {
   async getProfileByName(name: string) {
     if (!isSupabaseConfigured || !name) return null;
 
-    const normalized = name.trim().toLowerCase();
+    let cleanName = name;
+    let cleanEmail = '';
+    
+    if (name.includes('|')) {
+      const parts = name.split('|');
+      cleanName = parts[0].trim();
+      cleanEmail = parts[1].trim();
+    }
+
+    // 0. If there's an exact email, perform a strict lookup and return IMMEDIATELY.
+    // This avoids false matches/partial comparisons if the user was deleted/missing.
+    if (cleanEmail) {
+      try {
+        const { data: exactEmail } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('email', cleanEmail)
+          .maybeSingle();
+
+        if (exactEmail) return exactEmail;
+      } catch (e) {
+        console.warn('Error on exact email lookup inside getProfileByName:', e);
+      }
+      return null; // The profile is definitely deleted or missing, stop so we don't return other users!
+    }
+
+    const normalized = cleanName.trim().toLowerCase();
 
     // 1. Try exact match on full_name
     try {
       const { data: exactFull } = await supabase
         .from('profiles')
         .select('*')
-        .eq('full_name', name)
+        .eq('full_name', cleanName)
         .maybeSingle();
 
       if (exactFull) return exactFull;
@@ -682,7 +708,7 @@ export const chatService = {
       const { data: exactEmail } = await supabase
         .from('profiles')
         .select('*')
-        .eq('email', name)
+        .eq('email', cleanName)
         .maybeSingle();
 
       if (exactEmail) return exactEmail;
@@ -695,7 +721,7 @@ export const chatService = {
       const { data: ilikeFull } = await supabase
         .from('profiles')
         .select('*')
-        .ilike('full_name', name)
+        .ilike('full_name', cleanName)
         .maybeSingle();
 
       if (ilikeFull) return ilikeFull;
@@ -708,7 +734,7 @@ export const chatService = {
       const { data: ilikeEmail } = await supabase
         .from('profiles')
         .select('*')
-        .ilike('email', name)
+        .ilike('email', cleanName)
         .maybeSingle();
 
       if (ilikeEmail) return ilikeEmail;

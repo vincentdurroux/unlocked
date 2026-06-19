@@ -397,9 +397,15 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function getAuthorDisplayName(author: string | null | undefined): string {
+  if (!author) return 'Anonymous';
+  return author.includes('|') ? author.split('|')[0] : author;
+}
+
 function formatName(name: string | null | undefined): string {
   if (!name) return '';
-  const rawName = name.trim();
+  const cleanName = name.includes('|') ? name.split('|')[0] : name;
+  const rawName = cleanName.trim();
   const parts = rawName.split(/\s+/);
   if (parts.length > 1) {
     const first = parts[0];
@@ -5673,7 +5679,7 @@ function AdminView({
                           </div>
                           <div>
                             <div className="flex items-center flex-wrap gap-2 mb-1">
-                              <span className="font-bold text-slate-900">{testimony.author}</span>
+                              <span className="font-bold text-slate-900">{getAuthorDisplayName(testimony.author)}</span>
                               <span className="text-slate-300 mx-1">•</span>
                               <div className="flex items-center gap-0.5 text-amber-400">
                                 {[...Array(5)].map((_, i) => (
@@ -6335,7 +6341,7 @@ function AdminView({
                               >
                                 <div className="min-w-0 pr-4 text-left">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="font-bold text-slate-900 text-xs truncate">{currentHighlight.author}</span>
+                                    <span className="font-bold text-slate-900 text-xs truncate">{getAuthorDisplayName(currentHighlight.author)}</span>
                                     <span className="text-[9px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-md font-bold uppercase truncate max-w-[120px]">
                                       {currentHighlight.professionals?.name || 'Pro'}
                                     </span>
@@ -6358,7 +6364,7 @@ function AdminView({
                   (() => {
                     const approvedTestimonies = allTestimonies.filter(t => t.status === 'approved');
                     const filtered = approvedTestimonies.filter(t => 
-                      t.author.toLowerCase().includes(testimonySearch.toLowerCase()) ||
+                      getAuthorDisplayName(t.author).toLowerCase().includes(testimonySearch.toLowerCase()) ||
                       (t.comment && t.comment.toLowerCase().includes(testimonySearch.toLowerCase())) ||
                       (t.professionals?.name && t.professionals.name.toLowerCase().includes(testimonySearch.toLowerCase()))
                     );
@@ -6379,7 +6385,7 @@ function AdminView({
                               >
                                 <div className="flex flex-col gap-1 min-w-0 pr-4 text-left">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="font-bold text-slate-900 text-xs truncate">{testimony.author}</span>
+                                    <span className="font-bold text-slate-900 text-xs truncate">{getAuthorDisplayName(testimony.author)}</span>
                                     <span className="text-[9px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-md font-bold uppercase truncate max-w-[120px]">
                                       {testimony.professionals?.name || 'Pro'}
                                     </span>
@@ -11214,36 +11220,84 @@ function ProfessionalDetailView({
       try {
         const reviews = await proService.getTestimonies(pro.id);
         if (reviews && reviews.length > 0) {
-          // Get all non-null user_ids from reviews
-          const reviewUserIds = reviews.map((r: any) => r.user_id || r.author_id || r.profile_id || r.creator_id).filter(Boolean);
+          // Extract emails and names to match active profiles
+          const emails: string[] = [];
+          const names: string[] = [];
           
-          let activeProfileMap: Record<string, { chat_enabled: boolean }> = {};
-          if (reviewUserIds.length > 0) {
-            const { data: activeProfiles } = await supabase
-              .from('profiles')
-              .select('id, chat_enabled')
-              .in('id', reviewUserIds);
-            if (activeProfiles) {
-              activeProfiles.forEach((p: any) => {
-                activeProfileMap[p.id] = { chat_enabled: p.chat_enabled !== false };
-              });
+          reviews.forEach((r: any) => {
+            if (!r.author) return;
+            if (r.author.includes('|')) {
+              const parts = r.author.split('|');
+              names.push(parts[0].trim());
+              emails.push(parts[1].trim());
+            } else {
+              names.push(r.author.trim());
+              if (r.author.includes('@')) {
+                emails.push(r.author.trim());
+              }
             }
+          });
+
+          // Fetch matching profiles to check if chat is available (not disabled, not deleted)
+          let profiles: any[] = [];
+          try {
+            if (isSupabaseConfigured) {
+              const promises: any[] = [];
+              if (emails.length > 0) {
+                promises.push(supabase.from('profiles').select('id, full_name, email, chat_enabled').in('email', emails));
+              }
+              if (names.length > 0) {
+                promises.push(supabase.from('profiles').select('id, full_name, email, chat_enabled').in('full_name', names));
+              }
+              
+              if (promises.length > 0) {
+                const results = await Promise.all(promises);
+                results.forEach((res: any) => {
+                  if (res.data) {
+                    profiles = [...profiles, ...res.data];
+                  }
+                });
+              }
+            }
+          } catch (pe) {
+            console.warn('Error fetching matching profiles for testimonies:', pe);
           }
 
-          setLocalReviews(reviews.map((r: any) => {
-            const uId = r.user_id || r.author_id || r.profile_id || r.creator_id;
-            const profileInfo = uId ? activeProfileMap[uId] : null;
+          const mappedReviews = reviews.map((r: any) => {
+            let cleanAuthor = r.author || '';
+            let extractedEmail = '';
+            if (r.author && r.author.includes('|')) {
+              const parts = r.author.split('|');
+              cleanAuthor = parts[0].trim();
+              extractedEmail = parts[1].trim();
+            } else if (r.author && r.author.includes('@')) {
+              extractedEmail = r.author.trim();
+            }
+
+            // Find matching profile
+            let matchedProfile = null;
+            if (extractedEmail) {
+              matchedProfile = profiles.find((p: any) => p.email && p.email.toLowerCase() === extractedEmail.toLowerCase());
+            }
+            if (!matchedProfile && cleanAuthor) {
+              matchedProfile = profiles.find((p: any) => p.full_name && p.full_name.trim().toLowerCase() === cleanAuthor.toLowerCase());
+            }
+
+            const isSelf = matchedProfile ? (currentUser && matchedProfile.id === currentUser.id) : false;
+            const isChatAvailable = (matchedProfile && !isSelf) ? (matchedProfile.chat_enabled !== false) : false;
+
             return {
               id: r.id,
               author: r.author,
-              userId: uId,
+              userId: matchedProfile ? matchedProfile.id : (r.user_id || r.author_id || r.profile_id || r.creator_id),
               rating: r.rating,
               comment: r.comment,
               date: new Date(r.created_at).toLocaleDateString(),
-              hasActiveProfile: !!profileInfo,
-              chatEnabled: profileInfo ? profileInfo.chat_enabled : false
+              isChatAvailable: isChatAvailable
             };
-          }));
+          });
+
+          setLocalReviews(mappedReviews);
         } else {
           setLocalReviews([]);
         }
@@ -11258,7 +11312,7 @@ function ProfessionalDetailView({
       try {
         const authorName = userProfile?.full_name || currentUser?.email?.split('@')[0] || '';
         if (authorName) {
-          const reviewed = await proService.hasUserReviewedPro(authorName, pro.id);
+          const reviewed = await proService.hasUserReviewedPro(authorName, pro.id, currentUser?.email || undefined);
           setHasAlreadyReviewed(reviewed);
         }
       } catch (err) {
@@ -11531,46 +11585,48 @@ function ProfessionalDetailView({
                         <div key={review.id} className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100 space-y-3 animate-in fade-in duration-300">
                           <div className="flex justify-between items-start">
                             <div className="space-y-1">
-                              {(() => {
-                                const isBlocked = review.userId && (blockedUsers.includes(review.userId) || usersWhoBlockedMe.includes(review.userId));
-                                const isMe = review.userId && currentUser && review.userId === currentUser.id;
-                                const isChatAllowed = !!review.userId && !isMe && !isBlocked && review.hasActiveProfile && review.chatEnabled;
-
-                                if (isChatAllowed) {
-                                  return (
-                                    <div 
-                                      className="font-bold text-slate-900 flex items-center gap-2 cursor-pointer hover:text-brand-blue transition-colors group/author"
-                                      onClick={() => {
-                                        onNavigate('messages', { 
-                                          chat: {
-                                            id: `chat-${review.id}`,
-                                            userId: review.userId,
-                                            name: review.author,
-                                            displayName: formatName(review.author),
-                                            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formatName(review.author))}&background=random`,
-                                            online: true,
-                                            time: 'just now',
-                                            lastMsg: `Hello ${formatName(review.author)}! I saw your review for ${pro.name}.`,
-                                            returnToProId: pro.id
-                                          }
-                                        });
-                                        onClose();
-                                      }}
-                                    >
-                                      {formatName(review.author)}
-                                      <div className="w-6 h-6 rounded-full flex items-center justify-center bg-slate-100 group-hover/author:bg-brand-blue/10 transition-colors">
-                                        <MessageSquare className="w-3.5 h-3.5 text-slate-400 group-hover/author:text-brand-blue" />
-                                      </div>
-                                    </div>
-                                  );
-                                } else {
-                                  return (
-                                    <div className="font-bold text-slate-900 flex items-center gap-2">
-                                      {formatName(review.author)}
-                                    </div>
-                                  );
-                                }
-                              })()}
+                              <div 
+                                className={cn(
+                                  "font-bold text-slate-900 flex items-center gap-2 transition-colors",
+                                  review.isChatAvailable 
+                                    ? "cursor-pointer hover:text-brand-blue group/author" 
+                                    : "cursor-default"
+                                )}
+                                onClick={() => {
+                                  if (!review.isChatAvailable) return;
+                                  onNavigate('messages', { 
+                                    chat: {
+                                      id: `chat-${review.id}`,
+                                      userId: review.userId, // Direct user ID mapping if available
+                                      name: review.author, // RAW NAME for lookup as backup
+                                      displayName: formatName(review.author), // Formatted name for display
+                                      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formatName(review.author))}&background=random`,
+                                      online: true,
+                                      time: 'just now',
+                                      lastMsg: `Hello ${formatName(review.author)}! I saw your review for ${pro.name}.`,
+                                      returnToProId: pro.id
+                                    }
+                                  });
+                                  onClose();
+                                }}
+                              >
+                                {formatName(review.author)}
+                                {review.isChatAvailable && (
+                                  <div className={cn(
+                                    "w-6 h-6 rounded-full flex items-center justify-center transition-colors",
+                                    (review.userId && (blockedUsers.includes(review.userId) || usersWhoBlockedMe.includes(review.userId)))
+                                      ? "bg-slate-50 cursor-not-allowed"
+                                      : "bg-slate-100 group-hover/author:bg-brand-blue/10"
+                                  )}>
+                                    <MessageSquare className={cn(
+                                      "w-3.5 h-3.5 transition-all",
+                                      (review.userId && (blockedUsers.includes(review.userId) || usersWhoBlockedMe.includes(review.userId)))
+                                        ? "text-slate-250"
+                                        : "text-slate-400 group-hover/author:text-brand-blue"
+                                    )} />
+                                  </div>
+                                )}
+                              </div>
                               <div className="flex items-center gap-0.5">
                                 {[1, 2, 3, 4, 5].map((s) => (
                                   <Star key={s} className={cn("w-3 h-3", s <= review.rating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200")} />
@@ -11827,14 +11883,16 @@ DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`);
                             onClick={async () => {
                               setIsSubmitting(true);
                               setReviewError(null);
-                              const finalAuthorName = userProfile?.full_name || currentUser?.email?.split('@')[0] || 'Anonymous Member';
+                              const name = userProfile?.full_name || currentUser?.email?.split('@')[0] || 'Anonymous Member';
+                              const email = currentUser?.email || '';
+                              const finalAuthorName = email ? `${name}|${email}` : name;
                               try {
                                 await proService.addTestimony({
                                   pro_id: pro.id,
                                   author: finalAuthorName,
                                   rating: rating,
                                   comment: comment
-                                });
+                                }, email);
 
                                 setReviewSuccess(true);
                                 setHasAlreadyReviewed(true);
@@ -12871,7 +12929,7 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
   const [showSqlInstruction, setShowSqlInstruction] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
 
-  const sqlScript = `-- 1. Create public.archive_profiles table\\nCREATE TABLE IF NOT EXISTS public.archive_profiles (\\n  id uuid PRIMARY KEY,\\n  email text NOT NULL,\\n  full_name text,\\n  deleted_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL\\n);\\n\\n-- Enable Row Level Security (RLS)\\nALTER TABLE public.archive_profiles ENABLE ROW LEVEL SECURITY;\\n\\n-- 2. Create the delete function with automatic archiving\\nCREATE OR REPLACE FUNCTION public.delete_own_user()\\nRETURNS void AS $$\\nBEGIN\\n  -- Archive the profile\\n  INSERT INTO public.archive_profiles (id, email, full_name, deleted_at)\\n  SELECT id, email, full_name, now()\\n  FROM public.profiles\\n  WHERE id = auth.uid()\\n  ON CONFLICT (id) DO NOTHING;\\n\\n  -- Delete from auth.users (will cascade delete public.profiles)\\n  DELETE FROM auth.users\\n  WHERE id = auth.uid();\\nEND;\\n$$ LANGUAGE plpgsql SECURITY DEFINER;\\n\\n-- 3. Create "avatars" storage bucket & configure delete/upload policies\\nINSERT INTO storage.buckets (id, name, public)\\nVALUES ('avatars', 'avatars', true)\\nON CONFLICT (id) DO NOTHING;\\n\\n-- Enable owners to read/write/delete avatars securely\\nDROP POLICY IF EXISTS "Public Select" ON storage.objects;\\nDROP POLICY IF EXISTS "Auth Insert" ON storage.objects;\\nDROP POLICY IF EXISTS "Auth Update" ON storage.objects;\\nDROP POLICY IF EXISTS "Auth Delete" ON storage.objects;\\n\\nCREATE POLICY "Public Select" ON storage.objects FOR SELECT TO public USING (bucket_id = 'avatars');\\nCREATE POLICY "Auth Insert" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'avatars');\\nCREATE POLICY "Auth Update" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'avatars') WITH CHECK (bucket_id = 'avatars');\\nCREATE POLICY "Auth Delete" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'avatars');`;
+  const sqlScript = `-- 1. Create public.archive_profiles table\\nCREATE TABLE IF NOT EXISTS public.archive_profiles (\\n  id uuid PRIMARY KEY,\\n  email text NOT NULL,\\n  full_name text,\\n  deleted_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL\\n);\\n\\n-- Enable Row Level Security (RLS)\\nALTER TABLE public.archive_profiles ENABLE ROW LEVEL SECURITY;\\n\\n-- 2. Create the delete function with automatic archiving\\n-- Ensure message constraints are cascading to handle user deletion\\nALTER TABLE public.messages DROP CONSTRAINT IF EXISTS messages_receiver_id_fkey;\\nALTER TABLE public.messages ADD CONSTRAINT messages_receiver_id_fkey FOREIGN KEY (receiver_id) REFERENCES auth.users(id) ON DELETE CASCADE;\\nALTER TABLE public.messages DROP CONSTRAINT IF EXISTS messages_sender_id_fkey;\\nALTER TABLE public.messages ADD CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES auth.users(id) ON DELETE CASCADE;\\n\\nCREATE OR REPLACE FUNCTION public.delete_own_user()\\nRETURNS void AS $$\\nBEGIN\\n  -- Archive the profile\\n  INSERT INTO public.archive_profiles (id, email, full_name, deleted_at)\\n  SELECT id, email, full_name, now()\\n  FROM public.profiles\\n  WHERE id = auth.uid()\\n  ON CONFLICT (id) DO NOTHING;\\n\\n  -- Delete from auth.users (will cascade delete public.profiles)\\n  DELETE FROM auth.users\\n  WHERE id = auth.uid();\\nEND;\\n$$ LANGUAGE plpgsql SECURITY DEFINER;\\n\\n-- 3. Create "avatars" storage bucket & configure delete/upload policies\\nINSERT INTO storage.buckets (id, name, public)\\nVALUES ('avatars', 'avatars', true)\\nON CONFLICT (id) DO NOTHING;\\n\\n-- Enable owners to read/write/delete avatars securely\\nDROP POLICY IF EXISTS "Public Select" ON storage.objects;\\nDROP POLICY IF EXISTS "Auth Insert" ON storage.objects;\\nDROP POLICY IF EXISTS "Auth Update" ON storage.objects;\\nDROP POLICY IF EXISTS "Auth Delete" ON storage.objects;\\n\\nCREATE POLICY "Public Select" ON storage.objects FOR SELECT TO public USING (bucket_id = 'avatars');\\nCREATE POLICY "Auth Insert" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'avatars');\\nCREATE POLICY "Auth Update" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'avatars') WITH CHECK (bucket_id = 'avatars');\\nCREATE POLICY "Auth Delete" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'avatars');`;
 
   const fetchMyConversations = async () => {
     if (!currentUser) return;
@@ -12891,7 +12949,7 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
     if (!name) return;
     setLoadingTestimonies(true);
     try {
-      const list = await proService.getMyTestimonies(name);
+      const list = await proService.getMyTestimonies(name, currentUser?.email || undefined);
       setMyTestimonies(list);
     } catch (e) {
       console.error('Error fetching my testimonies:', e);

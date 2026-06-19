@@ -48,8 +48,7 @@ export const proService = {
   _hasRecProImageUrlColumn: true,
 
   isAdmin(email?: string | null) {
-    const adminEmails = ['vincentdurroux@gmail.com']; // You can add more admins here
-    return !!email && adminEmails.includes(email);
+    return false; // Hardcoded emails are deprecated. Admins are strictly verified via userProfile.is_admin = true in DB.
   },
 
   async getProfessionals() {
@@ -749,7 +748,7 @@ export const proService = {
     author: string;
     rating: number;
     comment: string;
-  }) {
+  }, authorEmail?: string) {
     if (!isSupabaseConfigured) return null;
 
     let finalProId = testimony.pro_id;
@@ -759,15 +758,26 @@ export const proService = {
     
     console.log('[proService] Adding testimony for pro_id:', finalProId, 'Type:', typeof finalProId);
 
+    // Make sure author text incorporates the email securely if provided
+    let finalAuthorValue = testimony.author;
+    let extractedEmail = authorEmail;
+    if (testimony.author.includes('|')) {
+      const parts = testimony.author.split('|');
+      finalAuthorValue = parts[0];
+      extractedEmail = parts[1];
+    }
+
+    const payloadAuthor = extractedEmail ? `${finalAuthorValue}|${extractedEmail}` : finalAuthorValue;
+
     // Check if user already reviewed this pro
-    const hasReviewed = await this.hasUserReviewedPro(testimony.author, finalProId);
+    const hasReviewed = await this.hasUserReviewedPro(finalAuthorValue, finalProId, extractedEmail);
     if (hasReviewed) {
       throw new Error('You have already submitted a testimonial for this professional.');
     }
 
     const payload = {
       pro_id: finalProId, // Pass normalized ID
-      author: testimony.author,
+      author: payloadAuthor,
       rating: testimony.rating,
       comment: testimony.comment,
       status: 'pending' // Default to pending for moderation
@@ -786,7 +796,7 @@ export const proService = {
     return data;
   },
 
-  async hasUserReviewedPro(authorName: string, proId: string | number) {
+  async hasUserReviewedPro(authorName: string, proId: string | number, authorEmail?: string) {
     if (!isSupabaseConfigured) return false;
 
     let finalProId = proId;
@@ -796,17 +806,30 @@ export const proService = {
 
     const { data, error } = await supabase
       .from('testimonies')
-      .select('id')
-      .eq('author', authorName)
-      .eq('pro_id', finalProId)
-      .maybeSingle();
+      .select('id, author')
+      .eq('pro_id', finalProId);
 
     if (error) {
       console.error('Error checking existing testimony:', error);
       return false;
     }
 
-    return !!data;
+    if (!data || data.length === 0) return false;
+
+    // Check if any review has match with email
+    if (authorEmail) {
+      const emailLower = authorEmail.toLowerCase();
+      const hasEmailMatch = data.some((t: any) => t.author && t.author.toLowerCase().endsWith(`|${emailLower}`));
+      if (hasEmailMatch) return true;
+    }
+    
+    // Check if any review has match with the clean author name (as fallback for legacy or unmatched)
+    const cleanSearchName = authorName.includes('|') ? authorName.split('|')[0].trim() : authorName.trim();
+    return data.some((t: any) => {
+      if (!t.author) return false;
+      const cleanAuthor = t.author.includes('|') ? t.author.split('|')[0] : t.author;
+      return cleanAuthor.trim().toLowerCase() === cleanSearchName.toLowerCase();
+    });
   },
 
   async syncProfessionalStats(proId: string | number) {
@@ -997,20 +1020,40 @@ export const proService = {
     });
   },
 
-  async getMyTestimonies(authorName: string) {
+  async getMyTestimonies(authorName: string, authorEmail?: string) {
     if (!isSupabaseConfigured) return [];
 
-    const { data, error } = await supabase
-      .from('testimonies')
-      .select('*')
-      .eq('author', authorName)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.warn('Error fetching my testimonies:', error);
-      return [];
+    let query = supabase.from('testimonies').select('*');
+    
+    if (authorEmail) {
+      const emailLower = authorEmail.toLowerCase();
+      const { data, error } = await query.order('created_at', { ascending: false });
+      
+      if (error) {
+        console.warn('Error fetching my testimonies:', error);
+        return [];
+      }
+      
+      return data.filter((t: any) => {
+        if (!t.author) return false;
+        if (t.author.toLowerCase().endsWith(`|${emailLower}`)) return true;
+        
+        // Fallback for legacy comments: match name only if no '|' is present in the database author field
+        if (!t.author.includes('|')) {
+          const cleanAuthor = t.author.trim().toLowerCase();
+          const cleanSearchName = authorName.trim().toLowerCase();
+          return cleanAuthor === cleanSearchName;
+        }
+        return false;
+      });
+    } else {
+      const { data, error } = await query.eq('author', authorName).order('created_at', { ascending: false });
+      if (error) {
+        console.warn('Error fetching my testimonies:', error);
+        return [];
+      }
+      return data;
     }
-    return data;
   },
 
   async updateTestimony(id: string | number, rating: number, comment: string) {
