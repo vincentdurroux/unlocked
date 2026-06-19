@@ -668,20 +668,6 @@ function OrientationLock() {
 }
 
 export default function App() {
-  useEffect(() => {
-    // 1. Détection de l'iPad (reprise de ta capture d'écran)
-    const isiPad = /iPad/.test(navigator.userAgent) || 
-                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-                   
-    // 2. Détection de ton application iOS (grâce à ton Xcode actuel)
-    const isInsideApp = navigator.userAgent.includes("PWAShell");
-
-    // 3. Si on est sur iPad DANS l'app, on applique la classe magique
-    if (isiPad && isInsideApp) {
-      document.body.classList.add("ipad-app-force-mobile");
-    }
-  }, []);
-
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
 
