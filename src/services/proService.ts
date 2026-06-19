@@ -819,8 +819,11 @@ export const proService = {
     // Check if any review has match with email
     if (authorEmail) {
       const emailLower = authorEmail.toLowerCase();
-      const hasEmailMatch = data.some((t: any) => t.author && t.author.toLowerCase().endsWith(`|${emailLower}`));
-      if (hasEmailMatch) return true;
+      const hasEmailMatch = data.some((t: any) => t.author && (
+          t.author.toLowerCase() == emailLower || 
+          t.author.toLowerCase().endsWith(`|${emailLower}`)
+      ));
+      return hasEmailMatch;
     }
     
     // Check if any review has match with the clean author name (as fallback for legacy or unmatched)
