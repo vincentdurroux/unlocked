@@ -1,5 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Normalize password recovery/redirect URLs with double-hashes (e.g. #type=recovery#access_token=...)
+if (typeof window !== 'undefined') {
+  const hash = window.location.hash;
+  if (hash && (hash.match(/#/g) || []).length > 1) {
+    console.log('[Supabase Setup] Double hash detected in URL:', hash);
+    const parts = hash.split('#');
+    // Filter out empty parts, then join them with '&' and prefix with '#'
+    const cleanParts = parts.filter(Boolean);
+    const normalizedHash = '#' + cleanParts.join('&');
+    console.log('[Supabase Setup] Normalized hash:', normalizedHash);
+    
+    // Rewrite window.location.hash so that the Supabase client can parse the access_token successfully
+    window.location.hash = normalizedHash;
+    // Also save a recovery flag to local storage
+    localStorage.setItem('unlocked_is_recovery_session', 'true');
+  }
+}
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
