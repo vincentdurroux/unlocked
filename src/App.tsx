@@ -1519,6 +1519,51 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Check if we are in a recovery redirect flow with access_token / refresh_token in hash
+    const checkRecoveryHash = async () => {
+      try {
+        const hash = window.location.hash || '';
+        const cleanHash = hash.replace(/^#/, '');
+        
+        // Check both standard URLSearchParams and loose fragments
+        const hasTokens = cleanHash.includes('access_token=') && cleanHash.includes('refresh_token=');
+        
+        if (hasTokens) {
+          console.log('[Auth Recovery Direct] Detected access_token and refresh_token in hash fragment. Initiating manual session setup...');
+          const params = new URLSearchParams(cleanHash);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+          const isRecoveryUrl = hash.includes('type=recovery') || hash.includes('recovery') || window.location.search.includes('type=recovery') || window.location.href.includes('type=recovery');
+          
+          if (accessToken && refreshToken && isRecoveryUrl) {
+            console.log('[Auth Recovery Direct] Found recovery tokens. Storing indicators and setting session.');
+            sessionStorage.setItem('unlocked_is_recovery_session', 'true');
+            localStorage.setItem('keep_me_signed_in', 'true');
+            
+            const { data, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken
+            });
+            
+            if (error) {
+              console.error('[Auth Recovery Direct] Error setting manual recovery session:', error.message);
+            } else {
+              console.log('[Auth Recovery Direct] Recovery session set successfully for email:', data.user?.email);
+              if (data.user) {
+                setCurrentUser(data.user);
+                setActiveView('update-password');
+                setAuthLoading(false);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[Auth Recovery Direct] Unexpected error in manual recovery check:', err);
+      }
+    };
+
+    checkRecoveryHash();
+
     // Listen for auth changes
     const { data: { subscription } } = authService.onAuthStateChange((event, session) => {
       console.log('Auth event:', event);
