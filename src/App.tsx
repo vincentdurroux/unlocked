@@ -1619,6 +1619,21 @@ export default function App() {
   }, []);
 
   const loadProfile = async (userId: string, event?: string) => {
+    const isRecovery = event === 'PASSWORD_RECOVERY' || 
+                      localStorage.getItem('unlocked_is_recovery_session') === 'true' ||
+                      window.location.hash.includes('type=recovery') || 
+                      window.location.hash.includes('recovery') || 
+                      window.location.href.includes('type=recovery') ||
+                      window.location.search.includes('type=recovery') ||
+                      activeViewRef.current === 'update-password';
+
+    if (isRecovery) {
+      console.log('[Auth] Password recovery flow detected, forcing update-password view and bypassing profile check.');
+      setActiveView('update-password');
+      setAuthLoading(false);
+      return;
+    }
+
     try {
       const profile = await authService.getProfile(userId);
       setUserProfile(profile);
@@ -1630,21 +1645,6 @@ export default function App() {
         updated: profile?.updated_at,
         event 
       });
-
-      const isRecovery = event === 'PASSWORD_RECOVERY' || 
-                        localStorage.getItem('unlocked_is_recovery_session') === 'true' ||
-                        window.location.hash.includes('type=recovery') || 
-                        window.location.hash.includes('recovery') || 
-                        window.location.href.includes('type=recovery') ||
-                        window.location.search.includes('type=recovery') ||
-                        activeViewRef.current === 'update-password';
-
-      if (isRecovery) {
-        console.log('[Auth] Password recovery flow detected, forcing update-password view.');
-        setActiveView('update-password');
-        setAuthLoading(false);
-        return;
-      }
 
       if (!profile) {
         console.log('[Onboarding] Profile missing, forcing flow.');
