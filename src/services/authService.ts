@@ -137,10 +137,24 @@ export const authService = {
     if (profile.full_name !== undefined && oldName && oldName !== profile.full_name) {
       try {
         console.log(`[Profile Update] Propagating name change from "${oldName}" to "${profile.full_name}" in testimonies...`);
+        
+        // Get user email for precise matching
+        const { data: { user } } = await supabase.auth.getUser();
+        const email = user?.email?.toLowerCase();
+        
+        let targetAuthorSelector = oldName;
+        let newAuthorValue = profile.full_name;
+        
+        if (email) {
+          // Precise match: name|email
+          targetAuthorSelector = `${oldName}|${email}`;
+          newAuthorValue = `${profile.full_name}|${email}`;
+        }
+
         const { error: testimoniesError } = await supabase
           .from('testimonies')
-          .update({ author: profile.full_name })
-          .eq('author', oldName);
+          .update({ author: newAuthorValue })
+          .eq('author', targetAuthorSelector);
           
         if (testimoniesError) {
           console.warn('[Profile Update] Failed to update testimonies authors:', testimoniesError);
