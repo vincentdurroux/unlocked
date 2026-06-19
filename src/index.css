@@ -128,7 +128,7 @@ body.ipad-app-force-mobile .my-seo-footer {
 }
 
 /* 2. On force le site à garder une largeur de smartphone (ex: 450px) au centre de l'iPad */
-body.ipad-app-force-mobile .app-container {
+body.ipad-app-force-mobile #root > div {
     width: 100% !important;
     max-width: 450px !important; /* Largeur d'un gros téléphone pour un look d'app native */
     margin: 0 auto !important;
