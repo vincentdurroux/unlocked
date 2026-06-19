@@ -1612,9 +1612,10 @@ export default function App() {
         event 
       });
 
-      const isRecovery = event === 'PASSWORD_RECOVERY' || 
+      const isRecovery = (event === 'PASSWORD_RECOVERY' || 
                         window.location.hash.includes('type=recovery') || 
-                        window.location.href.includes('type=recovery');
+                        window.location.href.includes('type=recovery')) &&
+                        localStorage.getItem('password_reset_completed') !== 'true';
 
       if (isRecovery) {
         console.log('[Auth] Password recovery flow detected, forcing update-password view.');

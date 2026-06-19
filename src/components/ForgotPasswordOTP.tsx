@@ -86,6 +86,9 @@ export function ForgotPasswordOTP({ onBackToLogin, onSuccess, initialEmail = '' 
     setIsLoading(true);
     setMessage(null);
 
+    // Set the completion flag so that background auth changes don't force recovery views during update
+    localStorage.setItem('password_reset_completed', 'true');
+
     try {
       // 1. Validate OTP token with type recovery (generates secure active session)
       const { error: verifyError } = await supabase.auth.verifyOtp({
@@ -94,14 +97,25 @@ export function ForgotPasswordOTP({ onBackToLogin, onSuccess, initialEmail = '' 
         type: 'recovery'
       });
 
-      if (verifyError) throw verifyError;
+      if (verifyError) {
+        localStorage.removeItem('password_reset_completed');
+        throw verifyError;
+      }
 
       // 2. Chained immediately with updateUser to update the password securely
       const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword
       });
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        localStorage.removeItem('password_reset_completed');
+        throw updateError;
+      }
+
+      // Clear the url hash if present to prevent any lingering recovery hooks
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
 
       setMessage({
         type: 'success',
@@ -110,9 +124,11 @@ export function ForgotPasswordOTP({ onBackToLogin, onSuccess, initialEmail = '' 
 
       // Smooth programmatic success redirection
       setTimeout(() => {
+        localStorage.removeItem('password_reset_completed');
         onSuccess();
       }, 2000);
     } catch (err: any) {
+      localStorage.removeItem('password_reset_completed');
       console.error('Error verifying OTP and updating password:', err);
       setMessage({
         type: 'error',
