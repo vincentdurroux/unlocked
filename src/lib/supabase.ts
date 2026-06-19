@@ -1,38 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Normalize password recovery/redirect URLs (e.g. #type=recovery#access_token=... or #type=recovery&access_token=...)
-if (typeof window !== 'undefined') {
-  const hash = window.location.hash || '';
-  const search = window.location.search || '';
-  const href = window.location.href || '';
-
-  const isRecoveryFlow = 
-    hash.includes('type=recovery') || 
-    hash.includes('recovery') || 
-    search.includes('type=recovery') ||
-    href.includes('type=recovery') ||
-    (hash.includes('access_token=') && (hash.includes('recovery') || hash.includes('type=')));
-
-  if (isRecoveryFlow) {
-    console.log('[Supabase Setup] Password recovery flow detected in URL. Preserving session.');
-    window.sessionStorage.setItem('unlocked_is_recovery_session', 'true');
-    window.localStorage.setItem('keep_me_signed_in', 'true');
-  }
-
-  // Normalize password recovery/redirect URLs with double-hashes
-  if (hash && (hash.match(/#/g) || []).length > 1) {
-    console.log('[Supabase Setup] Double hash detected in URL:', hash);
-    const parts = hash.split('#');
-    // Filter out empty parts, then join them with '&' and prefix with '#'
-    const cleanParts = parts.filter(Boolean);
-    const normalizedHash = '#' + cleanParts.join('&');
-    console.log('[Supabase Setup] Normalized hash:', normalizedHash);
-    
-    // Rewrite window.location.hash so that the Supabase client can parse the access_token successfully
-    window.location.hash = normalizedHash;
-  }
-}
-
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 

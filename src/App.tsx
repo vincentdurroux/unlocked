@@ -691,7 +691,7 @@ export default function App() {
       'community-guidelines', 'cookie-policy'
     ];
 
-    if (sessionStorage.getItem('unlocked_is_recovery_session') === 'true' || window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
+    if (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
       initial = 'update-password';
     } else if (cleanHash && validViews.includes(cleanHash as View)) {
       initial = cleanHash as View;
@@ -1519,64 +1519,11 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Check if we are in a recovery redirect flow with access_token / refresh_token in hash
-    const checkRecoveryHash = async () => {
-      try {
-        const hash = window.location.hash || '';
-        const cleanHash = hash.replace(/^#/, '');
-        
-        // Check both standard URLSearchParams and loose fragments
-        const hasTokens = cleanHash.includes('access_token=') && cleanHash.includes('refresh_token=');
-        
-        if (hasTokens) {
-          console.log('[Auth Recovery Direct] Detected access_token and refresh_token in hash fragment. Initiating manual session setup...');
-          const params = new URLSearchParams(cleanHash);
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
-          const isRecoveryUrl = hash.includes('type=recovery') || hash.includes('recovery') || window.location.search.includes('type=recovery') || window.location.href.includes('type=recovery');
-          
-          if (accessToken && refreshToken && isRecoveryUrl) {
-            console.log('[Auth Recovery Direct] Found recovery tokens. Storing indicators and setting session.');
-            sessionStorage.setItem('unlocked_is_recovery_session', 'true');
-            localStorage.setItem('keep_me_signed_in', 'true');
-            
-            const { data, error } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken
-            });
-            
-            if (error) {
-              console.error('[Auth Recovery Direct] Error setting manual recovery session:', error.message);
-            } else {
-              console.log('[Auth Recovery Direct] Recovery session set successfully for email:', data.user?.email);
-              if (data.user) {
-                setCurrentUser(data.user);
-                setActiveView('update-password');
-                setAuthLoading(false);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error('[Auth Recovery Direct] Unexpected error in manual recovery check:', err);
-      }
-    };
-
-    checkRecoveryHash();
-
     // Listen for auth changes
     const { data: { subscription } } = authService.onAuthStateChange((event, session) => {
       console.log('Auth event:', event);
-      const isRecovery = event === 'PASSWORD_RECOVERY' || 
-                        sessionStorage.getItem('unlocked_is_recovery_session') === 'true' ||
-                        window.location.hash.includes('type=recovery') || 
-                        window.location.hash.includes('recovery') || 
-                        window.location.href.includes('type=recovery') ||
-                        window.location.search.includes('type=recovery') ||
-                        activeViewRef.current === 'update-password';
-
       if (session?.user) {
-        if (!session.user.email_confirmed_at && !isRecovery) {
+        if (!session.user.email_confirmed_at) {
           authService.signOut().catch(() => {});
           setCurrentUser(null);
           setUserProfile(null);
@@ -1604,14 +1551,7 @@ export default function App() {
     // Check current session
     authService.getCurrentUser().then(user => {
       if (user) {
-        const isRecovery = sessionStorage.getItem('unlocked_is_recovery_session') === 'true' ||
-                           window.location.hash.includes('type=recovery') || 
-                           window.location.hash.includes('recovery') ||
-                           window.location.href.includes('type=recovery') ||
-                           window.location.search.includes('type=recovery') ||
-                           activeViewRef.current === 'update-password';
-
-        if (!user.email_confirmed_at && !isRecovery) {
+        if (!user.email_confirmed_at) {
           authService.signOut().catch(() => {});
           setCurrentUser(null);
           setAuthLoading(false);
@@ -1625,19 +1565,9 @@ export default function App() {
         
         // Ensure they requested to remember the login
         const keepSignedIn = localStorage.getItem('keep_me_signed_in') === 'true';
-        const hasAuthRedirect = window.location.hash.includes('access_token=') || 
-                                window.location.search.includes('code=') ||
-                                window.location.href.includes('code=') ||
-                                activeViewRef.current === 'update-password' ||
-                                activeViewRef.current === 'complete-profile';
-
-        if (keepSignedIn || isRecovery || hasAuthRedirect) {
-          if (isRecovery || hasAuthRedirect) {
-            // Force remember session so they stay logged in and can reset their password
-            localStorage.setItem('keep_me_signed_in', 'true');
-          }
+        if (keepSignedIn) {
           setCurrentUser(user);
-          loadProfile(user.id, isRecovery ? 'PASSWORD_RECOVERY' : undefined);
+          loadProfile(user.id);
         } else {
           authService.signOut().catch(() => {});
           setCurrentUser(null);
@@ -1669,21 +1599,6 @@ export default function App() {
   }, []);
 
   const loadProfile = async (userId: string, event?: string) => {
-    const isRecovery = event === 'PASSWORD_RECOVERY' || 
-                      sessionStorage.getItem('unlocked_is_recovery_session') === 'true' ||
-                      window.location.hash.includes('type=recovery') || 
-                      window.location.hash.includes('recovery') || 
-                      window.location.href.includes('type=recovery') ||
-                      window.location.search.includes('type=recovery') ||
-                      activeViewRef.current === 'update-password';
-
-    if (isRecovery) {
-      console.log('[Auth] Password recovery flow detected, forcing update-password view and bypassing profile check.');
-      setActiveView('update-password');
-      setAuthLoading(false);
-      return;
-    }
-
     try {
       const profile = await authService.getProfile(userId);
       setUserProfile(profile);
@@ -1695,6 +1610,17 @@ export default function App() {
         updated: profile?.updated_at,
         event 
       });
+
+      const isRecovery = event === 'PASSWORD_RECOVERY' || 
+                        window.location.hash.includes('type=recovery') || 
+                        window.location.href.includes('type=recovery');
+
+      if (isRecovery) {
+        console.log('[Auth] Password recovery flow detected, forcing update-password view.');
+        setActiveView('update-password');
+        setAuthLoading(false);
+        return;
+      }
 
       if (!profile) {
         console.log('[Onboarding] Profile missing, forcing flow.');
@@ -7350,8 +7276,6 @@ function UpdatePasswordView({ onPasswordUpdated }: { onPasswordUpdated: () => vo
 
     try {
       await authService.updatePassword(password);
-      sessionStorage.removeItem('unlocked_is_recovery_session');
-      localStorage.removeItem('unlocked_is_recovery_session');
       setMessage({ type: 'success', text: 'Your password has been successfully updated!' });
       if (window.history && window.history.replaceState) {
         window.history.replaceState(null, '', window.location.pathname);
@@ -7532,7 +7456,6 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
     setMessage(null);
     try {
       await authService.resetPassword(email);
-      sessionStorage.setItem('unlocked_is_recovery_session', 'true');
       setMessage({ type: 'success', text: 'Password reset link sent successfully! Please check your inbox configuration.' });
       setStep('password');
     } catch (error: any) {
