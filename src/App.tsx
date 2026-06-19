@@ -691,7 +691,7 @@ export default function App() {
       'community-guidelines', 'cookie-policy'
     ];
 
-    if (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
+    if (localStorage.getItem('unlocked_is_recovery_session') === 'true' || window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
       initial = 'update-password';
     } else if (cleanHash && validViews.includes(cleanHash as View)) {
       initial = cleanHash as View;
@@ -1522,8 +1522,16 @@ export default function App() {
     // Listen for auth changes
     const { data: { subscription } } = authService.onAuthStateChange((event, session) => {
       console.log('Auth event:', event);
+      const isRecovery = event === 'PASSWORD_RECOVERY' || 
+                        localStorage.getItem('unlocked_is_recovery_session') === 'true' ||
+                        window.location.hash.includes('type=recovery') || 
+                        window.location.hash.includes('recovery') || 
+                        window.location.href.includes('type=recovery') ||
+                        window.location.search.includes('type=recovery') ||
+                        activeViewRef.current === 'update-password';
+
       if (session?.user) {
-        if (!session.user.email_confirmed_at) {
+        if (!session.user.email_confirmed_at && !isRecovery) {
           authService.signOut().catch(() => {});
           setCurrentUser(null);
           setUserProfile(null);
@@ -1551,7 +1559,14 @@ export default function App() {
     // Check current session
     authService.getCurrentUser().then(user => {
       if (user) {
-        if (!user.email_confirmed_at) {
+        const isRecovery = localStorage.getItem('unlocked_is_recovery_session') === 'true' ||
+                           window.location.hash.includes('type=recovery') || 
+                           window.location.hash.includes('recovery') ||
+                           window.location.href.includes('type=recovery') ||
+                           window.location.search.includes('type=recovery') ||
+                           activeViewRef.current === 'update-password';
+
+        if (!user.email_confirmed_at && !isRecovery) {
           authService.signOut().catch(() => {});
           setCurrentUser(null);
           setAuthLoading(false);
@@ -1565,11 +1580,6 @@ export default function App() {
         
         // Ensure they requested to remember the login
         const keepSignedIn = localStorage.getItem('keep_me_signed_in') === 'true';
-        const isRecovery = window.location.hash.includes('type=recovery') || 
-                           window.location.hash.includes('recovery') ||
-                           window.location.href.includes('type=recovery') ||
-                           window.location.search.includes('type=recovery') ||
-                           activeViewRef.current === 'update-password';
 
         if (keepSignedIn || isRecovery) {
           if (isRecovery) {
@@ -1622,6 +1632,7 @@ export default function App() {
       });
 
       const isRecovery = event === 'PASSWORD_RECOVERY' || 
+                        localStorage.getItem('unlocked_is_recovery_session') === 'true' ||
                         window.location.hash.includes('type=recovery') || 
                         window.location.hash.includes('recovery') || 
                         window.location.href.includes('type=recovery') ||
@@ -7289,6 +7300,7 @@ function UpdatePasswordView({ onPasswordUpdated }: { onPasswordUpdated: () => vo
 
     try {
       await authService.updatePassword(password);
+      localStorage.removeItem('unlocked_is_recovery_session');
       setMessage({ type: 'success', text: 'Your password has been successfully updated!' });
       if (window.history && window.history.replaceState) {
         window.history.replaceState(null, '', window.location.pathname);
