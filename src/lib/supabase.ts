@@ -15,7 +15,7 @@ if (typeof window !== 'undefined') {
 
   if (isRecoveryFlow) {
     console.log('[Supabase Setup] Password recovery flow detected in URL. Preserving session.');
-    window.localStorage.setItem('unlocked_is_recovery_session', 'true');
+    window.sessionStorage.setItem('unlocked_is_recovery_session', 'true');
     window.localStorage.setItem('keep_me_signed_in', 'true');
   }
 

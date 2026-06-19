@@ -691,7 +691,7 @@ export default function App() {
       'community-guidelines', 'cookie-policy'
     ];
 
-    if (localStorage.getItem('unlocked_is_recovery_session') === 'true' || window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
+    if (sessionStorage.getItem('unlocked_is_recovery_session') === 'true' || window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
       initial = 'update-password';
     } else if (cleanHash && validViews.includes(cleanHash as View)) {
       initial = cleanHash as View;
@@ -1523,7 +1523,7 @@ export default function App() {
     const { data: { subscription } } = authService.onAuthStateChange((event, session) => {
       console.log('Auth event:', event);
       const isRecovery = event === 'PASSWORD_RECOVERY' || 
-                        localStorage.getItem('unlocked_is_recovery_session') === 'true' ||
+                        sessionStorage.getItem('unlocked_is_recovery_session') === 'true' ||
                         window.location.hash.includes('type=recovery') || 
                         window.location.hash.includes('recovery') || 
                         window.location.href.includes('type=recovery') ||
@@ -1559,7 +1559,7 @@ export default function App() {
     // Check current session
     authService.getCurrentUser().then(user => {
       if (user) {
-        const isRecovery = localStorage.getItem('unlocked_is_recovery_session') === 'true' ||
+        const isRecovery = sessionStorage.getItem('unlocked_is_recovery_session') === 'true' ||
                            window.location.hash.includes('type=recovery') || 
                            window.location.hash.includes('recovery') ||
                            window.location.href.includes('type=recovery') ||
@@ -1625,7 +1625,7 @@ export default function App() {
 
   const loadProfile = async (userId: string, event?: string) => {
     const isRecovery = event === 'PASSWORD_RECOVERY' || 
-                      localStorage.getItem('unlocked_is_recovery_session') === 'true' ||
+                      sessionStorage.getItem('unlocked_is_recovery_session') === 'true' ||
                       window.location.hash.includes('type=recovery') || 
                       window.location.hash.includes('recovery') || 
                       window.location.href.includes('type=recovery') ||
@@ -7305,6 +7305,7 @@ function UpdatePasswordView({ onPasswordUpdated }: { onPasswordUpdated: () => vo
 
     try {
       await authService.updatePassword(password);
+      sessionStorage.removeItem('unlocked_is_recovery_session');
       localStorage.removeItem('unlocked_is_recovery_session');
       setMessage({ type: 'success', text: 'Your password has been successfully updated!' });
       if (window.history && window.history.replaceState) {
@@ -7486,7 +7487,7 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
     setMessage(null);
     try {
       await authService.resetPassword(email);
-      localStorage.setItem('unlocked_is_recovery_session', 'true');
+      sessionStorage.setItem('unlocked_is_recovery_session', 'true');
       setMessage({ type: 'success', text: 'Password reset link sent successfully! Please check your inbox configuration.' });
       setStep('password');
     } catch (error: any) {
