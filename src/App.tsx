@@ -92,7 +92,6 @@ import {
   Navigation,
   Megaphone,
   Database,
-  Wrench,
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
@@ -668,76 +667,7 @@ function OrientationLock() {
   );
 }
 
-// --- Maintenance Page Component ---
-function MaintenancePage() {
-  return (
-    <div className="min-h-screen bg-[#0A0F2C] flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Glow Decorations */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[120px] animate-pulse" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-amber-500/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
-
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="max-w-2xl w-full text-center space-y-8 relative z-10"
-      >
-        {/* Animated Icon Container */}
-        <div className="flex justify-center">
-          <div className="relative">
-            <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-2xl animate-ping" />
-            <div className="bg-white/10 backdrop-blur-xl p-8 rounded-[40px] border border-white/10 shadow-2xl relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <Wrench className="w-16 h-16 text-blue-400 animate-[spin_4s_linear_infinite]" />
-            </div>
-          </div>
-        </div>
-
-        {/* Content Section */}
-        <div className="space-y-4">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white font-display tracking-tight leading-tight">
-            Under <span className="text-blue-400">Maintenance</span>
-          </h1>
-          <p className="text-slate-400 text-lg md:text-xl leading-relaxed max-w-lg mx-auto">
-            We are currently updating <span className="text-white font-bold">MyCityUnlocked</span> to bring you a smoother and more powerful experience.
-          </p>
-        </div>
-
-        {/* Progress Decoration */}
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-48 h-1.5 bg-white/5 rounded-full overflow-hidden">
-            <motion.div 
-              initial={{ x: "-100%" }}
-              animate={{ x: "100%" }}
-              transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-              className="w-1/2 h-full bg-gradient-to-r from-transparent via-blue-400 to-transparent"
-            />
-          </div>
-          <p className="text-slate-500 font-medium text-sm animate-pulse">
-            Thank you for your patience. We'll be back shortly!
-          </p>
-        </div>
-      </motion.div>
-
-      {/* Modern Footer */}
-      <footer className="absolute bottom-10 left-0 w-full text-center">
-        <p className="text-slate-500 text-sm font-medium tracking-widest uppercase opacity-50">
-          © 2026 MyCityUnlocked
-        </p>
-      </footer>
-    </div>
-  );
-}
-
-// --- Main App Component ---
 export default function App() {
-  // --- Maintenance Mode Check ---
-  const isMaintenanceMode = import.meta.env.VITE_MAINTENANCE_MODE === 'true';
-
-  if (isMaintenanceMode) {
-    return <MaintenancePage />;
-  }
-  // ------------------------------
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
 
