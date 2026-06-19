@@ -1580,9 +1580,14 @@ export default function App() {
         
         // Ensure they requested to remember the login
         const keepSignedIn = localStorage.getItem('keep_me_signed_in') === 'true';
+        const hasAuthRedirect = window.location.hash.includes('access_token=') || 
+                                window.location.search.includes('code=') ||
+                                window.location.href.includes('code=') ||
+                                activeViewRef.current === 'update-password' ||
+                                activeViewRef.current === 'complete-profile';
 
-        if (keepSignedIn || isRecovery) {
-          if (isRecovery) {
+        if (keepSignedIn || isRecovery || hasAuthRedirect) {
+          if (isRecovery || hasAuthRedirect) {
             // Force remember session so they stay logged in and can reset their password
             localStorage.setItem('keep_me_signed_in', 'true');
           }
@@ -7481,6 +7486,7 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
     setMessage(null);
     try {
       await authService.resetPassword(email);
+      localStorage.setItem('unlocked_is_recovery_session', 'true');
       setMessage({ type: 'success', text: 'Password reset link sent successfully! Please check your inbox configuration.' });
       setStep('password');
     } catch (error: any) {
