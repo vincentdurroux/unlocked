@@ -1565,9 +1565,19 @@ export default function App() {
         
         // Ensure they requested to remember the login
         const keepSignedIn = localStorage.getItem('keep_me_signed_in') === 'true';
-        if (keepSignedIn) {
+        const isRecovery = window.location.hash.includes('type=recovery') || 
+                           window.location.hash.includes('recovery') ||
+                           window.location.href.includes('type=recovery') ||
+                           window.location.search.includes('type=recovery') ||
+                           activeViewRef.current === 'update-password';
+
+        if (keepSignedIn || isRecovery) {
+          if (isRecovery) {
+            // Force remember session so they stay logged in and can reset their password
+            localStorage.setItem('keep_me_signed_in', 'true');
+          }
           setCurrentUser(user);
-          loadProfile(user.id);
+          loadProfile(user.id, isRecovery ? 'PASSWORD_RECOVERY' : undefined);
         } else {
           authService.signOut().catch(() => {});
           setCurrentUser(null);
@@ -1613,7 +1623,10 @@ export default function App() {
 
       const isRecovery = event === 'PASSWORD_RECOVERY' || 
                         window.location.hash.includes('type=recovery') || 
-                        window.location.href.includes('type=recovery');
+                        window.location.hash.includes('recovery') || 
+                        window.location.href.includes('type=recovery') ||
+                        window.location.search.includes('type=recovery') ||
+                        activeViewRef.current === 'update-password';
 
       if (isRecovery) {
         console.log('[Auth] Password recovery flow detected, forcing update-password view.');
