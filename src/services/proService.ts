@@ -17,6 +17,7 @@ export interface SupabaseProfessional {
   instagram: string;
   facebook?: string;
   location: string;
+  whatsapp?: string;
   lat?: number;
   lng?: number;
   created_at?: string;
@@ -190,6 +191,7 @@ export const proService = {
           website: pro.website,
           instagram: pro.instagram,
           facebook: pro.facebook,
+          whatsapp: pro.whatsapp,
           lat: lat,
           lng: lng,
           location: cleanLocation,
@@ -235,6 +237,7 @@ export const proService = {
           website: pro.website,
           instagram: pro.instagram,
           facebook: pro.facebook,
+          whatsapp: pro.whatsapp,
           lat: lat,
           lng: lng,
           location: cleanLocation,
@@ -443,6 +446,7 @@ export const proService = {
     setIfChanged('phone', pro.phone, existingRecord.phone);
     setIfChanged('email', pro.email, existingRecord.email);
     setIfChanged('website', pro.website, existingRecord.website);
+    setIfChanged('whatsapp', pro.whatsapp, existingRecord.whatsapp);
     setIfChanged('instagram', pro.instagram, existingRecord.instagram);
     setIfChanged('facebook', pro.facebook, existingRecord.facebook);
     setIfChanged('lat', lat, existingRecord.lat);

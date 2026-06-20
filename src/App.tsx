@@ -457,6 +457,7 @@ interface Professional {
   image: string;
   bio: string;
   phone?: string;
+  whatsapp?: string;
   email?: string;
   website?: string;
   instagram?: string;
@@ -3947,6 +3948,7 @@ function AdminView({
     image: '',
     bio: '',
     phone: '',
+    whatsapp: '',
     email: '',
     website: '',
     instagram: '',
@@ -4017,6 +4019,7 @@ function AdminView({
       category: rec.pro_category || '',
       categories: initialCategories,
       phone: rec.pro_phone || '',
+      whatsapp: rec.whatsapp || '',
       email: rec.pro_email || '',
       image: rec.pro_image_url || '',
       languages: rec.pro_languages || [],
@@ -4055,6 +4058,7 @@ function AdminView({
       image: imageValue,
       bio: bioValue,
       phone: pro.phone || '',
+      whatsapp: pro.whatsapp || '',
       email: pro.email || '',
       website: pro.website || '',
       instagram: pro.instagram || '',
@@ -4242,6 +4246,7 @@ function AdminView({
         description: newPro.bio,
         bio: newPro.bio, // Add both for safety
         phone: newPro.phone,
+        whatsapp: newPro.whatsapp,
         email: newPro.email,
         website: newPro.website,
         instagram: newPro.instagram,
@@ -4922,6 +4927,16 @@ function AdminView({
                     />
                   </div>
                   <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">WhatsApp</label>
+                    <input 
+                      type="tel"
+                      value={newPro.whatsapp || ''}
+                      onChange={e => setNewPro({...newPro, whatsapp: e.target.value})}
+                      placeholder="e.g. +34600000000"
+                      className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all font-display text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Location Address</label>
                     <AddressAutocomplete 
                       value={newPro.location}
@@ -5180,6 +5195,16 @@ function AdminView({
                       value={newPro.phone}
                       onChange={e => setNewPro({...newPro, phone: e.target.value})}
                       placeholder=""
+                      className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-display text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">WhatsApp</label>
+                    <input 
+                      type="tel"
+                      value={newPro.whatsapp || ''}
+                      onChange={e => setNewPro({...newPro, whatsapp: e.target.value})}
+                      placeholder="e.g. +34600000000"
                       className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-display text-sm"
                     />
                   </div>
@@ -11489,6 +11514,14 @@ function ProfessionalDetailView({
                       <div className="flex items-center gap-3">
                         <Phone className="w-3.5 h-3.5 text-cyan-500/70" />
                         <a href={`tel:${pro.phone}`} className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium">{pro.phone}</a>
+                      </div>
+                    )}
+                    {pro.whatsapp && (
+                      <div className="flex items-center gap-3">
+                        <svg className="w-3.5 h-3.5 text-[#25D366]/80 fill-current" viewBox="0 0 24 24">
+                          <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z"/>
+                        </svg>
+                        <a href={`https://wa.me/${pro.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium">{pro.whatsapp}</a>
                       </div>
                     )}
                     {pro.email && (
