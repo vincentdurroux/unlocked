@@ -13290,26 +13290,28 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
 
       {/* Menu List */}
       <div className="bg-white border-y border-slate-100">
-        {menuItems.map((item, index) => (
-          <button 
-            key={index}
-            onClick={() => item.action ? item.action() : setActiveSubPage(item.label)}
-            className={cn(
-              "w-full px-6 py-4 flex justify-between items-center active:bg-slate-50 hover:bg-slate-50/50 transition-all group",
-              index !== menuItems.length - 1 && "border-b border-slate-50"
-            )}
-          >
-            <div className="flex items-center gap-3 group-hover:translate-x-1 transition-transform">
-              <item.icon className={cn("w-5 h-5 text-slate-400 group-hover:text-brand-blue transition-colors", item.color)} />
-              <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors uppercase tracking-wider">{item.label}</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-brand-blue transition-colors" />
-          </button>
-        ))}
+        <div className="max-w-2xl mx-auto">
+          {menuItems.map((item, index) => (
+            <button 
+              key={index}
+              onClick={() => item.action ? item.action() : setActiveSubPage(item.label)}
+              className={cn(
+                "w-full px-6 py-4 flex justify-between items-center active:bg-slate-50 hover:bg-slate-50/50 transition-all group",
+                index !== menuItems.length - 1 && "border-b border-slate-50"
+              )}
+            >
+              <div className="flex items-center gap-3 group-hover:translate-x-1 transition-transform">
+                <item.icon className={cn("w-5 h-5 text-slate-400 group-hover:text-brand-blue transition-colors", item.color)} />
+                <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors uppercase tracking-wider">{item.label}</span>
+              </div>
+              <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-brand-blue transition-colors" />
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Logout Button */}
-      <div className="px-6 mt-8">
+      <div className="px-6 mt-8 max-w-2xl mx-auto">
         <button 
           onClick={handleLogout}
           className="w-full py-4 text-slate-500 font-medium hover:text-red-500 transition-colors flex items-center justify-center gap-2"
@@ -13323,7 +13325,7 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
       <AnimatePresence>
         {activeSubPage === 'My Account' && (
           <ProfileSubPage key="subpage-my-account" title="My Account" onBack={() => setActiveSubPage(null)}>
-            <div className="space-y-8 max-w-2xl mx-auto pb-10">
+            <div className="space-y-8 pb-10">
               {msg && (
                 <div className={cn(
                   "p-4 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2",
@@ -13696,7 +13698,7 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
 
         {activeSubPage === 'Settings' && (
           <ProfileSubPage key="subpage-settings" title="Settings" onBack={() => setActiveSubPage(null)}>
-            <div className="space-y-6">
+            <div className="space-y-6 pb-12">
               {/* Chat Participation Section */}
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                 {[
@@ -13851,7 +13853,7 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
             <div className="flex flex-col items-center space-y-12 py-6 px-1">
               <Logo className="scale-125" />
               
-              <div className="w-full text-slate-700 space-y-6 text-sm sm:text-base leading-relaxed font-sans text-left max-w-2xl mx-auto">
+              <div className="w-full text-slate-700 space-y-6 text-sm sm:text-base leading-relaxed font-sans text-left">
                 <div className="border-b border-slate-100 pb-5">
                   <h3 className="text-lg font-bold font-display text-brand-navy mb-2">Welcome to MyCityUnlocked</h3>
                   <p className="text-slate-600">
@@ -13960,12 +13962,12 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
 
         {activeSubPage === 'Legal' && (
           <ProfileSubPage key="subpage-legal" title="Legal" onBack={() => setActiveSubPage(null)} className="bg-white">
-            <div className="flex flex-col items-center text-center space-y-8 py-8">
+            <div className="bg-white flex flex-col items-center text-center space-y-8 py-8">
               <Logo className="scale-125 mb-4" />
               <div>
                 <p className="text-slate-400 text-xs font-mono uppercase tracking-widest">Version 1.0</p>
               </div>
-              <div className="w-full space-y-2 px-2 max-w-2xl mx-auto">
+              <div className="w-full space-y-2">
                 {[
                   { title: 'Privacy Policy', key: 'privacy_policy' },
                   { title: 'Community Guidelines', key: 'community_guidelines' },
@@ -13995,7 +13997,7 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
 
         {selectedDocKey && (
           <ProfileSubPage key={`subpage-doc-${selectedDocKey}`} title={docTitle || "Document"} onBack={() => setSelectedDocKey(null)}>
-            <div className="max-w-2xl mx-auto py-4">
+            <div className="py-4">
               <button 
                 onClick={() => setSelectedDocKey(null)}
                 className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors font-medium mb-4 px-2 cursor-pointer"
@@ -14175,20 +14177,24 @@ function ProfileSubPage({ title, onBack, children, className }: { title: string,
       transition={{ duration: 0.3, ease: "easeOut" }}
       className={cn("fixed inset-0 z-[60] flex flex-col", className || "bg-slate-50")}
     >
-      <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
-        <h2 className="text-xl font-semibold font-display text-brand-navy">{title}</h2>
+      <div className="bg-white border-b border-slate-100 sticky top-0 z-10 w-full">
+        <div className="max-w-2xl mx-auto px-6 py-4 flex items-center" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
+          <h2 className="text-xl font-semibold font-display text-brand-navy">{title}</h2>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-6 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
-        <div className="max-w-2xl mx-auto mb-5">
-          <button 
-            onClick={onBack} 
-            className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-900 font-semibold text-xs uppercase tracking-wider transition-colors group cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-            <span>Back</span>
-          </button>
+        <div className="max-w-2xl mx-auto">
+          <div className="mb-5">
+            <button 
+              onClick={onBack} 
+              className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-900 font-semibold text-xs uppercase tracking-wider transition-colors group cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+              <span>Back</span>
+            </button>
+          </div>
+          {children}
         </div>
-        {children}
       </div>
     </motion.div>
   );
