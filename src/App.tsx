@@ -1605,6 +1605,56 @@ export default function App() {
     };
   }, []);
 
+  // --- Inactivity Timeout ---
+  useEffect(() => {
+    const INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 1 hour
+    const lastActivityKey = 'last_activity_timestamp';
+
+    const updateLastActivity = () => {
+      localStorage.setItem(lastActivityKey, Date.now().toString());
+    };
+
+    const checkInactivity = () => {
+      const lastActivity = parseInt(localStorage.getItem(lastActivityKey) || '0');
+      if (lastActivity && Date.now() - lastActivity > INACTIVITY_TIMEOUT) {
+        if (activeViewRef.current !== 'home' && activeViewRef.current !== 'login') {
+          console.log('[Inactivity] Timeout reached, returning to home');
+          setActiveView('home');
+          scrollToTop();
+        }
+      }
+    };
+
+    // Events that count as activity
+    const activityEvents = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+    activityEvents.forEach(event => {
+      window.addEventListener(event, updateLastActivity);
+    });
+
+    // Check inactivity on start
+    checkInactivity();
+    updateLastActivity();
+
+    // Check periodically
+    const interval = setInterval(checkInactivity, 60000); // Check every minute
+
+    // Also check when the page becomes visible again (e.g. user returns to tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkInactivity();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, updateLastActivity);
+      });
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, []);
+
   const loadProfile = async (userId: string, event?: string) => {
     try {
       const profile = await authService.getProfile(userId);
