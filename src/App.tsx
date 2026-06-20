@@ -13251,6 +13251,13 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
               <Camera className="w-6 h-6 text-white" />
             )}
           </div>
+          
+          {/* Discreet camera indicator for mobile/tablet only */}
+          {!isUpdatingAvatar && (
+            <div className="absolute bottom-1 right-1 p-1 bg-white rounded-full shadow-sm border border-slate-100 text-brand-blue xl:hidden">
+              <Camera className="w-3.5 h-3.5" />
+            </div>
+          )}
           <input 
             type="file"
             ref={avatarInputRef}
