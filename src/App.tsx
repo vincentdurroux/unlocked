@@ -12853,107 +12853,118 @@ function FeedbackSubPage({ currentUser, onBack }: { currentUser: any, onBack: ()
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto pb-10">
-      <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-6 text-left">
-        <div className="flex items-center gap-2 border-b border-slate-50 pb-3">
-          <MessageSquare className="w-5 h-5 text-[#00C2A8]" />
-          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">Share Your Experience</h3>
-        </div>
+    <>
+      <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto pb-10">
+        <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-6 text-left">
+          <div className="flex items-center gap-2 border-b border-slate-50 pb-3">
+            <MessageSquare className="w-5 h-5 text-[#00C2A8]" />
+            <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">Share Your Experience</h3>
+          </div>
 
-        {error && (
-          <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3">
-            <AlertCircle className={`w-5 h-5 shrink-0 text-rose-500 ${!suggestedSql ? 'animate-bounce' : ''}`} />
-            <div className="space-y-3 w-full">
-              <p className="text-xs font-bold tracking-tight text-rose-700">{error}</p>
-              {suggestedSql && (
-                <div className="space-y-2 bg-white/50 p-3 rounded-xl border border-rose-100 mt-2">
-                  <p className="text-[10px] text-rose-600 font-bold uppercase tracking-wider">Solution: Run this in Supabase SQL Editor</p>
-                  <pre className="p-3 bg-slate-900 text-slate-100 text-[10px] font-mono rounded-lg overflow-x-auto whitespace-pre select-all">
-                    {suggestedSql}
-                  </pre>
-                  <p className="text-[9px] text-slate-500 italic">This will grant permission to the public role to submit feedback forms.</p>
-                  <button 
-                    onClick={() => {
-                      navigator.clipboard.writeText(suggestedSql);
-                      alert('SQL command copied to clipboard!');
-                    }}
-                    className="w-full py-2 bg-brand-blue text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-brand-blue-dark transition-colors shadow-sm"
+          {error && (
+            <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3">
+              <AlertCircle className={`w-5 h-5 shrink-0 text-rose-500 ${!suggestedSql ? 'animate-bounce' : ''}`} />
+              <div className="space-y-3 w-full">
+                <p className="text-xs font-bold tracking-tight text-rose-700">{error}</p>
+                {suggestedSql && (
+                  <div className="space-y-2 bg-white/50 p-3 rounded-xl border border-rose-100 mt-2">
+                    <p className="text-[10px] text-rose-600 font-bold uppercase tracking-wider">Solution: Run this in Supabase SQL Editor</p>
+                    <pre className="p-3 bg-slate-900 text-slate-100 text-[10px] font-mono rounded-lg overflow-x-auto whitespace-pre select-all">
+                      {suggestedSql}
+                    </pre>
+                    <p className="text-[9px] text-slate-500 italic">This will grant permission to the public role to submit feedback forms.</p>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(suggestedSql);
+                        alert('SQL command copied to clipboard!');
+                      }}
+                      className="w-full py-2 bg-brand-blue text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-brand-blue-dark transition-colors shadow-sm"
+                    >
+                      Copy Fix-it SQL
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Categories Selection */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Type of Feedback</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {categories.map((cat) => {
+                const Icon = cat.icon;
+                const isSelected = category === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setCategory(cat.id)}
+                    className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all active:scale-95 ${
+                      isSelected 
+                        ? `${cat.color} ring-2 ring-offset-2 ring-rose-500/10 scale-[1.02] shadow-sm` 
+                        : 'border-slate-100 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
                   >
-                    Copy Fix-it SQL
+                    <Icon className="w-5 h-5 shrink-0" />
+                    <span className="text-xs font-bold tracking-tight">{cat.label}</span>
                   </button>
-                </div>
-              )}
+                );
+              })}
             </div>
           </div>
-        )}
 
-        {/* Categories Selection */}
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Type of Feedback</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {categories.map((cat) => {
-              const Icon = cat.icon;
-              const isSelected = category === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setCategory(cat.id)}
-                  className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all active:scale-95 ${
-                    isSelected 
-                      ? `${cat.color} ring-2 ring-offset-2 ring-rose-500/10 scale-[1.02] shadow-sm` 
-                      : 'border-slate-100 bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Icon className="w-5 h-5 shrink-0" />
-                  <span className="text-xs font-bold tracking-tight">{cat.label}</span>
-                </button>
-              );
-            })}
+          {/* Comment Input */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex justify-between">
+              <span>Comments / Feedback</span>
+              <span className="text-slate-300 font-mono">{comment.length}/500</span>
+            </label>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value.slice(0, 500))}
+              placeholder="Tell us what you like"
+              rows={5}
+              className="w-full px-4 py-3 bg-white border border-slate-200 focus:ring-2 focus:ring-rose-500/15 focus:border-[#00C2A8] rounded-2xl text-sm font-medium text-slate-700 outline-none transition-all placeholder:text-slate-300 resize-none leading-relaxed"
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 justify-end pt-2 border-t border-slate-50">
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-6 py-3 bg-slate-50 hover:bg-slate-100 text-slate-500 text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !comment.trim()}
+              className="px-6 py-3 bg-[#00C2A8] hover:bg-[#00ad95] disabled:bg-slate-205 text-white text-xs font-extrabold uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 shadow-md shadow-teal-500/10 disabled:opacity-50"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                'Submit Feedback'
+              )}
+            </button>
           </div>
         </div>
-
-        {/* Comment Input */}
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex justify-between">
-            <span>Comments / Feedback</span>
-            <span className="text-slate-300 font-mono">{comment.length}/500</span>
-          </label>
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value.slice(0, 500))}
-            placeholder="Tell us what you like"
-            rows={5}
-            className="w-full px-4 py-3 bg-white border border-slate-200 focus:ring-2 focus:ring-rose-500/15 focus:border-[#00C2A8] rounded-2xl text-sm font-medium text-slate-700 outline-none transition-all placeholder:text-slate-300 resize-none leading-relaxed"
-          />
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-3 justify-end pt-2 border-t border-slate-50">
-          <button
-            type="button"
-            onClick={onBack}
-            className="px-6 py-3 bg-slate-50 hover:bg-slate-100 text-slate-500 text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={submitting || !comment.trim()}
-            className="px-6 py-3 bg-[#00C2A8] hover:bg-[#00ad95] disabled:bg-slate-205 text-white text-xs font-extrabold uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 shadow-md shadow-teal-500/10 disabled:opacity-50"
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              'Submit Feedback'
-            )}
-          </button>
-        </div>
+      </form>
+      <div className="text-center mt-12 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Need help?</p>
+        <a 
+          href="mailto:hello@mycityunlocked.app" 
+          className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-blue transition-all group"
+        >
+          <span className="text-sm font-medium border-b border-slate-200 group-hover:border-brand-blue/30 pb-0.5">hello@mycityunlocked.app</span>
+        </a>
       </div>
-    </form>
+    </>
   );
 }
 
