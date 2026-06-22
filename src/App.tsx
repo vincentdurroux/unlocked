@@ -692,6 +692,7 @@ export default function App() {
     let initial: View = 'home';
     const hash = window.location.hash;
     const cleanHash = hash.replace('#', '').split('?')[0]; // Remove hash symbol and query params
+    const pathname = window.location.pathname.replace(/^\/|\/$/g, ''); // Remove leading/trailing slashes
     const validViews: View[] = [
       'home', 'explore', 'events', 'guides', 'profile', 'community', 'marketplace', 
       'community-thread', 'messages', 'admin', 'login', 'complete-profile', 
@@ -703,6 +704,8 @@ export default function App() {
       initial = 'update-password';
     } else if (cleanHash && validViews.includes(cleanHash as View)) {
       initial = cleanHash as View;
+    } else if (pathname && validViews.includes(pathname as View)) {
+      initial = pathname as View;
     } else {
       const keepSignedIn = localStorage.getItem('keep_me_signed_in') === 'true';
       if (keepSignedIn) {
@@ -14309,7 +14312,17 @@ function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void 
               </div>
             </div>
 
-            <div className="mt-16 pt-8 border-t border-slate-100 flex justify-center">
+            <div className="mt-16 pt-12 border-t border-slate-100 flex flex-col items-center gap-8">
+              <div className="text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Need translation or help?</p>
+                <a 
+                  href="mailto:hello@mycityunlocked.app" 
+                  className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-blue transition-all group"
+                >
+                  <span className="text-sm font-medium border-b border-slate-200 group-hover:border-brand-blue/30 pb-0.5">hello@mycityunlocked.app</span>
+                </a>
+              </div>
+
               <button 
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400 hover:text-brand-blue transition-colors cursor-pointer"
