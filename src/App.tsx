@@ -700,7 +700,15 @@ export default function App() {
       'community-guidelines', 'cookie-policy', 'feedback'
     ];
 
-    if (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
+    const isSupabaseHash = hash.includes('access_token=') || 
+                           hash.includes('refresh_token=') || 
+                           hash.includes('error=') ||
+                           hash.includes('error_description=');
+
+    if (isSupabaseHash) {
+      const saved = localStorage.getItem('unlocked_active_view');
+      initial = (saved && !['login', 'complete-profile', 'update-password'].includes(saved)) ? (saved as View) : 'home';
+    } else if (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
       initial = 'update-password';
     } else if (cleanHash && validViews.includes(cleanHash as View)) {
       initial = cleanHash as View;
@@ -980,7 +988,12 @@ export default function App() {
       const currentHash = window.location.hash;
       const targetHash = `#${activeView}`;
 
-      if (currentHash !== targetHash) {
+      const isSupabaseHash = currentHash.includes('access_token=') || 
+                             currentHash.includes('refresh_token=') || 
+                             currentHash.includes('error=') ||
+                             currentHash.includes('error_description=');
+
+      if (currentHash !== targetHash && !isSupabaseHash) {
         if (isAuthView || mainTabs.includes(activeView)) {
           // Don't push auth views or main tabs to history so back navigation/lateral swipe skips them/does not cycle tabs
           window.history.replaceState({ view: activeView }, '', targetHash);
