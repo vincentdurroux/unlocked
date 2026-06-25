@@ -1838,10 +1838,24 @@ export default function App() {
                    activeView === 'profile' ? "text-brand-blue" : "text-slate-500"
                  )}
                >
-                 <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-brand-blue/10 transition-colors relative text-slate-400">
-                    <User className="w-4 h-4" />
+                 <div className={cn(
+                   "w-9 h-9 rounded-full flex items-center justify-center transition-all relative p-0.5 border-2",
+                   activeView === 'profile' ? "border-brand-blue bg-brand-blue/5" : "border-slate-100 bg-white group-hover:border-slate-200"
+                 )}>
+                    <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-slate-50">
+                      {userProfile?.avatar_url ? (
+                        <img 
+                          src={userProfile.avatar_url} 
+                          alt="Profile" 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <User className="w-4 h-4 text-slate-400" />
+                      )}
+                    </div>
                     {unreadConversations.length > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5 bg-rose-600 rounded-full border-2 border-white" />
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3 bg-rose-600 rounded-full border-2 border-white shadow-sm" />
                     )}
                  </div>
                  <span className="text-[11px] font-extrabold uppercase tracking-widest hidden lg:block">My Account</span>
@@ -2696,10 +2710,33 @@ export default function App() {
                   />
                 )}
                 <div className="relative">
-                  <item.icon className={cn(
-                    "w-7 h-7 transition-all", 
-                    (activeView === item.id) ? "stroke-[2.5px] text-brand-blue" : "stroke-[1.5px] text-slate-400"
-                  )} />
+                  {item.id === 'profile' ? (
+                    <div className={cn(
+                      "w-7 h-7 rounded-full flex items-center justify-center transition-all border-2 p-0.5",
+                      (activeView === item.id) ? "border-brand-blue bg-brand-blue/5" : "border-slate-100"
+                    )}>
+                      <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-slate-50">
+                        {userProfile?.avatar_url ? (
+                          <img 
+                            src={userProfile.avatar_url} 
+                            alt="Profile" 
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <User className={cn(
+                            "w-3.5 h-3.5 transition-all",
+                            (activeView === item.id) ? "text-brand-blue" : "text-slate-400"
+                          )} />
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <item.icon className={cn(
+                      "w-7 h-7 transition-all", 
+                      (activeView === item.id) ? "stroke-[2.5px] text-brand-blue" : "stroke-[1.5px] text-slate-400"
+                    )} />
+                  )}
                   {item.id === 'messages' && unreadConversations.length > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3 bg-rose-600 rounded-full border-2 border-white shadow-sm" />
                   )}
