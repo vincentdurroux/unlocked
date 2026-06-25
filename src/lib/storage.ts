@@ -48,5 +48,37 @@ export const storageService = {
       console.warn('Error deleting file from storage:', error);
       // We don't throw here to avoid breaking the main flow if deletion fails
     }
+  },
+
+  /**
+   * Helper to extract the path from a Supabase storage URL for the avatars bucket
+   */
+  getAvatarPathFromUrl(url: string) {
+    try {
+      const cleanUrl = url.split('?')[0];
+      
+      if (cleanUrl.includes('/storage/v1/object/public/avatars/')) {
+        const parts = cleanUrl.split('/storage/v1/object/public/avatars/');
+        return parts[parts.length - 1];
+      } else if (cleanUrl.includes('/public/avatars/')) {
+        const parts = cleanUrl.split('/public/avatars/');
+        return parts[parts.length - 1];
+      } else if (cleanUrl.includes('/avatars/avatars/')) {
+        const parts = cleanUrl.split('/avatars/avatars/');
+        return 'avatars/' + parts[parts.length - 1];
+      } else if (cleanUrl.includes('/avatars/')) {
+        const parts = cleanUrl.split('/avatars/');
+        if (parts[parts.length - 1]) {
+          return 'avatars/' + parts[parts.length - 1];
+        }
+      } else if (cleanUrl.startsWith('avatars/')) {
+        return cleanUrl;
+      } else if (!cleanUrl.includes('/') && !cleanUrl.startsWith('http')) {
+        return 'avatars/' + cleanUrl;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 };

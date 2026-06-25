@@ -13176,8 +13176,19 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
 
     setIsUpdatingAvatar(true);
     try {
+      // 1. Identify and cleanup OLD avatar if it exists
+      const oldAvatarUrl = userProfile?.avatar_url;
+      if (oldAvatarUrl) {
+        const pathToDelete = storageService.getAvatarPathFromUrl(oldAvatarUrl);
+        if (pathToDelete) {
+          console.log('Cleaning up previous avatar from storage:', pathToDelete);
+          await storageService.deleteFile('avatars', pathToDelete);
+        }
+      }
+
       const fileName = `${currentUser.id}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
       
+      // 2. Upload new avatar
       // Use 'avatars' bucket as requested
       const publicUrl = await storageService.uploadFile('avatars', `avatars/${fileName}`, file);
       
@@ -13259,29 +13270,7 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
 
       if (latestAvatarUrl) {
         try {
-          const cleanUrl = latestAvatarUrl.split('?')[0];
-          let pathToDelete = null;
-
-          if (cleanUrl.includes('/storage/v1/object/public/avatars/')) {
-            const parts = cleanUrl.split('/storage/v1/object/public/avatars/');
-            pathToDelete = parts[parts.length - 1];
-          } else if (cleanUrl.includes('/public/avatars/')) {
-            const parts = cleanUrl.split('/public/avatars/');
-            pathToDelete = parts[parts.length - 1];
-          } else if (cleanUrl.includes('/avatars/avatars/')) {
-            const parts = cleanUrl.split('/avatars/avatars/');
-            pathToDelete = 'avatars/' + parts[parts.length - 1];
-          } else if (cleanUrl.includes('/avatars/')) {
-            const parts = cleanUrl.split('/avatars/');
-            if (parts[parts.length - 1]) {
-              pathToDelete = 'avatars/' + parts[parts.length - 1];
-            }
-          } else if (cleanUrl.startsWith('avatars/')) {
-            pathToDelete = cleanUrl;
-          } else if (!cleanUrl.includes('/')) {
-            pathToDelete = 'avatars/' + cleanUrl;
-          }
-
+          const pathToDelete = storageService.getAvatarPathFromUrl(latestAvatarUrl);
           if (pathToDelete) {
             console.log('Attempting to delete avatar file from bucket:', pathToDelete);
             await storageService.deleteFile('avatars', pathToDelete);

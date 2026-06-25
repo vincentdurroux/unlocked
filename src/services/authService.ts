@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { storageService } from '../lib/storage';
 
 export interface Profile {
   id: string;
@@ -218,6 +219,20 @@ export const authService = {
   },
 
   async uploadAvatar(userId: string, file: File) {
+    // 1. Cleanup old avatar if it exists
+    try {
+      const { data: profile } = await supabase.from('profiles').select('avatar_url').eq('id', userId).single();
+      if (profile?.avatar_url) {
+        const pathToDelete = storageService.getAvatarPathFromUrl(profile.avatar_url);
+        if (pathToDelete) {
+          console.log('Cleaning up previous avatar from storage (authService):', pathToDelete);
+          await storageService.deleteFile('avatars', pathToDelete);
+        }
+      }
+    } catch (err) {
+      console.warn('Non-blocking error cleaning up old avatar in authService:', err);
+    }
+
     const fileExt = file.name.split('.').pop();
     const fileName = `${userId}-${Math.random()}.${fileExt}`;
     const filePath = `${fileName}`;
