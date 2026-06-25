@@ -976,12 +976,13 @@ export default function App() {
       localStorage.setItem('unlocked_active_view', activeView);
       
       const isAuthView = ['login', 'complete-profile', 'update-password'].includes(activeView);
+      const mainTabs = ['home', 'explore', 'events', 'guides', 'marketplace', 'profile'];
       const currentHash = window.location.hash;
       const targetHash = `#${activeView}`;
 
       if (currentHash !== targetHash) {
-        if (isAuthView) {
-          // Don't push auth views to history so back navigation skips them
+        if (isAuthView || mainTabs.includes(activeView)) {
+          // Don't push auth views or main tabs to history so back navigation/lateral swipe skips them/does not cycle tabs
           window.history.replaceState({ view: activeView }, '', targetHash);
         } else {
           // Push normal views to history
@@ -1008,12 +1009,6 @@ export default function App() {
         
         // Push the state back to prevent the browser from actually going back a page
         window.history.pushState({ view: activeView }, '', `#${activeView}`);
-        return;
-      }
-
-      // If we are on a main tab (other than home), go back to home
-      if (activeView !== 'home' && !['login', 'complete-profile', 'update-password'].includes(activeView)) {
-        setActiveView('home');
         return;
       }
 
