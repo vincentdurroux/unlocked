@@ -1889,7 +1889,7 @@ export default function App() {
                  )}
                >
                  <div className={cn(
-                   "w-12 h-12 rounded-full flex items-center justify-center transition-all relative p-0.5 border-2",
+                   "w-8 h-8 rounded-full flex items-center justify-center transition-all relative p-0.5 border-2",
                    activeView === 'profile' ? "border-brand-blue bg-brand-blue/5" : "border-slate-100 bg-white group-hover:border-slate-200"
                  )}>
                     <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-slate-50">
@@ -1901,7 +1901,7 @@ export default function App() {
                           referrerPolicy="no-referrer"
                         />
                       ) : (
-                        <User className="w-6 h-6 text-slate-400" />
+                        <User className="w-3 h-3 text-slate-400" />
                       )}
                     </div>
                     {unreadConversations.length > 0 && (
@@ -2762,7 +2762,7 @@ export default function App() {
                 <div className="relative">
                   {item.id === 'profile' ? (
                     <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center transition-all border-2 p-0.5",
+                      "w-7 h-7 rounded-full flex items-center justify-center transition-all border-2 p-0.5",
                       (activeView === item.id) ? "border-brand-blue bg-brand-blue/5" : "border-slate-100"
                     )}>
                       <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-slate-50">
@@ -2775,7 +2775,7 @@ export default function App() {
                           />
                         ) : (
                           <User className={cn(
-                            "w-5 h-5 transition-all",
+                            "w-3.5 h-3.5 transition-all",
                             (activeView === item.id) ? "text-brand-blue" : "text-slate-400"
                           )} />
                         )}
