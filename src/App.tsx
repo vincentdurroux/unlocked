@@ -744,6 +744,24 @@ export default function App() {
   const [initialSearch, setInitialSearch] = useState<string | null>(null);
   const [profileSubPage, setProfileSubPage] = useState<string | null>(null);
   const [profileDocKey, setProfileDocKey] = useState<string | null>(null);
+
+  const handleSetProfileSubPage = (val: string | null) => {
+    if (val === null) {
+      window.history.back();
+    } else {
+      setProfileSubPage(val);
+      window.history.pushState({ view: 'profile', subPage: val, docKey: null }, '', '#profile');
+    }
+  };
+
+  const handleSetProfileDocKey = (val: string | null) => {
+    if (val === null) {
+      window.history.back();
+    } else {
+      setProfileDocKey(val);
+      window.history.pushState({ view: 'profile', subPage: profileSubPage, docKey: val }, '', '#profile');
+    }
+  };
   const [searchParams, setSearchParams] = useState<{ query: string; location: string; category: string; filters?: any }>({ query: '', location: '', category: 'All' });
   const [unreadConversations, setUnreadConversations] = useState<string[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -985,7 +1003,7 @@ export default function App() {
       if (currentHash !== targetHash) {
         if (isAuthView || mainTabs.includes(activeView)) {
           // Don't push auth views or main tabs to history so back navigation/lateral swipe skips them/does not cycle tabs
-          window.history.replaceState({ view: activeView }, '', targetHash);
+          window.history.replaceState({ view: activeView, subPage: null, docKey: null }, '', targetHash);
         } else {
           // Push normal views to history
           window.history.pushState({ view: activeView }, '', targetHash);
@@ -994,17 +1012,17 @@ export default function App() {
     }
   }, [activeView]);
 
-  // Handle profile sub-page history pushes so that back gesture (lateral swipe) can pop them
-  useEffect(() => {
-    if (activeView === 'profile' && (profileSubPage || profileDocKey)) {
-      window.history.pushState({ view: 'profile', subPage: profileSubPage, docKey: profileDocKey }, '', '#profile');
-    }
-  }, [profileSubPage, profileDocKey, activeView]);
-
   // Handle browser back button (popstate)
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       // Check if we are in a sub-page of the Profile tab
+      if (event.state && event.state.view === 'profile') {
+        setProfileSubPage(event.state.subPage || null);
+        setProfileDocKey(event.state.docKey || null);
+        return;
+      }
+
+      // Check if we are in a sub-page of the Profile tab (fallback if no event state)
       if (activeView === 'profile' && (profileSubPage || profileDocKey)) {
         if (profileDocKey) {
           setProfileDocKey(null);
@@ -2067,9 +2085,9 @@ export default function App() {
                   refetchPros={refetchPros}
                   unreadConversations={unreadConversations}
                   activeSubPage={profileSubPage}
-                  setActiveSubPage={setProfileSubPage}
+                  setActiveSubPage={handleSetProfileSubPage}
                   selectedDocKey={profileDocKey}
-                  setSelectedDocKey={setProfileDocKey}
+                  setSelectedDocKey={handleSetProfileDocKey}
                 />
               )}
               {['privacy-policy', 'user-terms', 'provider-terms', 'community-guidelines', 'cookie-policy'].includes(activeView) && (
