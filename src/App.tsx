@@ -742,26 +742,6 @@ export default function App() {
     }
   });
   const [initialSearch, setInitialSearch] = useState<string | null>(null);
-  const [profileSubPage, setProfileSubPage] = useState<string | null>(null);
-  const [profileDocKey, setProfileDocKey] = useState<string | null>(null);
-
-  const handleSetProfileSubPage = (val: string | null) => {
-    if (val === null) {
-      window.history.back();
-    } else {
-      setProfileSubPage(val);
-      window.history.pushState({ view: 'profile', subPage: val, docKey: null }, '', '#profile');
-    }
-  };
-
-  const handleSetProfileDocKey = (val: string | null) => {
-    if (val === null) {
-      window.history.back();
-    } else {
-      setProfileDocKey(val);
-      window.history.pushState({ view: 'profile', subPage: profileSubPage, docKey: val }, '', '#profile');
-    }
-  };
   const [searchParams, setSearchParams] = useState<{ query: string; location: string; category: string; filters?: any }>({ query: '', location: '', category: 'All' });
   const [unreadConversations, setUnreadConversations] = useState<string[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -1003,7 +983,7 @@ export default function App() {
       if (currentHash !== targetHash) {
         if (isAuthView || mainTabs.includes(activeView)) {
           // Don't push auth views or main tabs to history so back navigation/lateral swipe skips them/does not cycle tabs
-          window.history.replaceState({ view: activeView, subPage: null, docKey: null }, '', targetHash);
+          window.history.replaceState({ view: activeView }, '', targetHash);
         } else {
           // Push normal views to history
           window.history.pushState({ view: activeView }, '', targetHash);
@@ -1015,23 +995,6 @@ export default function App() {
   // Handle browser back button (popstate)
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      // Check if we are in a sub-page of the Profile tab
-      if (event.state && event.state.view === 'profile') {
-        setProfileSubPage(event.state.subPage || null);
-        setProfileDocKey(event.state.docKey || null);
-        return;
-      }
-
-      // Check if we are in a sub-page of the Profile tab (fallback if no event state)
-      if (activeView === 'profile' && (profileSubPage || profileDocKey)) {
-        if (profileDocKey) {
-          setProfileDocKey(null);
-        } else if (profileSubPage) {
-          setProfileSubPage(null);
-        }
-        return;
-      }
-
       // Check if we are in a sub-view (detail page)
       const hasSubView = initialProId || initialEventId || initialGuideId || selectedPost || selectedAd || showMessagesModal;
 
@@ -1061,7 +1024,7 @@ export default function App() {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [activeView, initialProId, initialEventId, initialGuideId, selectedPost, selectedAd, showMessagesModal, profileSubPage, profileDocKey]);
+  }, [activeView, initialProId, initialEventId, initialGuideId, selectedPost, selectedAd, showMessagesModal]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [events, setEvents] = useState<Event[]>(isSupabaseConfigured ? [] : MOCK_EVENTS);
   const [guideCategories, setGuideCategories] = useState<any[]>([]);
@@ -1596,10 +1559,6 @@ export default function App() {
       setShowMessagesModal(true);
       return;
     }
-    if (view !== 'profile') {
-      setProfileSubPage(null);
-      setProfileDocKey(null);
-    }
     if (view !== activeView) {
       setPreviousView(activeView);
     }
@@ -2084,10 +2043,6 @@ export default function App() {
                   allPros={allPros}
                   refetchPros={refetchPros}
                   unreadConversations={unreadConversations}
-                  activeSubPage={profileSubPage}
-                  setActiveSubPage={handleSetProfileSubPage}
-                  selectedDocKey={profileDocKey}
-                  setSelectedDocKey={handleSetProfileDocKey}
                 />
               )}
               {['privacy-policy', 'user-terms', 'provider-terms', 'community-guidelines', 'cookie-policy'].includes(activeView) && (
@@ -13098,35 +13053,8 @@ function FeedbackSubPage({ currentUser, onBack }: { currentUser: any, onBack: ()
   );
 }
 
-function ProfileView({ 
-  scrollToTop, 
-  onNavigate, 
-  currentUser, 
-  userProfile, 
-  onProfileUpdate, 
-  onAddPro, 
-  allPros, 
-  refetchPros, 
-  unreadConversations = [],
-  activeSubPage,
-  setActiveSubPage,
-  selectedDocKey,
-  setSelectedDocKey
-}: { 
-  scrollToTop?: () => void, 
-  onNavigate?: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
-  currentUser?: any, 
-  userProfile?: Profile | null, 
-  onProfileUpdate?: () => void, 
-  onAddPro?: () => void, 
-  allPros?: any[], 
-  refetchPros?: () => void, 
-  unreadConversations?: string[],
-  activeSubPage: string | null,
-  setActiveSubPage: (val: string | null) => void,
-  selectedDocKey: string | null,
-  setSelectedDocKey: (val: string | null) => void
-}) {
+function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProfileUpdate, onAddPro, allPros, refetchPros, unreadConversations = [] }: { scrollToTop?: () => void, onNavigate?: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, currentUser?: any, userProfile?: Profile | null, onProfileUpdate?: () => void, onAddPro?: () => void, allPros?: any[], refetchPros?: () => void, unreadConversations?: string[] }) {
+  const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const userEmail = currentUser?.email || "";
@@ -13135,6 +13063,7 @@ function ProfileView({
   const [editName, setEditName] = useState(userProfile?.full_name || "");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   
+  const [selectedDocKey, setSelectedDocKey] = useState<string | null>(null);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   const [docContent, setDocContent] = useState<string>('');
   const [docTitle, setDocTitle] = useState<string>('');
@@ -14377,13 +14306,67 @@ function ProfileView({
 }
 
 function ProfileSubPage({ title, onBack, children, className }: { title: string, onBack: () => void, children: React.ReactNode, className?: string, key?: string }) {
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+  const touchEndY = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    const tagName = target.tagName?.toLowerCase();
+    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.closest('button') || target.closest('a')) {
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
+    }
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchStartY.current = e.targetTouches[0].clientY;
+    touchEndX.current = null;
+    touchEndY.current = null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    touchEndX.current = e.targetTouches[0].clientX;
+    touchEndY.current = e.targetTouches[0].clientY;
+  };
+
+  const handleTouchEnd = () => {
+    if (
+      touchStartX.current === null ||
+      touchStartY.current === null ||
+      touchEndX.current === null ||
+      touchEndY.current === null
+    ) {
+      return;
+    }
+
+    const diffX = touchEndX.current - touchStartX.current;
+    const diffY = touchEndY.current - touchStartY.current;
+
+    const minSwipeDistance = 50;
+
+    // Trigger onBack only on lateral swipe (left-to-right gesture) and ensure it's horizontal
+    if (diffX > minSwipeDistance && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+      onBack();
+    }
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+    touchEndX.current = null;
+    touchEndY.current = null;
+  };
+
   return (
     <motion.div
       initial={{ x: '100%' }}
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className={cn("fixed inset-0 z-[60] flex flex-col", className || "bg-slate-50")}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className={cn("fixed inset-0 z-[60] flex flex-col touch-pan-y", className || "bg-slate-50")}
     >
       <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
         <h2 className="text-xl font-semibold font-display text-brand-navy">{title}</h2>
@@ -14409,6 +14392,56 @@ function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void 
   const [docTitle, setDocTitle] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
 
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+  const touchEndY = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    const tagName = target.tagName?.toLowerCase();
+    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.closest('button') || target.closest('a')) {
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
+    }
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchStartY.current = e.targetTouches[0].clientY;
+    touchEndX.current = null;
+    touchEndY.current = null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    touchEndX.current = e.targetTouches[0].clientX;
+    touchEndY.current = e.targetTouches[0].clientY;
+  };
+
+  const handleTouchEnd = () => {
+    if (
+      touchStartX.current === null ||
+      touchStartY.current === null ||
+      touchEndX.current === null ||
+      touchEndY.current === null
+    ) {
+      return;
+    }
+
+    const diffX = touchEndX.current - touchStartX.current;
+    const diffY = touchEndY.current - touchStartY.current;
+
+    const minSwipeDistance = 50;
+
+    if (diffX > minSwipeDistance && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+      onBack();
+    }
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+    touchEndX.current = null;
+    touchEndY.current = null;
+  };
+
   useEffect(() => {
     async function loadDoc() {
       setIsLoading(true);
@@ -14428,7 +14461,12 @@ function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void 
   }, [docKey]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div 
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className="min-h-screen bg-white touch-pan-y"
+    >
       <div className="max-w-4xl mx-auto px-6 py-12 pb-32">
         <button 
           onClick={onBack}
