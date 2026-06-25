@@ -692,7 +692,7 @@ export default function App() {
     let initial: View = 'home';
     const hash = window.location.hash;
     const cleanHash = hash.replace('#', '').split('?')[0]; // Remove hash symbol and query params
-    const pathname = window.location.pathname.replace(/^\/|\/$/g, ''); // Remove leading/trailing slashes
+    const pathname = window.location.pathname.replace(/^\/|\/$/g, '').split('?')[0]; // Remove leading/trailing slashes and query params
     const validViews: View[] = [
       'home', 'explore', 'events', 'guides', 'profile', 'community', 'marketplace', 
       'community-thread', 'messages', 'admin', 'login', 'complete-profile', 
@@ -702,10 +702,10 @@ export default function App() {
 
     if (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
       initial = 'update-password';
-    } else if (cleanHash && validViews.includes(cleanHash as View)) {
-      initial = cleanHash as View;
     } else if (pathname && validViews.includes(pathname as View)) {
       initial = pathname as View;
+    } else if (cleanHash && validViews.includes(cleanHash as View)) {
+      initial = cleanHash as View;
     } else {
       const keepSignedIn = localStorage.getItem('keep_me_signed_in') === 'true';
       if (keepSignedIn) {
@@ -977,16 +977,16 @@ export default function App() {
       
       const isAuthView = ['login', 'complete-profile', 'update-password'].includes(activeView);
       const mainTabs = ['home', 'explore', 'events', 'guides', 'marketplace', 'profile'];
-      const currentHash = window.location.hash;
-      const targetHash = `#${activeView}`;
+      const currentPath = window.location.pathname.replace(/^\/|\/$/g, '').split('?')[0];
+      const targetPath = `/${activeView}`;
 
-      if (currentHash !== targetHash) {
+      if (currentPath !== activeView) {
         if (isAuthView || mainTabs.includes(activeView)) {
           // Don't push auth views or main tabs to history so back navigation/lateral swipe skips them/does not cycle tabs
-          window.history.replaceState({ view: activeView }, '', targetHash);
+          window.history.replaceState({ view: activeView }, '', targetPath);
         } else {
           // Push normal views to history
-          window.history.pushState({ view: activeView }, '', targetHash);
+          window.history.pushState({ view: activeView }, '', targetPath);
         }
       }
     }
@@ -1008,7 +1008,7 @@ export default function App() {
         setShowMessagesModal(false);
         
         // Push the state back to prevent the browser from actually going back a page
-        window.history.pushState({ view: activeView }, '', `#${activeView}`);
+        window.history.pushState({ view: activeView }, '', `/${activeView}`);
         return;
       }
 
@@ -1018,6 +1018,18 @@ export default function App() {
         const targetView = event.state.view as View;
         if (!['login', 'complete-profile', 'update-password'].includes(targetView)) {
           setActiveView(targetView);
+        }
+      } else {
+        // Fallback: decode active view from pathname if no event state
+        const pathname = window.location.pathname.replace(/^\/|\/$/g, '').split('?')[0];
+        const validViews: View[] = [
+          'home', 'explore', 'events', 'guides', 'profile', 'community', 'marketplace', 
+          'community-thread', 'messages', 'admin', 'login', 'complete-profile', 
+          'update-password', 'privacy-policy', 'user-terms', 'provider-terms', 
+          'community-guidelines', 'cookie-policy', 'feedback'
+        ];
+        if (pathname && validViews.includes(pathname as View)) {
+          setActiveView(pathname as View);
         }
       }
     };
