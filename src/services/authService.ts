@@ -69,6 +69,20 @@ export const authService = {
     return data;
   },
 
+  async signInWithApple() {
+    if (!isSupabaseConfigured) throw new Error('Supabase is not configured');
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'apple',
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+
+    if (error) throw error;
+    return data;
+  },
+
   async signOut() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;

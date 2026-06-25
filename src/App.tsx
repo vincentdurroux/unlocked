@@ -7576,6 +7576,25 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
     }
   };
 
+  const handleAppleLogin = async () => {
+    setIsLoading(true);
+    setMessage(null);
+    
+    // Persist the choice to localStorage for Apple login as well
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('keep_me_signed_in', rememberMe ? 'true' : 'false');
+    }
+
+    try {
+      await authService.signInWithApple();
+    } catch (error: any) {
+      console.error('Apple auth error:', error);
+      setMessage({ type: 'error', text: error.message || 'Apple Authentication failed' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const [showEmailForm, setShowEmailForm] = useState(false);
 
   return (
@@ -7679,6 +7698,21 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
                   </svg>
                   <span className="font-semibold text-slate-700">
                     {isNewUser ? 'Sign up with Google' : 'Sign in with Google'}
+                  </span>
+                </button>
+
+                {/* 1.5. Continue with Apple */}
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={handleAppleLogin}
+                  className="w-full h-14 bg-[#000000] hover:bg-slate-900 border border-black text-white rounded-[24px] font-normal text-sm sm:text-base hover:shadow-xs transition-all disabled:opacity-50 flex items-center justify-center gap-3.5 overflow-hidden active:scale-[0.985] cursor-pointer"
+                >
+                  <svg className="w-5 h-5 flex-shrink-0 text-white fill-current" viewBox="0 0 24 24">
+                    <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.54 9.103 1.51 12.06 1.005 1.45 2.19 3.07 3.766 3.01 1.524-.06 2.098-.98 3.937-.98 1.829 0 2.356.98 3.936.95 1.616-.027 2.65-1.465 3.64-2.91 1.142-1.666 1.61-3.277 1.637-3.36-.036-.015-3.142-1.204-3.174-4.782-.027-2.985 2.443-4.417 2.553-4.482-1.4-2.05-3.56-2.285-4.322-2.34-1.956-.157-3.374 1.04-4.321 1.04zM16.19 3.56c.806-.98 1.35-2.35 1.2-3.56-1.03.04-2.28.69-3.02 1.56-.66.76-1.24 2.15-1.08 3.35 1.15.09 2.33-.59 2.9-1.35z"/>
+                  </svg>
+                  <span className="font-semibold text-white">
+                    {isNewUser ? 'Sign up with Apple' : 'Sign in with Apple'}
                   </span>
                 </button>
 
