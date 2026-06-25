@@ -721,6 +721,9 @@ export default function App() {
     }
     return initial;
   });
+  const [showMessagesModal, setShowMessagesModal] = useState(false);
+  const [selectedAd, setSelectedAd] = useState<Ad | any>(null);
+  const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const activeViewRef = useRef<View>(activeView);
   useEffect(() => {
     activeViewRef.current = activeView;
@@ -786,16 +789,6 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [globalAlert]);
-
-  useEffect(() => {
-    if (activeView) {
-      localStorage.setItem('unlocked_active_view', activeView);
-      // Sync with URL hash for navigation and sharing
-      if (window.location.hash !== `#${activeView}`) {
-        window.history.replaceState(null, '', `#${activeView}`);
-      }
-    }
-  }, [activeView]);
 
   useEffect(() => {
     if (initialEventId) {
@@ -977,9 +970,66 @@ export default function App() {
 
   const [showAddPro, setShowAddPro] = useState(false);
   const [showAddAd, setShowAddAd] = useState(false);
-  const [showMessagesModal, setShowMessagesModal] = useState(false);
-  const [selectedAd, setSelectedAd] = useState<Ad | any>(null);
-  const [selectedPost, setSelectedPost] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (activeView) {
+      localStorage.setItem('unlocked_active_view', activeView);
+      
+      const isAuthView = ['login', 'complete-profile', 'update-password'].includes(activeView);
+      const currentHash = window.location.hash;
+      const targetHash = `#${activeView}`;
+
+      if (currentHash !== targetHash) {
+        if (isAuthView) {
+          // Don't push auth views to history so back navigation skips them
+          window.history.replaceState({ view: activeView }, '', targetHash);
+        } else {
+          // Push normal views to history
+          window.history.pushState({ view: activeView }, '', targetHash);
+        }
+      }
+    }
+  }, [activeView]);
+
+  // Handle browser back button (popstate)
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      // Check if we are in a sub-view (detail page)
+      const hasSubView = initialProId || initialEventId || initialGuideId || selectedPost || selectedAd || showMessagesModal;
+
+      if (hasSubView) {
+        // If in a sub-view, close it and stay on the current activeView (tab)
+        setInitialProId(null);
+        setInitialEventId(null);
+        setInitialGuideId(null);
+        setSelectedPost(null);
+        setSelectedAd(null);
+        setShowMessagesModal(false);
+        
+        // Push the state back to prevent the browser from actually going back a page
+        window.history.pushState({ view: activeView }, '', `#${activeView}`);
+        return;
+      }
+
+      // If we are on a main tab (other than home), go back to home
+      if (activeView !== 'home' && !['login', 'complete-profile', 'update-password'].includes(activeView)) {
+        setActiveView('home');
+        return;
+      }
+
+      // If we are on home or auth view, let the default behavior happen or handle accordingly
+      // If the state from history has a view, we can sync it
+      if (event.state && event.state.view) {
+        const targetView = event.state.view as View;
+        if (!['login', 'complete-profile', 'update-password'].includes(targetView)) {
+          setActiveView(targetView);
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [activeView, initialProId, initialEventId, initialGuideId, selectedPost, selectedAd, showMessagesModal]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [events, setEvents] = useState<Event[]>(isSupabaseConfigured ? [] : MOCK_EVENTS);
   const [guideCategories, setGuideCategories] = useState<any[]>([]);
@@ -14471,11 +14521,4 @@ function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
     </footer>
   );
 }
-
-// Ensure this useEffect is placed within the App component, just before its closing brace.
-// Since it's hard to find the end of the huge App component, I'll attempt this.
-// Actually, looking at the App structure, I should put it before the return.
-// Let me rethink and just use the useEffect with activeView as dependency to detect the change.
-// I will place it after all other hooks, near line 14385 is NOT safe.
-// I'll place it before the closing brace of App.
 
