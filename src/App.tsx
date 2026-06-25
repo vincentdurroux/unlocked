@@ -742,6 +742,8 @@ export default function App() {
     }
   });
   const [initialSearch, setInitialSearch] = useState<string | null>(null);
+  const [profileSubPage, setProfileSubPage] = useState<string | null>(null);
+  const [profileDocKey, setProfileDocKey] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useState<{ query: string; location: string; category: string; filters?: any }>({ query: '', location: '', category: 'All' });
   const [unreadConversations, setUnreadConversations] = useState<string[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -992,9 +994,26 @@ export default function App() {
     }
   }, [activeView]);
 
+  // Handle profile sub-page history pushes so that back gesture (lateral swipe) can pop them
+  useEffect(() => {
+    if (activeView === 'profile' && (profileSubPage || profileDocKey)) {
+      window.history.pushState({ view: 'profile', subPage: profileSubPage, docKey: profileDocKey }, '', '#profile');
+    }
+  }, [profileSubPage, profileDocKey, activeView]);
+
   // Handle browser back button (popstate)
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
+      // Check if we are in a sub-page of the Profile tab
+      if (activeView === 'profile' && (profileSubPage || profileDocKey)) {
+        if (profileDocKey) {
+          setProfileDocKey(null);
+        } else if (profileSubPage) {
+          setProfileSubPage(null);
+        }
+        return;
+      }
+
       // Check if we are in a sub-view (detail page)
       const hasSubView = initialProId || initialEventId || initialGuideId || selectedPost || selectedAd || showMessagesModal;
 
@@ -1024,7 +1043,7 @@ export default function App() {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [activeView, initialProId, initialEventId, initialGuideId, selectedPost, selectedAd, showMessagesModal]);
+  }, [activeView, initialProId, initialEventId, initialGuideId, selectedPost, selectedAd, showMessagesModal, profileSubPage, profileDocKey]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [events, setEvents] = useState<Event[]>(isSupabaseConfigured ? [] : MOCK_EVENTS);
   const [guideCategories, setGuideCategories] = useState<any[]>([]);
@@ -1559,6 +1578,10 @@ export default function App() {
       setShowMessagesModal(true);
       return;
     }
+    if (view !== 'profile') {
+      setProfileSubPage(null);
+      setProfileDocKey(null);
+    }
     if (view !== activeView) {
       setPreviousView(activeView);
     }
@@ -2043,6 +2066,10 @@ export default function App() {
                   allPros={allPros}
                   refetchPros={refetchPros}
                   unreadConversations={unreadConversations}
+                  activeSubPage={profileSubPage}
+                  setActiveSubPage={setProfileSubPage}
+                  selectedDocKey={profileDocKey}
+                  setSelectedDocKey={setProfileDocKey}
                 />
               )}
               {['privacy-policy', 'user-terms', 'provider-terms', 'community-guidelines', 'cookie-policy'].includes(activeView) && (
@@ -13053,8 +13080,35 @@ function FeedbackSubPage({ currentUser, onBack }: { currentUser: any, onBack: ()
   );
 }
 
-function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProfileUpdate, onAddPro, allPros, refetchPros, unreadConversations = [] }: { scrollToTop?: () => void, onNavigate?: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, currentUser?: any, userProfile?: Profile | null, onProfileUpdate?: () => void, onAddPro?: () => void, allPros?: any[], refetchPros?: () => void, unreadConversations?: string[] }) {
-  const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
+function ProfileView({ 
+  scrollToTop, 
+  onNavigate, 
+  currentUser, 
+  userProfile, 
+  onProfileUpdate, 
+  onAddPro, 
+  allPros, 
+  refetchPros, 
+  unreadConversations = [],
+  activeSubPage,
+  setActiveSubPage,
+  selectedDocKey,
+  setSelectedDocKey
+}: { 
+  scrollToTop?: () => void, 
+  onNavigate?: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
+  currentUser?: any, 
+  userProfile?: Profile | null, 
+  onProfileUpdate?: () => void, 
+  onAddPro?: () => void, 
+  allPros?: any[], 
+  refetchPros?: () => void, 
+  unreadConversations?: string[],
+  activeSubPage: string | null,
+  setActiveSubPage: (val: string | null) => void,
+  selectedDocKey: string | null,
+  setSelectedDocKey: (val: string | null) => void
+}) {
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const userEmail = currentUser?.email || "";
@@ -13063,7 +13117,6 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
   const [editName, setEditName] = useState(userProfile?.full_name || "");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   
-  const [selectedDocKey, setSelectedDocKey] = useState<string | null>(null);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   const [docContent, setDocContent] = useState<string>('');
   const [docTitle, setDocTitle] = useState<string>('');
