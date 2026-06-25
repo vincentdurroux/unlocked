@@ -707,7 +707,7 @@ export default function App() {
     } else if (pathname && validViews.includes(pathname as View)) {
       initial = pathname as View;
     } else {
-      const keepSignedIn = localStorage.getItem('keep_me_signed_in') === 'true';
+      const keepSignedIn = localStorage.getItem('keep_me_signed_in') !== 'false';
       if (keepSignedIn) {
         const saved = localStorage.getItem('unlocked_active_view');
         initial = (saved as View) || 'home';
@@ -1624,7 +1624,7 @@ export default function App() {
         }
         
         // Ensure they requested to remember the login
-        const keepSignedIn = localStorage.getItem('keep_me_signed_in') === 'true';
+        const keepSignedIn = localStorage.getItem('keep_me_signed_in') !== 'false';
         if (keepSignedIn) {
           setCurrentUser(user);
           loadProfile(user.id);
@@ -7563,7 +7563,7 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
     
     // Persist the choice to localStorage for Google login as well
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('keep_me_signed_in', rememberMe ? 'true' : 'false');
+      window.localStorage.setItem('keep_me_signed_in', 'true');
     }
 
     try {
@@ -7582,7 +7582,7 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
     
     // Persist the choice to localStorage for Apple login as well
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('keep_me_signed_in', rememberMe ? 'true' : 'false');
+      window.localStorage.setItem('keep_me_signed_in', 'true');
     }
 
     try {
