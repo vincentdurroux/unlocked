@@ -100,7 +100,8 @@ export const authService = {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'apple',
       options: {
-        redirectTo: getOAuthRedirectTo(),
+        function getOAuthRedirectTo(): string {
+    return 'mycityunlocked://home';
       },
     });
 
