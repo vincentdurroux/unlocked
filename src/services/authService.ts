@@ -1,6 +1,31 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { storageService } from '../lib/storage';
 
+// Helper to get the correct redirect URL for OAuth depending on the environment
+function getOAuthRedirectTo(): string {
+  if (typeof window === 'undefined') return '';
+
+  const origin = window.location.origin;
+
+  // Check if we are running in a native/hybrid platform (Capacitor, Cordova, WebView) inside iOS/Xcode
+  const isCapacitor = origin.startsWith('capacitor://') || origin.startsWith('ionic://');
+  const isFile = origin.startsWith('file://');
+  
+  // Detect iOS environment specifically
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  
+  // Detect local servers inside webview (like live reload http://localhost or http://192.168.x.x)
+  const isLocalhostOrIP = origin.includes('localhost') || /http:\/\/\d+\.\d+\.\d+\.\d+/.test(origin);
+
+  if (isCapacitor || isFile || (isIOS && isLocalhostOrIP)) {
+    // Return standard iOS deep link redirect for Capacitor
+    return 'capacitor://localhost';
+  }
+
+  // Fallback to standard web origin
+  return origin;
+}
+
 export interface Profile {
   id: string;
   email: string;
@@ -44,7 +69,7 @@ export const authService = {
     const { data, error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: getOAuthRedirectTo(),
       },
     });
 
@@ -58,7 +83,7 @@ export const authService = {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: getOAuthRedirectTo(),
         queryParams: {
           prompt: 'select_account',
         },
@@ -75,7 +100,7 @@ export const authService = {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'apple',
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: getOAuthRedirectTo(),
       },
     });
 
