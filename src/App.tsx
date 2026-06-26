@@ -14353,66 +14353,12 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
 }
 
 function ProfileSubPage({ title, onBack, children, className }: { title: string, onBack: () => void, children: React.ReactNode, className?: string, key?: string }) {
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
-  const touchEndX = useRef<number | null>(null);
-  const touchEndY = useRef<number | null>(null);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const target = e.target as HTMLElement;
-    const tagName = target.tagName?.toLowerCase();
-    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.closest('button') || target.closest('a')) {
-      touchStartX.current = null;
-      touchStartY.current = null;
-      return;
-    }
-    touchStartX.current = e.targetTouches[0].clientX;
-    touchStartY.current = e.targetTouches[0].clientY;
-    touchEndX.current = null;
-    touchEndY.current = null;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartX.current === null) return;
-    touchEndX.current = e.targetTouches[0].clientX;
-    touchEndY.current = e.targetTouches[0].clientY;
-  };
-
-  const handleTouchEnd = () => {
-    if (
-      touchStartX.current === null ||
-      touchStartY.current === null ||
-      touchEndX.current === null ||
-      touchEndY.current === null
-    ) {
-      return;
-    }
-
-    const diffX = touchEndX.current - touchStartX.current;
-    const diffY = touchEndY.current - touchStartY.current;
-
-    const minSwipeDistance = 50;
-
-    // Trigger onBack only on lateral swipe (left-to-right gesture) and ensure it's horizontal
-    if (diffX > minSwipeDistance && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
-      onBack();
-    }
-
-    touchStartX.current = null;
-    touchStartY.current = null;
-    touchEndX.current = null;
-    touchEndY.current = null;
-  };
-
   return (
     <motion.div
       initial={{ x: '100%' }}
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
       className={cn("fixed inset-0 z-[60] flex flex-col touch-pan-y", className || "bg-slate-50")}
     >
       <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
@@ -14439,56 +14385,6 @@ function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void 
   const [docTitle, setDocTitle] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
 
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
-  const touchEndX = useRef<number | null>(null);
-  const touchEndY = useRef<number | null>(null);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const target = e.target as HTMLElement;
-    const tagName = target.tagName?.toLowerCase();
-    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.closest('button') || target.closest('a')) {
-      touchStartX.current = null;
-      touchStartY.current = null;
-      return;
-    }
-    touchStartX.current = e.targetTouches[0].clientX;
-    touchStartY.current = e.targetTouches[0].clientY;
-    touchEndX.current = null;
-    touchEndY.current = null;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartX.current === null) return;
-    touchEndX.current = e.targetTouches[0].clientX;
-    touchEndY.current = e.targetTouches[0].clientY;
-  };
-
-  const handleTouchEnd = () => {
-    if (
-      touchStartX.current === null ||
-      touchStartY.current === null ||
-      touchEndX.current === null ||
-      touchEndY.current === null
-    ) {
-      return;
-    }
-
-    const diffX = touchEndX.current - touchStartX.current;
-    const diffY = touchEndY.current - touchStartY.current;
-
-    const minSwipeDistance = 50;
-
-    if (diffX > minSwipeDistance && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
-      onBack();
-    }
-
-    touchStartX.current = null;
-    touchStartY.current = null;
-    touchEndX.current = null;
-    touchEndY.current = null;
-  };
-
   useEffect(() => {
     async function loadDoc() {
       setIsLoading(true);
@@ -14509,9 +14405,6 @@ function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void 
 
   return (
     <div 
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
       className="min-h-screen bg-white touch-pan-y"
     >
       <div className="max-w-4xl mx-auto px-6 py-12 pb-32">
