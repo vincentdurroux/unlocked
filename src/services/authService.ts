@@ -7,18 +7,24 @@ function getOAuthRedirectTo(): string {
 
   const origin = window.location.origin;
 
-  // Check if we are running in a native/hybrid platform (Capacitor, Cordova, WebView) inside iOS/Xcode
-  const isCapacitor = origin.startsWith('capacitor://') || origin.startsWith('ionic://');
-  const isFile = origin.startsWith('file://');
-  
   // Detect iOS environment specifically
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
   
-  // Detect local servers inside webview (like live reload http://localhost or http://192.168.x.x)
+  // Detect if running inside a custom WebView (WKWebView) on iOS
+  // WKWebView usually lacks "Safari" in UserAgent while containing "Mobile", or has window.webkit defined.
+  const isWebView = isIOS && (
+    !!(window as any).webkit ||
+    origin.startsWith('file://') ||
+    origin.startsWith('capacitor://') ||
+    origin.startsWith('ionic://') ||
+    (!navigator.userAgent.includes('Safari') && navigator.userAgent.includes('Mobile'))
+  );
+  
+  // Detect local servers inside webview/Xcode (like http://localhost or http://192.168.x.x)
   const isLocalhostOrIP = origin.includes('localhost') || /http:\/\/\d+\.\d+\.\d+\.\d+/.test(origin);
 
-  if (isCapacitor || isFile || (isIOS && isLocalhostOrIP)) {
-    // Return standard iOS deep link redirect for Capacitor
+  if (isWebView || (isIOS && isLocalhostOrIP)) {
+    // Return standard iOS deep link redirect
     return 'mycityunlocked://home';
   }
 
@@ -329,3 +335,102 @@ export const authService = {
     return data;
   }
 };
+
+/**
+ * SQL to create the profiles table in Supabase:
+ * 
+ * create table profiles (
+ *   id uuid references auth.users on delete cascade not null primary key,
+ *   email text unique not null,
+ *   full_name text,
+ *   avatar_url text,
+ *   is_admin boolean default false,
+ *   chat_enabled boolean default true,
+ *   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+ *   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+ * );
+ * 
+ * -- Set up Row Level Security
+ * alter table profiles enable row level security;
+ * 
+ * create policy "Public profiles are viewable by everyone."
+ *   on profiles for select
+ *   using ( true );
+ * 
+ * create policy "Users can insert their own profile."
+ *   on profiles for insert
+ *   with check ( auth.uid() = id );
+ * 
+ * create policy "Users can update own profile."
+ *   on profiles for update
+ *   using ( auth.uid() = id );
+ * 
+ * -- Create a trigger to handle new user signups
+ * create or replace function public.handle_new_user()
+ * returns trigger as $$
+ * begin
+ *   insert into public.profiles (id, email, full_name, avatar_url)
+ *   values (new.id, new.email, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url');
+ *   return new;
+ * end;
+ * $$ language plpgsql security definer;
+ * 
+ * create trigger on_auth_user_created
+ *   after insert on auth.users
+ *   for each row execute procedure public.handle_new_user();
+ * 
+ * -- =========================================================
+ * -- UNLOCKD UN-REGISTRATION & PROFILE ARCHIVING SETUP
+ * -- =========================================================
+ * 
+ * -- 1. Create the archive table to store un-registered users
+ * create table if not exists public.archive_profiles (
+ *   id uuid primary key,
+ *   email text not null,
+ *   full_name text,
+ *   deleted_at timestamp with time zone default timezone('utc'::text, now()) not null
+ * );
+ * 
+ * -- Enable row level security, but restrict access to admins or none (completely offline history)
+ * alter table public.archive_profiles enable row level security;
+ * 
+ * -- 2. Create the security definer function to handle self-deletion
+ * create or replace function public.delete_own_user()
+ * returns void as $$
+ * begin
+ *   -- Archive user profile info first
+ *   insert into public.archive_profiles (id, email, full_name, deleted_at)
+ *   select id, email, full_name, now()
+ *   from public.profiles
+ *   where id = auth.uid()
+ *   on conflict (id) do nothing;
+ * 
+ *   -- Clean up user's events first to prevent foreign key constraint violations
+ *   delete from public.events
+ *   where user_id = auth.uid();
+ * 
+ *   -- Clean up user's feedback (or let cascade handle it)
+ *   delete from public.feedbacks
+ *   where user_id = auth.uid();
+ * 
+ *   -- Clean up user's messages and conversations to prevent chat foreign key violations
+ *   delete from public.messages
+ *   where sender_id = auth.uid() or receiver_id = auth.uid();
+ * 
+ *   -- Clean up user's conversations
+ *   delete from public.conversations
+ *   where participant_1 = auth.uid() or participant_2 = auth.uid();
+ * 
+ *   -- Clean up blocks and reports
+ *   delete from public.user_blocks
+ *   where blocker_id = auth.uid() or blocked_id = auth.uid();
+ * 
+ *   delete from public.user_reports
+ *   where reporter_id = auth.uid() or reported_id = auth.uid();
+ * 
+ *   -- Delete the user from auth.users (on delete cascade deletes from public.profiles automatically!)
+ *   delete from auth.users
+ *   where id = auth.uid();
+ * end;
+ * $$ language plpgsql security definer;
+ */
