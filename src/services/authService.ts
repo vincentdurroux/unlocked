@@ -75,7 +75,7 @@ export const authService = {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'apple',
       options: {
-        redirectTo: 'mycityunlocked://home',
+        redirectTo: window.location.origin,
       },
     });
 
