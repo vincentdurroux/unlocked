@@ -19,7 +19,7 @@ function getOAuthRedirectTo(): string {
 
   if (isCapacitor || isFile || (isIOS && isLocalhostOrIP)) {
     // Return standard iOS deep link redirect for Capacitor
-    return 'capacitor://localhost';
+    return 'mycityunlocked://home';
   }
 
   // Fallback to standard web origin
