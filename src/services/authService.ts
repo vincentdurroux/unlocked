@@ -7,24 +7,18 @@ function getOAuthRedirectTo(): string {
 
   const origin = window.location.origin;
 
+  // Check if we are running in a native/hybrid platform (Capacitor, Cordova, WebView) inside iOS/Xcode
+  const isCapacitor = origin.startsWith('capacitor://') || origin.startsWith('ionic://');
+  const isFile = origin.startsWith('file://');
+  
   // Detect iOS environment specifically
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
   
-  // Detect if running inside a custom WebView (WKWebView) on iOS
-  // WKWebView usually lacks "Safari" in UserAgent while containing "Mobile", or has window.webkit defined.
-  const isWebView = isIOS && (
-    !!(window as any).webkit ||
-    origin.startsWith('file://') ||
-    origin.startsWith('capacitor://') ||
-    origin.startsWith('ionic://') ||
-    (!navigator.userAgent.includes('Safari') && navigator.userAgent.includes('Mobile'))
-  );
-  
-  // Detect local servers inside webview/Xcode (like http://localhost or http://192.168.x.x)
+  // Detect local servers inside webview (like live reload http://localhost or http://192.168.x.x)
   const isLocalhostOrIP = origin.includes('localhost') || /http:\/\/\d+\.\d+\.\d+\.\d+/.test(origin);
 
-  if (isWebView || (isIOS && isLocalhostOrIP)) {
-    // Return standard iOS deep link redirect
+  if (isCapacitor || isFile || (isIOS && isLocalhostOrIP)) {
+    // Return standard iOS deep link redirect for Capacitor
     return 'mycityunlocked://home';
   }
 
