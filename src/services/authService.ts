@@ -26,26 +26,6 @@ function getOAuthRedirectTo(): string {
   return origin;
 }
 
-// Special helper for Apple Sign-In which cannot use custom URL schemes directly during the form_post redirect phase on iOS
-function getAppleRedirectTo(): string {
-  if (typeof window === 'undefined') return '';
-
-  const origin = window.location.origin;
-
-  const isCapacitor = origin.startsWith('capacitor://') || origin.startsWith('ionic://');
-  const isFile = origin.startsWith('file://');
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-  const isLocalhostOrIP = origin.includes('localhost') || /http:\/\/\d+\.\d+\.\d+\.\d+/.test(origin);
-
-  if (isCapacitor || isFile || (isIOS && isLocalhostOrIP)) {
-    // Return the HTTPS redirect proxy page for native iOS/Xcode
-    return 'https://mycityunlocked.app/apple-redirect.html';
-  }
-
-  // On standard web browsers, standard redirectTo works perfectly
-  return origin;
-}
-
 export interface Profile {
   id: string;
   email: string;
@@ -120,7 +100,7 @@ export const authService = {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'apple',
       options: {
-        redirectTo: getAppleRedirectTo(),
+        redirectTo: getOAuthRedirectTo(),
       },
     });
 
