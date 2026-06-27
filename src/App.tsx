@@ -14352,13 +14352,86 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
   );
 }
 
+// Reusable hook for swipe-to-go-back lateral gesture (left-to-right)
+function useSwipeBack(onBack: () => void) {
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+  const touchEndY = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    const tagName = target.tagName?.toLowerCase();
+    
+    // Don't intercept swipe when interacting with form inputs, textareas, select, buttons, links, map gesture controls
+    if (
+      tagName === 'input' || 
+      tagName === 'textarea' || 
+      tagName === 'select' || 
+      target.closest('button') || 
+      target.closest('a') ||
+      target.closest('.no-swipe')
+    ) {
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
+    }
+    
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchStartY.current = e.targetTouches[0].clientY;
+    touchEndX.current = null;
+    touchEndY.current = null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    touchEndX.current = e.targetTouches[0].clientX;
+    touchEndY.current = e.targetTouches[0].clientY;
+  };
+
+  const handleTouchEnd = () => {
+    if (
+      touchStartX.current === null ||
+      touchStartY.current === null ||
+      touchEndX.current === null ||
+      touchEndY.current === null
+    ) {
+      return;
+    }
+
+    const diffX = touchEndX.current - touchStartX.current;
+    const diffY = touchEndY.current - touchStartY.current;
+
+    const minSwipeDistance = 60; // minimum distance to count as a real swipe
+
+    // Trigger onBack only on left-to-right gesture and verify it's primarily horizontal
+    if (diffX > minSwipeDistance && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+      onBack();
+    }
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+    touchEndX.current = null;
+    touchEndY.current = null;
+  };
+
+  return {
+    onTouchStart: handleTouchStart,
+    onTouchMove: handleTouchMove,
+    onTouchEnd: handleTouchEnd
+  };
+}
+
 function ProfileSubPage({ title, onBack, children, className }: { title: string, onBack: () => void, children: React.ReactNode, className?: string, key?: string }) {
+  const swipeProps = useSwipeBack(onBack);
+
   return (
     <motion.div
       initial={{ x: '100%' }}
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ duration: 0.3, ease: "easeOut" }}
+      {...swipeProps}
       className={cn("fixed inset-0 z-[60] flex flex-col touch-pan-y", className || "bg-slate-50")}
     >
       <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
@@ -14384,6 +14457,7 @@ function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void 
   const [docContent, setDocContent] = useState<string>("");
   const [docTitle, setDocTitle] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
+  const swipeProps = useSwipeBack(onBack);
 
   useEffect(() => {
     async function loadDoc() {
@@ -14405,6 +14479,7 @@ function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void 
 
   return (
     <div 
+      {...swipeProps}
       className="min-h-screen bg-white touch-pan-y"
     >
       <div className="max-w-4xl mx-auto px-6 py-12 pb-32">
