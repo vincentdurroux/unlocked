@@ -881,8 +881,12 @@ export default function App() {
   // Handle auth enforcement for protected views
   useEffect(() => {
     const protectedViews: View[] = ['profile', 'messages', 'complete-profile'];
-    if (!authLoading && !currentUser && protectedViews.includes(activeView)) {
-      setActiveView('login');
+    if (!authLoading) {
+      if (!currentUser && protectedViews.includes(activeView)) {
+        setActiveView('login');
+      } else if (currentUser && activeView === 'login') {
+        setActiveView('home');
+      }
     }
   }, [authLoading, currentUser, activeView]);
 
@@ -993,7 +997,10 @@ export default function App() {
                              currentHash.includes('error=') ||
                              currentHash.includes('error_description=');
 
-      if (currentHash !== targetHash && !isSupabaseHash) {
+      // Replace Supabase hash once the user is logged in
+      const shouldReplaceSupabaseHash = isSupabaseHash && currentUser && !authLoading;
+
+      if ((currentHash !== targetHash && !isSupabaseHash) || shouldReplaceSupabaseHash) {
         if (isAuthView || mainTabs.includes(activeView)) {
           // Don't push auth views or main tabs to history so back navigation/lateral swipe skips them/does not cycle tabs
           window.history.replaceState({ view: activeView }, '', targetHash);
@@ -1003,7 +1010,7 @@ export default function App() {
         }
       }
     }
-  }, [activeView]);
+  }, [activeView, currentUser, authLoading]);
 
   // Handle browser back button (popstate)
   useEffect(() => {
@@ -1025,6 +1032,18 @@ export default function App() {
         return;
       }
 
+      // Check if user is logged in and trying to go back to an auth/login screen
+      const currentHash = window.location.hash.replace('#', '').split('?')[0];
+      const targetView = event.state?.view as View;
+      const isGoingToLogin = targetView === 'login' || currentHash === 'login';
+
+      if (currentUser && isGoingToLogin) {
+        // Replace current state with 'home' to wipe out 'login' from history
+        window.history.replaceState({ view: 'home' }, '', '#home');
+        setActiveView('home');
+        return;
+      }
+
       // If we are on home or auth view, let the default behavior happen or handle accordingly
       // If the state from history has a view, we can sync it
       if (event.state && event.state.view) {
@@ -1037,7 +1056,7 @@ export default function App() {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [activeView, initialProId, initialEventId, initialGuideId, selectedPost, selectedAd, showMessagesModal]);
+  }, [activeView, initialProId, initialEventId, initialGuideId, selectedPost, selectedAd, showMessagesModal, currentUser]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [events, setEvents] = useState<Event[]>(isSupabaseConfigured ? [] : MOCK_EVENTS);
   const [guideCategories, setGuideCategories] = useState<any[]>([]);
