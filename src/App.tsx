@@ -10120,7 +10120,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                   title="Locate me on the map"
                 >
                   <Navigation className="w-3.5 h-3.5 group-hover:rotate-45 transition-transform text-brand-blue" />
-                  <span>Locate Me</span>
+                  <span>Use my location</span>
                 </button>
               </div>
               <motion.div 
