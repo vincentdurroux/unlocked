@@ -26,7 +26,6 @@ import {
   ArrowRight,
   Clock,
   Euro,
-  Share2,
   Heart,
   Bell,
   Lock,
@@ -106,6 +105,22 @@ import { eventService } from './services/eventService';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
+
+const ShareIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <path d="M16 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" />
+    <path d="M9 15c1-3.5 4-6 9-6" />
+    <polyline points="14 5 19 9 14 13" />
+  </svg>
+);
 
 const QUALITY_CONFIGS = [
   { name: "Reliable", icon: ShieldCheck, color: "bg-emerald-500/10 text-emerald-800 border-emerald-500/25 hover:bg-emerald-500/20", iconColor: "text-emerald-500", rawTheme: "emerald" },
@@ -829,6 +844,33 @@ export default function App() {
       localStorage.removeItem('unlocked_initial_chat');
     }
   }, [initialChat]);
+
+  // Extract sharing parameters (?eventId, ?proId, ?guideId) on initial mount for deep-linking
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    
+    // Support query parameters appended inside/after the hash segment
+    let hashSearch = '';
+    if (window.location.hash.includes('?')) {
+      hashSearch = window.location.hash.substring(window.location.hash.indexOf('?'));
+    }
+    const hashParams = new URLSearchParams(hashSearch);
+
+    const eventId = params.get('eventId') || hashParams.get('eventId');
+    const proId = params.get('proId') || hashParams.get('proId');
+    const guideId = params.get('guideId') || hashParams.get('guideId');
+
+    if (eventId) {
+      setInitialEventId(eventId);
+      setActiveView('events');
+    } else if (proId) {
+      setInitialProId(proId);
+      setActiveView('explore');
+    } else if (guideId) {
+      setInitialGuideId(guideId);
+      setActiveView('guides');
+    }
+  }, []);
 
   const handleMarkChatAsRead = React.useCallback((chatId: string) => {
     setUnreadConversations(prev => {
@@ -3049,7 +3091,7 @@ function AdDetailModal({ ad, onClose }: { ad: Ad | any, onClose: () => void }) {
                 Send Email to Seller
               </button>
               <button className="p-4 bg-slate-100 text-slate-600 rounded-2xl font-bold active:scale-[0.98] transition-transform">
-                <Share2 className="w-5 h-5" />
+                <ShareIcon className="w-5 h-5" />
               </button>
             </div>
             </div>
@@ -8618,6 +8660,7 @@ function HomeView({
 
 function ExpertGuideModal({ isOpen, onClose, article }: { isOpen: boolean, onClose: () => void, article: any }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [shared, setShared] = useState(false);
 
   // Reset scroll state when article changes or when closed/opened
   useEffect(() => {
@@ -8672,12 +8715,55 @@ function ExpertGuideModal({ isOpen, onClose, article }: { isOpen: boolean, onClo
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10" />
             
-            <button 
-              onClick={onClose}
-              className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all shadow-lg active:scale-95 z-20"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+              <button 
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const shareUrl = `${window.location.origin}${window.location.pathname}?guideId=${article.id}`;
+                  const shareData = {
+                    title: article.title,
+                    text: article.excerpt || `Check out this practical guide on Unlocked Valencia: ${article.title}!`,
+                    url: shareUrl
+                  };
+                  
+                  if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+                    try {
+                      await navigator.share(shareData);
+                    } catch (err) {
+                      console.warn('Share sheets failed or cancelled:', err);
+                    }
+                  } else {
+                    try {
+                      await navigator.clipboard.writeText(shareUrl);
+                      setShared(true);
+                      setTimeout(() => setShared(false), 2000);
+                    } catch (err) {
+                      console.error('Failed to copy share link:', err);
+                    }
+                  }
+                }}
+                className={`p-2 backdrop-blur-md rounded-full text-white transition-all shadow-lg active:scale-95 z-20 ${
+                  shared 
+                    ? "bg-emerald-500 hover:bg-emerald-600 scale-105" 
+                    : "bg-white/10 hover:bg-white/20"
+                }`}
+                title="Share article"
+              >
+                {shared ? (
+                  <Check className="w-5 h-5" />
+                ) : (
+                  <ShareIcon className="w-5 h-5" />
+                )}
+              </button>
+
+              <button 
+                onClick={onClose}
+                className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all shadow-lg active:scale-95 z-20"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
             <div className="absolute bottom-6 left-6 right-6 pointer-events-none md:bottom-8 md:left-8 md:right-8">
               <div className="flex items-center gap-2 mb-2">
@@ -11435,6 +11521,7 @@ function ProfessionalDetailView({
   const [hasAlreadyReviewed, setHasAlreadyReviewed] = useState(false);
   const [checkingReview, setCheckingReview] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [shared, setShared] = useState(false);
   
   const [displayReviewCount, setDisplayReviewCount] = useState(pro.review_count || 0);
   const [displayRating, setDisplayRating] = useState(pro.rating || 0);
@@ -11608,12 +11695,55 @@ function ProfessionalDetailView({
         >
         {/* Header Image/Cover Area */}
         <div className="h-40 md:h-56 bg-gradient-to-br from-brand-blue/30 via-slate-100 to-amber-500/10 relative">
-          <button 
-            onClick={onClose} 
-            className="absolute top-6 right-6 p-2.5 bg-white/40 hover:bg-white/90 backdrop-blur-md rounded-full shadow-lg text-slate-600 transition-all z-10 active:scale-95"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="absolute top-6 right-6 flex items-center gap-2 z-10">
+            <button 
+              type="button"
+              onClick={async (e) => {
+                e.stopPropagation();
+                const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
+                const shareData = {
+                  title: pro.name,
+                  text: pro.company_name || `Check out this verified professional on Unlocked Valencia: ${pro.name}!`,
+                  url: shareUrl
+                };
+                
+                if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+                  try {
+                    await navigator.share(shareData);
+                  } catch (err) {
+                    console.warn('Share sheets failed or cancelled:', err);
+                  }
+                } else {
+                  try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    setShared(true);
+                    setTimeout(() => setShared(false), 2000);
+                  } catch (err) {
+                    console.error('Failed to copy share link:', err);
+                  }
+                }
+              }}
+              className={`p-2.5 backdrop-blur-md rounded-full shadow-lg transition-all active:scale-95 ${
+                shared 
+                  ? "bg-emerald-500 hover:bg-emerald-600 text-white scale-105" 
+                  : "bg-white/40 hover:bg-white/90 text-slate-600"
+              }`}
+              title="Share professional"
+            >
+              {shared ? (
+                <Check className="w-5 h-5" />
+              ) : (
+                <ShareIcon className="w-5 h-5" />
+              )}
+            </button>
+            <button 
+              onClick={onClose} 
+              className="p-2.5 bg-white/40 hover:bg-white/90 backdrop-blur-md rounded-full shadow-lg text-slate-600 transition-all active:scale-95"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="px-6 md:px-12 pb-12 -mt-16 md:-mt-22 relative">
@@ -12284,7 +12414,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                 {sharedEventId === event.id ? (
                   <Check className="w-4 h-4" />
                 ) : (
-                  <Share2 className="w-4 h-4" />
+                  <ShareIcon className="w-4 h-4" />
                 )}
               </button>
             </div>
@@ -12333,6 +12463,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
 
 function EventDetailModal({ event, onClose }: { event: Event, onClose: () => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [shared, setShared] = useState(false);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -12356,12 +12487,55 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
       >
         <div className="h-48 relative">
           <img src={event.image} alt="" className="w-full h-full object-cover" />
-          <button 
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white transition-all"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            <button 
+              type="button"
+              onClick={async (e) => {
+                e.stopPropagation();
+                const shareUrl = `${window.location.origin}${window.location.pathname}?eventId=${event.id}`;
+                const shareData = {
+                  title: event.title,
+                  text: event.description || `Check out this event: ${event.title}!`,
+                  url: shareUrl
+                };
+                
+                if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+                  try {
+                    await navigator.share(shareData);
+                  } catch (err) {
+                    console.warn('Share sheets failed or cancelled:', err);
+                  }
+                } else {
+                  try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    setShared(true);
+                    setTimeout(() => setShared(false), 2000);
+                  } catch (err) {
+                    console.error('Failed to copy share link:', err);
+                  }
+                }
+              }}
+              className={`p-2 backdrop-blur-md rounded-full text-white transition-all shadow-md active:scale-95 z-20 ${
+                shared 
+                  ? "bg-emerald-500 hover:bg-emerald-600 scale-105" 
+                  : "bg-white/20 hover:bg-white/40"
+              }`}
+              title="Share event"
+            >
+              {shared ? (
+                <Check className="w-5 h-5" />
+              ) : (
+                <ShareIcon className="w-5 h-5" />
+              )}
+            </button>
+            <button 
+              onClick={onClose}
+              className="p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white transition-all shadow-md active:scale-95 z-20"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         <div className="p-8 space-y-6">
           <div className="space-y-2">
