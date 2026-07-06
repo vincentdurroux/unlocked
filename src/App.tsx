@@ -9547,7 +9547,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
   useEffect(() => {
     if (initialProId) {
-      const pro = allPros.find(p => p.id === initialProId);
+      const pro = allPros.find(p => String(p.id) === String(initialProId));
       if (pro) {
         setSelectedPro(pro);
       }
@@ -12335,7 +12335,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
 
   useEffect(() => {
     if (initialEventId && events.length > 0) {
-      const event = events.find(e => e.id === initialEventId);
+      const event = events.find(e => String(e.id) === String(initialEventId));
       if (event) {
         setSelectedEvent(event);
       }
@@ -12684,7 +12684,7 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
 
   useEffect(() => {
     if (initialGuideId && articles.length > 0) {
-      const foundArticle = articles.find(art => art.id === initialGuideId);
+      const foundArticle = articles.find(art => String(art.id) === String(initialGuideId));
         
       if (foundArticle) {
         setSelectedArticleId(initialGuideId);
