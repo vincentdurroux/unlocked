@@ -12383,6 +12383,8 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                   e.stopPropagation();
                   const shareUrl = `${window.location.origin}${window.location.pathname}?eventId=${event.id}`;
                   const shareData = {
+                    title: event.title,
+                    text: event.title,
                     url: shareUrl
                   };
                   
@@ -12492,6 +12494,8 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
                 e.stopPropagation();
                 const shareUrl = `${window.location.origin}${window.location.pathname}?eventId=${event.id}`;
                 const shareData = {
+                  title: event.title,
+                  text: event.title,
                   url: shareUrl
                 };
                 
