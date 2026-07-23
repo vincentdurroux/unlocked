@@ -1,8 +1,12 @@
-[{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "app.mycityunlocked.twa",
-        "sha256_cert_fingerprints": ["EB:62:11:77:C8:46:1F:CF:7C:43:83:AB:75:CE:B9:96:68:2E:0E:A4:43:A3:21:8E:57:08:1D:19:16:AD:6E:D6"]
-      }
-    }]
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.mycityunlocked.twa",
+      "sha256_cert_fingerprints": [
+        "D3:26:7B:27:E8:95:1E:5C:7A:0D:B7:A4:94:8D:4C:CF:91:76:B1:FA:95:44:44:06:DD:A8:84:3E:B8:56:49:D7"
+      ]
+    }
+  }
+]
