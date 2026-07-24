@@ -8852,13 +8852,13 @@ function ExpertGuideModal({ isOpen, onClose, article }: { isOpen: boolean, onClo
                         )}
                         
                         {article.author?.email && (
-                          <a href={`mailto:${article.author.email}`} className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-100 hover:border-brand-blue/30 hover:bg-slate-50/50 transition-all group/mail">
+                          <a href={`mailto:${article.author.email}`} className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-100 hover:border-brand-blue/30 hover:bg-slate-50/50 transition-all group/mail min-w-0">
                             <div className="w-10 h-10 rounded-xl bg-brand-blue/10 flex items-center justify-center text-brand-blue group-hover/mail:scale-110 transition-transform shrink-0">
                               <Mail className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
                               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider leading-none mb-0.5">Email</p>
-                              <p className="text-xs font-bold text-slate-800 truncate">{article.author.email}</p>
+                              <p className="text-xs font-bold text-slate-800 break-all">{article.author.email}</p>
                             </div>
                           </a>
                         )}
@@ -8868,14 +8868,14 @@ function ExpertGuideModal({ isOpen, onClose, article }: { isOpen: boolean, onClo
                             href={article.author.website} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-100 hover:border-brand-blue/30 hover:bg-slate-50/50 transition-all group/web sm:col-span-2"
+                            className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-100 hover:border-brand-blue/30 hover:bg-slate-50/50 transition-all group/web sm:col-span-2 min-w-0"
                           >
                             <div className="w-10 h-10 rounded-xl bg-[#00C2A8]/10 flex items-center justify-center text-[#00C2A8] group-hover/web:scale-110 transition-transform shrink-0">
                               <Globe className="w-5 h-5 text-brand-blue" />
                             </div>
                             <div className="min-w-0">
                               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider leading-none mb-0.5">Website</p>
-                              <p className="text-xs font-bold text-brand-blue hover:underline truncate">{article.author.website}</p>
+                              <p className="text-xs font-bold text-brand-blue hover:underline break-all">{article.author.website.replace(/^https?:\/\/(www\.)?/, '')}</p>
                             </div>
                           </a>
                         )}
@@ -11881,61 +11881,64 @@ function ProfessionalDetailView({
                 )}>
                   <div className="space-y-3">
                     {pro.phone && (
-                      <div className="flex items-center gap-3">
-                        <Phone className="w-3.5 h-3.5 text-cyan-500/70" />
-                        <a href={`tel:${pro.phone}`} className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium">{pro.phone}</a>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Phone className="w-3.5 h-3.5 text-cyan-500/70 shrink-0" />
+                        <a href={`tel:${pro.phone}`} className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium truncate min-w-0" title={pro.phone}>{pro.phone}</a>
                       </div>
                     )}
                     {pro.whatsapp && (
-                      <div className="flex items-center gap-3">
-                        <svg className="w-4 h-4 text-[#25D366]/80 fill-current" viewBox="0 0 24 24">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <svg className="w-4 h-4 text-[#25D366]/80 fill-current shrink-0" viewBox="0 0 24 24">
                           <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z"/>
                         </svg>
-                        <a href={`https://wa.me/${pro.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium">{pro.whatsapp}</a>
+                        <a href={`https://wa.me/${pro.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium truncate min-w-0" title={pro.whatsapp}>{pro.whatsapp}</a>
                       </div>
                     )}
                     {pro.email && (
-                      <div className="flex items-center gap-3">
-                        <Mail className="w-3.5 h-3.5 text-brand-blue/70" />
-                        <a href={`mailto:${pro.email}`} className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium">{pro.email}</a>
+                      <div className="flex items-start gap-3 min-w-0">
+                        <Mail className="w-3.5 h-3.5 text-brand-blue/70 shrink-0 mt-1" />
+                        <a href={`mailto:${pro.email}`} className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0" title={pro.email}>{pro.email}</a>
                       </div>
                     )}
                     {pro.website && (
-                      <div className="flex items-center gap-3">
-                        <Link className="w-3.5 h-3.5 text-slate-400/70" />
+                      <div className="flex items-start gap-3 min-w-0">
+                        <Link className="w-3.5 h-3.5 text-slate-400/70 shrink-0 mt-1" />
                         <a 
                           href={pro.website.startsWith('http') ? pro.website : `https://${pro.website}`} 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium"
+                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0"
+                          title={pro.website}
                         >
                           {pro.website.replace(/^https?:\/\/(www\.)?/, '')}
                         </a>
                       </div>
                     )}
                     {pro.instagram && (
-                      <div className="flex items-center gap-3">
-                        <Instagram className="w-3.5 h-3.5 text-pink-500/70" />
+                      <div className="flex items-start gap-3 min-w-0">
+                        <Instagram className="w-3.5 h-3.5 text-pink-500/70 shrink-0 mt-1" />
                         <a 
                           href={pro.instagram.startsWith('http') ? pro.instagram : `https://instagram.com/${pro.instagram.replace(/^@/, '')}`} 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium"
+                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0"
+                          title={pro.instagram}
                         >
                           {pro.instagram.startsWith('@') ? pro.instagram : `@${pro.instagram}`}
                         </a>
                       </div>
                     )}
                     {pro.facebook && (
-                      <div className="flex items-center gap-3">
-                        <Facebook className="w-3.5 h-3.5 text-blue-600/70" />
+                      <div className="flex items-start gap-3 min-w-0">
+                        <Facebook className="w-3.5 h-3.5 text-blue-600/70 shrink-0 mt-1" />
                         <a 
                           href={pro.facebook.startsWith('http') ? pro.facebook : `https://facebook.com/${pro.facebook}`} 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium"
+                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0"
+                          title={pro.facebook}
                         >
-                          Facebook
+                          {pro.facebook.replace(/^https?:\/\/(www\.)?(facebook\.com\/)?/, '')}
                         </a>
                       </div>
                     )}
