@@ -704,10 +704,18 @@ export default function App() {
   const { professionals: allPros, loading: prosLoading, refetch: refetchPros } = useProfessionals([]);
   const initialViewRef = useRef<View | null>(null);
   const [activeView, setActiveView] = useState<View>(() => {
+    const isColdStart = typeof window !== 'undefined' && !sessionStorage.getItem('unlocked_app_session');
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('unlocked_app_session', 'true');
+    }
+
     let initial: View = 'home';
     const hash = window.location.hash;
     const cleanHash = hash.replace('#', '').split('?')[0]; // Remove hash symbol and query params
     const pathname = window.location.pathname.replace(/^\/|\/$/g, ''); // Remove leading/trailing slashes
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasDeepLinkQuery = searchParams.has('eventId') || searchParams.has('proId') || searchParams.has('guideId');
+
     const validViews: View[] = [
       'home', 'explore', 'events', 'guides', 'profile', 'community', 'marketplace', 
       'community-thread', 'messages', 'admin', 'login', 'complete-profile', 
@@ -725,18 +733,24 @@ export default function App() {
       initial = (saved && !['login', 'complete-profile', 'update-password'].includes(saved)) ? (saved as View) : 'home';
     } else if (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
       initial = 'update-password';
+    } else if (hasDeepLinkQuery) {
+      if (searchParams.has('eventId')) initial = 'events';
+      else if (searchParams.has('proId')) initial = 'explore';
+      else if (searchParams.has('guideId')) initial = 'guides';
+    } else if (isColdStart) {
+      // On fresh app launch (cold start), always open on 'home' while keeping user logged in
+      initial = 'home';
+      if (window.location.hash) {
+        try {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch (_) {}
+      }
     } else if (cleanHash && validViews.includes(cleanHash as View)) {
       initial = cleanHash as View;
     } else if (pathname && validViews.includes(pathname as View)) {
       initial = pathname as View;
     } else {
-      const keepSignedIn = localStorage.getItem('keep_me_signed_in') !== 'false';
-      if (keepSignedIn) {
-        const saved = localStorage.getItem('unlocked_active_view');
-        initial = (saved as View) || 'home';
-      } else {
-        initial = 'home';
-      }
+      initial = 'home';
     }
     
     if (initial !== 'login' && initial !== 'complete-profile' && initial !== 'update-password') {
@@ -8158,12 +8172,12 @@ function HomeView({
             onClick={() => onNavigate('explore')}
             className="relative group w-full cursor-pointer max-w-4xl"
           >
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-hover:text-brand-blue transition-colors z-10" />
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue transition-colors z-10" />
             <input 
               type="text"
               readOnly
               placeholder="Start your search..."
-              className="w-full h-12 md:h-14 pl-12 pr-6 bg-white rounded-2xl border border-slate-100 shadow-[0_4px_12px_rgba(0,0,0,0.03)] group-hover:border-brand-blue/30 group-hover:ring-4 group-hover:ring-brand-blue/5 outline-none transition-all text-slate-800 font-medium text-sm md:text-base placeholder:text-slate-400 cursor-pointer"
+              className="w-full h-12 md:h-14 pl-12 pr-6 bg-white rounded-2xl border border-slate-100 shadow-[0_4px_12px_rgba(0,0,0,0.03)] group-hover:border-brand-blue/30 group-hover:ring-4 group-hover:ring-brand-blue/5 outline-none transition-all text-brand-blue font-medium text-sm md:text-base placeholder:text-brand-blue cursor-pointer"
             />
           </div>
         </div>
@@ -10389,7 +10403,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
             ) : (
               <div className="col-span-full py-32 text-center space-y-6">
                 <div className="w-32 h-32 bg-slate-50 rounded-full flex items-center justify-center mx-auto ring-1 ring-slate-100">
-                  <Search className="w-12 h-12 text-slate-200" />
+                  <Search className="w-12 h-12 text-brand-blue" />
                 </div>
                 {!hasActiveFilter ? (
                   <div className="space-y-2">
