@@ -1877,19 +1877,10 @@ export default function App() {
 
   useEffect(() => {
     if (mainRef.current) {
-      // Scroll to top immediately to prevent any visual jerk/saccade
+      // Scroll to top immediately when switching activeView
       mainRef.current.scrollTo(0, 0);
-      
-      // Defer a secondary scroll-to-top to let the previous view finish its exit animation
-      // before resetting the scroll position of the shared container.
-      const timer = setTimeout(() => {
-        if (mainRef.current) {
-          mainRef.current.scrollTo(0, 0);
-        }
-      }, 120);
-      return () => clearTimeout(timer);
     }
-  }, [activeView, selectedAd, selectedPost, initialEventId, initialProId, initialGuideId]);
+  }, [activeView]);
 
   return (
     <APIProvider apiKey={GOOGLE_MAPS_KEY} version="weekly">
@@ -2085,9 +2076,9 @@ export default function App() {
                 />
               </motion.div>
               <motion.div 
-                animate={activeView === 'explore' ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 12, scale: 0.995 }}
-                initial={{ opacity: 0, y: 12, scale: 0.995 }}
-                transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                animate={activeView === 'explore' ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
+                initial={{ opacity: 0, y: 6 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
                 className={activeView === 'explore' ? 'block w-full' : 'hidden w-full'}
               >
                 {activeView === 'explore' && (
@@ -9513,7 +9504,12 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
   const [selectedLanguage, setSelectedLanguage] = useState('All');
   const [minRating, setMinRating] = useState(0);
-  const [selectedPro, setSelectedPro] = useState<Professional | null>(null);
+  const [selectedPro, setSelectedPro] = useState<Professional | null>(() => {
+    if (initialProId && allPros && allPros.length > 0) {
+      return allPros.find(p => String(p.id) === String(initialProId)) || null;
+    }
+    return null;
+  });
 
   // Sync selectedPro with freshly fetched allPros to show updated ratings/counts in modal
   useEffect(() => {
@@ -11761,7 +11757,7 @@ function ProfessionalDetailView({
   return (
     <div 
       ref={scrollRef}
-      className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] overflow-y-auto overscroll-contain flex justify-center" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
+      className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/60 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain flex justify-center" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
       onClick={onClose}
     >
       <div className="min-h-full w-full max-w-5xl flex items-start p-4 md:p-12">
@@ -12385,7 +12381,12 @@ DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`);
 }
 
 function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEvents }: { initialEventId?: string | null, onModalClose?: () => void, scrollToTop?: () => void, events?: Event[] }) {
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(() => {
+    if (initialEventId && propEvents && propEvents.length > 0) {
+      return propEvents.find(e => String(e.id) === String(initialEventId)) || null;
+    }
+    return null;
+  });
   const [events, setEvents] = useState<Event[]>(propEvents && propEvents.length > 0 ? propEvents : (isSupabaseConfigured ? [] : MOCK_EVENTS));
   const [loading, setLoading] = useState(!propEvents || propEvents.length === 0);
   const [sharedEventId, setSharedEventId] = useState<string | null>(null);
@@ -12725,8 +12726,8 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isNavigatedMode, setIsNavigatedMode] = useState(false);
-  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
-  const [showArticleModal, setShowArticleModal] = useState(false);
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(() => initialGuideId || null);
+  const [showArticleModal, setShowArticleModal] = useState<boolean>(() => !!initialGuideId);
 
   useEffect(() => {
     let active = true;
