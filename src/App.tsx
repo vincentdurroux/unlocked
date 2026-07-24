@@ -1032,7 +1032,8 @@ export default function App() {
       const isAuthView = ['login', 'complete-profile', 'update-password'].includes(activeView);
       const mainTabs = ['home', 'explore', 'events', 'guides', 'marketplace', 'profile'];
       const currentHash = window.location.hash;
-      const targetHash = `#${activeView}`;
+      const targetHash = activeView === 'home' ? '' : `#${activeView}`;
+      const targetUrl = activeView === 'home' ? (window.location.pathname + window.location.search) : `#${activeView}`;
 
       const isSupabaseHash = currentHash.includes('access_token=') || 
                              currentHash.includes('refresh_token=') || 
@@ -1045,10 +1046,10 @@ export default function App() {
       if ((currentHash !== targetHash && !isSupabaseHash) || shouldReplaceSupabaseHash) {
         if (isAuthView || mainTabs.includes(activeView)) {
           // Don't push auth views or main tabs to history so back navigation/lateral swipe skips them/does not cycle tabs
-          window.history.replaceState({ view: activeView }, '', targetHash);
+          window.history.replaceState({ view: activeView }, '', targetUrl);
         } else {
           // Push normal views to history
-          window.history.pushState({ view: activeView }, '', targetHash);
+          window.history.pushState({ view: activeView }, '', targetUrl);
         }
       }
     }
@@ -1070,7 +1071,8 @@ export default function App() {
         setShowMessagesModal(false);
         
         // Push the state back to prevent the browser from actually going back a page
-        window.history.pushState({ view: activeView }, '', `#${activeView}`);
+        const subViewTargetUrl = activeView === 'home' ? (window.location.pathname + window.location.search) : `#${activeView}`;
+        window.history.pushState({ view: activeView }, '', subViewTargetUrl);
         return;
       }
 
@@ -1081,7 +1083,8 @@ export default function App() {
 
       if (currentUser && isGoingToLogin) {
         // Replace current state with 'home' to wipe out 'login' from history
-        window.history.replaceState({ view: 'home' }, '', '#home');
+        const homeUrl = window.location.pathname + window.location.search;
+        window.history.replaceState({ view: 'home' }, '', homeUrl);
         setActiveView('home');
         return;
       }
