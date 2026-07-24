@@ -2076,8 +2076,8 @@ export default function App() {
                 />
               </motion.div>
               <motion.div 
-                animate={activeView === 'explore' ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
-                initial={{ opacity: 0, y: 6 }}
+                animate={activeView === 'explore' ? { opacity: 1 } : { opacity: 0 }}
+                initial={{ opacity: 0 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
                 className={activeView === 'explore' ? 'block w-full' : 'hidden w-full'}
               >
@@ -9567,11 +9567,11 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   useEffect(() => {
     if (initialProId) {
       const pro = allPros.find(p => String(p.id) === String(initialProId));
-      if (pro) {
+      if (pro && (!selectedPro || String(selectedPro.id) !== String(pro.id))) {
         setSelectedPro(pro);
       }
     }
-  }, [initialProId, allPros]);
+  }, [initialProId, allPros, selectedPro]);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(() => {
     try {
       const saved = localStorage.getItem('unlocked_user_location');
@@ -9643,12 +9643,11 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     }
   };
 
+  // Selected pro details view open
   useEffect(() => {
-    const mainContainer = document.querySelector('main');
-    if (mainContainer) {
-      mainContainer.scrollTo(0, 0);
+    if (selectedPro) {
+      // Keep scroll position stable when modal is active
     }
-    window.scrollTo(0, 0);
   }, [selectedPro]);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -11760,13 +11759,13 @@ function ProfessionalDetailView({
       className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/60 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain flex justify-center" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
       onClick={onClose}
     >
-      <div className="min-h-full w-full max-w-5xl flex items-start p-4 md:p-12">
+      <div className="min-h-full w-full max-w-5xl flex items-start justify-center py-6 md:py-12 px-4 md:px-8">
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.98 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="bg-white w-full rounded-[40px] overflow-hidden shadow-2xl relative my-auto"
+          className="bg-white w-full rounded-[40px] overflow-hidden shadow-2xl relative"
           onClick={e => e.stopPropagation()}
         >
         {/* Header Image/Cover Area */}
@@ -12563,7 +12562,7 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 15 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
-        className="relative bg-white w-full max-w-lg rounded-[32px] overflow-hidden shadow-2xl my-auto"
+        className="relative bg-white w-full max-w-lg rounded-[32px] overflow-hidden shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="h-48 relative">
