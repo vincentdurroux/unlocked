@@ -12557,17 +12557,18 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
   return (
     <div 
       ref={scrollRef}
-      className="fixed inset-x-0 bottom-[80px] md:inset-0 z-[100] overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex justify-center p-4 py-8 md:py-16" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
+      className="fixed inset-x-0 bottom-[80px] md:inset-0 z-[100] overflow-y-auto overscroll-contain bg-slate-900/60 backdrop-blur-sm flex justify-center" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
       onClick={onClose}
     >
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 15 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
-        className="relative bg-white w-full max-w-lg rounded-[32px] overflow-hidden shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
+      <div className="min-h-full w-full max-w-lg flex items-start justify-center p-4 py-8 md:py-16">
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 15 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="relative bg-white w-full rounded-[32px] overflow-hidden shadow-2xl"
+          onClick={e => e.stopPropagation()}
+        >
         <div className="h-48 relative">
           <img src={event.image} alt="" className="w-full h-full object-cover" />
           <div className="absolute top-4 right-4 flex items-center gap-2">
@@ -12659,7 +12660,7 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
                 <Map
                   defaultCenter={event.coordinates}
                   defaultZoom={15}
-                  gestureHandling="greedy"
+                  gestureHandling="none"
                   disableDefaultUI
                   mapId="event_map"
                 >
@@ -12692,6 +12693,7 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
           </div>
         </div>
       </motion.div>
+      </div>
     </div>
   );
 }
