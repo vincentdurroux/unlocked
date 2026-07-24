@@ -9539,6 +9539,12 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     return Array.from(list).sort();
   }, [allPros]);
 
+  const matchingCategories = useMemo(() => {
+    if (!search.trim() || searchMode !== 'standard') return [];
+    const query = search.trim().toLowerCase();
+    return allProfessions.filter(cat => cat.toLowerCase().includes(query));
+  }, [allProfessions, search, searchMode]);
+
   const scrollToPro = (pro: Professional) => {
     const element = document.getElementById(`pro-card-${pro.id}`);
     const mainContainer = document.querySelector('main');
@@ -9839,6 +9845,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                         onClick={() => {
                           setSearch('');
                           setDeferredSearch('');
+                          setSelectedCategory('All');
                           inputRef.current?.focus();
                         }}
                         className="p-1 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0 cursor-pointer"
@@ -9848,6 +9855,62 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                       </button>
                     )}
                   </div>
+
+                  {/* Category Autocomplete Dropdown */}
+                  {isInputFocused && search.trim().length > 0 && matchingCategories.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <Filter className="w-3 h-3 text-brand-blue" /> Categories
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-semibold">
+                          {matchingCategories.length} category option{matchingCategories.length > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+                        {matchingCategories.map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setSelectedCategory(cat);
+                              setSearch(cat);
+                              setDeferredSearch(cat);
+                              setIsInputFocused(false);
+                              if (checkMatches(cat)) {
+                                const mainContainer = document.querySelector('main');
+                                const resultsEl = document.getElementById('pro-cards-list');
+                                if (mainContainer && resultsEl) {
+                                  const containerRect = mainContainer.getBoundingClientRect();
+                                  const targetRect = resultsEl.getBoundingClientRect();
+                                  const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
+                                  mainContainer.scrollTo({
+                                    top: Math.max(0, offset - 16),
+                                    behavior: "smooth"
+                                  });
+                                  window.scrollTo(0, 0);
+                                }
+                              }
+                            }}
+                            className="w-full px-4 py-3 text-left hover:bg-blue-50/70 transition-colors flex items-center justify-between group cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-7 h-7 rounded-lg bg-brand-blue/10 flex items-center justify-center text-brand-blue group-hover:bg-brand-blue group-hover:text-white transition-colors shrink-0">
+                                <Tag className="w-3.5 h-3.5" />
+                              </div>
+                              <span className="text-xs md:text-sm font-semibold text-slate-800 group-hover:text-brand-blue transition-colors">
+                                {cat}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-blue uppercase tracking-wider shrink-0">
+                              Select
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Big Search Action Button */}
