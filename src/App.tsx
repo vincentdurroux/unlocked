@@ -14836,7 +14836,7 @@ function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
               <Mail className="w-4 h-4" />
             </a>
           </div>
-          <div className="pt-2 flex justify-center">
+          <div className="pt-3 flex flex-col items-center gap-2">
             <a 
               href="https://apps.apple.com/es/app/mycityunlocked/id6780855463?l=en-GB"
               target="_blank" 
@@ -14844,22 +14844,52 @@ function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
               className="inline-block transition-transform hover:scale-105"
             >
               <img 
-                src="/app-store-badge.png" 
+                src="/app-store-vector.svg" 
                 alt="Download on the App Store" 
-                className="h-10 w-auto object-contain"
+                className="h-12 w-auto object-contain"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                   const svgSibling = e.currentTarget.nextElementSibling as HTMLElement;
                   if (svgSibling) svgSibling.style.display = 'flex';
                 }}
               />
-              <div style={{ display: 'none' }} className="h-10 px-4 bg-black text-white rounded-lg flex items-center gap-2 border border-white/10 select-none shadow-md">
-                <svg viewBox="0 0 384 512" className="w-4 h-4 fill-white">
+              <div style={{ display: 'none' }} className="h-12 px-4 bg-black text-white rounded-lg flex items-center gap-2 border border-white/10 select-none shadow-md">
+                <svg viewBox="0 0 384 512" className="w-5 h-5 fill-white">
                   <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-48.7-22.9-76.9-22.4-36.6.6-70.3 21.6-89.2 54-38.5 66.7-9.8 165.2 27.5 219 18 26 39.5 54.8 67.7 53.8 27.1-1 37.5-17.5 70.3-17.5 32.7 0 42.1 17.5 70.3 17 28.7-.5 47.7-26 65.5-52 20.7-30.2 29.2-59.4 29.7-61-.7-.3-57-21.9-57.5-86.8zM286.7 82.3c15.3-18.5 25.6-44.2 22.8-69.8-22 1-48.6 14.8-64.4 33.3-13.8 16-25.9 42-23 67.2 24.3 1.9 49.3-12.2 64.6-30.7z" />
                 </svg>
                 <div className="flex flex-col items-start leading-none text-left">
                   <span className="text-[8px] font-normal tracking-wide uppercase">Download on the</span>
                   <span className="text-sm font-semibold tracking-tight">App Store</span>
+                </div>
+              </div>
+            </a>
+
+            <a 
+              href="https://play.google.com/store/apps/details?id=com.mycityunlocked.app"
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-block transition-transform hover:scale-105"
+            >
+              <img 
+                src="/google-play-vector.svg" 
+                alt="GET IT ON Google Play" 
+                className="h-12 w-auto object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const svgSibling = e.currentTarget.nextElementSibling as HTMLElement;
+                  if (svgSibling) svgSibling.style.display = 'flex';
+                }}
+              />
+              <div style={{ display: 'none' }} className="h-12 px-4 bg-black text-white rounded-lg flex items-center gap-2 border border-slate-700 select-none shadow-md">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0">
+                  <path fill="#4285F4" d="M3.609 1.814C3.224 2.23 3 2.807 3 3.43v17.14c0 .623.224 1.2.609 1.616l.084.084 9.613-9.613v-.228L3.693 1.73l-.084.084z"/>
+                  <path fill="#34A853" d="M16.482 15.17l-3.176-3.17-9.697 9.697c.473.475 1.22.545 1.954.133l10.919-6.66z"/>
+                  <path fill="#EA4335" d="M16.482 8.83L5.563 2.17C4.829 1.758 4.082 1.828 3.609 2.303l9.697 9.697 3.176-3.17z"/>
+                  <path fill="#FBBC05" d="M16.482 12l3.41-1.968c.84-.484.84-1.275 0-1.759l-3.41-1.968v5.695z"/>
+                </svg>
+                <div className="flex flex-col items-start leading-none text-left">
+                  <span className="text-[8px] font-normal tracking-wide uppercase text-slate-300">GET IT ON</span>
+                  <span className="text-sm font-semibold tracking-tight text-white">Google Play</span>
                 </div>
               </div>
             </a>
