@@ -8138,10 +8138,11 @@ function HomeView({
           <div className="w-full md:w-[50%] flex justify-center md:justify-start md:-translate-x-12 mb-0">
             <img 
               src="/people.png" 
-              alt="Community" 
+              alt="Community illustration" 
               loading="eager"
               fetchPriority="high"
               decoding="sync"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
               className="w-full max-w-[300px] md:max-w-[480px] h-auto object-contain block align-bottom"
             />
           </div>
