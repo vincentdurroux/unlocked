@@ -6402,10 +6402,13 @@ function AdminView({
                   })()
                 ) : (
                   (() => {
-                    const filtered = completedPros.filter(pro => 
-                      (pro.name || '').toLowerCase().includes(proSearch.toLowerCase()) ||
-                      (pro.category && pro.category.toLowerCase().includes(proSearch.toLowerCase()))
-                    );
+                    const filtered = completedPros.filter(pro => {
+                      if (!pro) return false;
+                      const name = typeof pro.name === 'string' ? pro.name : '';
+                      const category = typeof pro.category === 'string' ? pro.category : '';
+                      const query = (proSearch || '').toLowerCase();
+                      return name.toLowerCase().includes(query) || category.toLowerCase().includes(query);
+                    });
                     if (filtered.length > 0) {
                       return (
                         <div className="space-y-2">
@@ -9521,12 +9524,13 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
   const allProfessions = useMemo(() => {
     const list = new Set<string>();
-    allPros.forEach(p => {
+    (allPros || []).forEach(p => {
+      if (!p) return;
       if (p.categories && Array.isArray(p.categories)) {
         p.categories.forEach(c => {
-          if (c) list.add(c);
+          if (c && typeof c === 'string') list.add(c);
         });
-      } else if (p.category) {
+      } else if (p.category && typeof p.category === 'string') {
         list.add(p.category);
       }
     });
@@ -9534,9 +9538,9 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   }, [allPros]);
 
   const matchingCategories = useMemo(() => {
-    if (!search.trim() || searchMode !== 'standard') return [];
+    if (!search || typeof search !== 'string' || !search.trim() || searchMode !== 'standard') return [];
     const query = search.trim().toLowerCase();
-    return allProfessions.filter(cat => cat.toLowerCase().includes(query));
+    return allProfessions.filter(cat => typeof cat === 'string' && cat.toLowerCase().includes(query));
   }, [allProfessions, search, searchMode]);
 
   const scrollToPro = (pro: Professional) => {
@@ -9661,24 +9665,30 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   };
 
   const checkMatches = (text: string) => {
-    if (!text.trim()) return true;
-    return allPros.some(pro => {
+    if (!text || typeof text !== 'string' || !text.trim()) return true;
+    const searchLower = text.toLowerCase().trim();
+    return (allPros || []).some(pro => {
+      if (!pro) return false;
       const matchesCategory = selectedCategory === 'All' || 
                               (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
                               pro.category === selectedCategory;
       const matchesLanguage = selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
-      const matchesRating = pro.rating >= minRating;
+      const matchesRating = (pro.rating || 0) >= minRating;
       
-      const searchLower = text.toLowerCase().trim();
-      let matchesSearch = (pro.name || '').toLowerCase().includes(searchLower) || 
-                          (pro.categories && Array.isArray(pro.categories) && pro.categories.some(c => c.toLowerCase().includes(searchLower))) ||
-                          (pro.category || '').toLowerCase().includes(searchLower) ||
-                          (pro.company_name && pro.company_name.toLowerCase().includes(searchLower)) ||
-                          (pro.bio || '').toLowerCase().includes(searchLower);
+      const proName = typeof pro.name === 'string' ? pro.name : '';
+      const proCat = typeof pro.category === 'string' ? pro.category : '';
+      const proCompany = typeof pro.company_name === 'string' ? pro.company_name : '';
+      const proBio = typeof pro.bio === 'string' ? pro.bio : '';
+
+      let matchesSearch = proName.toLowerCase().includes(searchLower) || 
+                          (Array.isArray(pro.categories) && pro.categories.some(c => typeof c === 'string' && c.toLowerCase().includes(searchLower))) ||
+                          proCat.toLowerCase().includes(searchLower) ||
+                          proCompany.toLowerCase().includes(searchLower) ||
+                          proBio.toLowerCase().includes(searchLower);
                           
       let matchesDistance = true;
       if (maxDistance !== 'All' && userLocation) {
-        if (pro.coordinates) {
+        if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
           const dist = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
           matchesDistance = dist <= (maxDistance as number);
         } else {
@@ -9693,34 +9703,43 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   const distances = ['All', 1, 2, 5, 10, 25, 50, 100];
 
   const hasActiveFilter = searchMode === 'ai'
-    ? (deferredSearch.trim() !== '' || aiResults !== null)
-    : (deferredSearch.trim() !== '' || selectedCategory !== 'All' || selectedLanguage !== 'All' || maxDistance !== 'All' || minRating > 0);
+    ? ((typeof deferredSearch === 'string' && deferredSearch.trim() !== '') || aiResults !== null)
+    : ((typeof deferredSearch === 'string' && deferredSearch.trim() !== '') || selectedCategory !== 'All' || selectedLanguage !== 'All' || maxDistance !== 'All' || minRating > 0);
 
   const filteredPros = hasActiveFilter 
-    ? allPros.filter(pro => {
+    ? (allPros || []).filter(pro => {
+        if (!pro) return false;
         const matchesCategory = searchMode === 'ai' || selectedCategory === 'All' || 
                                 (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
                                 pro.category === selectedCategory;
         const matchesLanguage = searchMode === 'ai' || selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
-        const matchesRating = searchMode === 'ai' || pro.rating >= minRating;
+        const matchesRating = searchMode === 'ai' || (pro.rating || 0) >= minRating;
         
         let matchesSearch = true;
-        if (deferredSearch.trim() !== '') {
+        const searchStr = typeof deferredSearch === 'string' ? deferredSearch.trim() : '';
+        if (searchStr !== '') {
           if (aiResults !== null) {
             const proIdStr = String(pro.id);
             const matchInfo = aiResults[proIdStr];
             matchesSearch = !!matchInfo && matchInfo.score > 0;
           } else {
-            matchesSearch = (pro.name || '').toLowerCase().includes(deferredSearch.toLowerCase()) || 
-                            (pro.categories && Array.isArray(pro.categories) && pro.categories.some(c => c.toLowerCase().includes(deferredSearch.toLowerCase()))) ||
-                            (pro.category || '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
-                            (pro.bio || '').toLowerCase().includes(deferredSearch.toLowerCase());
+            const searchLower = searchStr.toLowerCase();
+            const proName = typeof pro.name === 'string' ? pro.name : '';
+            const proCat = typeof pro.category === 'string' ? pro.category : '';
+            const proCompany = typeof pro.company_name === 'string' ? pro.company_name : '';
+            const proBio = typeof pro.bio === 'string' ? pro.bio : '';
+
+            matchesSearch = proName.toLowerCase().includes(searchLower) || 
+                            (Array.isArray(pro.categories) && pro.categories.some(c => typeof c === 'string' && c.toLowerCase().includes(searchLower))) ||
+                            proCat.toLowerCase().includes(searchLower) ||
+                            proCompany.toLowerCase().includes(searchLower) ||
+                            proBio.toLowerCase().includes(searchLower);
           }
         }
         
         let matchesDistance = true;
         if (searchMode !== 'ai' && maxDistance !== 'All' && userLocation) {
-          if (pro.coordinates) {
+          if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
             const dist = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
             matchesDistance = dist <= (maxDistance as number);
           } else {
@@ -9849,61 +9868,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                     )}
                   </div>
 
-                  {/* Category Autocomplete Dropdown */}
-                  {isInputFocused && search.trim().length > 0 && matchingCategories.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                      <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                          <Filter className="w-3 h-3 text-brand-blue" /> Categories
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-semibold">
-                          {matchingCategories.length} category option{matchingCategories.length > 1 ? 's' : ''}
-                        </span>
-                      </div>
-                      <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
-                        {matchingCategories.map((cat) => (
-                          <button
-                            key={cat}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              setSelectedCategory(cat);
-                              setSearch(cat);
-                              setDeferredSearch(cat);
-                              setIsInputFocused(false);
-                              if (checkMatches(cat)) {
-                                const mainContainer = document.querySelector('main');
-                                const resultsEl = document.getElementById('pro-cards-list');
-                                if (mainContainer && resultsEl) {
-                                  const containerRect = mainContainer.getBoundingClientRect();
-                                  const targetRect = resultsEl.getBoundingClientRect();
-                                  const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
-                                  mainContainer.scrollTo({
-                                    top: Math.max(0, offset - 16),
-                                    behavior: "smooth"
-                                  });
-                                  window.scrollTo(0, 0);
-                                }
-                              }
-                            }}
-                            className="w-full px-4 py-3 text-left hover:bg-blue-50/70 transition-colors flex items-center justify-between group cursor-pointer"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-7 h-7 rounded-lg bg-brand-blue/10 flex items-center justify-center text-brand-blue group-hover:bg-brand-blue group-hover:text-white transition-colors shrink-0">
-                                <Tag className="w-3.5 h-3.5" />
-                              </div>
-                              <span className="text-xs md:text-sm font-semibold text-slate-800 group-hover:text-brand-blue transition-colors">
-                                {cat}
-                              </span>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-blue uppercase tracking-wider shrink-0">
-                              Select
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+
                 </div>
 
                 {/* Big Search Action Button */}
@@ -12796,14 +12761,18 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
     if (selectedCategory) {
       filtered = filtered.filter((article: any) => article.categoryId === selectedCategory);
     }
-    if (!searchQuery.trim()) return filtered;
+    if (!searchQuery || typeof searchQuery !== 'string' || !searchQuery.trim()) return filtered;
     
     const query = searchQuery.toLowerCase();
     return filtered.filter((article: any) => {
+      if (!article) return false;
+      const title = typeof article.title === 'string' ? article.title : '';
+      const excerpt = typeof article.excerpt === 'string' ? article.excerpt : '';
+      const content = typeof article.content === 'string' ? article.content : '';
       return (
-        article.title.toLowerCase().includes(query) ||
-        article.excerpt.toLowerCase().includes(query) ||
-        (article.content && article.content.toLowerCase().includes(query))
+        title.toLowerCase().includes(query) ||
+        excerpt.toLowerCase().includes(query) ||
+        content.toLowerCase().includes(query)
       );
     });
   }, [articles, searchQuery, selectedCategory]);
