@@ -8159,7 +8159,7 @@ function HomeView({
             </div>
             <div className="space-y-0.5 text-left">
               <h3 className="text-lg md:text-xl font-bold text-brand-navy">Looking for a trusted local pro?</h3>
-              <p className="text-slate-500 text-xs md:text-sm font-medium">Find professionals personally recommended by members and verified by our team.</p>
+              <p className="text-slate-500 text-xs md:text-sm font-medium">Find professionals personally recommended by members.</p>
             </div>
           </div>
 
@@ -8197,7 +8197,7 @@ function HomeView({
             },
             {
               title: "Trust-based recommendations",
-              desc: "Reviewed by members and verified by our team.",
+              desc: "Reviewed by members.",
               icon: <ShieldCheck className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />,
               bg: "bg-blue-50/50",
               className: ""
@@ -9258,21 +9258,41 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
   const [isInputFocused, setIsInputFocused] = useState(false);
 
   useEffect(() => {
+    scrollToTop?.();
+    const mainContainer = document.querySelector('main');
+    if (mainContainer) {
+      mainContainer.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
     if (isActive) {
       setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.focus();
+        const mc = document.querySelector('main');
+        if (mc) {
+          mc.scrollTop = 0;
         }
-      }, 100);
+        window.scrollTo(0, 0);
+        if (inputRef.current) {
+          inputRef.current.focus({ preventScroll: true });
+        }
+      }, 50);
     }
   }, [isActive]);
+
+  useEffect(() => {
+    scrollToTop?.();
+    const mainContainer = document.querySelector('main');
+    if (mainContainer) {
+      mainContainer.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+  }, []);
 
   // AI-powered Search states
   const [aiResults, setAiResults] = useState<{ [key: string]: { score: number; reason: string } } | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiQuery, setAiQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<'standard' | 'ai'>('standard');
+  const [searchMode, setSearchMode] = useState<'standard' | 'ai'>('ai');
 
   useEffect(() => {
     // If the input gets cleared, instantly reset all AI search filters
@@ -9308,10 +9328,6 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
     }
 
     setIsInputFocused(false);
-    const mainContainer = document.querySelector('main');
-    if (mainContainer) {
-      mainContainer.scrollTo({ top: 0, behavior: 'smooth' });
-    }
     
     setIsSearching(true);
     setAiLoading(true);
@@ -9471,21 +9487,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   // Secure auto-scrolling to results once Jane has finished sorting and rendering the list
   useEffect(() => {
     if (aiResults && !aiLoading) {
-      const timer = setTimeout(() => {
-        const mainContainer = document.querySelector('main');
-        const resultsEl = document.getElementById("pro-cards-list");
-        if (mainContainer && resultsEl) {
-          const containerRect = mainContainer.getBoundingClientRect();
-          const targetRect = resultsEl.getBoundingClientRect();
-          const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
-          mainContainer.scrollTo({
-            top: Math.max(0, offset - 16),
-            behavior: "smooth"
-          });
-          window.scrollTo(0, 0);
-        }
-      }, 350);
-      return () => clearTimeout(timer);
+      scrollToResults();
     }
   }, [aiResults, aiLoading]);
 
@@ -9499,9 +9501,24 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  useEffect(() => {
-    scrollToTop?.();
-  }, [selectedCategory]);
+  const scrollToResults = () => {
+    setTimeout(() => {
+      const mainContainer = document.querySelector('main');
+      const resultsEl = document.getElementById('pro-cards-list') || document.getElementById('results-section');
+      if (mainContainer && resultsEl) {
+        const containerRect = mainContainer.getBoundingClientRect();
+        const targetRect = resultsEl.getBoundingClientRect();
+        const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
+        mainContainer.scrollTo({
+          top: Math.max(0, offset - 16),
+          behavior: "smooth"
+        });
+      } else if (resultsEl) {
+        resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+
 
   const [selectedLanguage, setSelectedLanguage] = useState('All');
   const [minRating, setMinRating] = useState(0);
@@ -9702,18 +9719,16 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   const languages = ['All', 'Spanish', 'English', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Russian', 'Arabic', 'Chinese', 'Japanese'];
   const distances = ['All', 1, 2, 5, 10, 25, 50, 100];
 
-  const hasActiveFilter = searchMode === 'ai'
-    ? ((typeof deferredSearch === 'string' && deferredSearch.trim() !== '') || aiResults !== null)
-    : ((typeof deferredSearch === 'string' && deferredSearch.trim() !== '') || selectedCategory !== 'All' || selectedLanguage !== 'All' || maxDistance !== 'All' || minRating > 0);
+  const hasActiveFilter = (typeof deferredSearch === 'string' && deferredSearch.trim() !== '') || aiResults !== null || selectedCategory !== 'All' || selectedLanguage !== 'All' || maxDistance !== 'All' || minRating > 0;
 
   const filteredPros = hasActiveFilter 
     ? (allPros || []).filter(pro => {
         if (!pro) return false;
-        const matchesCategory = searchMode === 'ai' || selectedCategory === 'All' || 
+        const matchesCategory = selectedCategory === 'All' || 
                                 (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
                                 pro.category === selectedCategory;
-        const matchesLanguage = searchMode === 'ai' || selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
-        const matchesRating = searchMode === 'ai' || (pro.rating || 0) >= minRating;
+        const matchesLanguage = selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
+        const matchesRating = (pro.rating || 0) >= minRating;
         
         let matchesSearch = true;
         const searchStr = typeof deferredSearch === 'string' ? deferredSearch.trim() : '';
@@ -9738,7 +9753,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         }
         
         let matchesDistance = true;
-        if (searchMode !== 'ai' && maxDistance !== 'All' && userLocation) {
+        if (maxDistance !== 'All' && userLocation) {
           if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
             const dist = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
             matchesDistance = dist <= (maxDistance as number);
@@ -9775,438 +9790,304 @@ ${JSON.stringify(proListBrief, null, 2)}`,
       <div className="space-y-10">
         <div className="max-w-2xl mx-auto space-y-6">
           
-          {/* Top Segmented Tabs Indicator */}
-          <div className="flex justify-center mb-6">
-            <div className="bg-slate-100/80 p-1.5 rounded-full flex items-center gap-1 border border-slate-200/50">
-              <button 
-                onClick={() => {
-                  setSearchMode('standard');
-                  setSearch('');
-                  setDeferredSearch('');
-                  setAiResults(null);
-                  setAiQuery('');
-                }} 
-                className={`px-5 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${searchMode === 'standard' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                <Search className="w-3.5 h-3.5 animate-none" />
-                Search
-              </button>
-              <button 
-                onClick={() => {
-                  setSearchMode('ai');
-                  setSearch('');
-                  setDeferredSearch('');
-                  setAiResults(null);
-                  setAiQuery('');
-                }} 
-                className={`px-5 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${searchMode === 'ai' ? 'bg-white shadow-sm text-violet-600' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Ask Jane
-              </button>
+          {/* Ask Jane Search Interface */}
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="text-left space-y-1">
+              <h2 className="text-3xl md:text-4xl font-semibold font-display text-slate-900 tracking-tight leading-tight">
+                <span className="text-violet-600 font-semibold">Describe</span> what you need.
+              </h2>
+              <p className="text-slate-500 text-sm md:text-base leading-relaxed">
+                Describe your situation and Jane will help you find the right local professional.
+              </p>
             </div>
-          </div>
 
-          {/* Standard Search Interface */}
-          {searchMode === 'standard' ? (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              <div className="text-left space-y-2">
-                <h2 className="text-3xl md:text-4xl font-semibold font-display text-slate-900 tracking-tight leading-tight">
-                  Find exactly who you are <br /> 
-                  <span className="text-brand-blue font-semibold">looking for.</span>
-                </h2>
-              </div>
-
-              <div className="space-y-4">
-                {/* Search Input Box */}
-                <div className="relative bg-white rounded-[24px] border border-slate-200/80 p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] space-y-1.5 focus-within:border-brand-blue/40 focus-within:ring-4 focus-within:ring-brand-blue/5 transition-all">
-                  <div className="flex items-center gap-3">
-                    <Search className="w-5 h-5 text-brand-blue flex-shrink-0" />
-                    <input 
-                      ref={inputRef}
-                      type="text" 
-                      placeholder="Search profession or skills"
-                      className="w-full bg-transparent outline-none text-slate-800 font-semibold leading-tight placeholder:text-slate-300 text-sm md:text-base border-none p-0 focus:ring-0"
+            <div className="space-y-4">
+              {/* Purple Bordered Ask Jane Container */}
+              <div className="relative bg-white rounded-[24px] border-2 border-violet-200/90 p-5 shadow-[0_4px_24px_rgba(109,40,217,0.02)] space-y-2 focus-within:border-violet-400 focus-within:ring-4 focus-within:ring-violet-500/5 transition-all">
+                <div className="flex items-start gap-3">
+                  <Sparkles className="w-5 h-5 text-violet-500 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[10px] sm:text-[11px] font-extrabold text-violet-500 uppercase tracking-wider">
+                        Tell Jane about your situation...
+                      </label>
+                      {search && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearch('');
+                            setDeferredSearch('');
+                            setAiResults(null);
+                            setAiQuery('');
+                            inputRef.current?.focus();
+                          }}
+                          className="p-1 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0 cursor-pointer"
+                          title="Reset search"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <textarea 
+                      ref={inputRef as any}
+                      rows={3}
+                      placeholder="e.g. I just moved to Valencia and need help with residency paperwork in English"
+                      className="w-full bg-transparent outline-none text-slate-700 font-medium leading-relaxed placeholder:text-slate-300 text-xs sm:text-sm border-none p-0 focus:ring-0 resize-none"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      onFocus={() => setIsInputFocused(true)}
-                      onBlur={() => setTimeout(() => setIsInputFocused(false), 200)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          setDeferredSearch(search);
-                          if (checkMatches(search)) {
-                            const mainContainer = document.querySelector('main');
-                            const resultsEl = document.getElementById('pro-cards-list');
-                            if (mainContainer && resultsEl) {
-                              const containerRect = mainContainer.getBoundingClientRect();
-                              const targetRect = resultsEl.getBoundingClientRect();
-                              const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
-                              mainContainer.scrollTo({
-                                top: Math.max(0, offset - 16),
-                                behavior: "smooth"
-                              });
-                              window.scrollTo(0, 0);
-                            }
-                          }
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSearchSubmit();
                         }
                       }}
                     />
-                    {search && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSearch('');
-                          setDeferredSearch('');
-                          setSelectedCategory('All');
-                          inputRef.current?.focus();
-                        }}
-                        className="p-1 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0 cursor-pointer"
-                        title="Reset search"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                      </button>
-                    )}
                   </div>
-
-
                 </div>
-
-                {/* Big Search Action Button */}
-                <button 
-                  onClick={() => {
-                    setDeferredSearch(search);
-                    if (checkMatches(search)) {
-                      const mainContainer = document.querySelector('main');
-                      const resultsEl = document.getElementById('pro-cards-list');
-                      if (mainContainer && resultsEl) {
-                        const containerRect = mainContainer.getBoundingClientRect();
-                        const targetRect = resultsEl.getBoundingClientRect();
-                        const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
-                        mainContainer.scrollTo({
-                          top: Math.max(0, offset - 16),
-                          behavior: "smooth"
-                        });
-                        window.scrollTo(0, 0);
-                      }
-                    }
-                  }}
-                  className="w-full py-4.5 bg-brand-blue hover:brightness-115 active:scale-[0.98] text-white rounded-[24px] font-bold text-sm md:text-base shadow-lg shadow-brand-blue/15 transition-all flex items-center justify-center gap-2.5"
-                >
-                  <Search className="w-5 h-5" />
-                  Search
-                </button>
               </div>
 
-              {/* No Results banner */}
-              <AnimatePresence>
-                {hasActiveFilter && !aiLoading && filteredPros.length === 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="p-4 bg-amber-50/60 rounded-2xl border border-amber-100/50 text-amber-900 text-xs md:text-sm font-medium flex items-center gap-3 shadow-sm"
-                  >
-                    <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                    <span>No matches found. Try using other keywords or clearing some filters! 🌟</span>
-                  </motion.div>
+              {/* Large Purple Recommendations Action Button */}
+              <button 
+                onClick={handleSearchSubmit}
+                disabled={aiLoading || !search.trim()}
+                className="w-full py-4.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 active:scale-[0.98] text-white rounded-[24px] font-bold text-sm md:text-base shadow-lg shadow-violet-500/15 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
+              >
+                {aiLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-5 h-5 fill-white/10" />
                 )}
-              </AnimatePresence>
+                Get Recommendations
+              </button>
 
-              {/* Filters Section */}
-              <div className="space-y-4 pt-4 border-t border-slate-100">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Refine your search</p>
-                
-                <div className="grid grid-cols-2 gap-4 md:gap-x-6 md:gap-y-4">
-                  {/* Category Dropdown */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <Filter className="w-3.5 h-3.5 text-brand-blue" /> Category
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="w-full pl-4 pr-10 py-3.5 bg-white rounded-2xl border border-slate-200/70 hover:border-slate-300 focus:ring-4 focus:ring-brand-blue/5 focus:border-brand-blue/20 outline-none shadow-sm hover:shadow-md transition-all text-slate-700 font-bold text-xs md:text-sm appearance-none cursor-pointer"
-                      >
-                        <option value="All">All Categories</option>
-                        {allProfessions.map(prof => (
-                          <option key={prof} value={prof}>{prof}</option>
-                        ))}
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <ChevronDown className="w-4 h-4 text-slate-400" />
-                      </div>
-                    </div>
-                  </div>
+              {/* Privacy Safeguard Note */}
+              <div className="flex items-center justify-center gap-1.5 text-slate-400 font-bold text-[10px] md:text-[11px] tracking-wide pt-1 text-center">
+                <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>100% private. Jane is here to help.</span>
+              </div>
+            </div>
 
-                  {/* Language Dropdown */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5 text-brand-blue" /> Language
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={selectedLanguage}
-                        onChange={(e) => setSelectedLanguage(e.target.value)}
-                        className="w-full pl-4 pr-10 py-3.5 bg-white rounded-2xl border border-slate-200/70 hover:border-slate-300 focus:ring-4 focus:ring-brand-blue/5 focus:border-brand-blue/20 outline-none shadow-sm hover:shadow-md transition-all text-slate-700 font-bold text-xs md:text-sm appearance-none cursor-pointer"
-                      >
-                        {languages.map(lang => (
-                          <option key={lang} value={lang}>{lang === 'All' ? 'All Languages' : lang}</option>
-                        ))}
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <ChevronDown className="w-4 h-4 text-slate-400" />
-                      </div>
-                    </div>
-                  </div>
+            {/* No Results banner */}
+            <AnimatePresence>
+              {hasActiveFilter && !aiLoading && filteredPros.length === 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="p-4 bg-amber-50/60 rounded-2xl border border-amber-100/50 text-amber-900 text-xs md:text-sm font-medium flex items-center gap-3 shadow-sm"
+                >
+                  <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                  <span>No matches found. Try using other keywords or clearing some filters! 🌟</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-                  {/* Distance Slider */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-rose-500" /> Distance from me
-                    </label>
-                    <div className="px-4 pt-4 pb-8 bg-white rounded-2xl border border-slate-200/70 shadow-sm flex flex-col gap-2 min-h-[70px] justify-start hover:border-slate-300 transition-all relative">
-                      <input
-                        type="range"
-                        min="0"
-                        max={distanceSteps.length - 1}
-                        step="1"
-                        value={distanceSteps.indexOf(maxDistance)}
-                        onChange={(e) => {
-                          const index = parseInt(e.target.value);
-                          const val = distanceSteps[index];
-                          try {
-                            localStorage.setItem('unlocked_max_distance', String(val));
-                          } catch (e) {
-                            console.error(e);
-                          }
-                          if (!hasRealLocation) {
-                            requestGeolocation(() => {
-                              setMaxDistance(val);
-                            });
-                          } else {
-                            setMaxDistance(val);
-                          }
-                        }}
-                        disabled={!hasRealLocation}
-                        className={cn(
-                          "w-full h-1.5 bg-slate-100 rounded-lg appearance-none relative z-10",
-                          hasRealLocation ? "cursor-pointer accent-rose-500" : "cursor-not-allowed opacity-50"
-                        )}
-                      />
-                      
-                      {/* Static Centered Label and Moving Tick */}
-                      {(() => {
-                        const ratio = distanceSteps.indexOf(maxDistance) / (distanceSteps.length - 1);
-                        return (
-                          <>
-                            {/* Moving Tick on the slider line */}
-                            <div 
-                              className="absolute top-[19px] transition-all duration-300 pointer-events-none"
-                              style={{ 
-                                left: `calc(1rem + (100% - 2rem) * ${ratio})`,
-                                transform: 'translate(-50%, -50%)' 
-                              }}
-                            >
-                              <div className="w-0.5 h-3 bg-rose-400/40"></div>
-                            </div>
-                            
-                            {/* Fixed Centered Value */}
-                            <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
-                              <span className="text-[11px] font-extrabold text-rose-600 whitespace-nowrap bg-rose-50 px-3 py-1 rounded-full border border-rose-100 shadow-sm">
-                                {maxDistance === 'All' ? 'Any distance' : maxDistance < 1 ? '500m' : `${maxDistance}km`}
-                              </span>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
+            {/* AI Error banner */}
+            {aiError && (
+              <div className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 flex items-center gap-3 text-sm">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <span>{aiError}</span>
+              </div>
+            )}
 
-                  {/* Rating Star Selection */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <Star className="w-3.5 h-3.5 text-brand-yellow" /> Rating
-                    </label>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-3.5 bg-white rounded-2xl border border-slate-200/70 shadow-sm min-h-[60px] hover:border-slate-300 transition-all">
-                      <div className="flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <button
-                            key={s}
-                            onClick={() => setMinRating(minRating === s ? 0 : s)}
-                            className="p-0.5"
-                          >
-                            <Star className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4 transition-colors", s <= minRating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200")} />
-                          </button>
-                        ))}
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap self-start sm:self-center">
-                        {minRating > 0 ? `${minRating}.0+` : 'Any rating'}
-                      </span>
+            {/* Skeleton / Loading pulse for AI mapping */}
+            {aiLoading && (
+              <div className="p-8 bg-violet-50/40 rounded-3xl border border-indigo-100/40 flex flex-col items-center justify-center text-center space-y-4">
+                <div className="w-12 h-12 bg-violet-600/10 rounded-full flex items-center justify-center">
+                  <Sparkles className="w-6 h-6 text-violet-600 animate-spin" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-violet-900">Jane is analyzing your request...</p>
+                  <p className="text-xs text-slate-400 max-w-sm">Jane is searching our database of recommended professionals to find the perfect matches.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Filters Section */}
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Refine your search</p>
+              
+              <div className="grid grid-cols-2 gap-4 md:gap-x-6 md:gap-y-4">
+                {/* Category Dropdown */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5 text-brand-blue" /> Category
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedCategory(val);
+                        scrollToResults();
+                      }}
+                      className="w-full pl-4 pr-10 py-3.5 bg-white rounded-2xl border border-slate-200/70 hover:border-slate-300 focus:ring-4 focus:ring-brand-blue/5 focus:border-brand-blue/20 outline-none shadow-sm hover:shadow-md transition-all text-slate-700 font-bold text-xs md:text-sm appearance-none cursor-pointer"
+                    >
+                      <option value="All">All Categories</option>
+                      {allProfessions.map(prof => (
+                        <option key={prof} value={prof}>{prof}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
                     </div>
                   </div>
                 </div>
 
-                {/* Geolocation Explanation Banner styled exactly as requested and shown in image */}
-                {!hasRealLocation && showLocationBanner && (
-                  <div className="mt-4 p-4.5 pr-10 md:pr-14 rounded-[24px] border border-blue-100 bg-blue-50/50 flex flex-col md:flex-row items-center md:items-start gap-4 hover:border-blue-200/50 transition-all relative overflow-hidden shadow-xs animate-in fade-in duration-300">
-                    {/* Left Icon container */}
-                    <div className="w-11 h-11 bg-white border border-blue-100/50 text-blue-600 rounded-full flex items-center justify-center shrink-0 shadow-xs">
-                      <Navigation className="w-5 h-5 fill-blue-600" />
+                {/* Language Dropdown */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-brand-blue" /> Language
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedLanguage}
+                      onChange={(e) => setSelectedLanguage(e.target.value)}
+                      className="w-full pl-4 pr-10 py-3.5 bg-white rounded-2xl border border-slate-200/70 hover:border-slate-300 focus:ring-4 focus:ring-brand-blue/5 focus:border-brand-blue/20 outline-none shadow-sm hover:shadow-md transition-all text-slate-700 font-bold text-xs md:text-sm appearance-none cursor-pointer"
+                    >
+                      {languages.map(lang => (
+                        <option key={lang} value={lang}>{lang === 'All' ? 'All Languages' : lang}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
                     </div>
-                    {/* Main content block */}
-                    <div className="flex-1 text-center md:text-left min-w-0 pr-0 md:pr-2 space-y-1">
-                      <h4 className="text-xs md:text-sm font-bold text-slate-800 leading-snug">
-                        Use location to find professionals near you.
-                      </h4>
-                      <p className="text-[10px] md:text-xs text-slate-500 leading-relaxed max-w-lg">
-                        We'll use your location only to show relevant results nearby.
-                      </p>
-                    </div>
-                    {/* Blue Action Button */}
-                    <div className="shrink-0 flex items-center w-full md:w-auto justify-center">
-                      <button
-                        onClick={() => requestGeolocation()}
-                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[10px] md:text-xs font-bold tracking-wide transition-all flex items-center gap-2 shadow-xs hover:shadow-md hover:brightness-105 active:scale-95 cursor-pointer w-full md:w-auto justify-center"
-                      >
-                        <Navigation className="w-3.5 h-3.5 fill-white" />
-                        Use my location
-                      </button>
-                    </div>
-                    {/* Top Right Close Button */}
-                    <button
-                      onClick={() => {
-                        setShowLocationBanner(false);
+                  </div>
+                </div>
+
+                {/* Distance Slider */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-rose-500" /> Distance from me
+                  </label>
+                  <div className="px-4 pt-4 pb-8 bg-white rounded-2xl border border-slate-200/70 shadow-sm flex flex-col gap-2 min-h-[70px] justify-start hover:border-slate-300 transition-all relative">
+                    <input
+                      type="range"
+                      min="0"
+                      max={distanceSteps.length - 1}
+                      step="1"
+                      value={distanceSteps.indexOf(maxDistance)}
+                      onChange={(e) => {
+                        const index = parseInt(e.target.value);
+                        const val = distanceSteps[index];
                         try {
-                          localStorage.setItem('unlocked_show_location_banner', 'false');
+                          localStorage.setItem('unlocked_max_distance', String(val));
                         } catch (e) {
                           console.error(e);
                         }
+                        if (!hasRealLocation) {
+                          requestGeolocation(() => {
+                            setMaxDistance(val);
+                          });
+                        } else {
+                          setMaxDistance(val);
+                        }
                       }}
-                      className="absolute right-4 top-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-blue-100/30 transition-all cursor-pointer"
-                      title="Dismiss location prompt"
+                      disabled={!hasRealLocation}
+                      className={cn(
+                        "w-full h-1.5 bg-slate-100 rounded-lg appearance-none relative z-10",
+                        hasRealLocation ? "cursor-pointer accent-rose-500" : "cursor-not-allowed opacity-50"
+                      )}
+                    />
+                    
+                    {/* Static Centered Label and Moving Tick */}
+                    {(() => {
+                      const ratio = distanceSteps.indexOf(maxDistance) / (distanceSteps.length - 1);
+                      return (
+                        <>
+                          {/* Moving Tick on the slider line */}
+                          <div 
+                            className="absolute top-[19px] transition-all duration-300 pointer-events-none"
+                            style={{ 
+                              left: `calc(1rem + (100% - 2rem) * ${ratio})`,
+                              transform: 'translate(-50%, -50%)' 
+                            }}
+                          >
+                            <div className="w-0.5 h-3 bg-rose-400/40"></div>
+                          </div>
+                          
+                          {/* Fixed Centered Value */}
+                          <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
+                            <span className="text-[11px] font-extrabold text-rose-600 whitespace-nowrap bg-rose-50 px-3 py-1 rounded-full border border-rose-100 shadow-sm">
+                              {maxDistance === 'All' ? 'Any distance' : maxDistance < 1 ? '500m' : `${maxDistance}km`}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* Rating Star Selection */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 text-brand-yellow" /> Rating
+                  </label>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-3.5 bg-white rounded-2xl border border-slate-200/70 shadow-sm min-h-[60px] hover:border-slate-300 transition-all">
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setMinRating(minRating === s ? 0 : s)}
+                          className="p-0.5"
+                        >
+                          <Star className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4 transition-colors", s <= minRating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200")} />
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap self-start sm:self-center">
+                      {minRating > 0 ? `${minRating}.0+` : 'Any rating'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Geolocation Explanation Banner */}
+              {!hasRealLocation && showLocationBanner && (
+                <div className="mt-4 p-4.5 pr-10 md:pr-14 rounded-[24px] border border-blue-100 bg-blue-50/50 flex flex-col md:flex-row items-center md:items-start gap-4 hover:border-blue-200/50 transition-all relative overflow-hidden shadow-xs animate-in fade-in duration-300">
+                  {/* Left Icon container */}
+                  <div className="w-11 h-11 bg-white border border-blue-100/50 text-blue-600 rounded-full flex items-center justify-center shrink-0 shadow-xs">
+                    <Navigation className="w-5 h-5 fill-blue-600" />
+                  </div>
+                  {/* Main content block */}
+                  <div className="flex-1 text-center md:text-left min-w-0 pr-0 md:pr-2 space-y-1">
+                    <h4 className="text-xs md:text-sm font-bold text-slate-800 leading-snug">
+                      Use location to find professionals near you.
+                    </h4>
+                    <p className="text-[10px] md:text-xs text-slate-500 leading-relaxed max-w-lg">
+                      We'll use your location only to show relevant results nearby.
+                    </p>
+                  </div>
+                  {/* Blue Action Button */}
+                  <div className="shrink-0 flex items-center w-full md:w-auto justify-center">
+                    <button
+                      onClick={() => requestGeolocation()}
+                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[10px] md:text-xs font-bold tracking-wide transition-all flex items-center gap-2 shadow-xs hover:shadow-md hover:brightness-105 active:scale-95 cursor-pointer w-full md:w-auto justify-center"
                     >
-                      <X className="w-4 h-4" />
+                      <Navigation className="w-3.5 h-3.5 fill-white" />
+                      Use my location
                     </button>
                   </div>
-                )}
-
-              </div>
-            </div>
-          ) : (
-            /* AI Ask Jane Search Interface */
-            <div className="space-y-6 animate-in fade-in duration-300">
-              <div className="text-left space-y-1">
-                <h2 className="text-3xl md:text-4xl font-semibold font-display text-slate-900 tracking-tight leading-tight">
-                  <span className="text-violet-600 font-semibold">Not sure</span> who you need?
-                </h2>
-                <p className="text-slate-500 text-sm md:text-base leading-relaxed">
-                  Describe your situation and Jane will help.
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {/* Purple Bordered Ask Jane Container */}
-                <div className="relative bg-white rounded-[24px] border-2 border-violet-200/90 p-5 shadow-[0_4px_24px_rgba(109,40,217,0.02)] space-y-2 focus-within:border-violet-400 focus-within:ring-4 focus-within:ring-violet-500/5 transition-all">
-                  <div className="flex items-start gap-3">
-                    <Sparkles className="w-5 h-5 text-violet-500 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <label className="block text-[10px] sm:text-[11px] font-extrabold text-violet-500 uppercase tracking-wider">
-                          Tell Jane about your situation...
-                        </label>
-                        {search && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSearch('');
-                              setDeferredSearch('');
-                              inputRef.current?.focus();
-                            }}
-                            className="p-1 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0 cursor-pointer"
-                            title="Reset search"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      <textarea 
-                        ref={inputRef as any}
-                        rows={3}
-                        placeholder="e.g. I just moved to Valencia and need help with residency paperwork in English"
-                        className="w-full bg-transparent outline-none text-slate-700 font-medium leading-relaxed placeholder:text-slate-300 text-xs sm:text-sm border-none p-0 focus:ring-0 resize-none"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSearchSubmit();
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Large Purple Recommendations Action Button (moved right after writing field) */}
-                <button 
-                  onClick={handleSearchSubmit}
-                  disabled={aiLoading || !search.trim()}
-                  className="w-full py-4.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 active:scale-[0.98] text-white rounded-[24px] font-bold text-sm md:text-base shadow-lg shadow-violet-500/15 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
-                >
-                  {aiLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-5 h-5 fill-white/10" />
-                  )}
-                  Get Recommendations
-                </button>
-
-
-                {/* Privacy Safeguard Note */}
-                <div className="flex items-center justify-center gap-1.5 text-slate-400 font-bold text-[10px] md:text-[11px] tracking-wide pt-1 text-center">
-                  <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>100% private. Jane is here to help.</span>
-                </div>
-              </div>
-
-              {/* No Results banner */}
-              <AnimatePresence>
-                {hasActiveFilter && !aiLoading && filteredPros.length === 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="p-4 bg-amber-50/60 rounded-2xl border border-amber-100/50 text-amber-900 text-xs md:text-sm font-medium flex items-center gap-3 shadow-sm"
+                  {/* Top Right Close Button */}
+                  <button
+                    onClick={() => {
+                      setShowLocationBanner(false);
+                      try {
+                        localStorage.setItem('unlocked_show_location_banner', 'false');
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
+                    className="absolute right-4 top-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-blue-100/30 transition-all cursor-pointer"
+                    title="Dismiss location prompt"
                   >
-                    <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                    <span>No matches found. Try using other keywords or asking Jane another question! 🌟</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* AI Error banner */}
-              {aiError && (
-                <div className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 flex items-center gap-3 text-sm">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                  <span>{aiError}</span>
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               )}
 
-              {/* Skeleton / Loading pulse for AI mapping */}
-              {aiLoading && (
-                <div className="p-8 bg-violet-50/40 rounded-3xl border border-indigo-100/40 flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="w-12 h-12 bg-violet-600/10 rounded-full flex items-center justify-center">
-                    <Sparkles className="w-6 h-6 text-violet-600 animate-spin" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-violet-900">Jane is analyzing your request...</p>
-                    <p className="text-xs text-slate-400 max-w-sm">Jane is searching our database of recommended professionals to find the perfect matches.</p>
-                  </div>
-                </div>
-              )}
             </div>
-          )}
+          </div>
 
           {/* Active AI search indicator placed below */}
           {aiQuery && aiResults && !aiLoading && (
@@ -10233,34 +10114,32 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
       <div className="pt-8" id="results-section">
         <div className="space-y-12">
-          {/* Map View always on top - only for members */}
-          {currentUser && (
-            <div className="space-y-3">
-              <div className="flex justify-end px-2">
-                <button
-                  type="button"
-                  onClick={() => requestGeolocation()}
-                  className="flex items-center gap-1.5 text-xs font-bold text-brand-blue hover:text-[#002BE6] bg-blue-50/80 hover:bg-blue-100/90 active:scale-95 px-3.5 py-2 rounded-full border border-blue-100/60 shadow-sm transition-all cursor-pointer group"
-                  title="Locate me on the map"
-                >
-                  <Navigation className="w-3.5 h-3.5 group-hover:rotate-45 transition-transform text-brand-blue" />
-                  <span>Use my location</span>
-                </button>
-              </div>
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full h-[300px] md:h-[400px] rounded-[40px] overflow-hidden border border-slate-100 shadow-2xl relative bg-slate-50"
+          {/* Map View always on top */}
+          <div className="space-y-3">
+            <div className="flex justify-end px-2">
+              <button
+                type="button"
+                onClick={() => requestGeolocation()}
+                className="flex items-center gap-1.5 text-xs font-bold text-brand-blue hover:text-[#002BE6] bg-blue-50/80 hover:bg-blue-100/90 active:scale-95 px-3.5 py-2 rounded-full border border-blue-100/60 shadow-sm transition-all cursor-pointer group"
+                title="Locate me on the map"
               >
-                 <ProMap 
-                   pros={filteredPros} 
-                   onSelectPro={(pro) => scrollToPro(pro)} 
-                   center={userLocation || { lat: 39.4699, lng: -0.3763 }} 
-                   resetTrigger={mapCenterTrigger}
-                 />
-              </motion.div>
+                <Navigation className="w-3.5 h-3.5 group-hover:rotate-45 transition-transform text-brand-blue" />
+                <span>Use my location</span>
+              </button>
             </div>
-          )}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full h-[300px] md:h-[400px] rounded-[40px] overflow-hidden border border-slate-100 shadow-2xl relative bg-slate-50"
+            >
+               <ProMap 
+                 pros={filteredPros} 
+                 onSelectPro={(pro) => scrollToPro(pro)} 
+                 center={userLocation || { lat: 39.4699, lng: -0.3763 }} 
+                 resetTrigger={mapCenterTrigger}
+               />
+            </motion.div>
+          </div>
 
           {/* List View below the map */}
           <div id="pro-cards-list" className="grid grid-cols-1 md:grid-cols-2 gap-6 scroll-mt-28">
