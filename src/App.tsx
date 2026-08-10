@@ -9290,6 +9290,8 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
 
   // AI-powered Search states
   const [aiResults, setAiResults] = useState<{ [key: string]: { score: number; reason: string } } | null>(null);
+  const [aiExactMatch, setAiExactMatch] = useState<boolean>(true);
+  const [aiSummaryMessage, setAiSummaryMessage] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiQuery, setAiQuery] = useState('');
@@ -9300,6 +9302,8 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
     if (search.trim() === '') {
       setDeferredSearch('');
       setAiResults(null);
+      setAiExactMatch(true);
+      setAiSummaryMessage(null);
       setAiError(null);
       setAiQuery('');
     }
@@ -9322,6 +9326,8 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
     const trimmed = search.trim();
     if (!trimmed) {
       setAiResults(null);
+      setAiExactMatch(true);
+      setAiSummaryMessage(null);
       setDeferredSearch('');
       setAiQuery('');
       setAiError(null);
@@ -9351,7 +9357,7 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
           serverFailed = true;
         } else if (!response.ok) {
           if (response.status === 429) {
-            throw new Error("Jane is very busy right now! Please wait a few seconds and try again.");
+            throw new Error("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
           }
           try {
             const errJson = await response.json();
@@ -9393,17 +9399,22 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
         }));
 
         const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals.
-Your purpose is to thoroughly examine the user's natural language request (written in French, English, or Spanish) and return the most relevant matching professionals.
+Your purpose is to examine the user's natural language request and return the most relevant matching professionals.
 
-Review the list of professionals provided and rank them based on:
-1. Skills, profession, and category align, or partial matches.
-2. Direct/indirect/synonymous matches (e.g., if they ask for "relooking" or "decorateur d'interieur", match it against interior designers, painters, etc.).
-3. Language spoken (if they request "qui parle anglais" or "bilingual", match it against pros that speak English).
-4. Description context (matching specific skills mentioned in their bio, e.g. "compta" matching a tax advisor).
+Review the list of professionals provided and analyze:
+1. Is there an exact or strong match for the requested trade, skill, or service (e.g. plumber, electrician, French-speaking dentist, lawyer)?
+2. If at least one professional directly matches the requested trade/service:
+   - Set "exactMatchFound" to true, and set "summaryMessage" to null.
+   - Assign matching pros high relevancy scores (50-100).
+   - Assign unrelated pros a score of 0.
+3. If NO professional in the directory directly matches the requested trade/profession:
+   - Set "exactMatchFound" to false.
+   - Write a polite, empathetic "summaryMessage" strictly in ENGLISH explaining that no direct match was found for their request.
+     - Example: "No direct matches were found for 'plumber' in our directory at the moment."
+   - For professionals that might offer relevant adjacent services or general top recommendations, assign a score between 15 and 40.
+   - CRITICAL: For any professionals that have NOTHING to do with the request, set their score strictly to 0 (or omit them). Unrelated professionals MUST have a score of 0.
 
-Assign a match score from 0 to 100 for each. Include any professional that has a match score above 0. If a professional doesn't match at all, you may omit them or output score as 0.
-Under "reasonUrlExcerpt", write a single, user-friendly matching explanation in English (1 concise sentence maximum) suitable to be displayed inside a badge on their profile.
-Example reasonUrlExcerpt: "Recommended for your painting project thanks to 12 years of experience" or "Bilingual tax advisor ideal for your autonomo setup".`;
+4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single, concise matching or recommendation explanation strictly in English (1 sentence maximum).`;
 
         const response = await ai.models.generateContent({
           model: "gemini-3.1-flash-lite",
@@ -9415,16 +9426,24 @@ ${JSON.stringify(proListBrief, null, 2)}`,
             systemInstruction: sysInstruction,
             responseMimeType: "application/json",
             responseSchema: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING, description: "The professional's ID as a string" },
-                  score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                  reasonUrlExcerpt: { type: Type.STRING, description: "Highly engaging, concise explanation in English explaining why this pro is matched." }
-                },
-                required: ["id", "score", "reasonUrlExcerpt"]
-              }
+              type: Type.OBJECT,
+              properties: {
+                exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
+                summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
+                results: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING, description: "The professional's ID as a string" },
+                      score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
+                      reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                    },
+                    required: ["id", "score", "reasonUrlExcerpt"]
+                  }
+                }
+              },
+              required: ["exactMatchFound", "results"]
             },
             thinkingConfig: {
               thinkingLevel: ThinkingLevel.MINIMAL
@@ -9433,24 +9452,44 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           }
         });
 
-        const parsedContent = JSON.parse(response.text || "[]");
-        data = { results: parsedContent };
+        const parsedContent = JSON.parse(response.text || "{}");
+        data = parsedContent;
       }
 
       if (!data) {
         throw new Error("Could not retrieve search results.");
       }
       
-      const resultsDict: { [key: string]: { score: number; reason: string } } = {};
-      if (data.results && Array.isArray(data.results)) {
-        data.results.forEach((item: any) => {
-          resultsDict[String(item.id)] = {
-            score: item.score,
-            reason: item.reasonUrlExcerpt
-          };
-        });
+      let exactMatch = true;
+      let summaryMsg: string | null = null;
+
+      if (typeof data.exactMatchFound === 'boolean') {
+        exactMatch = data.exactMatchFound;
       }
+      if (typeof data.summaryMessage === 'string' && data.summaryMessage.trim()) {
+        summaryMsg = data.summaryMessage.trim();
+      }
+
+      const resultsDict: { [key: string]: { score: number; reason: string } } = {};
+      const rawResults = Array.isArray(data.results) ? data.results : (Array.isArray(data) ? data : []);
+      let highestScore = 0;
+
+      rawResults.forEach((item: any) => {
+        const sc = typeof item.score === 'number' ? item.score : 0;
+        if (sc > highestScore) highestScore = sc;
+        resultsDict[String(item.id)] = {
+          score: sc,
+          reason: item.reasonUrlExcerpt || item.reason || ''
+        };
+      });
+
+      if (rawResults.length === 0 || highestScore < 30) {
+        exactMatch = false;
+      }
+
       setAiResults(resultsDict);
+      setAiExactMatch(exactMatch);
+      setAiSummaryMessage(summaryMsg);
     } catch (err: any) {
       console.error("[Search] AI matching error:", err);
       const errMsg = err.message || "";
@@ -9465,12 +9504,14 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         errorLower.includes("busy") ||
         errorLower.includes("rate limit")
       ) {
-        setAiError("Jane is very busy right now! Please wait a few seconds and try again.");
+        setAiError("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
       } else {
         setAiError(err.message || "Connection error with the AI service.");
       }
       // Fallback: clear AI results
       setAiResults(null);
+      setAiExactMatch(true);
+      setAiSummaryMessage(null);
     } finally {
       setAiLoading(false);
       setIsSearching(false);
@@ -9505,19 +9546,20 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   const scrollToResults = () => {
     setTimeout(() => {
       const mainContainer = document.querySelector('main');
-      const resultsEl = document.getElementById('pro-cards-list') || document.getElementById('results-section');
+      const aiBannerEl = document.getElementById('ai-search-banner');
+      const resultsEl = aiBannerEl || document.getElementById('pro-cards-list') || document.getElementById('results-section');
       if (mainContainer && resultsEl) {
         const containerRect = mainContainer.getBoundingClientRect();
         const targetRect = resultsEl.getBoundingClientRect();
         const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
         mainContainer.scrollTo({
-          top: Math.max(0, offset - 16),
+          top: Math.max(0, offset - 90),
           behavior: "smooth"
         });
       } else if (resultsEl) {
         resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-    }, 100);
+    }, 120);
   };
 
 
@@ -9722,6 +9764,9 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
   const hasActiveFilter = (typeof deferredSearch === 'string' && deferredSearch.trim() !== '') || aiResults !== null || selectedCategory !== 'All' || selectedLanguage !== 'All' || maxDistance !== 'All' || minRating > 0;
 
+  // Check if we have strong exact matches from AI search
+  const hasStrongAiMatches = aiResults !== null && aiExactMatch && Object.values(aiResults).some(r => r.score >= 30);
+
   const filteredPros = hasActiveFilter 
     ? (allPros || []).filter(pro => {
         if (!pro) return false;
@@ -9737,7 +9782,9 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           if (aiResults !== null) {
             const proIdStr = String(pro.id);
             const matchInfo = aiResults[proIdStr];
-            matchesSearch = !!matchInfo && matchInfo.score > 0;
+            // Only keep professionals that have a positive score (> 0).
+            // Any professional with score <= 0 or missing from aiResults has nothing to do with the search and is hidden.
+            matchesSearch = !!matchInfo && typeof matchInfo.score === 'number' && matchInfo.score > 0;
           } else {
             const searchLower = searchStr.toLowerCase();
             const proName = typeof pro.name === 'string' ? pro.name : '';
@@ -9769,7 +9816,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         if (aiResults) {
           const scoreA = aiResults[String(a.id)]?.score || 0;
           const scoreB = aiResults[String(b.id)]?.score || 0;
-          return scoreB - scoreA;
+          if (scoreA !== scoreB) return scoreB - scoreA;
         }
 
         if (userLocation && a.coordinates && b.coordinates) {
@@ -9780,8 +9827,8 @@ ${JSON.stringify(proListBrief, null, 2)}`,
              return distA - distB;
           }
         }
-        
-        return 0;
+
+        return (b.rating || 0) - (a.rating || 0);
       })
     : [];
 
@@ -10086,35 +10133,13 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                   </button>
                 </div>
               )}
-
             </div>
           </div>
-
-          {/* Active AI search indicator placed below */}
-          {aiQuery && aiResults && !aiLoading && (
-            <div className="p-4 bg-blue-50 text-blue-900 rounded-2xl border border-blue-100 flex flex-wrap items-center justify-between gap-3 text-sm transition-all duration-300">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-brand-blue fill-blue-300 animate-pulse" />
-                <span>Jane's Recommended Results for "<strong>{aiQuery}</strong>" • <strong>{filteredPros.length}</strong> matches sorted by relevance</span>
-              </div>
-              <button 
-                onClick={() => {
-                  setSearch('');
-                  setAiResults(null);
-                  setAiQuery('');
-                  setDeferredSearch('');
-                }}
-                className="text-xs font-bold text-brand-blue hover:text-blue-800 transition-colors bg-white px-3 py-1.5 rounded-xl border border-blue-200 shadow-sm"
-              >
-                Clear
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
       <div className="pt-8" id="results-section">
-        <div className="space-y-12">
+        <div className="space-y-8">
           {/* Map View always on top */}
           <div className="space-y-3">
             <div className="flex justify-end px-2">
@@ -10141,6 +10166,81 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                />
             </motion.div>
           </div>
+
+          {/* Active AI search message banner (Placed AFTER map - Clean & Seamless Light Theme) */}
+          {aiQuery && aiResults && !aiLoading && (
+            <motion.div 
+              id="ai-search-banner"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className={`scroll-mt-28 p-4 md:p-5 rounded-2xl border transition-all shadow-xs ${
+                !hasStrongAiMatches || !aiExactMatch
+                  ? "bg-amber-50/70 border-amber-200/80 text-amber-950"
+                  : "bg-blue-50/60 border-blue-100 text-slate-900"
+              }`}
+            >
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className={`p-2.5 rounded-xl shrink-0 border ${
+                    !hasStrongAiMatches || !aiExactMatch
+                      ? "bg-amber-100/80 border-amber-200 text-amber-800"
+                      : "bg-blue-100/80 border-blue-200 text-brand-blue"
+                  }`}>
+                    <Sparkles className="w-5 h-5 animate-pulse" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                        !hasStrongAiMatches || !aiExactMatch
+                          ? "bg-amber-100 text-amber-900 border-amber-200"
+                          : "bg-blue-100 text-blue-900 border-blue-200"
+                      }`}>
+                        {!hasStrongAiMatches || !aiExactMatch ? "Jane's Tips" : "Jane's Search"}
+                      </span>
+                      <span className="text-xs font-medium text-slate-500">
+                        "{aiQuery}"
+                      </span>
+                    </div>
+
+                    {!hasStrongAiMatches || !aiExactMatch ? (
+                      <p className="text-xs sm:text-sm font-medium leading-relaxed text-amber-950">
+                        {aiSummaryMessage ? (
+                          aiSummaryMessage
+                        ) : (
+                          <>
+                            No direct matches were found for "<strong>{aiQuery}</strong>" in our directory. Here are other top community-recommended professionals:
+                          </>
+                        )}
+                      </p>
+                    ) : (
+                      <p className="text-xs sm:text-sm font-medium leading-relaxed text-slate-700">
+                        Jane found <strong>{filteredPros.length}</strong> {filteredPros.length === 1 ? 'match' : 'matches'} for "<strong>{aiQuery}</strong>" sorted by relevance:
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center shrink-0 self-start md:self-center pt-1 md:pt-0">
+                  <button
+                    onClick={() => {
+                      setSearch('');
+                      setAiResults(null);
+                      setAiQuery('');
+                      setDeferredSearch('');
+                      setAiSummaryMessage(null);
+                      setAiExactMatch(true);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 active:scale-95 text-xs font-semibold text-slate-700 border border-slate-200 shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <X className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Clear</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           {/* List View below the map */}
           <div id="pro-cards-list" className="grid grid-cols-1 md:grid-cols-2 gap-6 scroll-mt-28">

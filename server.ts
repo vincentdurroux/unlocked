@@ -117,25 +117,23 @@ async function startServer() {
       }));
 
       const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals.
-Your purpose is to thoroughly examine the user's natural language request (written in French, English, or Spanish) and return the most relevant matching professionals.
+Your purpose is to examine the user's natural language request and return the most relevant matching professionals.
 
-Review the list of professionals provided and rank them based on:
-1. Skills, profession, and category align, or partial matches.
-2. Direct/indirect/synonymous matches (e.g., if they ask for "relooking" or "decorateur d'interieur", match it against interior designers, painters, etc.).
-3. Language spoken (if they request "qui parle anglais" or "bilingual", match it against pros that speak English).
-4. Description context (matching specific skills mentioned in their bio, e.g. "compta" matching a tax advisor).
+Review the list of professionals provided and analyze:
+1. Is there an exact or strong match for the requested trade, skill, or service (e.g. plumber, electrician, French-speaking dentist, lawyer)?
+2. If at least one professional directly matches the requested trade/service:
+   - Set "exactMatchFound" to true, and set "summaryMessage" to null.
+   - Assign matching pros high relevancy scores (50-100).
+   - Assign unrelated pros a score of 0.
+3. If NO professional in the directory directly matches the requested trade/profession:
+   - Set "exactMatchFound" to false.
+   - Write a polite, empathetic "summaryMessage" strictly in ENGLISH explaining that no direct match was found for their request.
+     - Example: "No direct matches were found for 'plumber' in our directory at the moment."
+   - For professionals that might offer relevant adjacent services or general top recommendations, assign a score between 15 and 40.
+   - CRITICAL: For any professionals that have NOTHING to do with the request, set their score strictly to 0 (or omit them). Unrelated professionals MUST have a score of 0.
 
-Assign a match score from 0 to 100 for each. Include any professional that has a match score above 0. If a professional doesn't match at all, you may omit them or output score as 0.
-Under "reasonUrlExcerpt", write a single, user-friendly matching explanation in English (1 concise sentence maximum) suitable to be displayed inside a badge on their profile.
-Example reasonUrlExcerpt: "Recommended for your painting project thanks to 12 years of experience" or "Bilingual tax advisor ideal for your autonomo setup".
+4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single, concise matching or recommendation explanation strictly in English (1 sentence maximum).`;
 
-You MUST return a JSON array of objects where each object contains:
-- "id": (string) The professional's ID.
-- "score": (integer) The relevancy match score from 0 to 100.
-- "reasonUrlExcerpt": (string) Engaging explanation in English explaining why they matched.
-
-Return only the raw JSON.`;
- 
       const response = await getAiClient().models.generateContent({
         model: "gemini-3.1-flash-lite",
         contents: `User Query: "${query}"
@@ -146,16 +144,24 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           systemInstruction: sysInstruction,
           responseMimeType: "application/json",
           responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING, description: "The professional's ID as a string" },
-                score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                reasonUrlExcerpt: { type: Type.STRING, description: "Highly engaging, concise explanation in English explaining why this pro is matched." }
-              },
-              required: ["id", "score", "reasonUrlExcerpt"]
-            }
+            type: Type.OBJECT,
+            properties: {
+              exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
+              summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
+              results: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING, description: "The professional's ID as a string" },
+                    score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
+                    reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                  },
+                  required: ["id", "score", "reasonUrlExcerpt"]
+                }
+              }
+            },
+            required: ["exactMatchFound", "results"]
           },
           thinkingConfig: {
             thinkingLevel: ThinkingLevel.MINIMAL
@@ -164,8 +170,26 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         }
       });
 
-      const parsedResults = JSON.parse(response.text || "[]");
-      return res.json({ results: parsedResults });
+      const parsedData = JSON.parse(response.text || "{}");
+      let results: any[] = [];
+      let exactMatchFound = true;
+      let summaryMessage: string | null = null;
+
+      if (Array.isArray(parsedData)) {
+        results = parsedData;
+      } else if (parsedData && typeof parsedData === "object") {
+        results = Array.isArray(parsedData.results) ? parsedData.results : [];
+        exactMatchFound = typeof parsedData.exactMatchFound === "boolean" ? parsedData.exactMatchFound : true;
+        summaryMessage = parsedData.summaryMessage || null;
+      }
+
+      // Verify if any pro has a high confidence match score (>= 40)
+      const hasStrongMatch = results.some((r: any) => (r.score || 0) >= 40);
+      if (!hasStrongMatch) {
+        exactMatchFound = false;
+      }
+
+      return res.json({ exactMatchFound, summaryMessage, results });
     } catch (error: any) {
       console.error("[api] Gemini AI Search matching error:", error);
       const errorMsg = error.message || "";
@@ -178,7 +202,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         errorLower.includes("too many requests") ||
         errorLower.includes("rate limit")
       ) {
-        return res.status(429).json({ error: "Jane is very busy right now! Please wait a few seconds and try again." });
+        return res.status(429).json({ error: "Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need." });
       }
       return res.status(500).json({ error: error.message || "Failed to process matching" });
     }
