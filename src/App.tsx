@@ -8152,28 +8152,31 @@ function HomeView({
         </div>
 
         {/* Hero Search Card */}
-        <div className="relative z-10 -mt-3 md:mt-0 overflow-hidden rounded-[2.5rem] bg-slate-50 md:bg-slate-50/50 p-6 md:p-12 lg:p-16 border border-slate-100 shadow-md md:shadow-sm transition-all duration-500 hover:shadow-md">
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center gap-5 mb-8 md:mb-12">
-            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-blue-50/80 flex items-center justify-center shadow-inner">
-               <Search className="w-6 h-6 md:w-8 md:h-8 text-brand-blue" />
+        <div className="relative z-10 -mt-3 md:mt-0 overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-white via-slate-50/90 to-blue-50/40 p-6 md:p-10 lg:p-12 border border-blue-100/80 shadow-[0_12px_40px_rgba(0,43,230,0.06)] transition-all duration-500 hover:shadow-[0_16px_48px_rgba(0,43,230,0.1)] group/card">
+          {/* Subtle 2026 Ambient Light Glow */}
+          <div className="absolute -top-20 -right-20 w-64 h-64 bg-brand-blue/10 rounded-full blur-3xl pointer-events-none group-hover/card:bg-brand-blue/15 transition-all duration-700" />
+          
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <div className="flex items-start md:items-center gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-brand-blue text-white flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0">
+                <Search className="w-6 h-6 md:w-7 md:h-7 text-white" />
+              </div>
+              <div className="space-y-1 text-left">
+                <h3 className="text-xl md:text-2xl font-bold text-brand-navy tracking-tight">Looking for a trusted local pro?</h3>
+                <p className="text-slate-500 text-xs md:text-sm font-medium">
+                  Search member recommendations or let <strong className="text-brand-blue font-semibold">Jane, your AI assistant</strong>, match you instantly.
+                </p>
+              </div>
             </div>
-            <div className="space-y-0.5 text-left">
-              <h3 className="text-lg md:text-xl font-bold text-brand-navy">Looking for a trusted local pro?</h3>
-              <p className="text-slate-500 text-xs md:text-sm font-medium">Find professionals personally recommended by members.</p>
-            </div>
-          </div>
 
-          <div 
-            onClick={() => onNavigate('explore')}
-            className="relative group w-full cursor-pointer max-w-4xl"
-          >
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue transition-colors z-10" />
-            <input 
-              type="text"
-              readOnly
-              placeholder="Start your search..."
-              className="w-full h-12 md:h-14 pl-12 pr-6 bg-white rounded-2xl border border-slate-100 shadow-[0_4px_12px_rgba(0,0,0,0.03)] group-hover:border-brand-blue/30 group-hover:ring-4 group-hover:ring-brand-blue/5 outline-none transition-all text-brand-blue font-medium text-sm md:text-base placeholder:text-brand-blue cursor-pointer"
-            />
+            <button 
+              onClick={() => onNavigate('explore')}
+              className="shrink-0 inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-2xl font-bold text-sm md:text-base shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+            >
+              <Search className="w-4 h-4" />
+              <span>Start searching</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -9794,22 +9797,22 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="text-left space-y-1">
               <h2 className="text-3xl md:text-4xl font-semibold font-display text-slate-900 tracking-tight leading-tight">
-                <span className="text-violet-600 font-semibold">Describe</span> what you need.
+                <span className="text-brand-blue font-semibold">What</span> are you looking for?
               </h2>
               <p className="text-slate-500 text-sm md:text-base leading-relaxed">
-                Describe your situation and Jane will help you find the right local professional.
+                Search for a professional or let Jane, your AI assistant, find the best match for you.
               </p>
             </div>
 
             <div className="space-y-4">
-              {/* Purple Bordered Ask Jane Container */}
-              <div className="relative bg-white rounded-[24px] border-2 border-violet-200/90 p-5 shadow-[0_4px_24px_rgba(109,40,217,0.02)] space-y-2 focus-within:border-violet-400 focus-within:ring-4 focus-within:ring-violet-500/5 transition-all">
+              {/* Blue Bordered Ask Jane Container */}
+              <div className="relative bg-white rounded-[24px] border-2 border-blue-200/90 p-5 shadow-[0_4px_24px_rgba(37,99,235,0.02)] space-y-2 focus-within:border-brand-blue/50 focus-within:ring-4 focus-within:ring-brand-blue/5 transition-all">
                 <div className="flex items-start gap-3">
-                  <Sparkles className="w-5 h-5 text-violet-500 mt-0.5 flex-shrink-0" />
+                  <Sparkles className="w-5 h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center justify-between">
-                      <label className="block text-[10px] sm:text-[11px] font-extrabold text-violet-500 uppercase tracking-wider">
-                        Tell Jane about your situation...
+                      <label className="block text-[10px] sm:text-[11px] font-extrabold text-brand-blue uppercase tracking-wider">
+                        Tell Jane what you need...
                       </label>
                       {search && (
                         <button
@@ -9831,7 +9834,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                     <textarea 
                       ref={inputRef as any}
                       rows={3}
-                      placeholder="e.g. I just moved to Valencia and need help with residency paperwork in English"
+                      placeholder="e.g. plumber, French-speaking dentist, or help sorting out my paperwork"
                       className="w-full bg-transparent outline-none text-slate-700 font-medium leading-relaxed placeholder:text-slate-300 text-xs sm:text-sm border-none p-0 focus:ring-0 resize-none"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
@@ -9846,18 +9849,18 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                 </div>
               </div>
 
-              {/* Large Purple Recommendations Action Button */}
+              {/* Large Blue Recommendations Action Button */}
               <button 
                 onClick={handleSearchSubmit}
                 disabled={aiLoading || !search.trim()}
-                className="w-full py-4.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 active:scale-[0.98] text-white rounded-[24px] font-bold text-sm md:text-base shadow-lg shadow-violet-500/15 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
+                className="w-full py-4.5 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-[24px] font-bold text-sm md:text-base shadow-lg shadow-blue-500/15 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
               >
                 {aiLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   <Sparkles className="w-5 h-5 fill-white/10" />
                 )}
-                Get Recommendations
+                Find professionals
               </button>
 
               {/* Privacy Safeguard Note */}
@@ -9892,12 +9895,12 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
             {/* Skeleton / Loading pulse for AI mapping */}
             {aiLoading && (
-              <div className="p-8 bg-violet-50/40 rounded-3xl border border-indigo-100/40 flex flex-col items-center justify-center text-center space-y-4">
-                <div className="w-12 h-12 bg-violet-600/10 rounded-full flex items-center justify-center">
-                  <Sparkles className="w-6 h-6 text-violet-600 animate-spin" />
+              <div className="p-8 bg-blue-50/40 rounded-3xl border border-blue-100/40 flex flex-col items-center justify-center text-center space-y-4">
+                <div className="w-12 h-12 bg-brand-blue/10 rounded-full flex items-center justify-center">
+                  <Sparkles className="w-6 h-6 text-brand-blue animate-spin" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-bold text-violet-900">Jane is analyzing your request...</p>
+                  <p className="text-sm font-bold text-brand-navy">Jane is analyzing your request...</p>
                   <p className="text-xs text-slate-400 max-w-sm">Jane is searching our database of recommended professionals to find the perfect matches.</p>
                 </div>
               </div>
@@ -10091,9 +10094,9 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
           {/* Active AI search indicator placed below */}
           {aiQuery && aiResults && !aiLoading && (
-            <div className="p-4 bg-violet-50 text-violet-800 rounded-2xl border border-violet-100 flex flex-wrap items-center justify-between gap-3 text-sm transition-all duration-300">
+            <div className="p-4 bg-blue-50 text-blue-900 rounded-2xl border border-blue-100 flex flex-wrap items-center justify-between gap-3 text-sm transition-all duration-300">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-violet-600 fill-violet-300 animate-pulse" />
+                <Sparkles className="w-4 h-4 text-brand-blue fill-blue-300 animate-pulse" />
                 <span>Jane's Recommended Results for "<strong>{aiQuery}</strong>" • <strong>{filteredPros.length}</strong> matches sorted by relevance</span>
               </div>
               <button 
@@ -10103,7 +10106,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                   setAiQuery('');
                   setDeferredSearch('');
                 }}
-                className="text-xs font-bold text-violet-600 hover:text-violet-800 transition-colors bg-white px-3 py-1.5 rounded-xl border border-violet-200 shadow-sm"
+                className="text-xs font-bold text-brand-blue hover:text-blue-800 transition-colors bg-white px-3 py-1.5 rounded-xl border border-blue-200 shadow-sm"
               >
                 Clear
               </button>
@@ -10120,7 +10123,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
               <button
                 type="button"
                 onClick={() => requestGeolocation()}
-                className="flex items-center gap-1.5 text-xs font-bold text-brand-blue hover:text-[#002BE6] bg-blue-50/80 hover:bg-blue-100/90 active:scale-95 px-3.5 py-2 rounded-full border border-blue-100/60 shadow-sm transition-all cursor-pointer group"
+                className="flex items-center gap-1.5 text-xs font-bold text-brand-blue hover:text-blue-700 bg-blue-50/80 hover:bg-blue-100/90 active:scale-95 px-3.5 py-2 rounded-full border border-blue-100/60 shadow-sm transition-all cursor-pointer group"
                 title="Locate me on the map"
               >
                 <Navigation className="w-3.5 h-3.5 group-hover:rotate-45 transition-transform text-brand-blue" />
@@ -10161,8 +10164,8 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
                   {/* AI Match Score Badge */}
                   {aiResults && aiResults[String(pro.id)] && (
-                    <div className="absolute top-6 right-16 px-2.5 py-1 bg-violet-50 text-violet-700 rounded-full flex items-center gap-1 text-[10px] font-bold border border-violet-100/50 z-10">
-                      <Sparkles className="w-3 h-3 text-violet-500 fill-violet-200" />
+                    <div className="absolute top-6 right-16 px-2.5 py-1 bg-blue-50 text-brand-blue rounded-full flex items-center gap-1 text-[10px] font-bold border border-blue-100/50 z-10">
+                      <Sparkles className="w-3 h-3 text-brand-blue fill-blue-200" />
                       <span>{aiResults[String(pro.id)].score}% Jane match</span>
                     </div>
                   )}
@@ -10229,9 +10232,9 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
                       {/* AI Tailored Matching Reason */}
                       {aiResults && aiResults[String(pro.id)]?.reason && (
-                        <div className="mt-3 p-3 bg-violet-50/40 rounded-2xl border border-violet-100/45 flex items-start gap-2 max-w-full">
-                          <Sparkles className="w-3.5 h-3.5 text-violet-500 mt-0.5 flex-shrink-0 animate-pulse" />
-                          <p className="text-xs text-violet-800 font-medium italic leading-relaxed">
+                        <div className="mt-3 p-3 bg-blue-50/40 rounded-2xl border border-blue-100/45 flex items-start gap-2 max-w-full">
+                          <Sparkles className="w-3.5 h-3.5 text-brand-blue mt-0.5 flex-shrink-0 animate-pulse" />
+                          <p className="text-xs text-blue-900 font-medium italic leading-relaxed">
                             "{aiResults[String(pro.id)].reason}"
                           </p>
                         </div>
