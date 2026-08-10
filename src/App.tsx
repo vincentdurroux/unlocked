@@ -8171,11 +8171,9 @@ function HomeView({
 
             <button 
               onClick={() => onNavigate('explore')}
-              className="shrink-0 inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-2xl font-bold text-sm md:text-base shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+              className="shrink-0 inline-flex items-center justify-center px-6 py-3.5 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-2xl font-bold text-sm md:text-base shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
             >
-              <Search className="w-4 h-4" />
               <span>Start searching</span>
-              <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
