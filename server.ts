@@ -119,20 +119,26 @@ async function startServer() {
       const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals.
 Your purpose is to examine the user's natural language request and return the most relevant matching professionals.
 
-Review the list of professionals provided and analyze:
-1. Is there an exact or strong match for the requested trade, skill, or service (e.g. plumber, electrician, French-speaking dentist, lawyer)?
-2. If at least one professional directly matches the requested trade/service:
-   - Set "exactMatchFound" to true, and set "summaryMessage" to null.
-   - Assign matching pros high relevancy scores (50-100).
-   - Assign unrelated pros a score of 0.
-3. If NO professional in the directory directly matches the requested trade/profession:
-   - Set "exactMatchFound" to false.
-   - Write a polite, empathetic "summaryMessage" strictly in ENGLISH explaining that no direct match was found for their request.
-     - Example: "No direct matches were found for 'plumber' in our directory at the moment."
-   - For professionals that might offer relevant adjacent services or general top recommendations, assign a score between 15 and 40.
-   - CRITICAL: For any professionals that have NOTHING to do with the request, set their score strictly to 0 (or omit them). Unrelated professionals MUST have a score of 0.
+Review the list of professionals provided and evaluate BOTH trade/service criteria AND location criteria:
 
-4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single, concise matching or recommendation explanation strictly in English (1 sentence maximum).`;
+1. QUERY PARSING:
+   - Identify the requested trade, skill, or service (e.g., plumber, electrician, dentist, lawyer, real estate agent).
+   - Identify if the query mentions a specific location or city (e.g., "in Paris", "à Barcelone", "London", "near Madrid").
+
+2. STRICT LOCATION & SERVICE MATCHING RULES:
+   - LOCATION CRITERIA: If the user explicitly asks for a professional in a specific city/location:
+     * A professional in a DIFFERENT city/location MUST NOT be treated as an exact match, even if their trade/profession is identical! (e.g. A plumber in Barcelona is NOT a match for "plumber in Paris").
+     * Assign a score of 0 to professionals located in a completely different city when a specific city was explicitly requested in the query.
+   - DIRECT MATCH (Score 60-100): The professional directly matches BOTH the requested trade/service AND the requested city/location (if specified).
+   - ADJACENT / ALTERNATIVE MATCH (Score 15-40): The professional matches the trade but is in an adjacent area, OR provides a relevant related service.
+   - UNRELATED OR WRONG LOCATION (Score 0): The professional has an unrelated trade/service OR is located in a completely wrong city when a specific city was requested.
+
+3. "exactMatchFound" & "summaryMessage" RULES:
+   - Set "exactMatchFound" to true ONLY if at least one professional directly matches BOTH the requested trade/service AND the specified city/location (if any). Set "summaryMessage" to null.
+   - Set "exactMatchFound" to false if NO professional matches BOTH criteria.
+   - If "exactMatchFound" is false, write a polite, empathetic "summaryMessage" strictly in ENGLISH explaining that no direct match was found in that location (e.g. "No direct matches were found for 'plumber in Paris' in our directory at the moment.").
+
+4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single, concise explanation strictly in English (1 sentence maximum) clarifying why they matched (mentioning their trade and location).`;
 
       const response = await getAiClient().models.generateContent({
         model: "gemini-3.1-flash-lite",
