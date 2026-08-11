@@ -110,7 +110,9 @@ async function startServer() {
         name: p.name,
         company_name: p.company_name || "",
         category: p.category || p.profession || "",
+        categories: p.categories || [],
         bio: p.bio || p.description || "",
+        top_qualities: p.top_qualities || [],
         languages: p.languages || [],
         rating: p.rating || 0,
         location: p.location || ""
@@ -121,24 +123,34 @@ Your purpose is to examine the user's natural language request and return the mo
 
 Review the list of professionals provided and evaluate BOTH trade/service criteria AND location criteria:
 
-1. QUERY PARSING:
-   - Identify the requested trade, skill, or service (e.g., plumber, electrician, dentist, lawyer, real estate agent).
-   - Identify if the query mentions a specific location or city (e.g., "in Paris", "à Barcelone", "London", "near Madrid").
+1. QUERY PARSING & SYNONYMS (CRITICAL):
+   - Trade / Profession Synonyms & Translations:
+     * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "hair salon", "barber" ALL match "Hairdresser", "Coiffeur", "Beauty & Wellness", or hair care services.
+     * "doctor", "physician", "médecin", "gp" ALL match Doctor/Medical services.
+     * "realtor", "real estate agent", "inmobiliaria" ALL match Real Estate / Property services.
+     * "plumber", "plombier", "fontanero" ALL match Plumbing services.
+     * Treat language translations (English, French, Spanish) and word variations (e.g., "hair dresser" vs "hairdresser") as EXACT trade matches!
+   - Location Matching:
+     * "Valencia area", "in Valencia", "around Valencia", "Valencia city" matches professionals located in Valencia or Valencia metropolitan/province towns (e.g. Valencia, La Eliana, Torrent, Paterna, etc.).
 
-2. STRICT LOCATION & SERVICE MATCHING RULES:
-   - LOCATION CRITERIA: If the user explicitly asks for a professional in a specific city/location:
-     * A professional in a DIFFERENT city/location MUST NOT be treated as an exact match, even if their trade/profession is identical! (e.g. A plumber in Barcelona is NOT a match for "plumber in Paris").
-     * Assign a score of 0 to professionals located in a completely different city when a specific city was explicitly requested in the query.
-   - DIRECT MATCH (Score 60-100): The professional directly matches BOTH the requested trade/service AND the requested city/location (if specified).
-   - ADJACENT / ALTERNATIVE MATCH (Score 15-40): The professional matches the trade but is in an adjacent area, OR provides a relevant related service.
-   - UNRELATED OR WRONG LOCATION (Score 0): The professional has an unrelated trade/service OR is located in a completely wrong city when a specific city was requested.
+2. SCORING & MATCHING RULES:
+   - DIRECT MATCH (Score 70-100): The professional matches BOTH requested trade/service (including synonyms/translations) AND requested location/area (or if no location was specified).
+     * Example: "hair dresser in valencia area" + hairdresser in Valencia => DIRECT MATCH (Score 80-100).
+   - ADJACENT / ALTERNATIVE MATCH (Score 15-45): The professional offers a closely related trade (e.g. general beauty salon for a hairdresser request), OR matches the trade in a neighboring distant town.
+   - UNRELATED OR WRONG LOCATION (Score 0): The professional has a completely unrelated trade OR is in a totally different distant city/country when a specific city was requested.
 
 3. "exactMatchFound" & "summaryMessage" RULES:
-   - Set "exactMatchFound" to true ONLY if at least one professional directly matches BOTH the requested trade/service AND the specified city/location (if any). Set "summaryMessage" to null.
-   - Set "exactMatchFound" to false if NO professional matches BOTH criteria.
-   - If "exactMatchFound" is false, write a polite, empathetic "summaryMessage" strictly in ENGLISH explaining that no direct match was found in that location (e.g. "No direct matches were found for 'plumber in Paris' in our directory at the moment.").
+   - CRITICAL: If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), you MUST set "exactMatchFound" to true, and set "summaryMessage" to null!
+   - Set "exactMatchFound" to false ONLY if NO professional in the directory directly matches both trade and location.
+   - If "exactMatchFound" is false:
+     * If there ARE alternative/adjacent professionals returned with score > 0:
+       - With specific trade and location (e.g. "plumber in La Eliana"): "We couldn't find a [trade] in [location] in our directory. Jane found some alternative options, but they may not meet all your criteria."
+       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory. Jane found some alternative options, but they may not meet all your criteria."
+     * If NO professionals match at all (all professionals have score 0):
+       - With specific trade and location: "We couldn't find a [trade] in [location] in our directory."
+       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory."
 
-4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single, concise explanation strictly in English (1 sentence maximum) clarifying why they matched (mentioning their trade and location).`;
+4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).`;
 
       const response = await getAiClient().models.generateContent({
         model: "gemini-3.1-flash-lite",
