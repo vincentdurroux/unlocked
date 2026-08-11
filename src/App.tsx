@@ -8181,7 +8181,7 @@ function HomeView({
 
 
       {/* Why people love Unlocked Section */}
-      <div className="space-y-8 md:space-y-12 py-4">
+      <div className="hidden md:block space-y-8 md:space-y-12 py-4">
         <h3 className="font-semibold text-2xl font-display text-brand-navy flex items-center gap-2">
           <Heart className="w-6 h-6 text-brand-blue" />
           Why people love Unlocked
