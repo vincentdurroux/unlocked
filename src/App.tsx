@@ -8177,6 +8177,32 @@ function HomeView({
             </button>
           </div>
         </div>
+
+        {/* Hero Recommend Pro Card */}
+        <div className="relative z-10 mt-4 overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-amber-50/60 via-white to-amber-50/20 p-6 md:p-10 lg:p-12 border border-amber-200/60 shadow-[0_12px_40px_rgba(245,158,11,0.05)] transition-all duration-500 hover:shadow-[0_16px_48px_rgba(245,158,11,0.1)] group/rec-card">
+          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl pointer-events-none group-hover/rec-card:bg-amber-400/15 transition-all duration-700" />
+          
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <div className="flex items-start md:items-center gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-brand-navy flex items-center justify-center shadow-lg shadow-amber-500/20 shrink-0">
+                <UserPlus className="w-6 h-6 md:w-7 md:h-7 text-brand-navy" />
+              </div>
+              <div className="space-y-1 text-left">
+                <h3 className="text-xl md:text-2xl font-bold text-brand-navy tracking-tight">Know someone great?</h3>
+                <p className="text-slate-600 text-xs md:text-sm font-medium">
+                  Recommend a pro and help other members like you.
+                </p>
+              </div>
+            </div>
+
+            <button 
+              onClick={onAddPro}
+              className="shrink-0 inline-flex items-center justify-center px-6 py-3.5 bg-brand-yellow hover:bg-amber-400 active:scale-[0.98] text-brand-navy rounded-2xl font-bold text-sm md:text-base shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+            >
+              <span>Recommend a pro</span>
+            </button>
+          </div>
+        </div>
       </div>
 
 
