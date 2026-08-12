@@ -8085,6 +8085,10 @@ function HomeView({
   const [sec3Idx, setSec3Idx] = useState(0);
   const [sec4Idx, setSec4Idx] = useState(0);
 
+  const [selectedPro, setSelectedPro] = useState<Professional | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [selectedArticle, setSelectedArticle] = useState<any | null>(null);
+
   const [discoverTestimonies, setDiscoverTestimonies] = useState<any[]>([]);
   useEffect(() => {
     const loadTestimonies = async () => {
@@ -8315,7 +8319,7 @@ function HomeView({
               <div 
                 className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 hover:border-amber-500/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
                 id="discover-card-pro"
-                onClick={() => onNavigate('explore', { proId: proToShow.id })}
+                onClick={() => setSelectedPro(proToShow)}
               >
                 <div className="relative flex-1">
                   <AnimatePresence mode="wait" initial={false}>
@@ -8458,7 +8462,7 @@ function HomeView({
               <div 
                 className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 hover:border-brand-blue/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
                 id="discover-card-event"
-                onClick={() => onNavigate('events', { eventId: featuredEvent.id })}
+                onClick={() => setSelectedEvent(featuredEvent)}
               >
                 <div className="relative flex-1">
                   <AnimatePresence mode="wait" initial={false}>
@@ -8559,7 +8563,7 @@ function HomeView({
               <div 
                 className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 hover:border-[#00C2A8]/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
                 id="discover-card-guide"
-                onClick={() => onNavigate('guides', { guideId: featuredArticle.id })}
+                onClick={() => setSelectedArticle(featuredArticle)}
               >
                 <div className="relative flex-1">
                   <AnimatePresence mode="wait" initial={false}>
@@ -8690,6 +8694,37 @@ function HomeView({
           </div>
         </div>
       </div>
+
+      {/* Detail Modals on HomeView */}
+      <AnimatePresence>
+        {selectedPro && (
+          <ProfessionalDetailView
+            pro={selectedPro}
+            onClose={() => setSelectedPro(null)}
+            onNavigate={onNavigate}
+            onProUpdate={onProUpdate}
+            currentUser={currentUser}
+            userProfile={userProfile}
+            blockedUsers={blockedUsers}
+            usersWhoBlockedMe={usersWhoBlockedMe}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedEvent && (
+          <EventDetailModal
+            event={selectedEvent}
+            onClose={() => setSelectedEvent(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      <ExpertGuideModal
+        isOpen={!!selectedArticle}
+        onClose={() => setSelectedArticle(null)}
+        article={selectedArticle}
+      />
     </div>
   );
 }
