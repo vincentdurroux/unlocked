@@ -23,17 +23,38 @@
 
 @keyframes scintillate {
   0%, 100% {
-    opacity: 0.95;
-    filter: drop-shadow(0 1.5px 3px rgba(217, 119, 6, 0.2)) brightness(1);
+    transform: rotate(0deg) scale(1);
+    filter: drop-shadow(0 2px 4px rgba(217, 119, 6, 0.25));
+  }
+  10% {
+    transform: rotate(-16deg) scale(1.12);
+    filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.45));
+  }
+  20% {
+    transform: rotate(16deg) scale(1.12);
+    filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.45));
+  }
+  30% {
+    transform: rotate(-12deg) scale(1.08);
+    filter: drop-shadow(0 2px 6px rgba(245, 158, 11, 0.4));
+  }
+  40% {
+    transform: rotate(8deg) scale(1.04);
+    filter: drop-shadow(0 2px 5px rgba(245, 158, 11, 0.35));
   }
   50% {
-    opacity: 1;
-    filter: drop-shadow(0 2.5px 6px rgba(251, 191, 36, 0.35)) brightness(1.1);
+    transform: rotate(-4deg) scale(1.02);
+  }
+  60%, 95% {
+    transform: rotate(0deg) scale(1);
+    filter: drop-shadow(0 2px 4px rgba(217, 119, 6, 0.25));
   }
 }
 
 .animate-scintillate {
-  animation: scintillate 2.5s ease-in-out infinite;
+  animation: scintillate 2.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
+  transform-origin: 50% 10%;
+  will-change: transform;
 }
 
 @keyframes marquee {

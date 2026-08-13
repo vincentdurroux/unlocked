@@ -2309,14 +2309,14 @@ export default function App() {
               <button 
                 onClick={() => setShowNotificationsModal(!showNotificationsModal)}
                 aria-label="Notifications"
-                className="relative w-12 h-12 bg-transparent active:scale-95 transition-all flex items-center justify-center shrink-0 ml-2 group cursor-pointer border-0 p-0 outline-none"
+                className="relative w-12 h-12 bg-transparent active:scale-95 transition-all flex items-center justify-center shrink-0 ml-2 group cursor-pointer border-0 p-0 outline-none overflow-visible"
               >
-                {/* Beautiful custom-designed golden bell mimicking the screenshot */}
+                {/* Custom-designed golden bell with hardware-accelerated animation */}
                 <svg 
                   xmlns="http://www.w3.org/2000/svg" 
                   viewBox="0 0 24 24" 
                   className={cn(
-                    "w-9 h-9 transition-all duration-300 group-hover:rotate-12 group-hover:scale-105",
+                    "w-9 h-9 transition-all duration-300 group-hover:rotate-12 group-hover:scale-105 relative z-0",
                     unreadCount > 0 ? "animate-scintillate" : "filter drop-shadow-[0_2px_4px_rgba(217,119,6,0.25)]"
                   )}
                 >
@@ -2345,7 +2345,7 @@ export default function App() {
                 
                 {/* Red badge containing the unread count */}
                 {unreadCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-600 text-white text-[8.5px] sm:text-[9px] font-extrabold shadow-md shadow-rose-600/20">
+                  <span className="absolute top-0.5 right-0.5 z-20 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-600 text-white text-[8.5px] sm:text-[9px] font-extrabold shadow-md shadow-rose-600/30 ring-2 ring-white">
                     {unreadCount}
                   </span>
                 )}
