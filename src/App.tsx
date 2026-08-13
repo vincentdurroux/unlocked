@@ -9079,7 +9079,7 @@ function HomeView({
               onNavigate('explore');
             }
           }}
-          className="relative z-10 -mt-3 md:mt-0 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#f8fafc] p-5 md:p-8 border border-blue-200/35 hover:border-blue-300/50 transition-all duration-300 hover:scale-[1.015] active:scale-[0.99] group/card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
+          className="relative z-10 -mt-3 md:mt-0 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#f8fafc] p-5 md:p-8 border border-blue-200/60 hover:border-blue-300/80 transition-all duration-300 hover:scale-[1.015] active:scale-[0.99] group/card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
         >
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="flex items-start md:items-center gap-4">
@@ -9111,7 +9111,7 @@ function HomeView({
               onAddPro();
             }
           }}
-          className="relative z-10 mt-4 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#fffdf5] p-5 md:p-8 border border-amber-200/40 hover:border-amber-300/60 transition-all duration-300 hover:scale-[1.015] active:scale-[0.99] group/rec-card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-yellow"
+          className="relative z-10 mt-4 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#fffdf5] p-5 md:p-8 border border-amber-200/70 hover:border-amber-300/90 transition-all duration-300 hover:scale-[1.015] active:scale-[0.99] group/rec-card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-yellow"
         >
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="flex items-start md:items-center gap-4">
