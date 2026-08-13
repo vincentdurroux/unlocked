@@ -9634,7 +9634,7 @@ function HomeView({
   );
 }
 
-function ExpertGuideModal({ isOpen, onClose, article }: { isOpen: boolean, onClose: () => void, article: any }) {
+function ExpertGuideModal({ isOpen, onClose, article: rawArticle }: { isOpen: boolean, onClose: () => void, article: any }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [shared, setShared] = useState(false);
 
@@ -9645,9 +9645,9 @@ function ExpertGuideModal({ isOpen, onClose, article }: { isOpen: boolean, onClo
         scrollContainerRef.current.scrollTop = 0;
       }
     }
-  }, [isOpen, article]);
+  }, [isOpen, rawArticle]);
 
-  if (!isOpen || !article) return null;
+  const article = rawArticle || {};
 
   const imageSrc = article.imageUrl || "/valencia.jpg";
   const categoryName = article.categoryTitle || "Valencia Guide";
@@ -9665,22 +9665,25 @@ function ExpertGuideModal({ isOpen, onClose, article }: { isOpen: boolean, onClo
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-x-0 bottom-[80px] md:inset-0 z-[100] flex items-center justify-center p-3.5 sm:p-6 lg:p-8" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}>
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="absolute inset-0 bg-brand-navy/60 backdrop-blur-md"
-        />
-        
-        <motion.div 
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="bg-white w-full max-w-4xl h-full md:h-auto md:max-h-[85vh] rounded-[24px] md:rounded-[40px] shadow-2xl relative flex flex-col overflow-hidden"
-          onClick={e => e.stopPropagation()}
-        >
+      {isOpen && rawArticle && (
+        <div className="fixed inset-x-0 bottom-[80px] md:inset-0 z-[100] flex items-center justify-center p-3.5 sm:p-6 lg:p-8" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}>
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-brand-navy/60 backdrop-blur-md"
+          />
+          
+          <motion.div 
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.92, opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="bg-white w-full max-w-4xl h-full md:h-auto md:max-h-[85vh] rounded-[24px] md:rounded-[40px] shadow-2xl relative flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
           {/* Header Image Section - Compact, Stable, and High Contrast */}
           <div className="relative h-[200px] flex-shrink-0 overflow-hidden bg-brand-navy group">
             <img 
@@ -9854,6 +9857,7 @@ function ExpertGuideModal({ isOpen, onClose, article }: { isOpen: boolean, onClo
           </div>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 }
@@ -12679,17 +12683,21 @@ function ProfessionalDetailView({
   }, [pro.id, currentUser, userProfile]);
 
   return (
-    <div 
+    <motion.div 
       ref={scrollRef}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
       className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/60 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain flex justify-center" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
       onClick={onClose}
     >
       <div className="min-h-full w-full max-w-5xl flex items-start justify-center py-6 md:py-12 px-4 md:px-8">
         <motion.div 
-          initial={{ opacity: 0, scale: 0.98 }}
+          initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.98 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
+          exit={{ opacity: 0, scale: 0.92 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           className="bg-white w-full rounded-[40px] overflow-hidden shadow-2xl relative"
           onClick={e => e.stopPropagation()}
         >
@@ -13301,7 +13309,7 @@ DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`);
         </div>
       </motion.div>
     </div>
-  </div>
+  </motion.div>
 );
 }
 
@@ -13478,17 +13486,21 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
   }, [event.id]);
 
   return (
-    <div 
+    <motion.div 
       ref={scrollRef}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
       className="fixed inset-x-0 bottom-[80px] md:inset-0 z-[100] overflow-y-auto overscroll-contain bg-slate-900/60 backdrop-blur-sm flex justify-center" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
       onClick={onClose}
     >
       <div className="min-h-full w-full max-w-lg flex items-start justify-center p-4 py-8 md:py-16">
         <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 15 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.92 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           className="relative bg-white w-full rounded-[32px] overflow-hidden shadow-2xl"
           onClick={e => e.stopPropagation()}
         >
@@ -13615,7 +13627,7 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
         </div>
       </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
