@@ -43,6 +43,7 @@ import {
   RotateCcw,
   Loader2,
   Zap,
+  Sparkles,
   Smile,
   GraduationCap,
   Settings,
@@ -58,7 +59,6 @@ import {
   HeartPulse,
   Briefcase,
   Lightbulb,
-  Sparkles,
   Trophy,
   Palmtree,
   SlidersHorizontal,
@@ -91,6 +91,9 @@ import {
   Navigation,
   Megaphone,
   Database,
+  Wrench,
+  UserCheck,
+  ThumbsUp
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
@@ -105,6 +108,175 @@ import { eventService } from './services/eventService';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
+
+// Custom Tooth Icon matching screenshot
+const ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2C8 2 6 4 6 8c0 3.5 1.5 6 2.5 9 .8 2.4 1.5 5 3.5 5 1.2 0 1.8-.8 2-2 .2 1.2.8 2 2 2 2 0 2.7-2.6 3.5-5 1-3 2.5-5.5 2.5-9 0-4-2-6-6-6z" />
+    <path d="M9 9c1.5 1 4.5 1 6 0" />
+  </svg>
+);
+
+// Custom Cleaner Icon (Broom / Balai)
+const CleanerIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 3L11.5 9.5" />
+    <path d="M10 8l6 6" />
+    <path d="M11.5 9.5L4 17l-1 4 4-1 7.5-7.5" />
+    <path d="M6 18l3.5-3.5" />
+    <path d="M8 20l3.5-3.5" />
+  </svg>
+);
+
+const NOTIFICATION_ICONS = [
+  { 
+    id: 'dentist', 
+    label: 'Dentist & Medical', 
+    category: 'Trades & Health',
+    icon: ToothIcon, 
+    bgColor: 'bg-[#EBF3FF]', 
+    textColor: 'text-[#2563EB]',
+    borderColor: 'border-[#BFDBFE]'
+  },
+  { 
+    id: 'cleaner', 
+    label: 'Cleaner & Housekeeping', 
+    category: 'Trades & Services',
+    icon: CleanerIcon, 
+    bgColor: 'bg-[#E6F7F0]', 
+    textColor: 'text-[#059669]',
+    borderColor: 'border-[#A7F3D0]'
+  },
+  { 
+    id: 'wrench', 
+    label: 'Plumbing & Handyman', 
+    category: 'Trades & Home',
+    icon: Wrench, 
+    bgColor: 'bg-[#FFEDD5]', 
+    textColor: 'text-[#EA580C]',
+    borderColor: 'border-[#FED7AA]'
+  },
+  { 
+    id: 'electrician', 
+    label: 'Electrical & Solar', 
+    category: 'Trades & Power',
+    icon: Zap, 
+    bgColor: 'bg-[#FEF9C3]', 
+    textColor: 'text-[#CA8A04]',
+    borderColor: 'border-[#FEF08A]'
+  },
+  { 
+    id: 'construction', 
+    label: 'Builder & Renovation', 
+    category: 'Trades & Building',
+    icon: Building2, 
+    bgColor: 'bg-[#F1F5F9]', 
+    textColor: 'text-[#475569]',
+    borderColor: 'border-[#CBD5E1]'
+  },
+  { 
+    id: 'pro_service', 
+    label: 'Professional Service', 
+    category: 'Trades & Business',
+    icon: Briefcase, 
+    bgColor: 'bg-[#E0F2FE]', 
+    textColor: 'text-[#0284C7]',
+    borderColor: 'border-[#BAE6FD]'
+  },
+  { 
+    id: 'event', 
+    label: 'Events & Calendar', 
+    category: 'Events',
+    icon: Calendar, 
+    bgColor: 'bg-[#FEF3C7]', 
+    textColor: 'text-[#D97706]',
+    borderColor: 'border-[#FDE68A]'
+  },
+  { 
+    id: 'guide', 
+    label: 'Guides & Legal', 
+    category: 'Guides',
+    icon: BookOpen, 
+    bgColor: 'bg-[#F3E8FF]', 
+    textColor: 'text-[#9333EA]',
+    borderColor: 'border-[#DDD6FE]'
+  },
+  { 
+    id: 'recommendation', 
+    label: 'Member Recommendation', 
+    category: 'Recommendations',
+    icon: ThumbsUp, 
+    bgColor: 'bg-[#FFE4E6]', 
+    textColor: 'text-[#E11D48]',
+    borderColor: 'border-[#FECDD3]'
+  },
+  { 
+    id: 'megaphone', 
+    label: 'Announcements', 
+    category: 'General',
+    icon: Megaphone, 
+    bgColor: 'bg-[#E0F2FE]', 
+    textColor: 'text-[#0284C7]',
+    borderColor: 'border-[#BAE6FD]'
+  },
+  { 
+    id: 'star', 
+    label: 'Top Pro & Featured', 
+    category: 'Recommendations',
+    icon: Star, 
+    bgColor: 'bg-[#FEF9C3]', 
+    textColor: 'text-[#CA8A04]',
+    borderColor: 'border-[#FEF08A]'
+  },
+  { 
+    id: 'gift', 
+    label: 'Offers & Perks', 
+    category: 'Promotions',
+    icon: Gift, 
+    bgColor: 'bg-[#FCE7F3]', 
+    textColor: 'text-[#DB2777]',
+    borderColor: 'border-[#FBCFE8]'
+  },
+  { 
+    id: 'shield', 
+    label: 'Verified & Security', 
+    category: 'Trust',
+    icon: ShieldCheck, 
+    bgColor: 'bg-[#ECFDF5]', 
+    textColor: 'text-[#047857]',
+    borderColor: 'border-[#A7F3D0]'
+  },
+  { 
+    id: 'sparkles', 
+    label: 'New Updates', 
+    category: 'Updates',
+    icon: Sparkles, 
+    bgColor: 'bg-[#EFF6FF]', 
+    textColor: 'text-[#2563EB]',
+    borderColor: 'border-[#BFDBFE]'
+  }
+];
+
+const getNotificationIconData = (iconId?: string, type?: string) => {
+  if (iconId) {
+    const found = NOTIFICATION_ICONS.find(item => item.id === iconId);
+    if (found) return found;
+  }
+  if (type === 'recommendation' || type === 'recommendation_request') {
+    return NOTIFICATION_ICONS.find(i => i.id === 'recommendation')!;
+  }
+  if (type === 'event') {
+    return NOTIFICATION_ICONS.find(i => i.id === 'event')!;
+  }
+  if (type === 'guide') {
+    return NOTIFICATION_ICONS.find(i => i.id === 'guide')!;
+  }
+  return NOTIFICATION_ICONS.find(i => i.id === 'megaphone')!;
+};
+
+const getNotificationIcon = (iconId?: string, type?: string) => {
+  return getNotificationIconData(iconId, type).icon;
+};
 
 const ShareIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
   <svg 
@@ -255,6 +427,37 @@ import { emailService } from './services/emailService';
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
+
+const parseAnnouncement = (ann: any) => {
+  if (!ann) return ann;
+  let rawContent = ann.content || '';
+  let icon = ann.icon || 'megaphone';
+  let title = '';
+  let content = rawContent;
+
+  if (rawContent.startsWith('[icon:')) {
+    const endIconIndex = rawContent.indexOf(']');
+    if (endIconIndex !== -1) {
+      icon = rawContent.slice(6, endIconIndex).trim();
+      rawContent = rawContent.slice(endIconIndex + 1).trim();
+      content = rawContent;
+    }
+  }
+
+  if (rawContent.startsWith('[') && rawContent.includes(']')) {
+    const closingBracketIndex = rawContent.indexOf(']');
+    title = rawContent.slice(1, closingBracketIndex).trim();
+    content = rawContent.slice(closingBracketIndex + 1).trim();
+  }
+
+  return {
+    ...ann,
+    icon,
+    title,
+    content,
+    created_at: ann.updated_at || ann.created_at || new Date().toISOString()
+  };
+};
 
 const GOOGLE_MAPS_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 
@@ -1117,6 +1320,119 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [activeView, initialProId, initialEventId, initialGuideId, selectedPost, selectedAd, showMessagesModal, currentUser]);
   const [ads, setAds] = useState<Ad[]>([]);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
+  const [readAnnouncementIds, setReadAnnouncementIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('unlocked_read_announcements');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const fetchAnnouncementsFromDb = async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      let list: any[] = [];
+      const { data: annData, error: annError } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (!annError && annData && annData.length > 0) {
+        list = annData
+          .filter(ann => ann.is_active !== false)
+          .map(ann => parseAnnouncement(ann));
+      }
+
+      const { data: recData, error: recError } = await supabase
+        .from('pro_recommendations')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!recError && recData && recData.length > 0) {
+        const mappedRecs = recData.map(r => ({
+          id: `rec-${r.id}`,
+          title: `Demande de recommandation: ${r.pro_category || 'Professionnel'}`,
+          content: r.notes || `Nouvelle recommandation soumise pour ${r.company_name || r.pro_name || r.pro_category}.`,
+          created_at: r.created_at || new Date().toISOString(),
+          type: 'recommendation_request',
+          is_read: r.status === 'processed' || r.status === 'refused' || false,
+          user_email: r.user_email,
+          pro_category: r.pro_category,
+          pro_name: r.pro_name || r.company_name
+        }));
+        list = [...list, ...mappedRecs];
+      }
+
+      list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setAnnouncementsList(list);
+    } catch (err) {
+      console.warn('Error fetching announcements from Supabase:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnnouncementsFromDb();
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel('public:announcements_and_recs')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
+        fetchAnnouncementsFromDb();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pro_recommendations' }, () => {
+        fetchAnnouncementsFromDb();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isSupabaseConfigured]);
+
+  const hasUnreadAnnouncements = useMemo(() => {
+    if (announcementsList.length === 0) return false;
+    return announcementsList.some(item => {
+      // If it is a real active announcement, the red dot stays visible as long as it is active
+      if (item.type !== 'recommendation_request') {
+        return true;
+      }
+      const isLocallyRead = readAnnouncementIds.includes(String(item.id));
+      const isDbRead = item.is_read === true || item.status === 'processed' || item.status === 'refused';
+      return !isLocallyRead && !isDbRead;
+    });
+  }, [announcementsList, readAnnouncementIds]);
+
+  const unreadCount = useMemo(() => {
+    if (announcementsList.length === 0) return 0;
+    return announcementsList.filter(item => {
+      if (item.type !== 'recommendation_request') {
+        return true;
+      }
+      const isLocallyRead = readAnnouncementIds.includes(String(item.id));
+      const isDbRead = item.is_read === true || item.status === 'processed' || item.status === 'refused';
+      return !isLocallyRead && !isDbRead;
+    }).length;
+  }, [announcementsList, readAnnouncementIds]);
+
+  const handleMarkAnnouncementAsRead = (id: string) => {
+    const updated = Array.from(new Set([...readAnnouncementIds, String(id)]));
+    setReadAnnouncementIds(updated);
+    try {
+      localStorage.setItem('unlocked_read_announcements', JSON.stringify(updated));
+    } catch (_) {}
+  };
+
+  const handleMarkAllAnnouncementsAsRead = () => {
+    const allIds = announcementsList.map(a => String(a.id));
+    const updated = Array.from(new Set([...readAnnouncementIds, ...allIds]));
+    setReadAnnouncementIds(updated);
+    try {
+      localStorage.setItem('unlocked_read_announcements', JSON.stringify(updated));
+    } catch (_) {}
+  };
   const [events, setEvents] = useState<Event[]>(isSupabaseConfigured ? [] : MOCK_EVENTS);
   const [guideCategories, setGuideCategories] = useState<any[]>([]);
   const allArticles = useMemo(() => {
@@ -1988,46 +2304,75 @@ export default function App() {
                  <span className="text-[11px] font-extrabold uppercase tracking-widest hidden lg:block">My Account</span>
                </button>
             </div>
-            <motion.button 
-              onClick={() => {
-                if (!currentUser) {
-                  handleNavigate('login');
-                } else {
-                  setShowAddPro(true);
-                }
-              }}
-            animate={{
-              scale: [1, 1.04, 1],
-            }}
-            transition={{
-              duration: 2.5,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-            className="relative w-12 h-12 md:w-14 md:h-14 flex items-center justify-center group flex-shrink-0 ml-2"
-          >
-            {/* Central Button */}
-            <div className="absolute inset-1.5 bg-brand-yellow rounded-full shadow-lg shadow-brand-yellow/30 flex items-center justify-center z-10 transition-all duration-300 group-hover:scale-110 group-active:scale-95">
-              <Plus className="w-5 h-5 text-white" />
-            </div>
-            
-            {/* Circular Text */}
-            <div className="absolute inset-0 w-full h-full">
-              <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                <defs>
-                  <path
-                    id="circlePath"
-                    d="M 50, 50 m -43, 0 a 43,43 0 1,1 86,0 a 43,43 0 1,1 -86,0"
+            {/* Notification Bell Button */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotificationsModal(!showNotificationsModal)}
+                title="Demandes de Recommandations"
+                aria-label="Notifications"
+                className="relative w-12 h-12 bg-transparent active:scale-95 transition-all flex items-center justify-center shrink-0 ml-2 group cursor-pointer border-0 p-0 outline-none"
+              >
+                {/* Beautiful custom-designed golden bell mimicking the screenshot */}
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  viewBox="0 0 24 24" 
+                  className={cn(
+                    "w-9 h-9 transition-all duration-300 group-hover:rotate-12 group-hover:scale-105",
+                    unreadCount > 0 ? "animate-scintillate" : "filter drop-shadow-[0_2px_4px_rgba(217,119,6,0.25)]"
+                  )}
+                >
+                  <defs>
+                    <linearGradient id="premiumBellGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#FFE066" />
+                      <stop offset="40%" stopColor="#FFB300" />
+                      <stop offset="100%" stopColor="#F59E0B" />
+                    </linearGradient>
+                    <linearGradient id="premiumClapperGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#F59E0B" />
+                      <stop offset="100%" stopColor="#D97706" />
+                    </linearGradient>
+                  </defs>
+                  {/* Bell Body */}
+                  <path 
+                    d="M12 2.25c-1.1 0-2 .9-2 2v.45c-2.82.57-5 3.06-5 6.05v4.5c0 .65-.28 1.25-.78 1.68l-.47.41c-.6.53-.22 1.54.59 1.54h15.32c.81 0 1.19-1.01.59-1.54l-.47-.41a2.24 2.24 0 0 1-.78-1.68v-4.5c0-2.99-2.18-5.48-5-6.05v-.45c0-1.1-.9-2-2-2z" 
+                    fill="url(#premiumBellGrad)" 
                   />
-                </defs>
-                <text className="text-[19px] font-black fill-brand-yellow tracking-[0.08em] uppercase">
-                  <textPath xlinkHref="#circlePath">
-                    Recommend a Pro
-                  </textPath>
-                </text>
-              </svg>
+                  {/* Bell Clapper */}
+                  <path 
+                    d="M9.5 19.38c.4 1.5 1.76 2.62 3.5 2.62s3.1-1.12 3.5-2.62h-7z" 
+                    fill="url(#premiumClapperGrad)" 
+                  />
+                </svg>
+                
+                {/* Red badge containing the unread count */}
+                {unreadCount > 0 && (
+                  <span className="absolute top-0.5 right-0.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-600 text-white text-[8.5px] sm:text-[9px] font-extrabold shadow-md shadow-rose-600/20">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {showNotificationsModal && (
+                  <NotificationsDropdownBanner 
+                    isOpen={showNotificationsModal}
+                    onClose={() => setShowNotificationsModal(false)}
+                    announcements={announcementsList}
+                    readIds={readAnnouncementIds}
+                    onMarkAsRead={handleMarkAnnouncementAsRead}
+                    onMarkAllAsRead={handleMarkAllAnnouncementsAsRead}
+                    onNavigate={handleNavigate}
+                    onAddPro={() => {
+                      if (!currentUser) {
+                        handleNavigate('login');
+                      } else {
+                        setShowAddPro(true);
+                      }
+                    }}
+                  />
+                )}
+              </AnimatePresence>
             </div>
-          </motion.button>
           </div>
         </header>
       )}
@@ -2222,6 +2567,7 @@ export default function App() {
                   setGuideCategories={setGuideCategories}
                   allArticles={allArticles}
                   setGlobalAlert={setGlobalAlert}
+                  onRefetchAnnouncements={fetchAnnouncementsFromDb}
                 />
               )}
               {activeView === 'marketplace' && (
@@ -2271,6 +2617,8 @@ export default function App() {
               </motion.div>
             </motion.div>
           )}
+
+
 
           {showAddPro && (
             <motion.div 
@@ -3539,7 +3887,8 @@ function AdminView({
   guideCategories = [],
   setGuideCategories,
   allArticles = [],
-  setGlobalAlert
+  setGlobalAlert,
+  onRefetchAnnouncements
 }: { 
   scrollToTop?: () => void, 
   onRefetchPros?: () => Promise<void>, 
@@ -3577,11 +3926,12 @@ function AdminView({
   savingAnnouncement?: boolean,
   setSavingAnnouncement?: React.Dispatch<React.SetStateAction<boolean>>,
   setAnnouncement?: React.Dispatch<React.SetStateAction<any>>,
-  setGlobalAlert: React.Dispatch<React.SetStateAction<any>>
+  setGlobalAlert: React.Dispatch<React.SetStateAction<any>>,
+  onRefetchAnnouncements?: () => void
 }) {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dashboardCategory, setDashboardCategory] = useState<'pros' | 'events' | 'testimonies' | 'reported_users' | 'highlights' | 'guides'>('pros');
+  const [dashboardCategory, setDashboardCategory] = useState<'pros' | 'events' | 'testimonies' | 'reported_users' | 'highlights' | 'guides' | 'announcements'>('pros');
   const [activeTab, setActiveTab ] = useState<'recommendations' | 'add_pro' | 'edit_pro' | 'add_event' | 'edit_event' | 'all_events' | 'completed' | 'refused'>('recommendations');
   const [activeRecId, setActiveRecId] = useState<string | null>(null);
   const [editingProId, setEditingProId] = useState<string | null>(null);
@@ -3637,6 +3987,130 @@ function AdminView({
 
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewArticle, setPreviewArticle] = useState<any>(null);
+
+  // Announcements states inside AdminView
+  const [adminAnnouncements, setAdminAnnouncements] = useState<any[]>([]);
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
+  const [showAnnForm, setShowAnnForm] = useState(false);
+  const [annFormTitle, setAnnFormTitle] = useState('');
+  const [annFormContent, setAnnFormContent] = useState('');
+  const [annFormIsActive, setAnnFormIsActive] = useState(true);
+  const [annFormCtaType, setAnnFormCtaType] = useState('');
+  const [annFormIcon, setAnnFormIcon] = useState('megaphone');
+  const [savingAnn, setSavingAnn] = useState(false);
+  const [deletingAnnId, setDeletingAnnId] = useState<string | null>(null);
+  const [editingAnnId, setEditingAnnId] = useState<string | null>(null);
+
+  const fetchAdminAnnouncements = async () => {
+    if (!isSupabaseConfigured) return;
+    setLoadingAnnouncements(true);
+    try {
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      if (error) throw error;
+      const parsed = (data || []).map(ann => parseAnnouncement(ann));
+      setAdminAnnouncements(parsed);
+    } catch (err: any) {
+      console.error('Error fetching admin announcements:', err);
+    } finally {
+      setLoadingAnnouncements(false);
+    }
+  };
+
+  const handleSaveAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!annFormContent.trim()) {
+      setMsg({ type: 'error', text: 'Please fill in the message.' });
+      return;
+    }
+    setSavingAnn(true);
+    try {
+      const iconTag = `[icon:${annFormIcon || 'megaphone'}]`;
+      const titleTag = annFormTitle.trim() ? `[${annFormTitle.trim()}] ` : '';
+      const formattedContent = `${iconTag}${titleTag}${annFormContent.trim()}`;
+
+      if (editingAnnId) {
+        const { error } = await supabase
+          .from('announcements')
+          .update({
+            content: formattedContent,
+            is_active: annFormIsActive,
+            cta_type: annFormCtaType || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingAnnId);
+        if (error) throw error;
+        setMsg({ type: 'success', text: 'Announcement updated successfully.' });
+      } else {
+        const { error } = await supabase
+          .from('announcements')
+          .insert([
+            {
+              content: formattedContent,
+              is_active: annFormIsActive,
+              cta_type: annFormCtaType || null,
+              updated_at: new Date().toISOString()
+            }
+          ]);
+        if (error) throw error;
+        setMsg({ type: 'success', text: 'Announcement published successfully!' });
+      }
+      
+      // Reset form
+      setAnnFormTitle('');
+      setAnnFormContent('');
+      setAnnFormIsActive(true);
+      setAnnFormCtaType('');
+      setAnnFormIcon('megaphone');
+      setEditingAnnId(null);
+      setShowAnnForm(false);
+      
+      // Refresh
+      fetchAdminAnnouncements();
+      if (onRefetchAnnouncements) {
+        onRefetchAnnouncements();
+      }
+    } catch (err: any) {
+      console.error('Error saving announcement:', err);
+      setMsg({ type: 'error', text: 'Error saving announcement: ' + err.message });
+    } finally {
+      setSavingAnn(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    setDeletingAnnId(id);
+    try {
+      const { error } = await supabase
+        .from('announcements')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      setMsg({ type: 'success', text: 'Announcement deleted successfully.' });
+      
+      fetchAdminAnnouncements();
+      if (onRefetchAnnouncements) {
+        onRefetchAnnouncements();
+      }
+    } catch (err: any) {
+      console.error('Error deleting announcement:', err);
+      setMsg({ type: 'error', text: 'Error deleting announcement: ' + err.message });
+    } finally {
+      setDeletingAnnId(null);
+    }
+  };
+
+  const handleEditAnnouncementClick = (ann: any) => {
+    setAnnFormTitle(ann.title || '');
+    setAnnFormContent(ann.content || '');
+    setAnnFormIsActive(ann.is_active !== false);
+    setAnnFormCtaType(ann.cta_type || '');
+    setAnnFormIcon(ann.icon || ann.type || 'megaphone');
+    setEditingAnnId(ann.id);
+    setShowAnnForm(true);
+  };
 
   const handlePreviewArticle = () => {
     const categoryTitle = guideCategories.find(c => c.id === guideFormCategory)?.title || 'Guide';
@@ -4073,6 +4547,8 @@ function AdminView({
       fetchGuides();
     } else if (dashboardCategory === 'guides') {
       fetchGuides();
+    } else if (dashboardCategory === 'announcements') {
+      fetchAdminAnnouncements();
     }
   }, [dashboardCategory]);
 
@@ -4623,11 +5099,12 @@ function AdminView({
               dashboardCategory === 'reported_users' ? 'Moderate reported users, content, and harassment reports.' :
               dashboardCategory === 'highlights' ? 'Select which pro, event, article, and testimonial are highlighted on the Landing Page.' :
               dashboardCategory === 'guides' ? 'Manage articles, educational tips, and local expat guides.' :
+              dashboardCategory === 'announcements' ? 'Publish and manage community announcements & IT updates.' :
               'Moderate client reviews and testimonies.'}
            </h3>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 bg-slate-100/80 p-1.5 rounded-[22px] w-full border border-slate-200/50 gap-1.5">
+        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-7 bg-slate-100/80 p-1.5 rounded-[22px] w-full border border-slate-200/50 gap-1.5">
           <button 
             onClick={() => {
               setDashboardCategory('pros');
@@ -4704,6 +5181,18 @@ function AdminView({
           >
             <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span className="truncate">Safety</span>
+          </button>
+          <button 
+            onClick={() => {
+              setDashboardCategory('announcements');
+            }}
+            className={cn(
+              "px-1 py-3 rounded-[18px] text-[9px] sm:text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2",
+              dashboardCategory === 'announcements' ? "bg-white text-yellow-600 shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/50"
+            )}
+          >
+            <Megaphone className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="truncate">Announcements</span>
           </button>
         </div>
       </div>
@@ -7181,6 +7670,278 @@ function AdminView({
             </div>
           )}
         </div>
+      ) : dashboardCategory === 'announcements' ? (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div>
+              <h4 className="text-lg font-bold font-display text-slate-800">
+                Announcements & IT Updates
+              </h4>
+              <p className="text-xs text-slate-400 font-medium">Publish one-line announcements for all users.</p>
+            </div>
+            {!showAnnForm && (
+              <button
+                onClick={() => {
+                  setAnnFormTitle('');
+                  setAnnFormContent('');
+                  setAnnFormIsActive(true);
+                  setAnnFormCtaType('');
+                  setEditingAnnId(null);
+                  setShowAnnForm(true);
+                }}
+                className="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 active:scale-95 text-slate-900 text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-md shadow-yellow-500/10 flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Publish announcement
+              </button>
+            )}
+          </div>
+
+          {showAnnForm ? (
+            <form onSubmit={handleSaveAnnouncement} className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm space-y-6 text-left">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div>
+                  <h4 className="text-sm font-bold uppercase tracking-wider text-slate-700">
+                    {editingAnnId ? "Edit Announcement" : "New Announcement"}
+                  </h4>
+                  <p className="text-xs text-slate-400 font-medium">Enter the announcement details below.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAnnForm(false);
+                    setEditingAnnId(null);
+                  }}
+                  className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-500 text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Message (one line preferred)</label>
+                  <textarea
+                    required
+                    rows={3}
+                    placeholder="e.g. System maintenance completed. Everything is back online!"
+                    value={annFormContent}
+                    onChange={(e) => setAnnFormContent(e.target.value)}
+                    className="w-full text-xs px-4 py-3 rounded-xl bg-slate-50 border border-slate-150 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 text-slate-800 font-medium"
+                  />
+                </div>
+
+                {/* Icon Selection Grid */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                    Notification Icon Library
+                  </label>
+                  <p className="text-[11px] text-slate-500 font-medium">Select the icon to display in front of this notification:</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-slate-50 rounded-2xl border border-slate-150 max-h-64 overflow-y-auto">
+                    {NOTIFICATION_ICONS.map((item) => {
+                      const IconComponent = item.icon;
+                      const isSelected = annFormIcon === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setAnnFormIcon(item.id)}
+                          className={cn(
+                            "flex items-center gap-3 p-2.5 rounded-2xl border text-xs font-medium transition-all relative cursor-pointer text-left group",
+                            isSelected 
+                              ? "border-blue-600 bg-white shadow-md ring-2 ring-blue-500/20" 
+                              : "border-slate-200/70 bg-white/80 hover:bg-white hover:border-slate-300"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105",
+                            item.bgColor,
+                            item.textColor,
+                            item.borderColor
+                          )}>
+                            <IconComponent className="w-5 h-5 stroke-[2.2]" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-xs font-bold text-slate-800 block truncate leading-tight">{item.label}</span>
+                            <span className="text-[10px] text-slate-400 capitalize">{item.category}</span>
+                          </div>
+                          {isSelected && (
+                            <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] shadow-xs font-bold shrink-0">
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-150">
+                  <input
+                    type="checkbox"
+                    id="annFormIsActive"
+                    checked={annFormIsActive}
+                    onChange={(e) => setAnnFormIsActive(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-yellow-600 focus:ring-yellow-500"
+                  />
+                  <div>
+                    <label htmlFor="annFormIsActive" className="text-xs font-bold text-slate-700 block cursor-pointer">Activate Announcement</label>
+                    <p className="text-[10px] text-slate-400 font-medium">The announcement will instantly appear in the users dropdown banner.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-150">
+                  <input
+                    type="checkbox"
+                    id="annFormCtaType"
+                    checked={annFormCtaType === 'recommend_pro'}
+                    onChange={(e) => setAnnFormCtaType(e.target.checked ? 'recommend_pro' : '')}
+                    className="w-4 h-4 rounded border-slate-300 text-yellow-600 focus:ring-yellow-500"
+                  />
+                  <div>
+                    <label htmlFor="annFormCtaType" className="text-xs font-bold text-slate-700 block cursor-pointer">Option: "Recommend a pro" action</label>
+                    <p className="text-[10px] text-slate-400 font-medium">Adds a clickable "Recommend a pro" icon button next to the message, which opens the recommendation modal when clicked.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAnnForm(false);
+                    setEditingAnnId(null);
+                  }}
+                  className="px-5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingAnn}
+                  className="px-5 py-2.5 bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-250 text-slate-900 text-xs font-bold uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 shadow-md shadow-yellow-500/10"
+                >
+                  {savingAnn ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                      Publishing...
+                    </>
+                  ) : editingAnnId ? (
+                    "Update Announcement"
+                  ) : (
+                    "Publish Announcement"
+                  )}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-4">
+              {loadingAnnouncements ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                  <div className="w-8 h-8 border-3 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-slate-400 text-xs font-medium">Loading announcements...</p>
+                </div>
+              ) : adminAnnouncements.length === 0 ? (
+                <div className="bg-white p-12 rounded-[32px] border border-slate-100 shadow-sm text-center space-y-2">
+                  <Megaphone className="w-8 h-8 text-slate-350 mx-auto" />
+                  <h4 className="text-xs font-bold text-slate-750">No announcements published</h4>
+                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                    Publish your first message or IT alert. It will appear on a single line for all users.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  {adminAnnouncements.map((ann) => {
+                    const isActive = ann.is_active !== false;
+                    const annData = getNotificationIconData(ann.icon, ann.type);
+                    const AnnIconComponent = annData.icon;
+                    return (
+                      <div
+                        key={ann.id}
+                        className={cn(
+                          "p-5 rounded-[24px] border transition-all flex flex-col md:flex-row gap-4 justify-between items-start md:items-center",
+                          isActive
+                            ? "bg-white border-yellow-100 hover:border-yellow-200 shadow-xs"
+                            : "bg-slate-50/55 border-dashed border-slate-200 opacity-65"
+                        )}
+                      >
+                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                          <div className={cn(
+                            "w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border shadow-xs",
+                            annData.bgColor,
+                            annData.textColor,
+                            annData.borderColor
+                          )}>
+                            <AnnIconComponent className="w-5.5 h-5.5 stroke-[2.2]" />
+                          </div>
+                          <div className="space-y-2 min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {ann.title && ann.title !== 'Announcement' && (
+                                <span className="text-[10px] bg-yellow-50 text-yellow-700 border border-yellow-100 px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">
+                                  {ann.title}
+                                </span>
+                              )}
+                              {isActive ? (
+                                <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider inline-flex items-center gap-1">
+                                  <span className="w-1 h-1 rounded-full bg-emerald-500 animate-ping" />
+                                  Online
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider inline-flex items-center gap-1">
+                                  Offline
+                                </span>
+                              )}
+                            </div>
+
+                            <h5 className="font-semibold text-slate-900 text-xs sm:text-sm leading-relaxed text-left">
+                              {ann.content}
+                            </h5>
+
+                            <p className="text-[10px] text-slate-400 font-semibold text-left">
+                              Published on {new Date(ann.created_at).toLocaleDateString('en-US', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-100 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleEditAnnouncementClick(ann)}
+                            className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-slate-200 transition-all flex items-center gap-1.5"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deletingAnnId === ann.id}
+                            onClick={() => handleDeleteAnnouncement(ann.id)}
+                            className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-rose-100/50 transition-all flex items-center gap-1.5"
+                          >
+                            {deletingAnnId === ann.id ? (
+                              "..."
+                            ) : (
+                              <>
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Delete</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       ) : null}
 
       {/* Delete Confirmation Modal */}
@@ -8026,6 +8787,163 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
   );
 }
 
+function NotificationsDropdownBanner({
+  isOpen,
+  onClose,
+  announcements,
+  readIds,
+  onMarkAsRead,
+  onNavigate,
+  onAddPro
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  announcements: any[];
+  readIds: string[];
+  onMarkAsRead: (id: string) => void;
+  onMarkAllAsRead?: () => void;
+  onNavigate?: (view: View, params?: any) => void;
+  onAddPro?: () => void;
+}) {
+  const [showOlder, setShowOlder] = useState(false);
+
+  if (!isOpen) return null;
+
+  // Active notifications list
+  const activeNotifications = announcements.filter(item => item);
+  const displayedNotifications = showOlder ? activeNotifications : activeNotifications.slice(0, 6);
+
+  return (
+    <>
+      {/* Backdrop */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.1 }}
+        className="fixed inset-0 z-40 bg-slate-900/15 cursor-default" 
+        onClick={onClose} 
+      />
+
+      {/* Main Notification Card / Popup */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.85, y: -8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.85, y: -8 }}
+        transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+        style={{ transformOrigin: 'calc(100% - 20px) 0px' }}
+        className="absolute top-full right-0 mt-2.5 w-[calc(100vw-32px)] sm:w-[460px] bg-white rounded-3xl shadow-2xl z-50 border border-slate-100/90 flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Top Caret Arrow pointing up to the bell */}
+        <div className="absolute -top-2 right-5 w-4 h-4 bg-white rotate-45 border-t border-l border-slate-100/90 z-20" />
+
+        {/* Header */}
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-white rounded-t-3xl z-10">
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-bold text-slate-900 tracking-tight">Notifications</h3>
+          </div>
+        </div>
+
+        {/* Notifications List */}
+        <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100/70 p-2 sm:p-3 space-y-1">
+          {displayedNotifications.length === 0 ? (
+            <div className="py-12 text-center text-slate-400">
+              <Bell className="w-8 h-8 mx-auto mb-2 opacity-30 text-slate-400" />
+              <p className="text-xs font-semibold">No notifications</p>
+            </div>
+          ) : displayedNotifications.map((item) => {
+            const itemData = getNotificationIconData(item.icon, item.type);
+            const IconComp = itemData.icon;
+
+            const title = item.title && item.title.toLowerCase() !== 'notification' && item.title.toLowerCase() !== 'announcement'
+              ? item.title
+              : (item.type === 'recommendation_request' ? 'Looking for a professional' : null);
+
+            const description = item.content || item.notes || item.message || '';
+
+            return (
+              <div
+                key={item.id}
+                onClick={() => {
+                  onMarkAsRead(String(item.id));
+                  if (item.type === 'event' && onNavigate) {
+                    onClose();
+                    onNavigate('events');
+                  } else if (item.type === 'guide' && onNavigate) {
+                    onClose();
+                    onNavigate('guides');
+                  } else if ((item.type === 'recommendation_request' || item.type === 'recommendation') && onNavigate) {
+                    onClose();
+                    onNavigate('explore');
+                  }
+                }}
+                className="p-3 rounded-2xl transition-all cursor-pointer flex items-start gap-3.5 relative group bg-white hover:bg-slate-50/60"
+              >
+                {/* Soft Squircle Icon Container */}
+                <div className={cn(
+                  "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs border",
+                  itemData.bgColor,
+                  itemData.textColor,
+                  itemData.borderColor
+                )}>
+                  <IconComp className="w-6 h-6 stroke-[2.2]" />
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0 pr-2">
+                  {title && (
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug break-words">
+                      {title}
+                    </h4>
+                  )}
+                  {description && (
+                    <p className="text-xs text-slate-700 font-medium leading-snug break-words mt-0.5">
+                      {description}
+                    </p>
+                  )}
+                </div>
+
+                {/* Action Button */}
+                {item.cta_type === 'recommend_pro' && (
+                  <div className="flex items-center gap-2 shrink-0 pt-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMarkAsRead(String(item.id));
+                        onClose();
+                        if (onAddPro) onAddPro();
+                      }}
+                      title="Recommend a pro"
+                      className="px-2.5 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold border border-blue-200 transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      <UserPlus className="w-3 h-3" />
+                      <span>Pro</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer View Older Notifications */}
+        {activeNotifications.length > 6 && !showOlder && (
+          <div className="p-3 bg-slate-50/80 border-t border-slate-100 text-center rounded-b-3xl">
+            <button
+              onClick={() => setShowOlder(true)}
+              className="text-xs font-bold text-slate-600 hover:text-blue-600 flex items-center justify-center gap-1 mx-auto transition-colors cursor-pointer"
+            >
+              <span>View older notifications</span>
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </>
+  );
+}
+
 function HomeView({ 
   onNavigate, 
   allPros, 
@@ -8156,55 +9074,72 @@ function HomeView({
         </div>
 
         {/* Hero Search Card */}
-        <div className="relative z-10 -mt-3 md:mt-0 overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-white via-slate-50/90 to-blue-50/40 p-6 md:p-10 lg:p-12 border border-blue-100/80 shadow-[0_12px_40px_rgba(0,43,230,0.06)] transition-all duration-500 hover:shadow-[0_16px_48px_rgba(0,43,230,0.1)] group/card">
-          {/* Subtle 2026 Ambient Light Glow */}
-          <div className="absolute -top-20 -right-20 w-64 h-64 bg-brand-blue/10 rounded-full blur-3xl pointer-events-none group-hover/card:bg-brand-blue/15 transition-all duration-700" />
-          
+        <div 
+          onClick={() => onNavigate('explore')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onNavigate('explore');
+            }
+          }}
+          className="relative z-10 -mt-3 md:mt-0 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#f8fafc] p-5 md:p-8 border border-slate-100 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:shadow-[0_12px_36px_rgba(0,0,0,0.06)] hover:scale-[1.015] active:scale-[0.99] group/card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
+        >
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="flex items-start md:items-center gap-4">
-              <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-brand-blue text-white flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0">
-                <Search className="w-6 h-6 md:w-7 md:h-7 text-white" />
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-blue-500 to-brand-blue text-white flex items-center justify-center shadow-sm shrink-0">
+                <Search className="w-5 h-5 md:w-6 md:h-6 text-white" />
               </div>
               <div className="space-y-1 text-left">
-                <h3 className="text-xl md:text-2xl font-bold text-brand-navy tracking-tight">Looking for a trusted local pro?</h3>
-                <p className="text-slate-500 text-xs md:text-sm font-medium">
+                <h3 className="text-base md:text-lg font-bold text-brand-navy tracking-tight">Looking for a trusted local pro?</h3>
+                <p className="text-slate-500 text-[11px] md:text-[13px] font-medium leading-relaxed">
                   Search member recommendations or let <strong className="text-brand-blue font-semibold">Jane, your AI assistant</strong>, match you instantly.
                 </p>
               </div>
             </div>
 
-            <button 
-              onClick={() => onNavigate('explore')}
-              className="shrink-0 inline-flex items-center justify-center px-6 py-3.5 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-2xl font-bold text-sm md:text-base shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+            <div 
+              className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-blue group-hover/card:bg-[#0958d9] text-white rounded-xl font-bold text-xs md:text-sm shadow-sm transition-all"
             >
+              <Search className="w-3.5 h-3.5 md:w-4 h-4 text-white shrink-0" />
               <span>Start searching</span>
-            </button>
+            </div>
           </div>
         </div>
 
         {/* Hero Recommend Pro Card */}
-        <div className="relative z-10 mt-4 overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-amber-50/60 via-white to-amber-50/20 p-6 md:p-10 lg:p-12 border border-amber-200/60 shadow-[0_12px_40px_rgba(245,158,11,0.05)] transition-all duration-500 hover:shadow-[0_16px_48px_rgba(245,158,11,0.1)] group/rec-card">
-          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl pointer-events-none group-hover/rec-card:bg-amber-400/15 transition-all duration-700" />
-          
+        <div 
+          onClick={onAddPro}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onAddPro();
+            }
+          }}
+          className="relative z-10 mt-4 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#fffdf5] p-5 md:p-8 border border-slate-100 shadow-[0_8px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:shadow-[0_12px_36px_rgba(0,0,0,0.06)] hover:scale-[1.015] active:scale-[0.99] group/rec-card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-yellow"
+        >
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="flex items-start md:items-center gap-4">
-              <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-brand-navy flex items-center justify-center shadow-lg shadow-amber-500/20 shrink-0">
-                <UserPlus className="w-6 h-6 md:w-7 md:h-7 text-brand-navy" />
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-500 text-brand-navy flex items-center justify-center shadow-sm shrink-0">
+                <UserPlus className="w-5 h-5 md:w-6 md:h-6 text-brand-navy" />
               </div>
               <div className="space-y-1 text-left">
-                <h3 className="text-xl md:text-2xl font-bold text-brand-navy tracking-tight">Know someone great?</h3>
-                <p className="text-slate-600 text-xs md:text-sm font-medium">
-                  Recommend a pro and help other members like you.
+                <h3 className="text-base md:text-lg font-bold text-brand-navy tracking-tight">Know someone great?</h3>
+                <p className="text-slate-600 text-[11px] md:text-[13px] font-medium leading-relaxed">
+                  Recommend a pro and help other members find the best.
                 </p>
               </div>
             </div>
 
-            <button 
-              onClick={onAddPro}
-              className="shrink-0 inline-flex items-center justify-center px-6 py-3.5 bg-brand-yellow hover:bg-amber-400 active:scale-[0.98] text-brand-navy rounded-2xl font-bold text-sm md:text-base shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+            <div 
+              className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-yellow group-hover/rec-card:bg-amber-400 text-brand-navy rounded-xl font-bold text-xs md:text-sm shadow-sm transition-all"
             >
+              <UserPlus className="w-3.5 h-3.5 md:w-4 h-4 text-brand-navy shrink-0" />
               <span>Recommend a pro</span>
-            </button>
+            </div>
           </div>
         </div>
       </div>
@@ -8649,30 +9584,11 @@ function HomeView({
                 <div className="flex items-start gap-2.5">
                   <div className="w-4 h-4 rounded-full bg-brand-yellow/20 text-amber-700 flex items-center justify-center font-black text-[10px] mt-0.5 select-none shrink-0 border border-brand-yellow/30">1</div>
                   <div className="leading-tight flex-1" style={{ textAlign: 'left' }}>
-                    <p><strong className="text-slate-700">Recommend</strong>: Click the button at the top of your screen. A pro can only be added <strong className="text-slate-800">on recommendation of a member</strong>.</p>
-                    <div className="mt-2 flex items-center gap-3 bg-slate-50/80 p-2.5 rounded-2xl border border-slate-100 group-hover:bg-amber-50 group-hover:border-brand-yellow/20 transition-all">
-                      <div className="relative w-10 h-10 flex items-center justify-center flex-shrink-0">
-                        {/* Simplified visual of the header button */}
-                        <div className="absolute inset-1.5 bg-brand-yellow rounded-full shadow-sm flex items-center justify-center z-10">
-                          <Plus className="w-3.5 h-3.5 text-white" />
-                        </div>
-                        <div className="absolute inset-0 w-full h-full rotate-12">
-                          <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                            <defs>
-                              <path
-                                id="miniCirclePath"
-                                d="M 50, 50 m -43, 0 a 43,43 0 1,1 86,0 a 43,43 0 1,1 -86,0"
-                              />
-                            </defs>
-                            <text className="text-[20px] font-black fill-brand-yellow uppercase">
-                              <textPath xlinkHref="#miniCirclePath">Recommend a Pro</textPath>
-                            </text>
-                          </svg>
-                        </div>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-[9px] font-bold text-slate-400 group-hover:text-amber-600 transition-colors uppercase tracking-widest leading-none">Find this at the header</p>
-                        <p className="text-[10px] text-slate-500 font-medium leading-tight">Click to start recommendation</p>
+                    <p className="text-slate-600 font-medium">Click the button <strong className="text-slate-800 font-semibold">Recommend a pro</strong> on the home page.</p>
+                    <div className="mt-3 flex items-center justify-start">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-brand-yellow text-brand-navy rounded-xl font-bold text-[10px] shadow-sm select-none">
+                        <UserPlus className="w-3.5 h-3.5 text-brand-navy shrink-0" />
+                        <span>Recommend a pro</span>
                       </div>
                     </div>
                   </div>
@@ -9844,7 +10760,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   const hasActiveFilter = (typeof deferredSearch === 'string' && deferredSearch.trim() !== '') || aiResults !== null || selectedCategory !== 'All' || selectedLanguage !== 'All' || maxDistance !== 'All' || minRating > 0;
 
   // Check if we have strong exact matches from AI search
-  const hasStrongAiMatches = aiResults !== null && aiExactMatch && Object.values(aiResults).some(r => r.score >= 30);
+  const hasStrongAiMatches = aiResults !== null && aiExactMatch && (Object.values(aiResults) as any[]).some(r => r.score >= 30);
 
   const filteredPros = hasActiveFilter 
     ? (allPros || []).filter(pro => {

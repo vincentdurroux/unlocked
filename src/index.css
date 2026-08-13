@@ -21,6 +21,21 @@
   animation: float 20s ease-in-out infinite;
 }
 
+@keyframes scintillate {
+  0%, 100% {
+    opacity: 0.95;
+    filter: drop-shadow(0 1.5px 3px rgba(217, 119, 6, 0.2)) brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 2.5px 6px rgba(251, 191, 36, 0.35)) brightness(1.1);
+  }
+}
+
+.animate-scintillate {
+  animation: scintillate 2.5s ease-in-out infinite;
+}
+
 @keyframes marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
