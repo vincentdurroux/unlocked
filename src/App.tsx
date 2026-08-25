@@ -940,18 +940,18 @@ export default function App() {
       if (searchParams.has('eventId')) initial = 'events';
       else if (searchParams.has('proId')) initial = 'explore';
       else if (searchParams.has('guideId')) initial = 'guides';
+    } else if (cleanHash && validViews.includes(cleanHash as View)) {
+      initial = cleanHash as View;
+    } else if (pathname && validViews.includes(pathname as View)) {
+      initial = pathname as View;
     } else if (isColdStart) {
-      // On fresh app launch (cold start), always open on 'home' while keeping user logged in
+      // On fresh app launch (cold start) without a specific target view, open on 'home'
       initial = 'home';
       if (window.location.hash) {
         try {
           window.history.replaceState(null, '', window.location.pathname + window.location.search);
         } catch (_) {}
       }
-    } else if (cleanHash && validViews.includes(cleanHash as View)) {
-      initial = cleanHash as View;
-    } else if (pathname && validViews.includes(pathname as View)) {
-      initial = pathname as View;
     } else {
       initial = 'home';
     }
