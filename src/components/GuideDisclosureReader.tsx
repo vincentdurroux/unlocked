@@ -629,13 +629,8 @@ export function GuideDisclosureReader({ article }: { article: GuideArticle }) {
                   </div>
                 </div>
 
-                {/* Right side stats & Chevron */}
+                {/* Right side Chevron */}
                 <div className="flex items-center gap-2.5 shrink-0 pl-2">
-                  {!isOpen && sec.listItemsCount > 0 && (
-                    <span className="hidden sm:inline-flex text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
-                      {sec.listItemsCount} points
-                    </span>
-                  )}
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
                     isOpen 
                       ? 'bg-teal-50 text-teal-700 rotate-180' 
