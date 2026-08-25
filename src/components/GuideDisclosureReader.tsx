@@ -45,7 +45,6 @@ interface ParsedSection {
   number: number;
   title: string;
   rawTitle: string;
-  badge?: string;
   lines: string[];
   tipsCount: number;
   listItemsCount: number;
@@ -187,7 +186,7 @@ export function parseGuideContent(rawContent?: string, articleTitle?: string): {
   let currentSection: ParsedSection | null = null;
   let sectionIndex = 1;
 
-  const isHeadingLine = (trimmed: string): { isHeading: boolean; title: string; level: number; badge?: string } => {
+  const isHeadingLine = (trimmed: string): { isHeading: boolean; title: string; level: number } => {
     // Markdown headers: #, ##, ###, ####
     const mdMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
     if (mdMatch) {
@@ -195,22 +194,24 @@ export function parseGuideContent(rawContent?: string, articleTitle?: string): {
       let title = mdMatch[2].trim();
       // Remove trailing # if any
       title = title.replace(/\s+#+$/, '');
+      // Strip leading "Part X:", "Partie X:", "Step X:", "Étape X:", "Section X:" or "1. "
+      title = title.replace(/^(?:(?:Partie|Part|Étape|Step|Section)\s*\d+[:\.\-]\s*|\d+[\.\-\)]\s*)/i, '').trim();
       return { isHeading: true, title, level };
     }
 
     // Numbered step pattern: "1. Title", "Step 1: Title", "Étape 1: Title", "Part 1: Title", "Partie 1: Title"
     const stepMatch = trimmed.match(/^(?:(Étape|Step|Partie|Part|Section)\s+(\d+)\s*[:\.\-]\s*|(\d+)[\.\-\)]\s+)(.+)$/i);
     if (stepMatch && trimmed.length < 90 && !trimmed.endsWith('.')) {
-      const stepNumber = stepMatch[2] || stepMatch[3];
       const title = stepMatch[4].trim();
-      const badge = stepNumber ? `Step ${stepNumber}` : undefined;
-      return { isHeading: true, title, level: 2, badge };
+      return { isHeading: true, title, level: 2 };
     }
 
     // Bold title on its own line: **Title**
     const boldTitleMatch = trimmed.match(/^\*\*([^\*]+)\*\*$/);
     if (boldTitleMatch && trimmed.length < 80) {
-      return { isHeading: true, title: boldTitleMatch[1].trim(), level: 3 };
+      let title = boldTitleMatch[1].trim();
+      title = title.replace(/^(?:(?:Partie|Part|Étape|Step|Section)\s*\d+[:\.\-]\s*|\d+[\.\-\)]\s*)/i, '').trim();
+      return { isHeading: true, title, level: 3 };
     }
 
     return { isHeading: false, title: '', level: 0 };
@@ -247,9 +248,8 @@ export function parseGuideContent(rawContent?: string, articleTitle?: string): {
       currentSection = {
         id: `section-${sectionIndex}`,
         number: sectionIndex,
-        title: headingInfo.title,
-        rawTitle: headingInfo.title,
-        badge: headingInfo.badge || `Part ${sectionIndex}`,
+        title: headingInfo.title || `Section ${sectionIndex}`,
+        rawTitle: headingInfo.title || `Section ${sectionIndex}`,
         lines: [],
         tipsCount: 0,
         listItemsCount: 0,
@@ -284,17 +284,17 @@ export function parseGuideContent(rawContent?: string, articleTitle?: string): {
       const generatedSections: ParsedSection[] = paragraphs.map((para, idx) => {
         const pLines = para.split('\n');
         const firstLine = pLines[0].trim();
-        let sectionTitle = `Step ${idx + 1}`;
+        let sectionTitle = `Section ${idx + 1}`;
         let contentLines = pLines;
 
         // Try extracting first sentence or bold line as title
         if (firstLine.length < 60 && !firstLine.endsWith('.')) {
-          sectionTitle = firstLine.replace(/^\*\*|\*\*$/g, '');
+          sectionTitle = firstLine.replace(/^\*\*|\*\*$/g, '').replace(/^(?:(?:Partie|Part|Étape|Step|Section)\s*\d+[:\.\-]\s*|\d+[\.\-\)]\s*)/i, '').trim();
           contentLines = pLines.slice(1);
         } else {
           const firstSentence = firstLine.split(/[.!?]/)[0];
           if (firstSentence && firstSentence.length < 50) {
-            sectionTitle = firstSentence.trim();
+            sectionTitle = firstSentence.trim().replace(/^(?:(?:Partie|Part|Étape|Step|Section)\s*\d+[:\.\-]\s*|\d+[\.\-\)]\s*)/i, '').trim();
           } else {
             sectionTitle = idx === 0 ? "Overview & Context" : idx === paragraphs.length - 1 ? "Practical Advice & Next Steps" : `Key Point ${idx + 1}`;
           }
@@ -305,7 +305,6 @@ export function parseGuideContent(rawContent?: string, articleTitle?: string): {
           number: idx + 1,
           title: sectionTitle,
           rawTitle: sectionTitle,
-          badge: `Part ${idx + 1}`,
           lines: contentLines,
           tipsCount: 0,
           listItemsCount: contentLines.filter(l => l.trim().startsWith('-') || l.trim().startsWith('*')).length,
@@ -622,13 +621,8 @@ export function GuideDisclosureReader({ article }: { article: GuideArticle }) {
                     {displayNumber}
                   </div>
 
-                  {/* Title & Badge */}
-                  <div className="min-w-0 space-y-0.5">
-                    {sec.badge && (
-                      <span className="text-[10px] font-black uppercase tracking-wider text-teal-600 block">
-                        {sec.badge}
-                      </span>
-                    )}
+                  {/* Title */}
+                  <div className="min-w-0">
                     <h3 className="text-sm sm:text-base md:text-[17px] font-extrabold text-slate-900 group-hover:text-teal-700 transition-colors leading-snug line-clamp-2">
                       {sec.title}
                     </h3>

@@ -127,7 +127,7 @@ export function buildMarkdownFromChapters(intro: string, chapters: GuideChapterD
     const chapNum = idx + 1;
     const chapTitle = chap.title.trim() || `Chapter ${chapNum}`;
     
-    const lines: string[] = [`## ${chapNum}. ${chapTitle}`];
+    const lines: string[] = [`## ${chapTitle}`];
 
     if (chap.body && chap.body.trim()) {
       lines.push(chap.body.trim());
