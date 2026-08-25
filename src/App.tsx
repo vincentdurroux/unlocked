@@ -2649,13 +2649,13 @@ export default function App() {
               className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/70 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
               onClick={() => setShowAddPro(false)}
             >
-              <div className="min-h-full flex items-center justify-center p-3 sm:p-5">
+              <div className="min-h-full flex items-center justify-center p-3 sm:p-5 my-4 sm:my-8">
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.96, y: 12 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.96, y: 12 }}
                   transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                  className="bg-white w-full max-w-lg rounded-3xl overflow-hidden relative shadow-2xl flex flex-col my-auto border border-slate-200/80"
+                  className="bg-white w-full max-w-lg rounded-3xl overflow-hidden relative shadow-2xl flex flex-col border border-slate-200/80"
                   onClick={e => e.stopPropagation()}
                 >
                 {/* Modal Header */}
@@ -2680,7 +2680,7 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="p-6 sm:p-8 space-y-6 max-h-[75vh] overflow-y-auto">
+                <div className="p-6 sm:p-8 space-y-6">
                   {/* Trust Banner */}
                   <div className="p-4 bg-gradient-to-br from-amber-50/90 via-amber-50/40 to-orange-50/30 border border-amber-200/70 rounded-2xl shadow-2xs flex items-start gap-3">
                     <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
