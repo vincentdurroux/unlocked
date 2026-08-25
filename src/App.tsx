@@ -108,6 +108,8 @@ import { eventService } from './services/eventService';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
+import { GuideDisclosureReader } from './components/GuideDisclosureReader';
+import { GuideChapterBuilder } from './components/GuideChapterBuilder';
 
 // Custom Tooth Icon matching screenshot
 const ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -940,18 +942,19 @@ export default function App() {
       if (searchParams.has('eventId')) initial = 'events';
       else if (searchParams.has('proId')) initial = 'explore';
       else if (searchParams.has('guideId')) initial = 'guides';
+    } else if (cleanHash && validViews.includes(cleanHash as View)) {
+      // If a specific valid hash is in the URL (e.g. #privacy-policy, #events, #guides), honor it directly!
+      initial = cleanHash as View;
+    } else if (pathname && validViews.includes(pathname as View)) {
+      initial = pathname as View;
     } else if (isColdStart) {
-      // On fresh app launch (cold start), always open on 'home' while keeping user logged in
+      // On fresh app launch without a valid sub-route/hash, default to home
       initial = 'home';
       if (window.location.hash) {
         try {
           window.history.replaceState(null, '', window.location.pathname + window.location.search);
         } catch (_) {}
       }
-    } else if (cleanHash && validViews.includes(cleanHash as View)) {
-      initial = cleanHash as View;
-    } else if (pathname && validViews.includes(pathname as View)) {
-      initial = pathname as View;
     } else {
       initial = 'home';
     }
@@ -1316,8 +1319,27 @@ export default function App() {
       }
     };
 
+    const handleHashChange = () => {
+      const newHash = window.location.hash.replace('#', '').split('?')[0];
+      const validViews: View[] = [
+        'home', 'explore', 'events', 'guides', 'profile', 'community', 'marketplace', 
+        'community-thread', 'messages', 'admin', 'login', 'complete-profile', 
+        'update-password', 'privacy-policy', 'user-terms', 'provider-terms', 
+        'community-guidelines', 'cookie-policy', 'feedback'
+      ];
+      if (newHash && validViews.includes(newHash as View)) {
+        setActiveView(newHash as View);
+      } else if (!newHash) {
+        setActiveView('home');
+      }
+    };
+
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handleHashChange);
+    };
   }, [activeView, initialProId, initialEventId, initialGuideId, selectedPost, selectedAd, showMessagesModal, currentUser]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
@@ -7423,15 +7445,21 @@ function AdminView({
                   </div>
                 </div>
 
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Article Content (Markdown supported)</label>
-                  <textarea
-                    rows={8}
-                    required
-                    placeholder="Enter full article text. You can use markdown headers, bullets, and paragraphs..."
-                    value={articleFormContent}
-                    onChange={(e) => setArticleFormContent(e.target.value)}
-                    className="w-full text-xs px-4 py-3 rounded-xl bg-slate-50 border border-slate-150 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-slate-800 font-medium font-sans resize-y"
+                <div className="space-y-3 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                        Article Content & Chapters
+                      </label>
+                      <p className="text-[11px] text-slate-400 font-medium">
+                        Structure your guide into distinct chapters. Each chapter automatically becomes an interactive, collapsible section.
+                      </p>
+                    </div>
+                  </div>
+
+                  <GuideChapterBuilder
+                    initialMarkdown={articleFormContent}
+                    onChangeMarkdown={(md) => setArticleFormContent(md)}
                   />
                 </div>
               </div>
@@ -9759,41 +9787,34 @@ function ExpertGuideModal({ isOpen, onClose, article: rawArticle }: { isOpen: bo
           {/* Scrollable Content */}
           <div 
             ref={scrollContainerRef}
-            className="flex-grow overflow-y-auto p-8 md:p-12 scroll-smooth"
+            className="flex-grow overflow-y-auto p-4 sm:p-6 md:p-10 scroll-smooth"
           >
             <div className="max-w-2xl mx-auto space-y-8">
-              {/* Excerpt with our custom Unlocked attribution right below it */}
-              <div className="text-left pb-4 border-b border-slate-100">
-                {article.excerpt && (
-                  <p className="text-slate-600 italic text-base leading-relaxed mb-2.5">
-                    {article.excerpt}
-                  </p>
-                )}
-                <p className="text-xs text-brand-blue font-bold uppercase tracking-wider">
-                  by {article.author?.name || (typeof article.author === 'string' ? article.author : null) || 'MyCityUnlocked'}
-                </p>
-              </div>
-
-
-
-              {/* Guide Content - Simple and highly readable text */}
-              <div className="markdown-body">
-                <SimpleMarkdown>{article.content}</SimpleMarkdown>
-              </div>
+              {/* Interactive Disclosure Reader with Sections & Tabs */}
+              <GuideDisclosureReader article={article} />
 
               {/* Bottom Contact Section / Author Details */}
               {hasAuthorDetails && (
-                <div className="mt-12 p-8 bg-slate-50 border border-slate-100/80 rounded-[24px] relative overflow-hidden group shadow-sm text-left">
+                <div className="mt-8 p-6 sm:p-8 bg-slate-50 border border-slate-200/80 rounded-[28px] relative overflow-hidden group shadow-2xs text-left">
                   <div className="relative z-10 space-y-4">
                     <div>
                       <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full bg-brand-navy/10 text-brand-navy font-extrabold text-[10px] uppercase tracking-wider">
+                            Guide Author
+                          </span>
+                          <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Verified by MyCityUnlocked
+                          </span>
+                        </div>
                         {article.author?.name && (
-                          <h4 className="text-lg font-black text-slate-900 font-display leading-snug">
+                          <h4 className="text-lg sm:text-xl font-black text-slate-900 font-display leading-snug pt-1">
                             {article.author.name}
                           </h4>
                         )}
                         {(article.author?.role || article.author?.businessName || article.author?.business_name) && (
-                          <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
                             {article.author?.role && <span>{article.author.role}</span>}
                             {article.author?.role && (article.author?.businessName || article.author?.business_name) && <span className="mx-2 text-slate-300">•</span>}
                             {(article.author?.businessName || article.author?.business_name) && (
@@ -9807,26 +9828,26 @@ function ExpertGuideModal({ isOpen, onClose, article: rawArticle }: { isOpen: bo
                     </div>
 
                     {(article.author?.phone || article.author?.email || article.author?.website) && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-200/70">
                         {article.author?.phone && (
-                          <a href={`tel:${article.author.phone}`} className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-100 hover:border-brand-blue/30 hover:bg-slate-50/50 transition-all group/call">
-                            <div className="w-10 h-10 rounded-xl bg-brand-yellow/10 flex items-center justify-center text-brand-yellow group-hover/call:scale-110 transition-transform shrink-0">
-                              <Phone className="w-5 h-5 text-brand-blue" />
+                          <a href={`tel:${article.author.phone}`} className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-slate-200/80 hover:border-teal-500/40 hover:bg-slate-50/70 transition-all group/call shadow-2xs">
+                            <div className="w-9 h-9 rounded-xl bg-teal-500/10 flex items-center justify-center text-teal-600 group-hover/call:scale-105 transition-transform shrink-0">
+                              <Phone className="w-4 h-4" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider leading-none mb-0.5">Phone</p>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider leading-none mb-0.5">Phone</p>
                               <p className="text-xs font-bold text-slate-800 truncate">{article.author.phone}</p>
                             </div>
                           </a>
                         )}
                         
                         {article.author?.email && (
-                          <a href={`mailto:${article.author.email}`} className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-100 hover:border-brand-blue/30 hover:bg-slate-50/50 transition-all group/mail min-w-0">
-                            <div className="w-10 h-10 rounded-xl bg-brand-blue/10 flex items-center justify-center text-brand-blue group-hover/mail:scale-110 transition-transform shrink-0">
-                              <Mail className="w-5 h-5" />
+                          <a href={`mailto:${article.author.email}`} className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-slate-200/80 hover:border-teal-500/40 hover:bg-slate-50/70 transition-all group/mail shadow-2xs min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600 group-hover/mail:scale-105 transition-transform shrink-0">
+                              <Mail className="w-4 h-4" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider leading-none mb-0.5">Email</p>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider leading-none mb-0.5">Email</p>
                               <p className="text-xs font-bold text-slate-800 break-all">{article.author.email}</p>
                             </div>
                           </a>
@@ -9837,14 +9858,14 @@ function ExpertGuideModal({ isOpen, onClose, article: rawArticle }: { isOpen: bo
                             href={article.author.website} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-100 hover:border-brand-blue/30 hover:bg-slate-50/50 transition-all group/web sm:col-span-2 min-w-0"
+                            className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-slate-200/80 hover:border-teal-500/40 hover:bg-slate-50/70 transition-all group/web shadow-2xs sm:col-span-2 min-w-0"
                           >
-                            <div className="w-10 h-10 rounded-xl bg-[#00C2A8]/10 flex items-center justify-center text-[#00C2A8] group-hover/web:scale-110 transition-transform shrink-0">
-                              <Globe className="w-5 h-5 text-brand-blue" />
+                            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 group-hover/web:scale-105 transition-transform shrink-0">
+                              <Globe className="w-4 h-4" />
                             </div>
-                            <div className="min-w-0">
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider leading-none mb-0.5">Website</p>
-                              <p className="text-xs font-bold text-brand-blue hover:underline break-all">{article.author.website.replace(/^https?:\/\/(www\.)?/, '')}</p>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider leading-none mb-0.5">Website</p>
+                              <p className="text-xs font-bold text-teal-700 hover:underline break-all truncate">{article.author.website.replace(/^https?:\/\/(www\.)?/, '')}</p>
                             </div>
                           </a>
                         )}
