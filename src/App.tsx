@@ -10938,4991 +10938,205 @@ ${JSON.stringify(proListBrief, null, 2)}`,
             {/* Skeleton / Loading pulse for AI mapping */}
             {aiLoading && (
               <div className="p-8 bg-blue-50/40 rounded-3xl border border-blue-100/40 flex flex-col items-center justify-center text-center space-y-4">
-                <div className="w-12 h-12 bg-brand-blue/10 rounded-full flex items-center justify-center">
-                  <Sparkles className="w-6 h-6 text-brand-blue animate-spin" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-brand-navy">Jane is analyzing your request...</p>
-                  <p className="text-xs text-slate-400 max-w-sm">Jane is searching our database of recommended professionals to find the perfect matches.</p>
-                </div>
-              </div>
-            )}
-
-            {/* Filters Section */}
-            <div className="space-y-4 pt-4 border-t border-slate-100">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Refine your search</p>
-              
-              <div className="grid grid-cols-2 gap-4 md:gap-x-6 md:gap-y-4">
-                {/* Category Dropdown */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Filter className="w-3.5 h-3.5 text-brand-blue" /> Category
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSelectedCategory(val);
-                        scrollToResults();
-                      }}
-                      className="w-full pl-4 pr-10 py-3.5 bg-white rounded-2xl border border-slate-200/70 hover:border-slate-300 focus:ring-4 focus:ring-brand-blue/5 focus:border-brand-blue/20 outline-none shadow-sm hover:shadow-md transition-all text-slate-700 font-bold text-xs md:text-sm appearance-none cursor-pointer"
-                    >
-                      <option value="All">All Categories</option>
-                      {allProfessions.map(prof => (
-                        <option key={prof} value={prof}>{prof}</option>
-                      ))}
-                    </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <ChevronDown className="w-4 h-4 text-slate-400" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Language Dropdown */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5 text-brand-blue" /> Language
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={selectedLanguage}
-                      onChange={(e) => setSelectedLanguage(e.target.value)}
-                      className="w-full pl-4 pr-10 py-3.5 bg-white rounded-2xl border border-slate-200/70 hover:border-slate-300 focus:ring-4 focus:ring-brand-blue/5 focus:border-brand-blue/20 outline-none shadow-sm hover:shadow-md transition-all text-slate-700 font-bold text-xs md:text-sm appearance-none cursor-pointer"
-                    >
-                      {languages.map(lang => (
-                        <option key={lang} value={lang}>{lang === 'All' ? 'All Languages' : lang}</option>
-                      ))}
-                    </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <ChevronDown className="w-4 h-4 text-slate-400" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Distance Slider */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-rose-500" /> Distance from me
-                  </label>
-                  <div className="px-4 pt-4 pb-8 bg-white rounded-2xl border border-slate-200/70 shadow-sm flex flex-col gap-2 min-h-[70px] justify-start hover:border-slate-300 transition-all relative">
-                    <input
-                      type="range"
-                      min="0"
-                      max={distanceSteps.length - 1}
-                      step="1"
-                      value={distanceSteps.indexOf(maxDistance)}
-                      onChange={(e) => {
-                        const index = parseInt(e.target.value);
-                        const val = distanceSteps[index];
-                        try {
-                          localStorage.setItem('unlocked_max_distance', String(val));
-                        } catch (e) {
-                          console.error(e);
-                        }
-                        if (!hasRealLocation) {
-                          requestGeolocation(() => {
-                            setMaxDistance(val);
-                          });
-                        } else {
-                          setMaxDistance(val);
-                        }
-                      }}
-                      disabled={!hasRealLocation}
-                      className={cn(
-                        "w-full h-1.5 bg-slate-100 rounded-lg appearance-none relative z-10",
-                        hasRealLocation ? "cursor-pointer accent-rose-500" : "cursor-not-allowed opacity-50"
-                      )}
-                    />
-                    
-                    {/* Static Centered Label and Moving Tick */}
-                    {(() => {
-                      const ratio = distanceSteps.indexOf(maxDistance) / (distanceSteps.length - 1);
-                      return (
-                        <>
-                          {/* Moving Tick on the slider line */}
-                          <div 
-                            className="absolute top-[19px] transition-all duration-300 pointer-events-none"
-                            style={{ 
-                              left: `calc(1rem + (100% - 2rem) * ${ratio})`,
-                              transform: 'translate(-50%, -50%)' 
-                            }}
-                          >
-                            <div className="w-0.5 h-3 bg-rose-400/40"></div>
-                          </div>
-                          
-                          {/* Fixed Centered Value */}
-                          <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
-                            <span className="text-[11px] font-extrabold text-rose-600 whitespace-nowrap bg-rose-50 px-3 py-1 rounded-full border border-rose-100 shadow-sm">
-                              {maxDistance === 'All' ? 'Any distance' : maxDistance < 1 ? '500m' : `${maxDistance}km`}
-                            </span>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-
-                {/* Rating Star Selection */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Star className="w-3.5 h-3.5 text-brand-yellow" /> Rating
-                  </label>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-3.5 bg-white rounded-2xl border border-slate-200/70 shadow-sm min-h-[60px] hover:border-slate-300 transition-all">
-                    <div className="flex items-center gap-0.5">
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => setMinRating(minRating === s ? 0 : s)}
-                          className="p-0.5"
-                        >
-                          <Star className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4 transition-colors", s <= minRating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200")} />
-                        </button>
-                      ))}
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap self-start sm:self-center">
-                      {minRating > 0 ? `${minRating}.0+` : 'Any rating'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Geolocation Explanation Banner */}
-              {!hasRealLocation && showLocationBanner && (
-                <div className="mt-4 p-4.5 pr-10 md:pr-14 rounded-[24px] border border-blue-100 bg-blue-50/50 flex flex-col md:flex-row items-center md:items-start gap-4 hover:border-blue-200/50 transition-all relative overflow-hidden shadow-xs animate-in fade-in duration-300">
-                  {/* Left Icon container */}
-                  <div className="w-11 h-11 bg-white border border-blue-100/50 text-blue-600 rounded-full flex items-center justify-center shrink-0 shadow-xs">
-                    <Navigation className="w-5 h-5 fill-blue-600" />
-                  </div>
-                  {/* Main content block */}
-                  <div className="flex-1 text-center md:text-left min-w-0 pr-0 md:pr-2 space-y-1">
-                    <h4 className="text-xs md:text-sm font-bold text-slate-800 leading-snug">
-                      Use location to find professionals near you.
-                    </h4>
-                    <p className="text-[10px] md:text-xs text-slate-500 leading-relaxed max-w-lg">
-                      We'll use your location only to show relevant results nearby.
-                    </p>
-                  </div>
-                  {/* Blue Action Button */}
-                  <div className="shrink-0 flex items-center w-full md:w-auto justify-center">
-                    <button
-                      onClick={() => requestGeolocation()}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[10px] md:text-xs font-bold tracking-wide transition-all flex items-center gap-2 shadow-xs hover:shadow-md hover:brightness-105 active:scale-95 cursor-pointer w-full md:w-auto justify-center"
-                    >
-                      <Navigation className="w-3.5 h-3.5 fill-white" />
-                      Use my location
-                    </button>
-                  </div>
-                  {/* Top Right Close Button */}
-                  <button
-                    onClick={() => {
-                      setShowLocationBanner(false);
-                      try {
-                        localStorage.setItem('unlocked_show_location_banner', 'false');
-                      } catch (e) {
-                        console.error(e);
-                      }
-                    }}
-                    className="absolute right-4 top-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-blue-100/30 transition-all cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="pt-8" id="results-section">
-        <div className="space-y-8">
-          {/* Map View always on top */}
-          <div className="space-y-3">
-            <div className="flex justify-end px-2">
-              <button
-                type="button"
-                onClick={() => requestGeolocation()}
-                className="flex items-center gap-1.5 text-xs font-bold text-brand-blue hover:text-blue-700 bg-blue-50/80 hover:bg-blue-100/90 active:scale-95 px-3.5 py-2 rounded-full border border-blue-100/60 shadow-sm transition-all cursor-pointer group"
-              >
-                <Navigation className="w-3.5 h-3.5 group-hover:rotate-45 transition-transform text-brand-blue" />
-                <span>Use my location</span>
-              </button>
-            </div>
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="w-full h-[300px] md:h-[400px] rounded-[40px] overflow-hidden border border-slate-100 shadow-2xl relative bg-slate-50"
-            >
-               <ProMap 
-                 pros={filteredPros} 
-                 onSelectPro={(pro) => scrollToPro(pro)} 
-                 center={userLocation || { lat: 39.4699, lng: -0.3763 }} 
-                 resetTrigger={mapCenterTrigger}
-               />
-            </motion.div>
-          </div>
-
-          {/* Active AI search message banner (Placed AFTER map - Clean & Seamless Light Theme) */}
-          {aiQuery && aiResults && !aiLoading && (
-            <motion.div 
-              id="ai-search-banner"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className={`scroll-mt-28 p-4 md:p-5 rounded-2xl border transition-all shadow-xs ${
-                !hasStrongAiMatches || !aiExactMatch
-                  ? "bg-amber-50/70 border-amber-200/80 text-amber-950"
-                  : "bg-blue-50/60 border-blue-100 text-slate-900"
-              }`}
-            >
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-start gap-3.5">
-                  <div className={`p-2.5 rounded-xl shrink-0 border ${
-                    !hasStrongAiMatches || !aiExactMatch
-                      ? "bg-amber-100/80 border-amber-200 text-amber-800"
-                      : "bg-blue-100/80 border-blue-200 text-brand-blue"
-                  }`}>
-                    <Sparkles className="w-5 h-5 animate-pulse" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
-                        !hasStrongAiMatches || !aiExactMatch
-                          ? "bg-amber-100 text-amber-900 border-amber-200"
-                          : "bg-blue-100 text-blue-900 border-blue-200"
-                      }`}>
-                        {!hasStrongAiMatches || !aiExactMatch ? "Jane's Tips" : "Jane's Search"}
-                      </span>
-                      <span className="text-xs font-medium text-slate-500">
-                        "{aiQuery}"
-                      </span>
-                    </div>
-
-                    {!hasStrongAiMatches || !aiExactMatch ? (
-                      <p className="text-xs sm:text-sm font-medium leading-relaxed text-amber-950">
-                        {aiSummaryMessage ? (
-                          filteredPros.length === 0 
-                            ? aiSummaryMessage.replace(/Jane found some alternative options, but they may not meet all your criteria\./gi, '').trim()
-                            : aiSummaryMessage
-                        ) : (
-                          <>
-                            We couldn't find an exact match for "<strong>{aiQuery}</strong>" in our directory.
-                            {filteredPros.length > 0 && " Jane found some alternative options, but they may not meet all your criteria."}
-                          </>
-                        )}
-                      </p>
-                    ) : (
-                      <p className="text-xs sm:text-sm font-medium leading-relaxed text-slate-700">
-                        Jane found <strong>{filteredPros.length}</strong> {filteredPros.length === 1 ? 'match' : 'matches'} for "<strong>{aiQuery}</strong>" sorted by relevance:
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center shrink-0 self-start md:self-center pt-1 md:pt-0">
-                  <button
-                    onClick={() => {
-                      setSearch('');
-                      setAiResults(null);
-                      setAiQuery('');
-                      setDeferredSearch('');
-                      setAiSummaryMessage(null);
-                      setAiExactMatch(true);
-                    }}
-                    className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 active:scale-95 text-xs font-semibold text-slate-700 border border-slate-200 shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    <X className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Clear</span>
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* List View below the map */}
-          <div id="pro-cards-list" className="grid grid-cols-1 md:grid-cols-2 gap-6 scroll-mt-28">
-            {filteredPros.length > 0 ? (
-              filteredPros.map((pro, index) => (
-                <motion.div 
-                  key={pro.id} 
-                  id={`pro-card-${pro.id}`}
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  onClick={() => setSelectedPro(pro)}
-                  className="group relative bg-white rounded-[32px] p-6 flex flex-col lg:flex-row gap-6 border border-slate-100 transition-all shadow-sm hover:shadow-xl hover:shadow-slate-200/50 hover:border-brand-blue/10 cursor-pointer overflow-hidden"
-                >
-                  {/* Number Badge to match map pins */}
-                  <div className="absolute top-6 right-6 w-8 h-8 bg-brand-blue text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-lg shadow-brand-blue/20 z-10 transition-transform group-hover:scale-110">
-                    {index + 1}
-                  </div>
-
-                  {/* AI Match Score Badge */}
-                  {aiResults && aiResults[String(pro.id)] && (
-                    <div className="absolute top-6 right-16 px-2.5 py-1 bg-blue-50 text-brand-blue rounded-full flex items-center gap-1 text-[10px] font-bold border border-blue-100/50 z-10">
-                      <Sparkles className="w-3 h-3 text-brand-blue fill-blue-200" />
-                      <span>{aiResults[String(pro.id)].score}% Jane match</span>
-                    </div>
-                  )}
-
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50/50 rounded-full -mr-16 -mt-16 group-hover:bg-brand-blue/5 transition-colors duration-500" />
-                  
-                  <div className="relative w-24 h-24 sm:w-40 sm:h-40 lg:w-32 lg:h-32 rounded-2xl bg-slate-50 overflow-hidden flex-shrink-0 border border-slate-100 shadow-sm group-hover:scale-105 transition-transform duration-700 flex items-center justify-center">
-                    {pro.image ? (
-                      <img src={pro.image} alt={pro.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <User className="w-1/2 h-1/2 text-slate-200" />
-                    )}
-                  </div>
-  
-                  <div className="relative flex-1 flex flex-col justify-between min-w-0 py-1">
-                    <div className="space-y-2">
-                      <div className="space-y-0.5">
-                        <h4 className="font-bold text-slate-900 text-xl truncate group-hover:text-brand-blue transition-colors tracking-tight pr-8">{pro.name}</h4>
-                        {pro.company_name && (
-                          <p className="text-xs font-semibold text-slate-600 truncate -mt-0.5 mb-1.5">{pro.company_name}</p>
-                        )}
-                        <div className="flex items-center gap-2">
-                           <span className="text-[11px] font-medium text-brand-blue uppercase tracking-widest">{pro.category}</span>
-                           <span className="text-slate-200">•</span>
-                           <div className={cn(
-                             "flex items-center gap-1 transition-all",
-                             !currentUser && "filter blur-[4px] select-none pointer-events-none"
-                           )}>
-                             <Star className="w-3 h-3 text-brand-yellow fill-brand-yellow" />
-                             <span className="text-xs font-normal text-slate-700">
-                               {pro.review_count && pro.review_count > 0 ? (
-                                 <span className="flex items-center gap-1">
-                                   {pro.rating} <span className="text-slate-400 font-medium font-sans">({pro.review_count})</span>
-                                 </span>
-                               ) : 'Recommended by the community. Reviews coming soon'}
-                             </span>
-                           </div>
-                        </div>
-                      </div>
-                      {pro.top_qualities && pro.top_qualities.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 pt-4 pb-2">
-                          {pro.top_qualities.map(quality => {
-                            const cfg = getQualityConfig(quality);
-                            const IconComp = cfg.icon;
-                            return (
-                              <span 
-                                key={quality} 
-                                className="px-2 py-1 bg-slate-50 text-slate-700 rounded-xl text-[10px] font-bold border border-slate-100 flex items-center gap-1.5 shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
-                              >
-                                <IconComp className={`w-3 h-3 ${cfg.iconColor}`} />
-                                {quality}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      <p className={cn(
-                        "text-sm text-slate-500 line-clamp-2 leading-relaxed font-medium transition-all mb-4",
-                        !currentUser && "filter blur-[4.5px] select-none pointer-events-none"
-                      )}>
-                        {pro.bio}
-                      </p>
-
-                      {/* AI Tailored Matching Reason */}
-                      {aiResults && aiResults[String(pro.id)]?.reason && (
-                        <div className="mt-3 p-3 bg-blue-50/40 rounded-2xl border border-blue-100/45 flex items-start gap-2 max-w-full">
-                          <Sparkles className="w-3.5 h-3.5 text-brand-blue mt-0.5 flex-shrink-0 animate-pulse" />
-                          <p className="text-xs text-blue-900 font-medium italic leading-relaxed">
-                            "{aiResults[String(pro.id)].reason}"
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="mt-6 pt-4 border-t border-slate-50/80 space-y-3.5">
-                      {/* Languages Row */}
-                      {pro.languages && Array.isArray(pro.languages) && pro.languages.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <div className="flex items-center gap-1 mr-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none shrink-0">
-                            <Globe className="w-3 h-3 text-slate-400" />
-                            <span>Languages:</span>
-                          </div>
-                          {pro.languages.map(lang => (
-                            <span key={lang} className="px-2 py-0.5 bg-slate-50 text-slate-500 rounded-lg text-[10px] font-semibold border border-slate-100/60 transition-colors hover:bg-slate-100/50">
-                              {lang}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Location & Distance Row */}
-                      <div className="flex items-center justify-between gap-3 min-w-0 w-full">
-                        <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest min-w-0 flex-1">
-                          <MapPin className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
-                          <span className={cn(
-                            "truncate font-medium text-slate-500 normal-case",
-                            !currentUser && "filter blur-[4.5px] select-none text-slate-300 inline-block pointer-events-none"
-                          )}>
-                            {pro.location || "Carrer Sorní, 12, 46004 Valencia"}
-                          </span>
-                        </div>
-
-                        {hasRealLocation && userLocation && pro.coordinates && (
-                          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-50/70 border border-rose-100 text-rose-600 rounded-full text-[10px] font-semibold shrink-0 shadow-[0_1px_2px_rgba(244,63,94,0.02)] select-none">
-                            <span className="relative flex h-1.5 w-1.5">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
-                            </span>
-                            <span>
-                              {(() => {
-                                const d = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
-                                return d < 1 ? `${Math.round(d * 1000)}m` : `${d.toFixed(1)} km`;
-                              })()}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Sign up prompt for visitors */}
-                      {!currentUser && (
-                        <div className="pt-0.5">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onNavigate('login');
-                            }}
-                            className="text-[9px] font-bold text-brand-blue uppercase tracking-widest hover:underline flex items-center gap-1.5 transition-all active:scale-95"
-                          >
-                            <Lock className="w-2.5 h-2.5 text-brand-blue" /> Join Unlocked to view location & map
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              ))
-            ) : (
-              <div className="col-span-full py-32 text-center space-y-6">
-                <div className="w-32 h-32 bg-slate-50 rounded-full flex items-center justify-center mx-auto ring-1 ring-slate-100">
-                  <Search className="w-12 h-12 text-brand-blue" />
-                </div>
-                {!hasActiveFilter ? (
-                  <div className="space-y-2">
-                    <p className="text-slate-900 font-bold text-2xl">
-                      {searchMode === 'ai' ? "Ask Jane for recommendations" : "Start your search"}
-                    </p>
-                    <p className="text-slate-400 max-w-md mx-auto font-medium">
-                      {searchMode === 'ai' 
-                        ? "Tell Jane what you need in natural language, and she will find the perfect community-recommended matches for you." 
-                        : "Use the search bar or filters above to find the best local professionals recommended by the community."}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-slate-900 font-bold text-2xl">No pros found</p>
-                    <p className="text-slate-400 max-w-md mx-auto font-medium">We didn't find any professional matching your search. Try different filters or keywords!</p>
-                  </div>
-                )}
-
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Detail Modal Integration */}
-      <AnimatePresence>
-        {selectedPro && (
-          <ProfessionalDetailView 
-            pro={selectedPro} 
-            onClose={() => {
-              setSelectedPro(null);
-              onModalClose?.();
-            }} 
-            onNavigate={onNavigate}
-            onProUpdate={onProUpdate}
-            currentUser={currentUser}
-            userProfile={userProfile}
-            blockedUsers={blockedUsers}
-            usersWhoBlockedMe={usersWhoBlockedMe}
-          />
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function MessagesView({ 
-  scrollToTop, 
-  initialChat, 
-  onClearInitial, 
-  onNavigate, 
-  onClose,
-  currentUser, 
-  userProfile,
-  unreadConversations = [],
-  blockedUsers = [],
-  usersWhoBlockedMe = [],
-  onBlockedUsersUpdate,
-  onMarkChatAsRead
-}: { 
-  scrollToTop?: () => void, 
-  initialChat?: any, 
-  onClearInitial?: () => void,
-  onNavigate?: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void,
-  onClose?: () => void,
-  currentUser?: any,
-  userProfile?: Profile | null,
-  unreadConversations?: string[],
-  blockedUsers: string[],
-  usersWhoBlockedMe: string[],
-  onBlockedUsersUpdate?: () => void,
-  onMarkChatAsRead?: (chatId: string) => void
-}) {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loadingConversations, setLoadingConversations] = useState(true);
-  const [selectedChat, setSelectedChat] = useState<Conversation | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loadingMessages, setLoadingMessages] = useState(false);
-  const [newMessage, setNewMessage] = useState('');
-  const [isSending, setIsSending] = useState(false);
-  
-  // Custom alerts or status notifications
-  const [viewAlert, setViewAlert] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
-
-  // Search filter for chats list
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Modals & Menu Dropdowns
-  const [showOptionsDropdown, setShowOptionsDropdown] = useState(false);
-  const [showBlockModal, setShowBlockModal] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [isActionLoading, setIsActionLoading] = useState(false);
-
-  // Report fields
-  const [reportReason, setReportReason] = useState('harassment');
-  const [reportDetails, setReportDetails] = useState('');
-  
-  // Cleanup empty conversations when navigating away or switching chats
-  useEffect(() => {
-    const lastActiveChatId = selectedChat?.id;
-    
-    return () => {
-      if (lastActiveChatId) {
-        console.log(`[MessagesView] Triggering empty conversation check for ${lastActiveChatId}`);
-        chatService.deleteConversationIfEmpty(lastActiveChatId).then(deleted => {
-          if (deleted) {
-            setConversations(prev => prev.filter(c => c.id !== lastActiveChatId));
-          }
-        });
-      }
-    };
-  }, [selectedChat?.id]); // Trigger when selectedChat changes. Unmount handles view changes.
-
-  // Helper to close chat with explicit cleanup
-  const handleCloseChat = async () => {
-    const chatId = selectedChat?.id;
-    setSelectedChat(null);
-    if (chatId) {
-      const deleted = await chatService.deleteConversationIfEmpty(chatId);
-      if (deleted) {
-        setConversations(prev => prev.filter(c => c.id !== chatId));
-      }
-    }
-  };
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const lastMarkedReadRef = useRef<number>(0);
-  const lastMessagesLengthRef = useRef<number>(0);
-
-  // Scroll automatic to chat bottom
-  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    if (messagesContainerRef.current) {
-      const scrollHeight = messagesContainerRef.current.scrollHeight;
-      if (behavior === 'smooth') {
-        messagesContainerRef.current.scrollTo({
-          top: scrollHeight,
-          behavior: 'smooth'
-        });
-      } else {
-        messagesContainerRef.current.scrollTop = scrollHeight;
-      }
-    } else {
-      messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
-    }
-  };
-
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const now = Date.now();
-    if (now - lastMarkedReadRef.current > 1500) {
-      lastMarkedReadRef.current = now;
-      if (selectedChat && currentUser) {
-        // Only trigger update if there are actually unread messages from the other user
-        const hasUnreadIncoming = messages.some(m => m.sender_id !== currentUser.id && !m.is_read);
-        if (!hasUnreadIncoming) return;
-
-        chatService.markMessagesAsRead(selectedChat.id, currentUser.id);
-        // Also ensure local storage and parent state are kept up to date
-        localStorage.setItem(`chat_last_read_${selectedChat.id}`, new Date().toISOString());
-        onMarkChatAsRead?.(selectedChat.id);
-
-        // Instantly mark received messages in local state as read
-        setMessages(prev => prev.map(m => {
-          if (m.sender_id !== currentUser.id && !m.is_read) {
-            return { ...m, is_read: true };
-          }
-          return m;
-        }));
-      }
-    }
-  };
-
-  useEffect(() => {
-    // Only scroll to bottom if the messages length increased (new message)
-    // or if it's the first load for this chat
-    if (messages.length > lastMessagesLengthRef.current || lastMessagesLengthRef.current === 0) {
-      const isScrolledUp = messagesContainerRef.current && 
-        (messagesContainerRef.current.scrollHeight - messagesContainerRef.current.scrollTop - messagesContainerRef.current.clientHeight > 150);
-
-      if (lastMessagesLengthRef.current === 0 || !isScrolledUp) {
-        scrollToBottom(lastMessagesLengthRef.current === 0 ? 'auto' : 'smooth');
-      }
-    }
-    lastMessagesLengthRef.current = messages.length;
-  }, [messages.length]); // Only depend on length to avoid scrolling on status updates
-
-  // Load conversations and initial chat coordination
-  useEffect(() => {
-    let active = true;
-
-    const initMessages = async () => {
-      if (!currentUser) return;
-      try {
-        setLoadingConversations(true);
-
-        // Fetch conversations safely
-        let userConvs: Conversation[] = [];
-
-        try {
-          if (isSupabaseConfigured) {
-            userConvs = await chatService.getUserConversations(currentUser.id);
-          }
-        } catch (e) {
-          console.warn('Error fetching user conversations:', e);
-        }
-
-        if (!active) return;
-
-        // Handle initialChat trigger if present
-        if (initialChat) {
-          // If it's already a full conversation object, just select it
-          if (initialChat.id && initialChat.participant_1 && initialChat.participant_2) {
-            setConversations(userConvs);
-            setSelectedChat(initialChat);
-            setLoadingConversations(false);
-            onClearInitial?.();
-            return;
-          }
-
-          const targetName = initialChat.name || (initialChat.otherUser?.full_name);
-          const targetId = initialChat.userId || initialChat.otherUser?.id;
-
-          if (!targetName && !targetId) {
-            setConversations(userConvs);
-            setLoadingConversations(false);
-            onClearInitial?.();
-            return;
-          }
-
-          // Case: Self-chat prevention
-          const currentUserNormalizedName = (currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || '').trim().toLowerCase();
-          const targetNormalizedName = (targetName || '').trim().toLowerCase();
-
-          if (targetId === currentUser.id || (targetName && targetNormalizedName === currentUserNormalizedName)) {
-            setViewAlert({ type: 'info', text: "You cannot start a conversation with yourself." });
-            setConversations(userConvs);
-            setLoadingConversations(false);
-            onClearInitial?.();
-            return;
-          }
-
-          // Seek profile
-          let otherProfile = null;
-          try {
-            if (targetId) {
-              otherProfile = await authService.getProfile(targetId);
-            } else if (targetName) {
-              otherProfile = await chatService.getProfileByName(targetName);
-            }
-          } catch (e) {
-            console.warn('Error fetching profile for initial chat:', e);
-          }
-
-          if (!active) return;
-
-          if (otherProfile) {
-            if (otherProfile.id === currentUser.id) {
-              setViewAlert({ type: 'info', text: "You cannot start a conversation with yourself." });
-              setConversations(userConvs);
-              setLoadingConversations(false);
-              onClearInitial?.();
-              return;
-            }
-
-            if (otherProfile.chat_enabled === false) {
-              setViewAlert({ type: 'error', text: "This member has disabled chat participation." });
-              setConversations(userConvs);
-              setLoadingConversations(false);
-              onClearInitial?.();
-              return;
-            }
-
-            if (blockedUsers.includes(otherProfile.id)) {
-              setViewAlert({ type: 'info', text: `You have blocked ${otherProfile.full_name || 'this member'}.` });
-            }
-
-            // Create or retrieve real conversation
-            try {
-              const conv = await chatService.getOrCreateConversation(currentUser.id, otherProfile.id);
-              if (conv && active) {
-                const fullConv: Conversation = {
-                  ...conv,
-                  otherUser: otherProfile
-                };
-
-                // Refresh list and select conv
-                let updatedConvs: Conversation[] = [];
-                try {
-                  updatedConvs = await chatService.getUserConversations(currentUser.id);
-                } catch (e) {
-                  console.warn('Error refreshing conversations list:', e);
-                }
-
-                setConversations(updatedConvs.length > 0 ? updatedConvs : [fullConv]);
-                const matchedConv = updatedConvs.find(c => c.id === conv.id) || fullConv;
-                setSelectedChat(matchedConv);
-              } else if (active) {
-                setViewAlert({ type: 'error', text: "Messaging service is temporarily unavailable. Check your Supabase configuration." });
-              }
-            } catch (dbErr: any) {
-              console.error('Real conversation creation failed:', dbErr);
-              const errorMsg = dbErr?.message || "Unknown database error";
-              
-              if (errorMsg.includes('relation "public.conversations" does not exist')) {
-                setViewAlert({ type: 'error', text: "The 'conversations' table is missing in your Supabase database. Please create it to enable messaging." });
-              } else if (errorMsg.includes('permissions') || errorMsg.includes('RLS')) {
-                setViewAlert({ type: 'error', text: "Permission denied. Please check your Supabase RLS policies for the 'conversations' table." });
-              } else {
-                setViewAlert({ type: 'error', text: `Database error: ${errorMsg}. Check the browser console for details.` });
-              }
-            }
-          } else {
-            console.warn('[MessagesView] Member not found for profile lookup:', targetName || targetId);
-            setViewAlert({ 
-              type: 'error', 
-              text: `Member "${targetName || 'Requested'}" could not be found. They might have changed their profile name or deleted their account.` 
-            });
-            setConversations(userConvs);
-          }
-          onClearInitial?.();
-        } else {
-          // If no initialChat, just set conversations normally
-          setConversations(userConvs);
-        }
-      } catch (err) {
-        console.error('Error during message flow initialization:', err);
-      } finally {
-        if (active) {
-          setLoadingConversations(false);
-        }
-      }
-    };
-
-    initMessages();
-
-    return () => {
-      active = false;
-    };
-  }, [currentUser, initialChat]);
-
-  // Handle selection of a chat and real-time subscription
-  useEffect(() => {
-    if (!selectedChat) {
-      setMessages([]);
-      return;
-    }
-
-    let isMounted = true;
-    setLoadingMessages(true);
-
-    const loadMsgs = async () => {
-      try {
-        const msgs = await chatService.getMessages(selectedChat.id);
-        if (isMounted) {
-          // Filter out messages from blocked users
-          const filteredMsgs = msgs.filter(m => !blockedUsers.includes(m.sender_id));
-          
-          // Reset length ref for new chat to force scroll to bottom on first load
-          lastMessagesLengthRef.current = 0;
-
-          // Instantly mark all received messages as read in local rendering list
-          const readMappedMsgs = filteredMsgs.map(m => {
-            if (m.sender_id !== currentUser?.id) {
-              return { ...m, is_read: true };
-            }
-            return m;
-          });
-          
-          setMessages(readMappedMsgs);
-          // Mark as read in localStorage
-          localStorage.setItem(`chat_last_read_${selectedChat.id}`, new Date().toISOString());
-          // Mark as read in parent state
-          onMarkChatAsRead?.(selectedChat.id);
-
-          // Mark as read in Supabase
-          if (currentUser) {
-            chatService.markMessagesAsRead(selectedChat.id, currentUser.id);
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching messages list:', err);
-      } finally {
-        if (isMounted) {
-          setLoadingMessages(false);
-        }
-      }
-    };
-
-    loadMsgs();
-
-    // Subscribe to messages changes in real-time
-    const unsubscribe = chatService.subscribeToMessages(selectedChat.id, (newMsg) => {
-      if (isMounted) {
-        // If current user blocked the sender of this message, ignore it
-        if (blockedUsers.includes(newMsg.sender_id)) {
-          console.log('[Chat] Ignoring message from blocked user');
-          return;
-        }
-
-        setMessages(prev => {
-          // Idempotent: prevent duplicates
-          if (prev.find(m => m.id === newMsg.id)) return prev;
-          
-          // Since we are looking at this chat, mark upcoming message as read immediately
-          localStorage.setItem(`chat_last_read_${selectedChat.id}`, new Date().toISOString());
-          onMarkChatAsRead?.(selectedChat.id);
-
-          // Mark incoming message as read in database
-          if (currentUser && newMsg.sender_id !== currentUser.id) {
-            chatService.markMessagesAsRead(selectedChat.id, currentUser.id);
-          }
-          
-          const finalMsg = {
-            ...newMsg,
-            is_read: newMsg.sender_id === currentUser?.id ? newMsg.is_read : true
-          };
-          
-          return [...prev, finalMsg];
-        });
-      }
-    }, (updatedMsg) => {
-      if (isMounted) {
-        // Handle real-time updates (e.g. message is_read status marked true by other user)
-        setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
-  }, [selectedChat, blockedUsers, onMarkChatAsRead, currentUser]);
-
-  // Send a message
-  const handleSendMessage = async (e?: React.FormEvent | React.MouseEvent) => {
-    if (e) e.preventDefault();
-    if (!selectedChat || !currentUser || !newMessage.trim() || isSending) return;
-
-    const otherUserId = selectedChat.otherUser?.id;
-    if (otherUserId) {
-      if (selectedChat.otherUser?.chat_enabled === false) {
-        setViewAlert({ type: 'error', text: 'This member has disabled chat participation.' });
-        return;
-      }
-      if (blockedUsers.includes(otherUserId)) {
-        setViewAlert({ type: 'error', text: 'You need to unblock this member to send them a message.' });
-        return;
-      }
-      if (usersWhoBlockedMe.includes(otherUserId)) {
-        setViewAlert({ type: 'error', text: 'You cannot send messages to this member.' });
-        return;
-      }
-    }
-
-    try {
-      setIsSending(true);
-      const text = newMessage.trim();
-      setNewMessage(''); // optimistic client-side clearing
-
-      const sent = await chatService.sendMessage(selectedChat.id, currentUser.id, text);
-      if (sent) {
-        setMessages(prev => {
-          if (prev.find(m => m.id === sent.id)) return prev;
-          return [...prev, sent];
-        });
-        
-        // Mark as read immediately on sending
-        localStorage.setItem(`chat_last_read_${selectedChat.id}`, new Date().toISOString());
-        
-        // Refresh conversations to update order
-        const userConvs = await chatService.getUserConversations(currentUser.id);
-        setConversations(userConvs);
-      }
-    } catch (err: any) {
-      console.error('Error executing sendMessage:', err);
-      if (err.message === 'This discussion is blocked.' || err.message === 'This conversation is blocked.') {
-        setViewAlert({ type: 'error', text: 'You cannot send messages because the conversation or member is blocked.' });
-        // Refresh block lists globally
-        onBlockedUsersUpdate?.();
-      } else if (err.message === 'Chat participation is disabled for one of the users.') {
-        setViewAlert({ type: 'error', text: 'Chat participation is disabled for you or the other member.' });
-      } else {
-        setViewAlert({ type: 'error', text: 'Unable to send message. Please try again.' });
-      }
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  // Block or Unblock user execution
-  const executeBlockToggle = async () => {
-    const otherUserId = selectedChat?.otherUser?.id;
-    if (!otherUserId || !currentUser || !selectedChat) return;
-
-    try {
-      setIsActionLoading(true);
-      const isCurrentlyBlocked = blockedUsers.includes(otherUserId);
-
-      if (isCurrentlyBlocked) {
-        await chatService.unblockUser(currentUser.id, otherUserId);
-        const unblockedGlobally = await chatService.unblockConversation(selectedChat.id, currentUser.id); 
-        
-        onBlockedUsersUpdate?.();
-        
-        // Only update local UI state if it was unblocked globally (no other blocks)
-        if (unblockedGlobally) {
-          setSelectedChat(prev => prev ? { ...prev, is_blocked: false } : null);
-          setConversations(prev => prev.map(c => c.id === selectedChat.id ? { ...c, is_blocked: false } : c));
-        }
-        
-        setViewAlert({ type: 'success', text: 'Member successfully unblocked.' });
-      } else {
-        await chatService.blockUser(currentUser.id, otherUserId);
-        await chatService.blockConversation(selectedChat.id); // Also block conversation
-        
-        onBlockedUsersUpdate?.();
-        setSelectedChat(prev => prev ? { ...prev, is_blocked: true } : null);
-        setConversations(prev => prev.map(c => c.id === selectedChat.id ? { ...c, is_blocked: true } : c));
-        setViewAlert({ type: 'success', text: 'Member successfully blocked.' });
-      }
-      setShowBlockModal(false);
-    } catch (err) {
-      console.error('Error toggling block state:', err);
-      setViewAlert({ type: 'error', text: 'Failed to update block state.' });
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  // Submit report
-  const handleSendReport = async () => {
-    const otherUserId = selectedChat?.otherUser?.id;
-    if (!otherUserId || !currentUser) return;
-
-    try {
-      setIsActionLoading(true);
-      console.log('[Report] Submitting report with payload:', {
-        reporter_id: currentUser.id,
-        reported_id: otherUserId,
-        reason: reportReason,
-        details: reportDetails.trim(),
-        conversation_id: selectedChat.id
-      });
-      
-      await chatService.reportUser({
-        reporter_id: currentUser.id,
-        reported_id: otherUserId,
-        reason: reportReason,
-        details: reportDetails.trim(),
-        conversation_id: selectedChat.id
-      });
-      
-      // Automatically block the user as requested
-      if (!blockedUsers.includes(otherUserId)) {
-        try {
-          await chatService.blockUser(currentUser.id, otherUserId);
-          onBlockedUsersUpdate?.();
-        } catch (blockErr) {
-          console.warn('[Report] Automatic block failed:', blockErr);
-        }
-      }
-      
-      setViewAlert({ type: 'success', text: 'Report submitted. The member has also been blocked automatically.' });
-      setReportDetails('');
-      setShowReportModal(false);
-    } catch (err: any) {
-      console.error('Error submitting report:', err);
-      // Detailed error for diagnostic
-      const errorMsg = err?.message || 'Failed to submit report.';
-      const errorCode = err?.code || 'Unknown';
-      setViewAlert({ 
-        type: 'error', 
-        text: `Report failed: ${errorMsg} (Code: ${errorCode}). Please ensure the 'user_reports' table exists and allows your account to submit reports.` 
-      });
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  // Filter conversations matching search string
-  const filteredConversations = conversations.filter(conv => {
-    const otherName = conv.otherUser?.full_name || '';
-    return otherName.toLowerCase().includes(searchQuery.toLowerCase());
-  });
-
-  return (
-    <div className="h-full w-full bg-white overflow-hidden flex relative">
-      {/* Visual Alerts Overlay container */}
-      <AnimatePresence>
-        {viewAlert && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] max-w-md w-[90%] bg-slate-900 text-white rounded-2xl px-5 py-3.5 shadow-xl flex items-center justify-between gap-3 text-sm font-medium"
-          >
-            <span>{viewAlert.text}</span>
-            <button 
-              onClick={() => setViewAlert(null)}
-              className="p-1.5 hover:bg-white/10 rounded-full transition-colors text-slate-350"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* LEFT SIDEBAR - List of conversations */}
-      <div className={cn(
-        "w-full md:w-80 border-r border-slate-100 flex flex-col transition-all duration-200 bg-white",
-        selectedChat ? "hidden md:flex" : "flex"
-      )}>
-        <div className="p-5 border-b border-slate-100 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-900 font-display">Private Messages</h2>
-            <button 
-              onClick={() => onClose ? onClose() : onNavigate?.('back' as any)}
-              className="p-1 px-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all flex items-center gap-1.5"
-            >
-              <span className="text-[10px] font-bold uppercase tracking-wider">Close</span>
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <p className="text-[10px] text-slate-500 bg-slate-50 border border-slate-100 p-2.5 rounded-xl leading-relaxed">
-            To start a private conversation with a community member, click on the chat icon next to their name in the testimonials section of a professional's profile.
-          </p>
-        </div>
-
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
-          {loadingConversations ? (
-            <div className="p-8 text-center space-y-3">
-              <Loader2 className="w-6 h-6 text-brand-blue animate-spin mx-auto" />
-              <p className="text-xs text-slate-500">Loading conversations...</p>
-            </div>
-          ) : filteredConversations.length === 0 ? (
-            <div className="p-8 text-center space-y-2">
-              <p className="text-sm font-bold text-slate-400">No messages</p>
-            </div>
-          ) : (
-            filteredConversations.map(conv => {
-              const otherUserObj = conv.otherUser;
-              const otherName = otherUserObj?.full_name || 'Anonymous Member';
-              const displayedName = formatName(otherName);
-              const otherAvatar = otherUserObj?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayedName)}&background=random`;
-              const isBlockedByMe = blockedUsers.includes(otherUserObj?.id || '');
-              const isBlockedMe = usersWhoBlockedMe.includes(otherUserObj?.id || '');
-              const isBlockedLocally = isBlockedByMe || isBlockedMe;
-              const isUnread = unreadConversations.includes(conv.id);
-
-              return (
-                <div 
-                  key={conv.id}
-                  onClick={async () => {
-                    const prevId = selectedChat?.id;
-                    setSelectedChat(conv);
-                    setShowOptionsDropdown(false);
-                    // Force mark as read locally
-                    localStorage.setItem(`chat_last_read_${conv.id}`, new Date().toISOString());
-                    
-                    // Manually trigger cleanup if switching from an empty chat
-                    if (prevId && prevId !== conv.id) {
-                      const deleted = await chatService.deleteConversationIfEmpty(prevId);
-                      if (deleted) {
-                        setConversations(prev => prev.filter(c => c.id !== prevId));
-                      }
-                    }
-                  }}
-                  className={cn(
-                    "p-4 flex gap-3 cursor-pointer transition-all border-l-4 relative",
-                    selectedChat?.id === conv.id ? "bg-brand-blue/5 border-brand-blue" : "hover:bg-slate-50 border-transparent"
-                  )}
-                >
-                  <div className="relative flex-shrink-0">
-                    <img src={otherAvatar} alt="" className="w-11 h-11 rounded-full object-cover border border-slate-100" />
-                    {isBlockedLocally && (
-                      <div className="absolute -bottom-1 -right-1 bg-rose-500 text-white p-0.5 rounded-full border border-white">
-                        <Ban className="w-3 h-3" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start">
-                      <h4 className={cn("text-sm truncate", isUnread ? "font-black text-slate-900" : "font-bold text-slate-700")}>
-                        {displayedName}
-                      </h4>
-                      <span className="text-[9px] text-slate-400">
-                        {conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : ''}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                      {conv.is_blocked ? (
-                        <span className="text-[10px] bg-slate-900 text-white px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
-                          <Lock className="w-2.5 h-2.5" />
-                          Chat Blocked
-                        </span>
-                      ) : isBlockedByMe ? (
-                        <span className="text-[10px] bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">Blocked</span>
-                      ) : isBlockedMe ? (
-                        <span className="text-[10px] bg-slate-50 text-slate-400 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">Unavailable</span>
-                      ) : (
-                        <p className={cn("text-xs truncate", isUnread ? "font-bold text-brand-blue" : "text-slate-500")}>
-                          {isUnread ? "New messages" : "Click to open chat"}
-                        </p>
-                      )}
-                      {isUnread && (
-                        <span className="w-2 h-2 rounded-full bg-rose-500 shadow-sm" />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* RIGHT PANEL - Actual chat window */}
-      <div className={cn(
-        "flex-1 flex flex-col bg-slate-50/20 transition-all duration-200",
-        selectedChat ? "flex" : "hidden md:flex bg-white items-center justify-center text-center p-8"
-      )}>
-        {selectedChat ? (
-          <>
-            {/* Conversations Header */}
-            <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shadow-sm relative z-30">
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={handleCloseChat}
-                  className="md:hidden p-2 -ml-2 text-slate-400 hover:text-brand-blue transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <div className="relative">
-                  <img 
-                     src={selectedChat.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(formatName(selectedChat.otherUser?.full_name))}&background=random`} 
-                     alt="" 
-                     className="w-10 h-10 rounded-full object-cover border border-slate-100" 
-                  />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900">{formatName(selectedChat.otherUser?.full_name)}</h4>
-                  {(blockedUsers.includes(selectedChat.otherUser?.id || '') || usersWhoBlockedMe.includes(selectedChat.otherUser?.id || '')) && (
-                    <div className="flex items-center gap-1 mt-0.5">
-                      {blockedUsers.includes(selectedChat.otherUser?.id || '') ? (
-                        <span className="text-[9px] bg-rose-50 text-rose-500 font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md">Blocked by you</span>
-                      ) : (
-                        <span className="text-[9px] bg-slate-100 text-slate-500 font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md">Unavailable</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Action options - Dropdown with block & report */}
-              <div className="relative">
-                <button 
-                  onClick={() => setShowOptionsDropdown(prev => !prev)}
-                  className="p-2.5 bg-slate-50 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
-                  title="Options Menu"
-                >
-                  <MoreHorizontal className="w-5 h-5" />
-                </button>
-
-                {/* Dropdown Box */}
-                {showOptionsDropdown && (
-                  <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl border border-slate-150 shadow-xl py-2 z-40">
-                    <button 
-                      onClick={() => {
-                        setShowOptionsDropdown(false);
-                        setShowReportModal(true);
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors font-medium"
-                    >
-                      <Flag className="w-4 h-4 text-amber-500" />
-                      Report this member
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setShowOptionsDropdown(false);
-                        setShowBlockModal(true);
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-rose-600 hover:bg-rose-50/50 flex items-center gap-2.5 transition-colors font-medium border-t border-slate-50"
-                    >
-                      <Ban className="w-4 h-4 text-rose-500" />
-                      {blockedUsers.includes(selectedChat.otherUser?.id || '') ? 'Unblock member' : 'Block member'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Chat Messages Log */}
-            <div 
-              ref={messagesContainerRef}
-              className="flex-1 p-4 md:p-6 space-y-4 overflow-y-auto bg-slate-50/40" 
-              onScroll={handleScroll}
-            >
-              {loadingMessages ? (
-                <div className="h-full flex flex-col items-center justify-center space-y-2">
-                  <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
-                  <p className="text-xs text-slate-400">Loading conversation...</p>
-                </div>
-              ) : (() => {
-                const visibleMsgs = messages.filter(msg => {
-                  if (!msg?.content) return true;
-                  return !(msg.content.startsWith('Hello ') && msg.content.includes('! I saw your review for '));
-                });
-                
-                if (visibleMsgs.length === 0) {
-                  return (
-                    <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2">
-                      <MessageSquare className="w-8 h-8 text-slate-300" />
-                      <p className="text-sm font-bold text-slate-500">No messages yet</p>
-                      <p className="text-xs text-slate-400 max-w-xs leading-relaxed">Engage in a respectful and constructive conversation regarding their review!</p>
-                    </div>
-                  );
-                }
-                
-                return visibleMsgs.map((msg) => {
-                  const isSentByMe = msg.sender_id === currentUser?.id;
-                  
-                  return (
-                    <div 
-                      key={msg.id} 
-                      className={cn("flex", isSentByMe ? "justify-end" : "justify-start")}
-                    >
-                      <div className={cn(
-                        "p-4 rounded-2xl max-w-[85%] md:max-w-sm text-sm shadow-sm leading-relaxed",
-                        isSentByMe 
-                          ? "bg-brand-blue text-white rounded-tr-none" 
-                          : "bg-white text-slate-700 border border-slate-100 rounded-tl-none"
-                      )}>
-                        <p className="break-words white-space-pre-wrap">{msg.content}</p>
-                        <span className={cn(
-                          "block text-[9px] mt-1.5 text-right font-medium",
-                          isSentByMe ? "text-blue-150" : "text-slate-400"
-                        )}>
-                          {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Input Box section (Conditional blockers) */}
-            <div className="p-4 bg-white border-t border-slate-100 pb-6 md:pb-4">
-              {userProfile?.chat_enabled === false ? (
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center text-slate-500 text-xs font-bold leading-relaxed shadow-sm">
-                  You have disabled chat participation. Enable it in Profile &gt; Settings to send and receive messages.
-                </div>
-              ) : selectedChat.otherUser?.chat_enabled === false ? (
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center text-slate-500 text-xs font-bold leading-relaxed shadow-sm flex items-center justify-center gap-2">
-                  <Lock className="w-4 h-4 text-slate-400" />
-                  This member has disabled chat participation.
-                </div>
-              ) : selectedChat.is_blocked ? (
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center text-white text-xs font-bold flex flex-col items-center justify-center gap-1.5 shadow-xl">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Lock className="w-4 h-4 text-rose-400" />
-                    <span>
-                      {blockedUsers.includes(selectedChat.otherUser?.id || '') 
-                        ? 'You have blocked this conversation.' 
-                        : 'This conversation has been blocked by the other participant.'}
-                    </span>
-                  </div>
-                  {blockedUsers.includes(selectedChat.otherUser?.id || '') && (
-                    <button 
-                      onClick={() => setShowBlockModal(true)}
-                      className="mt-1 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl border border-white/20 text-[10px] shadow-sm uppercase tracking-wider transition-all"
-                    >
-                      Unblock to resume
-                    </button>
-                  )}
-                </div>
-              ) : blockedUsers.includes(selectedChat.otherUser?.id || '') ? (
-                <div className="bg-rose-50/50 border border-rose-100 rounded-2xl p-4 text-center text-rose-600 text-xs font-bold flex flex-col items-center justify-center gap-1.5 shadow-sm">
-                  <span>You have blocked this member. Unblock them from the options menu to resume the discussion.</span>
-                  <button 
-                    onClick={() => setShowBlockModal(true)}
-                    className="mt-1 bg-white hover:bg-rose-50 text-rose-500 hover:text-rose-600 px-3.5 py-1.5 rounded-xl border border-rose-200 text-[10px] shadow-sm uppercase tracking-wider transition-all"
-                  >
-                    Unblock Now
-                  </button>
-                </div>
-              ) : usersWhoBlockedMe.includes(selectedChat.otherUser?.id || '') ? (
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center text-slate-500 text-xs font-bold leading-relaxed shadow-sm">
-                  This member does not accept private messages anymore or is currently unavailable.
-                </div>
-              ) : (
-                <form onSubmit={handleSendMessage} className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type your private message..."
-                    disabled={isSending}
-                    className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand-blue/20 outline-none font-medium text-slate-700 transition-all disabled:opacity-60"
-                  />
-                  <button 
-                    type="submit"
-                    onClick={handleSendMessage}
-                    disabled={!newMessage.trim() || isSending}
-                    className="bg-brand-blue text-white p-2.5 rounded-xl shadow-lg shadow-brand-blue/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 cursor-pointer"
-                  >
-                    {isSending ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <ArrowRight className="w-5 h-5" />
-                    )}
-                  </button>
-                </form>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-8 md:p-12 space-y-4 bg-white">
-            <div className="w-20 h-20 bg-brand-blue/10 rounded-full flex items-center justify-center animate-bounce-slow">
-              <MessageCircle className="w-10 h-10 text-brand-blue" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-lg font-bold text-slate-900">Your Private Conversations</h3>
-              <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
-                Connect with authentic community members by clicking on the chat message icon next to their reviews on wellness professional profiles.
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* REPORT MEMBER DIALOG MODAL */}
-      <AnimatePresence>
-        {showReportModal && selectedChat && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4"
-          >
-            <motion.div 
-               initial={{ scale: 0.95, y: 15 }}
-               animate={{ scale: 1, y: 0 }}
-               exit={{ scale: 0.95, y: 15 }}
-               className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl relative"
-            >
-              <button 
-                onClick={() => setShowReportModal(false)}
-                className="absolute top-5 right-5 p-2 bg-slate-50 text-slate-400 hover:text-slate-600 rounded-full transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              <div className="space-y-4">
-                <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center">
-                  <Flag className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 font-display">Report Inappropriate Behavior</h3>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                    Help us keep our community safe and friendly by reporting any inappropriate behavior or harassment.
-                  </p>
-                </div>
-
-                <div className="space-y-3 pt-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Primary Reason</label>
-                    <select 
-                      value={reportReason} 
-                      onChange={(e) => setReportReason(e.target.value)} 
-                      className="w-full px-4 py-2 bg-white border border-slate-200 focus:ring-2 focus:ring-brand-blue/20 rounded-xl text-xs font-medium text-slate-700 outline-none"
-                    >
-                      <option value="harassment">Harassment or disrespectful behavior</option>
-                      <option value="spam">Spam / Unsolicited advertising</option>
-                      <option value="inappropriate">Inappropriate content</option>
-                      <option value="scam">Scam or suspicious behavior</option>
-                      <option value="other">Other reason</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Details (Optional)</label>
-                    <textarea 
-                      value={reportDetails}
-                      onChange={(e) => setReportDetails(e.target.value)}
-                      rows={4}
-                      placeholder="Describe the situation in a few sentences..."
-                      className="w-full px-4 py-3 bg-white border border-slate-200 focus:ring-2 focus:ring-brand-blue/20 rounded-xl text-xs font-medium text-slate-700 outline-none transition-all resize-none font-sans"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-4">
-                  <button 
-                    onClick={() => setShowReportModal(false)}
-                    className="py-3 bg-white hover:bg-slate-50 text-slate-550 rounded-xl text-xs font-bold border border-slate-200 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={handleSendReport}
-                    disabled={isActionLoading}
-                    className="py-3 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-brand-blue/20 transition-all disabled:opacity-50"
-                  >
-                    {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit'}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* BLOCK MEMBER DIALOG MODAL */}
-      <AnimatePresence>
-        {showBlockModal && selectedChat && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4"
-          >
-            <motion.div 
-              initial={{ scale: 0.95, y: 15 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl relative"
-            >
-              <div className="space-y-4 text-center">
-                <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center mx-auto">
-                  <Ban className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 font-display">
-                    {blockedUsers.includes(selectedChat.otherUser?.id || '') ? 'Unblock this member?' : 'Block this member?'}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                    {blockedUsers.includes(selectedChat.otherUser?.id || '') 
-                      ? `By unblocking ${formatName(selectedChat.otherUser?.full_name)}, you will be able to message them and receive their messages again.`
-                      : `By blocking ${formatName(selectedChat.otherUser?.full_name)}, you will stop all direct communication and will no longer receive or send any messages.`}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-3">
-                  <button 
-                    onClick={() => setShowBlockModal(false)}
-                    className="py-2.5 bg-white hover:bg-slate-50 text-slate-550 rounded-xl text-xs font-bold border border-slate-200 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={executeBlockToggle}
-                    disabled={isActionLoading}
-                    className={cn(
-                      "py-2.5 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all disabled:opacity-50",
-                      blockedUsers.includes(selectedChat.otherUser?.id || '') 
-                        ? "bg-brand-blue hover:bg-blue-600 shadow-brand-blue/15" 
-                        : "bg-rose-600 hover:bg-rose-700 shadow-rose-600/15"
-                    )}
-                  >
-                    {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : blockedUsers.includes(selectedChat.otherUser?.id || '') ? 'Unblock' : 'Block'}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function ProfessionalDetailView({ 
-  pro, 
-  onClose, 
-  onNavigate, 
-  onProUpdate, 
-  currentUser, 
-  userProfile,
-  blockedUsers = [],
-  usersWhoBlockedMe = []
-}: { 
-  pro: Professional, 
-  onClose: () => void, 
-  onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
-  onProUpdate?: () => void, 
-  currentUser?: any, 
-  userProfile?: any,
-  blockedUsers?: string[],
-  usersWhoBlockedMe?: string[]
-}) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  
-  // Swipe gesture support for testimonials carousel
-  const touchStartX = useRef<number | null>(null);
-  const touchEndX = useRef<number | null>(null);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchEndX.current = null;
-    touchStartX.current = e.targetTouches[0].clientX;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.targetTouches[0].clientX;
-  };
-
-  const handleTouchEnd = () => {
-    if (!touchStartX.current || !touchEndX.current) return;
-    const distance = touchStartX.current - touchEndX.current;
-    const minSwipeDistance = 50;
-    const totalPages = Math.ceil(localReviews.length / 3);
-    
-    if (distance > minSwipeDistance) {
-      // Swiped left -> show next reviews
-      setReviewCarouselIndex((prev) => Math.min(totalPages - 1, prev + 1));
-    } else if (distance < -minSwipeDistance) {
-      // Swiped right -> show previous reviews
-      setReviewCarouselIndex((prev) => Math.max(0, prev - 1));
-    }
-  };
-
-  const [isWritingReview, setIsWritingReview] = useState(false);
-  const [reviewSuccess, setReviewSuccess] = useState(false);
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState('');
-  const [hoveredRating, setHoveredRating] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [localReviews, setLocalReviews] = useState<any[]>([]);
-  const [reviewCarouselIndex, setReviewCarouselIndex] = useState(0);
-  const [hasAlreadyReviewed, setHasAlreadyReviewed] = useState(false);
-  const [checkingReview, setCheckingReview] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
-  const [shared, setShared] = useState(false);
-  
-  const [displayReviewCount, setDisplayReviewCount] = useState(pro.review_count || 0);
-  const [displayRating, setDisplayRating] = useState(pro.rating || 0);
-
-  // Sync local display states when props change (from parent refetch)
-  useEffect(() => {
-    setDisplayReviewCount(pro.review_count || 0);
-    setDisplayRating(pro.rating || 0);
-  }, [pro.review_count, pro.rating]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
-    }
-    
-    // Reset writing state when switching pros
-    setIsWritingReview(false);
-    setReviewSuccess(false);
-    setRating(0);
-    setComment('');
-    setReviewCarouselIndex(0);
-    // Fetch real reviews from Supabase
-    const fetchReviews = async () => {
-      try {
-        const reviews = await proService.getTestimonies(pro.id);
-        if (reviews && reviews.length > 0) {
-          // Extract emails and names to match active profiles
-          const emails: string[] = [];
-          const names: string[] = [];
-          
-          reviews.forEach((r: any) => {
-            if (!r.author) return;
-            if (r.author.includes('|')) {
-              const parts = r.author.split('|');
-              names.push(parts[0].trim());
-              emails.push(parts[1].trim());
-            } else {
-              names.push(r.author.trim());
-              if (r.author.includes('@')) {
-                emails.push(r.author.trim());
-              }
-            }
-          });
-
-          // Fetch matching profiles to check if chat is available (not disabled, not deleted)
-          let profiles: any[] = [];
-          try {
-            if (isSupabaseConfigured) {
-              const promises: any[] = [];
-              if (emails.length > 0) {
-                promises.push(supabase.from('profiles').select('id, full_name, email, chat_enabled').in('email', emails));
-              }
-              if (names.length > 0) {
-                promises.push(supabase.from('profiles').select('id, full_name, email, chat_enabled').in('full_name', names));
-              }
-              
-              if (promises.length > 0) {
-                const results = await Promise.all(promises);
-                results.forEach((res: any) => {
-                  if (res.data) {
-                    profiles = [...profiles, ...res.data];
-                  }
-                });
-              }
-            }
-          } catch (pe) {
-            console.warn('Error fetching matching profiles for testimonies:', pe);
-          }
-
-          const mappedReviews = reviews.map((r: any) => {
-            let cleanAuthor = r.author || '';
-            let extractedEmail = '';
-            if (r.author && r.author.includes('|')) {
-              const parts = r.author.split('|');
-              cleanAuthor = parts[0].trim();
-              extractedEmail = parts[1].trim();
-            } else if (r.author && r.author.includes('@')) {
-              extractedEmail = r.author.trim();
-            }
-
-            // Find matching profile
-            let matchedProfile = null;
-            if (extractedEmail) {
-              matchedProfile = profiles.find((p: any) => p.email && p.email.toLowerCase() === extractedEmail.toLowerCase());
-            }
-            if (!matchedProfile && cleanAuthor) {
-              matchedProfile = profiles.find((p: any) => p.full_name && p.full_name.trim().toLowerCase() === cleanAuthor.toLowerCase());
-            }
-
-            const isSelf = matchedProfile ? (currentUser && matchedProfile.id === currentUser.id) : false;
-            const isChatAvailable = (matchedProfile && !isSelf) ? (matchedProfile.chat_enabled !== false) : false;
-
-            return {
-              id: r.id,
-              author: r.author,
-              userId: matchedProfile ? matchedProfile.id : (r.user_id || r.author_id || r.profile_id || r.creator_id),
-              rating: r.rating,
-              comment: r.comment,
-              date: new Date(r.created_at).toLocaleDateString(),
-              isChatAvailable: isChatAvailable
-            };
-          });
-
-          setLocalReviews(mappedReviews);
-        } else {
-          setLocalReviews([]);
-        }
-      } catch (err) {
-        console.error('Failed to fetch reviews:', err);
-      }
-    };
-
-    const checkExistingReview = async () => {
-      if (!currentUser) return;
-      setCheckingReview(true);
-      try {
-        const authorName = userProfile?.full_name || currentUser?.email?.split('@')[0] || '';
-        if (authorName) {
-          const reviewed = await proService.hasUserReviewedPro(authorName, pro.id, currentUser?.email || undefined);
-          setHasAlreadyReviewed(reviewed);
-        }
-      } catch (err) {
-        console.error('Error checking review status:', err);
-      } finally {
-        setCheckingReview(false);
-      }
-    };
-
-    fetchReviews();
-    checkExistingReview();
-
-    if (!isSupabaseConfigured) return;
-
-    // Real-time updates for testimonies on this pro profile
-    const channel = supabase
-      .channel(`realtime_testimonies_pro_${pro.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'testimonies',
-          filter: `pro_id=eq.${pro.id}`
-        },
-        () => {
-          console.log('[Realtime] Testimonies table updated for pro - refetching reviews...');
-          fetchReviews();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [pro.id, currentUser, userProfile]);
-
-  return (
-    <motion.div 
-      ref={scrollRef}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.18 }}
-      className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/60 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain flex justify-center" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
-      onClick={onClose}
-    >
-      <div className="min-h-full w-full max-w-5xl flex items-start justify-center py-6 md:py-12 px-4 md:px-8">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.92 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="bg-white w-full rounded-[40px] overflow-hidden shadow-2xl relative"
-          onClick={e => e.stopPropagation()}
-        >
-        {/* Header Image/Cover Area */}
-        <div className="h-40 md:h-56 bg-gradient-to-br from-brand-blue/30 via-slate-100 to-amber-500/10 relative">
-          <div className="absolute top-6 right-6 flex items-center gap-2 z-10">
-            <button 
-              type="button"
-              onClick={async (e) => {
-                e.stopPropagation();
-                const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
-                const shareData = {
-                  title: pro.name,
-                  text: pro.company_name || `Check out this verified professional on Unlocked Valencia: ${pro.name}!`,
-                  url: shareUrl
-                };
-                
-                if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-                  try {
-                    await navigator.share(shareData);
-                  } catch (err) {
-                    console.warn('Share sheets failed or cancelled:', err);
-                  }
-                } else {
-                  try {
-                    await navigator.clipboard.writeText(shareUrl);
-                    setShared(true);
-                    setTimeout(() => setShared(false), 2000);
-                  } catch (err) {
-                    console.error('Failed to copy share link:', err);
-                  }
-                }
-              }}
-              className={`p-2.5 backdrop-blur-md rounded-full shadow-lg transition-all active:scale-95 ${
-                shared 
-                  ? "bg-emerald-500 hover:bg-emerald-600 text-white scale-105" 
-                  : "bg-white/40 hover:bg-white/90 text-slate-600"
-              }`}
-            >
-              {shared ? (
-                <Check className="w-5 h-5" />
-              ) : (
-                <ShareIcon className="w-5 h-5" />
-              )}
-            </button>
-            <button 
-              onClick={onClose} 
-              className="p-2.5 bg-white/40 hover:bg-white/90 backdrop-blur-md rounded-full shadow-lg text-slate-600 transition-all active:scale-95"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="px-6 md:px-12 pb-12 -mt-16 md:-mt-22 relative">
-          <div className="flex flex-col md:flex-row gap-6 md:items-end mb-10">
-            <div className="w-36 h-36 md:w-44 md:h-44 rounded-[32px] bg-white p-1.5 overflow-hidden shadow-2xl border-4 border-white ring-1 ring-slate-100 group flex items-center justify-center flex-shrink-0">
-              {pro.image ? (
-                <img src={pro.image} alt={pro.name} className="w-full h-full object-cover rounded-[24px] group-hover:scale-110 transition-transform duration-700" />
-              ) : (
-                <User className="w-20 h-20 text-slate-200" />
-              )}
-            </div>
-            <div className="flex-1 space-y-3 pb-2">
-              <div className="flex flex-col gap-1 items-start">
-                <h3 className="text-4xl md:text-5xl font-black text-slate-900 font-display tracking-tight leading-none">{pro.name}</h3>
-                {pro.company_name && (
-                  <p className="text-lg font-semibold text-slate-600 font-sans tracking-tight">{pro.company_name}</p>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-xl font-medium border border-brand-blue/10">
-                  <Briefcase className="w-3.5 h-3.5" />
-                  {pro.category}
-                </div>
-                <div className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-xl font-medium border border-slate-100 transition-all",
-                  !currentUser && "filter blur-[4px] select-none pointer-events-none"
-                )}>
-                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                  <span>{displayReviewCount > 0 ? `${displayRating} (${displayReviewCount})` : 'Recommended by the community. Reviews coming soon'}</span>
-                </div>
-              </div>
-
-              {pro.top_qualities && pro.top_qualities.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-2">
-                  {pro.top_qualities.map((quality) => {
-                    const cfg = getQualityConfig(quality);
-                    const QualityIcon = cfg.icon;
-                    return (
-                      <span 
-                        key={quality} 
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border ${cfg.color} transition-all duration-300 hover:scale-[1.03] select-none`}
-                      >
-                        <QualityIcon className={`w-4 h-4 ${cfg.iconColor} shrink-0`} />
-                        {quality}
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-16">
-            <div className="lg:col-span-2 space-y-12">
-              {/* Direct Contact & Info Bar */}
-              <div className="bg-slate-50/30 rounded-2xl p-6 w-full border border-slate-100/50 relative overflow-hidden min-h-[160px] flex flex-col justify-center">
-                <div className={cn(
-                  "grid grid-cols-1 md:grid-cols-2 gap-8 transition-all duration-300",
-                  !currentUser && "filter blur-[6.5px] select-none pointer-events-none"
-                )}>
-                  <div className="space-y-3">
-                    {pro.phone && (
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Phone className="w-3.5 h-3.5 text-cyan-500/70 shrink-0" />
-                        <a href={`tel:${pro.phone}`} className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium truncate min-w-0" title={pro.phone}>{pro.phone}</a>
-                      </div>
-                    )}
-                    {pro.whatsapp && (
-                      <div className="flex items-center gap-3 min-w-0">
-                        <svg className="w-4 h-4 text-[#25D366]/80 fill-current shrink-0" viewBox="0 0 24 24">
-                          <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z"/>
-                        </svg>
-                        <a href={`https://wa.me/${pro.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium truncate min-w-0" title={pro.whatsapp}>{pro.whatsapp}</a>
-                      </div>
-                    )}
-                    {pro.email && (
-                      <div className="flex items-start gap-3 min-w-0">
-                        <Mail className="w-3.5 h-3.5 text-brand-blue/70 shrink-0 mt-1" />
-                        <a href={`mailto:${pro.email}`} className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0" title={pro.email}>{pro.email}</a>
-                      </div>
-                    )}
-                    {pro.website && (
-                      <div className="flex items-start gap-3 min-w-0">
-                        <Link className="w-3.5 h-3.5 text-slate-400/70 shrink-0 mt-1" />
-                        <a 
-                          href={pro.website.startsWith('http') ? pro.website : `https://${pro.website}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0"
-                          title={pro.website}
-                        >
-                          {pro.website.replace(/^https?:\/\/(www\.)?/, '')}
-                        </a>
-                      </div>
-                    )}
-                    {pro.instagram && (
-                      <div className="flex items-start gap-3 min-w-0">
-                        <Instagram className="w-3.5 h-3.5 text-pink-500/70 shrink-0 mt-1" />
-                        <a 
-                          href={pro.instagram.startsWith('http') ? pro.instagram : `https://instagram.com/${pro.instagram.replace(/^@/, '')}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0"
-                          title={pro.instagram}
-                        >
-                          {pro.instagram.startsWith('@') ? pro.instagram : `@${pro.instagram}`}
-                        </a>
-                      </div>
-                    )}
-                    {pro.facebook && (
-                      <div className="flex items-start gap-3 min-w-0">
-                        <Facebook className="w-3.5 h-3.5 text-blue-600/70 shrink-0 mt-1" />
-                        <a 
-                          href={pro.facebook.startsWith('http') ? pro.facebook : `https://facebook.com/${pro.facebook}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0"
-                          title={pro.facebook}
-                        >
-                          {pro.facebook.replace(/^https?:\/\/(www\.)?(facebook\.com\/)?/, '')}
-                        </a>
-                      </div>
-                    )}
-                    {pro.languages && Array.isArray(pro.languages) && pro.languages.length > 0 && (
-                      <div className="flex items-center gap-3">
-                        <Globe className="w-3.5 h-3.5 text-slate-400/70" />
-                        <div className="flex flex-wrap gap-2">
-                          {pro.languages.map(lang => (
-                            <span key={lang} className="text-sm text-slate-500 font-medium">{lang}</span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    {pro.location && (
-                      <>
-                        <a 
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pro.location)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-start gap-3 group/loc cursor-pointer"
-                        >
-                          <MapPin className="w-3.5 h-3.5 text-rose-500/70 group-hover/loc:text-rose-500 transition-colors mt-0.5" />
-                          <span className="text-sm text-slate-500 group-hover/loc:text-brand-blue transition-colors underline decoration-slate-200 underline-offset-4 font-medium leading-relaxed">{pro.location}</span>
-                        </a>
-                        
-                        {/* Mini Map */}
-                        {pro.coordinates && (
-                          <div className="w-full h-32 rounded-2xl overflow-hidden border border-slate-100 shadow-sm relative group/map">
-                            <Map
-                              defaultCenter={pro.coordinates}
-                              defaultZoom={15}
-                              gestureHandling={'none'}
-                              disableDefaultUI={true}
-                              mapId="MINI_MAP"
-                              className="w-full h-full"
-                            >
-                              <AdvancedMarker position={pro.coordinates}>
-                                <Pin background="#E11D48" glyphColor="#fff" borderColor="#BE123D" />
-                              </AdvancedMarker>
-                            </Map>
-                            <div className="absolute inset-0 bg-transparent cursor-pointer" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pro.location!)}`, '_blank')} />
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-                {!currentUser && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-white/45 backdrop-blur-[4px] rounded-2xl text-center z-10 transition-all">
-                    <div className="w-11 h-11 rounded-full bg-brand-blue/10 flex items-center justify-center text-brand-blue mb-2 shadow-sm animate-pulse">
-                      <Lock className="w-5 h-5 stroke-[2.5px]" />
-                    </div>
-                    <p className="text-sm font-semibold text-slate-950 tracking-tight mb-4 max-w-xs mx-auto">Join our community for free to reveal full information and testimonials</p>
-                    <button 
-                      onClick={() => { onClose(); onNavigate('login'); }}
-                      className="px-5 py-2.5 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-[10px] font-semibold uppercase tracking-wider shadow-lg shadow-brand-blue/25 transition-all active:scale-95 flex items-center gap-1.5"
-                    >
-                      <Lock className="w-3.5 h-3.5" /> Sign up for free to Unlocked
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <section className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-brand-blue" />
-                  <h4 className="text-lg font-semibold text-slate-900 font-display uppercase tracking-wider">About</h4>
-                </div>
-                <div className="markdown-body">
-                  <SimpleMarkdown>{pro.bio}</SimpleMarkdown>
-                </div>
-              </section>
-
-              {/* Reviews Section */}
-              <section className="space-y-6 pt-6">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-2 h-2 rounded-full bg-brand-yellow shrink-0" />
-                    <h4 className="text-lg font-semibold text-slate-900 font-display uppercase tracking-wider">Testimonials</h4>
-                    <span className="text-xs bg-slate-100/80 border border-slate-200 text-slate-500 px-2 py-0.5 rounded-full font-bold font-mono">
-                      {localReviews.length}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="relative">
-                  <div 
-                    onTouchStart={handleTouchStart}
-                    onTouchMove={handleTouchMove}
-                    onTouchEnd={handleTouchEnd}
-                    className={cn(
-                      "space-y-4 transition-all duration-300 touch-pan-y",
-                      !currentUser && "filter blur-[7px] select-none pointer-events-none"
-                    )}
-                  >
-                    {localReviews.length > 0 ? (
-                      localReviews.slice(reviewCarouselIndex * 3, reviewCarouselIndex * 3 + 3).map((review) => (
-                        <div key={review.id} className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100 space-y-3 animate-in fade-in duration-300">
-                          <div className="flex justify-between items-start">
-                            <div className="space-y-1">
-                              <div 
-                                className={cn(
-                                  "font-bold text-slate-900 flex items-center gap-2 transition-colors",
-                                  review.isChatAvailable 
-                                    ? "cursor-pointer hover:text-brand-blue group/author" 
-                                    : "cursor-default"
-                                )}
-                                onClick={() => {
-                                  if (!review.isChatAvailable) return;
-                                  onNavigate('messages', { 
-                                    chat: {
-                                      id: `chat-${review.id}`,
-                                      userId: review.userId, // Direct user ID mapping if available
-                                      name: review.author, // RAW NAME for lookup as backup
-                                      displayName: formatName(review.author), // Formatted name for display
-                                      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formatName(review.author))}&background=random`,
-                                      online: true,
-                                      time: 'just now',
-                                      lastMsg: `Hello ${formatName(review.author)}! I saw your review for ${pro.name}.`,
-                                      returnToProId: pro.id
-                                    }
-                                  });
-                                  onClose();
-                                }}
-                              >
-                                {formatName(review.author)}
-                                {review.isChatAvailable && (
-                                  <div className={cn(
-                                    "w-6 h-6 rounded-full flex items-center justify-center transition-colors",
-                                    (review.userId && (blockedUsers.includes(review.userId) || usersWhoBlockedMe.includes(review.userId)))
-                                      ? "bg-slate-50 cursor-not-allowed"
-                                      : "bg-slate-100 group-hover/author:bg-brand-blue/10"
-                                  )}>
-                                    <MessageSquare className={cn(
-                                      "w-3.5 h-3.5 transition-all",
-                                      (review.userId && (blockedUsers.includes(review.userId) || usersWhoBlockedMe.includes(review.userId)))
-                                        ? "text-slate-250"
-                                        : "text-slate-400 group-hover/author:text-brand-blue"
-                                    )} />
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-0.5">
-                                {[1, 2, 3, 4, 5].map((s) => (
-                                  <Star key={s} className={cn("w-3 h-3", s <= review.rating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200")} />
-                                ))}
-                              </div>
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{review.date}</span>
-                          </div>
-                          <p className="text-sm text-slate-600 leading-relaxed italic">"{review.comment}"</p>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="py-12 text-center space-y-3 bg-slate-50/30 rounded-3xl border border-dashed border-slate-200">
-                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
-                          <MessageCircle className="w-6 h-6 text-slate-200" />
-                        </div>
-                        <p className="text-sm text-slate-400 font-medium italic">No testimonials yet. Be the first to share your experience!</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {localReviews.length > 3 && (
-                    <div className="flex justify-center mt-6 animate-in fade-in duration-300">
-                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 p-1 rounded-xl shadow-sm">
-                        <button
-                          onClick={() => setReviewCarouselIndex((prev) => Math.max(0, prev - 1))}
-                          disabled={reviewCarouselIndex === 0}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-950 hover:bg-white disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-500 transition-all shadow-none disabled:shadow-none hover:shadow-xs active:scale-95 animate-none"
-                          title="Previous reviews"
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <span className="text-[11px] font-bold text-slate-600 px-2.5 font-mono tracking-tight whitespace-nowrap select-none">
-                          {reviewCarouselIndex + 1} / {Math.ceil(localReviews.length / 3)}
-                        </span>
-                        <button
-                          onClick={() => setReviewCarouselIndex((prev) => Math.min(Math.ceil(localReviews.length / 3) - 1, prev + 1))}
-                          disabled={reviewCarouselIndex + 1 >= Math.ceil(localReviews.length / 3)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-950 hover:bg-white disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-500 transition-all shadow-none disabled:shadow-none hover:shadow-xs active:scale-95 animate-none"
-                          title="Next reviews"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {!currentUser && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/45 backdrop-blur-[4px] rounded-3xl p-6 text-center z-10 transition-all">
-                      <div className="w-11 h-11 rounded-full bg-brand-blue/10 flex items-center justify-center text-brand-blue mb-2 shadow-sm animate-pulse">
-                        <Lock className="w-5 h-5 stroke-[2.5px]" />
-                      </div>
-                      <p className="text-sm font-semibold text-slate-950 tracking-tight text-center px-4 mb-4">Join our community for free to reveal full information and testimonials</p>
-                      <button 
-                        onClick={() => { onClose(); onNavigate('login'); }}
-                        className="px-5 py-2.5 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-[10px] font-semibold uppercase tracking-wider shadow-lg shadow-brand-blue/25 transition-all active:scale-95 flex items-center gap-1.5 justify-center mx-auto"
-                      >
-                        <Lock className="w-3.5 h-3.5" /> Sign up for free to Unlocked
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </section>
-            </div>
-
-            {currentUser && (
-              <div className="space-y-6">
-                <motion.div 
-                  layout
-                  className="bg-slate-50 rounded-3xl p-8 border border-slate-100 space-y-6 overflow-hidden"
-                >
-                  <div className="space-y-2">
-                    <h4 className="text-lg font-bold text-slate-900 leading-tight">Experience with this professional?</h4>
-                    <p className="text-sm text-slate-500 font-medium">Help the community by sharing your feedback about {pro.name}.</p>
-                  </div>
-
-                  <AnimatePresence mode="wait">
-                    {reviewSuccess ? (
-                      <motion.div
-                        key="success-message"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-8 text-center space-y-4"
-                      >
-                        <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20 rotate-3">
-                          <Check className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="space-y-2">
-                          <h4 className="text-emerald-900 font-bold text-lg">Sent for moderation</h4>
-                          <p className="text-emerald-700/80 text-sm leading-relaxed px-4">
-                            Thank you! Your testimonial has been submitted for moderation and will be published once approved by an administrator.
-                          </p>
-                        </div>
-                        <button 
-                          onClick={() => setReviewSuccess(false)}
-                          className="px-6 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-500/10 hover:bg-emerald-600 transition-all active:scale-95"
-                        >
-                          Understood
-                        </button>
-                      </motion.div>
-                    ) : hasAlreadyReviewed ? (
-                      <motion.div
-                        key="already-reviewed"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="bg-brand-blue/5 border border-brand-blue/10 rounded-2xl p-6 text-center space-y-3"
-                      >
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center mx-auto shadow-sm">
-                          <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="text-slate-900 font-bold text-sm">Review Submitted</h4>
-                          <p className="text-slate-500 text-xs leading-relaxed px-4">
-                            You have already shared your experience with {pro.name}. Thank you for your contribution to our community!
-                          </p>
-                        </div>
-                      </motion.div>
-                    ) : !isWritingReview ? (
-                      <motion.button 
-                        key="write-btn"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        onClick={() => setIsWritingReview(true)}
-                        disabled={checkingReview}
-                        className="w-full py-4 bg-white text-slate-900 border-2 border-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-900 hover:text-white transition-all active:scale-95 shadow-sm disabled:opacity-50"
-                      >
-                        <Star className="w-4 h-4" />
-                        {checkingReview ? 'Checking...' : 'Write a Review'}
-                      </motion.button>
-                    ) : (
-                      <motion.div 
-                        key="review-form"
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="space-y-6"
-                      >
-                        {reviewError && (
-                          <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl space-y-3 text-left">
-                            <div className="flex items-start gap-2.5">
-                              <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
-                              <div className="space-y-1">
-                                <p className="text-xs font-bold text-rose-800">Error submitting review</p>
-                                <p className="text-xs text-rose-600 font-medium leading-relaxed">{reviewError}</p>
-                              </div>
-                            </div>
-                            
-                            {(reviewError.toLowerCase().includes('bigint') || reviewError.toLowerCase().includes('22p02')) && (
-                              <div className="bg-white/90 p-4 rounded-xl border border-rose-200 mt-2 space-y-2.5 font-sans">
-                                <p className="text-[10px] font-extrabold text-[#00C2A8] uppercase tracking-wider flex items-center gap-1.5">
-                                  <ShieldAlert className="w-3.5 h-3.5" /> Dynamic DB Solution Found
-                                </p>
-                                <p className="text-[11px] text-slate-600 leading-relaxed">
-                                  A legacy or custom-named trigger is still active on your <code>testimonies</code> or <code>professionals</code> table, casting parameters as <code>bigint</code> and blocking your reviews. 
-                                  Running this <strong>all-powerful dynamic script</strong> in your <strong>Supabase SQL Editor</strong> will search for and drop <strong>every single trigger</strong> on those tables regardless of its name:
-                                </p>
-                                <pre className="p-3 bg-slate-950 text-slate-100 text-[10px] font-mono rounded-lg overflow-x-auto whitespace-pre select-all max-h-52 border border-slate-800">
-{`-- 1. DYNAMICALLY DROP ALL TRIGGERS ON 'testimonies' AND 'professionals' TABLES
-DO $$ 
-DECLARE 
-    rt RECORD;
-BEGIN
-    FOR rt IN (
-        SELECT trigger_name, event_object_table, trigger_schema
-        FROM information_schema.triggers 
-        WHERE event_object_table IN ('testimonies', 'professionals')
-    ) LOOP
-        EXECUTE 'DROP TRIGGER IF EXISTS ' || quote_ident(rt.trigger_name) || ' ON ' || quote_ident(rt.trigger_schema) || '.' || quote_ident(rt.event_object_table) || ' CASCADE;';
-    END LOOP;
-END $$;
-
--- 2. DROP THE KNOWN DEPRECATED FUNCTION SIGNATURES SAFELY
-DROP FUNCTION IF EXISTS public.sync_testimonies_stats() CASCADE;
-DROP FUNCTION IF EXISTS public.update_professional_rating() CASCADE;
-DROP FUNCTION IF EXISTS public.testimonies_sync_stats() CASCADE;
-DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`}
-                                </pre>
-                                <button 
-                                  type="button"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(`-- 1. DYNAMICALLY DROP ALL TRIGGERS ON 'testimonies' AND 'professionals' TABLES
-DO $$ 
-DECLARE 
-    rt RECORD;
-BEGIN
-    FOR rt IN (
-        SELECT trigger_name, event_object_table, trigger_schema
-        FROM information_schema.triggers 
-        WHERE event_object_table IN ('testimonies', 'professionals')
-    ) LOOP
-        EXECUTE 'DROP TRIGGER IF EXISTS ' || quote_ident(rt.trigger_name) || ' ON ' || quote_ident(rt.trigger_schema) || '.' || quote_ident(rt.event_object_table) || ' CASCADE;';
-    END LOOP;
-END $$;
-
--- 2. DROP THE KNOWN DEPRECATED FUNCTION SIGNATURES SAFELY
-DROP FUNCTION IF EXISTS public.sync_testimonies_stats() CASCADE;
-DROP FUNCTION IF EXISTS public.update_professional_rating() CASCADE;
-DROP FUNCTION IF EXISTS public.testimonies_sync_stats() CASCADE;
-DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`);
-                                    alert('Fix-it SQL command copied to clipboard!');
-                                  }}
-                                  className="w-full py-2.5 bg-slate-900 text-white hover:bg-slate-800 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5"
-                                >
-                                  Copy Fix-it SQL
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="flex justify-center gap-2 py-2">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <button
-                              key={star}
-                              onMouseEnter={() => setHoveredRating(star)}
-                              onMouseLeave={() => setHoveredRating(0)}
-                              onClick={() => setRating(star)}
-                              className="transition-transform active:scale-90"
-                            >
-                              <Star 
-                                className={cn(
-                                  "w-8 h-8 transition-colors",
-                                  (hoveredRating || rating) >= star ? "fill-amber-400 text-amber-400" : "text-slate-200"
-                                )} 
-                              />
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className="space-y-3">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Your Feedback</label>
-                          <textarea 
-                            placeholder="Tell us about your experience..." 
-                            value={comment}
-                            onChange={(e) => setComment(e.target.value)}
-                            className="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:ring-2 focus:ring-brand-blue outline-none h-32 text-sm font-medium resize-none shadow-inner" 
-                          />
-                        </div>
-
-                        <div className="flex gap-3 pt-2">
-                          <button 
-                            onClick={() => {
-                              setIsWritingReview(false);
-                              setReviewError(null);
-                            }}
-                            className="flex-1 py-3 bg-white text-slate-500 rounded-xl text-sm font-bold border border-slate-200 hover:bg-slate-50 transition-all"
-                          >
-                            Cancel
-                          </button>
-                          <button 
-                            disabled={!rating || !comment.trim() || isSubmitting}
-                            onClick={async () => {
-                              setIsSubmitting(true);
-                              setReviewError(null);
-                              const name = userProfile?.full_name || currentUser?.email?.split('@')[0] || 'Anonymous Member';
-                              const email = currentUser?.email || '';
-                              const finalAuthorName = email ? `${name}|${email}` : name;
-                              try {
-                                await proService.addTestimony({
-                                  pro_id: pro.id,
-                                  author: finalAuthorName,
-                                  rating: rating,
-                                  comment: comment
-                                }, email);
-
-                                setReviewSuccess(true);
-                                setHasAlreadyReviewed(true);
-                                setIsWritingReview(false);
-                                setRating(0);
-                                setComment('');
-                              } catch (err: any) {
-                                console.error('Failed to submit review:', err);
-                                setReviewError(err.message || 'An error occurred while posting your testimonial. Please try again.');
-                              } finally {
-                                setIsSubmitting(false);
-                              }
-                            }}
-                            className="flex-1 py-3 bg-brand-blue text-white rounded-xl text-sm font-bold shadow-lg shadow-brand-blue/20 active:scale-95 transition-all disabled:opacity-50"
-                          >
-                            {isSubmitting ? 'Posting...' : 'Post Review'}
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              </div>
-            )}
-          </div>
-        </div>
-      </motion.div>
-    </div>
-  </motion.div>
-);
-}
-
-function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEvents }: { initialEventId?: string | null, onModalClose?: () => void, scrollToTop?: () => void, events?: Event[] }) {
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(() => {
-    if (initialEventId && propEvents && propEvents.length > 0) {
-      return propEvents.find(e => String(e.id) === String(initialEventId)) || null;
-    }
-    return null;
-  });
-  const [events, setEvents] = useState<Event[]>(propEvents && propEvents.length > 0 ? propEvents : (isSupabaseConfigured ? [] : MOCK_EVENTS));
-  const [loading, setLoading] = useState(!propEvents || propEvents.length === 0);
-  const [sharedEventId, setSharedEventId] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Only fetch if not provided via props or if they're empty and we're configured
-    if (propEvents && propEvents.length > 0) {
-      setEvents(propEvents);
-      setLoading(false);
-      return;
-    }
-
-    const loadEvents = async () => {
-      try {
-        const data = await eventService.getEvents();
-        if (data) {
-          setEvents(data);
-        }
-      } catch (err) {
-        console.error('Failed to load events:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadEvents();
-  }, [propEvents]);
-
-  useEffect(() => {
-    if (initialEventId && events.length > 0) {
-      const event = events.find(e => String(e.id) === String(initialEventId));
-      if (event) {
-        setSelectedEvent(event);
-      }
-    }
-  }, [initialEventId, events]);
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="space-y-1">
-        <h2 className="text-3xl font-bold font-display text-brand-navy tracking-tight">What's Up in Your City</h2>
-        <p className="text-slate-500 text-sm">Discover meetups and cultural events.</p>
-      </div>
-
-      {loading && events.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 space-y-4">
-          <Loader2 className="w-10 h-10 text-brand-blue animate-spin" />
-          <p className="text-slate-400 font-medium">Discovering best events...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto w-full">
-          {events.map(event => (
-          <div 
-            key={event.id} 
-            className="card bg-white group hover-lift cursor-pointer"
-            onClick={() => setSelectedEvent(event)}
-          >
-            <div className="h-40 overflow-hidden relative">
-              <img src={event.image} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-lg text-center min-w-[50px] flex flex-col justify-center items-center">
-                <p className="text-[10px] font-semibold text-blue-600 uppercase leading-tight">
-                  {event.start_date || event.date}
-                </p>
-                {event.end_date && (
-                  <>
-                    <p className="text-[8px] text-blue-600 font-normal lowercase leading-none my-0.5">to</p>
-                    <p className="text-[10px] font-semibold text-blue-600 uppercase leading-tight">
-                      {event.end_date}
-                    </p>
-                  </>
-                )}
-              </div>
-              <button 
-                type="button"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const shareUrl = `${window.location.origin}${window.location.pathname}?eventId=${event.id}`;
-                  const shareData = {
-                    title: event.title,
-                    text: event.title,
-                    url: shareUrl
-                  };
-                  
-                  if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-                    try {
-                      await navigator.share(shareData);
-                    } catch (err) {
-                      console.warn('Share sheets failed or cancelled:', err);
-                    }
-                  } else {
-                    try {
-                      await navigator.clipboard.writeText(shareUrl);
-                      setSharedEventId(event.id);
-                      setTimeout(() => setSharedEventId(null), 2000);
-                    } catch (err) {
-                      console.error('Failed to copy share link:', err);
-                    }
-                  }
-                }}
-                className={`absolute top-4 right-4 p-2 rounded-full backdrop-blur transition-all duration-300 z-10 ${
-                  sharedEventId === event.id 
-                    ? "bg-emerald-500 text-white scale-110 shadow-lg shadow-emerald-500/20" 
-                    : "bg-black/50 hover:bg-black/75 hover:scale-105 active:scale-90 text-white"
-                }`}
-                title="Share event"
-              >
-                {sharedEventId === event.id ? (
-                  <Check className="w-4 h-4" />
-                ) : (
-                  <ShareIcon className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-            <div className="p-4 space-y-3">
-              <div className="flex justify-between items-start">
-                <h4 className="font-bold text-lg">{event.title}</h4>
-                <span className="text-[10px] font-bold bg-brand-blue/5 text-brand-blue px-2 py-1 rounded-full">{event.category}</span>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-slate-500">
-                <div className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {event.start_time || event.time}
-                  {event.end_time && ` - ${event.end_time}`}
-                </div>
-                <div className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  {event.location}
-                </div>
-              </div>
-              <div className="flex justify-end pt-2">
-                <span className="text-brand-blue font-bold text-xs flex items-center gap-1 group-hover:gap-2 transition-all">
-                  View Details
-                  <ArrowRight className="w-3 h-3" />
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-      )}
-
-      <AnimatePresence>
-        {selectedEvent && (
-          <EventDetailModal 
-            event={selectedEvent} 
-            onClose={() => {
-              setSelectedEvent(null);
-              onModalClose?.();
-            }} 
-          />
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function EventDetailModal({ event, onClose }: { event: Event, onClose: () => void }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [shared, setShared] = useState(false);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
-    }
-  }, [event.id]);
-
-  return (
-    <motion.div 
-      ref={scrollRef}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.18 }}
-      className="fixed inset-x-0 bottom-[80px] md:inset-0 z-[100] overflow-y-auto overscroll-contain bg-slate-900/60 backdrop-blur-sm flex justify-center" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
-      onClick={onClose}
-    >
-      <div className="min-h-full w-full max-w-lg flex items-start justify-center p-4 py-8 md:py-16">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.92 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="relative bg-white w-full rounded-[32px] overflow-hidden shadow-2xl"
-          onClick={e => e.stopPropagation()}
-        >
-        <div className="h-48 relative">
-          <img src={event.image} alt="" className="w-full h-full object-cover" />
-          <div className="absolute top-4 right-4 flex items-center gap-2">
-            <button 
-              type="button"
-              onClick={async (e) => {
-                e.stopPropagation();
-                const shareUrl = `${window.location.origin}${window.location.pathname}?eventId=${event.id}`;
-                const shareData = {
-                  title: event.title,
-                  text: event.title,
-                  url: shareUrl
-                };
-                
-                if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-                  try {
-                    await navigator.share(shareData);
-                  } catch (err) {
-                    console.warn('Share sheets failed or cancelled:', err);
-                  }
-                } else {
-                  try {
-                    await navigator.clipboard.writeText(shareUrl);
-                    setShared(true);
-                    setTimeout(() => setShared(false), 2000);
-                  } catch (err) {
-                    console.error('Failed to copy share link:', err);
-                  }
-                }
-              }}
-              className={`p-2 backdrop-blur-md rounded-full text-white transition-all shadow-md active:scale-95 z-20 ${
-                shared 
-                  ? "bg-emerald-500 hover:bg-emerald-600 scale-105" 
-                  : "bg-white/20 hover:bg-white/40"
-              }`}
-            >
-              {shared ? (
-                <Check className="w-5 h-5" />
-              ) : (
-                <ShareIcon className="w-5 h-5" />
-              )}
-            </button>
-            <button 
-              onClick={onClose}
-              className="p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white transition-all shadow-md active:scale-95 z-20"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-        <div className="p-8 space-y-6">
-          <div className="space-y-2">
-            <div className="flex justify-between items-start">
-              <h2 className="text-2xl font-bold text-slate-900">{event.title}</h2>
-              <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue rounded-full text-[10px] font-bold uppercase tracking-wider">
-                {event.category}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-4 text-sm text-slate-500">
-              <div className="flex items-center gap-1.5 font-medium">
-                <Calendar className="w-4 h-4 text-brand-blue" />
-                {event.start_date || event.date}
-                {event.end_date && ` to ${event.end_date}`}
-              </div>
-              <div className="flex items-center gap-1.5 font-medium">
-                <Clock className="w-4 h-4 text-brand-blue" />
-                {event.start_time || event.time}
-                {event.end_time && ` - ${event.end_time}`}
-              </div>
-              <div className="flex items-center gap-1.5 font-medium">
-                <MapPin className="w-4 h-4 text-brand-blue" />
-                {event.location}
-              </div>
-            </div>
-          </div>
-
-          <div className="markdown-body">
-            <SimpleMarkdown>
-              {event.description || `Join us for ${event.title} at ${event.location}! This is a great opportunity to meet new people and enjoy the local atmosphere.`}
-            </SimpleMarkdown>
-          </div>
-
-          {event.coordinates && (
-            <div className="space-y-4">
-              <h3 className="font-bold text-slate-900">Location</h3>
-              <div className="h-48 w-full rounded-2xl overflow-hidden border border-slate-100 shadow-inner group">
-                <Map
-                  defaultCenter={event.coordinates}
-                  defaultZoom={15}
-                  gestureHandling="none"
-                  disableDefaultUI
-                  mapId="event_map"
-                >
-                  <AdvancedMarker position={event.coordinates}>
-                    <Pin background={'#0870B8'} glyphColor={'#FFFFFF'} borderColor={'#0870B8'} />
-                  </AdvancedMarker>
-                </Map>
-              </div>
-              <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                <Info className="w-3 h-3" />
-                {event.location}
-              </p>
-            </div>
-          )}
-
-          <div className="pt-4">
-            <button 
-              onClick={() => {
-                const title = encodeURIComponent(event.title);
-                const details = encodeURIComponent(event.description || '');
-                const location = encodeURIComponent(event.location);
-                const googleUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&location=${location}`;
-                window.open(googleUrl, '_blank');
-              }}
-              className="w-full py-4 bg-brand-blue text-white rounded-2xl font-bold text-sm shadow-xl shadow-brand-blue/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-            >
-              <Calendar className="w-4 h-4" />
-              Add to Calendar
-            </button>
-          </div>
-        </div>
-      </motion.div>
-      </div>
-    </motion.div>
-  );
-}
-
-const ICON_MAP: Record<string, () => React.JSX.Element> = {
-  RocketIcon,
-  PaperworkIcon,
-  FamilyIcon,
-  HealthIcon,
-  WorkIcon,
-  TipsIcon,
-  CityFunIcon,
-};
-
-function TopicIcon(name: string, sizeClass: string = "w-4 h-4") {
-  switch (name) {
-    case 'HomeIcon': return <Home className={sizeClass} />;
-    case 'PaperworkIcon': return <FileText className={sizeClass} />;
-    case 'TransportIcon': return <Car className={sizeClass} />;
-    case 'HealthIcon': return <HeartPulse className={sizeClass} />;
-    case 'FamilyIcon': return <Users className={sizeClass} />;
-    case 'SchoolsIcon': return <GraduationCap className={sizeClass} />;
-    case 'BankingIcon': return <CreditCard className={sizeClass} />;
-    case 'PetsIcon': return <Dog className={sizeClass} />;
-    default: return <BookOpen className={sizeClass} />;
-  }
-}
-
-function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuideId?: string | null, onModalClose?: () => void, scrollToTop?: () => void }) {
-  const [articles, setArticles] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [isNavigatedMode, setIsNavigatedMode] = useState(false);
-  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(() => initialGuideId || null);
-  const [showArticleModal, setShowArticleModal] = useState<boolean>(() => !!initialGuideId);
-
-  useEffect(() => {
-    let active = true;
-    const loadArticles = async () => {
-      try {
-        const raw = await guideService.getGuideCategories();
-        console.log('DEBUG: categories returned by guideService:', raw);
-        const flattened = raw.flatMap(cat => 
-          cat.articles
-            .filter((article: any) => article.isOnline !== false)
-            .map((article: any) => ({
-              ...article,
-              categoryId: cat.id,
-              category_id: cat.id,
-              categoryTitle: cat.title,
-              categoryColor: cat.color,
-            }))
-        );
-        if (active) {
-          setArticles(flattened);
-          setCategories(raw);
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('Failed to load articles:', err);
-        if (active) {
-          setError('Could not load guides, please try again later.');
-          setLoading(false);
-        }
-      }
-    };
-    loadArticles();
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    if (initialGuideId && articles.length > 0) {
-      const foundArticle = articles.find(art => String(art.id) === String(initialGuideId));
-        
-      if (foundArticle) {
-        setSelectedArticleId(initialGuideId);
-        setShowArticleModal(true);
-      }
-    }
-  }, [initialGuideId, articles]);
-
-  useEffect(() => {
-    scrollToTop?.();
-  }, []);
-
-  const handleCloseModal = () => {
-    setShowArticleModal(false);
-    if (initialGuideId) {
-      onModalClose?.();
-    }
-  };
-
-  const selectedArticle = useMemo(() => {
-    return articles.find(art => art.id === selectedArticleId) || null;
-  }, [selectedArticleId, articles]);
-
-  const filteredArticles = useMemo(() => {
-    let filtered = articles;
-    if (selectedCategory) {
-      filtered = filtered.filter((article: any) => article.categoryId === selectedCategory);
-    }
-    if (!searchQuery || typeof searchQuery !== 'string' || !searchQuery.trim()) return filtered;
-    
-    const query = searchQuery.toLowerCase();
-    return filtered.filter((article: any) => {
-      if (!article) return false;
-      const title = typeof article.title === 'string' ? article.title : '';
-      const excerpt = typeof article.excerpt === 'string' ? article.excerpt : '';
-      const content = typeof article.content === 'string' ? article.content : '';
-      return (
-        title.toLowerCase().includes(query) ||
-        excerpt.toLowerCase().includes(query) ||
-        content.toLowerCase().includes(query)
-      );
-    });
-  }, [articles, searchQuery, selectedCategory]);
-
-  if (loading) {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-3">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-        <p className="text-slate-500 font-medium text-sm">Loading guides...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-3">
-        <p className="text-red-500 font-medium text-sm text-center">{error}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="pb-32">
-      {isNavigatedMode && selectedCategory ? (
-        /* Category Sub-page Layout */
-        <div className="px-6 pt-6">
-          <button 
-            onClick={() => {
-              setIsNavigatedMode(false);
-              setSelectedCategory(null);
-            }}
-            className="flex items-center gap-2 text-slate-500 hover:text-brand-blue transition-colors mb-6 group"
-          >
-            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-brand-blue/10 transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-            </div>
-            <span className="text-sm font-bold">Back to all guides</span>
-          </button>
-          
-          {(() => {
-             const cat = categories.find(c => c.id === selectedCategory);
-             return (
-               <div className="space-y-6 mb-8">
-                 <div className="space-y-2">
-                   <div className="flex items-center gap-3">
-                     <div className={cat?.color.replace('bg-', 'text-') || 'text-brand-blue'}>
-                       {TopicIcon(cat?.icon_name || 'HomeIcon', 'w-10 h-10')}
-                     </div>
-                     <h2 className="text-2xl font-bold font-display text-brand-navy">{cat?.title}</h2>
-                   </div>
-                   <p className="text-slate-500 text-sm max-w-xl">{cat?.description}</p>
-                 </div>
-
-                 <div className="pt-4">
-                   <h3 className="font-bold text-slate-800 mb-4">{cat?.title} Articles</h3>
-                   {filteredArticles.length > 0 ? (
-                     <div className="space-y-4">
-                       {filteredArticles.map((article: any) => (
-                         <div 
-                           key={article.id} 
-                           onClick={() => {
-                             setSelectedArticleId(article.id);
-                             setShowArticleModal(true);
-                           }}
-                           className="flex items-center gap-4 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm cursor-pointer hover:border-brand-blue/30 transition-all group"
-                         >
-                           {article.imageUrl && (
-                             <img 
-                               src={article.imageUrl} 
-                               alt={article.title} 
-                               className="w-20 h-20 md:w-32 md:h-32 rounded-xl object-cover" 
-                               referrerPolicy="no-referrer"
-                             />
-                           )}
-                           <div className="flex-1 min-w-0 pr-2">
-                             <h4 className="font-bold text-slate-950 text-sm line-clamp-2 leading-tight group-hover:text-brand-blue transition-colors">
-                               {article.title}
-                             </h4>
-                             <p className="text-[10px] text-slate-500 line-clamp-2 mt-1">
-                               {article.excerpt}
-                             </p>
-                           </div>
-                           <ChevronRight className="w-5 h-5 text-slate-300 stroke-[1.5]" />
-                         </div>
-                       ))}
-                     </div>
-                   ) : (
-                     <div className="py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center">
-                       <p className="text-slate-500 text-sm">No articles available in this category yet.</p>
-                     </div>
-                   )}
-                 </div>
-               </div>
-             );
-          })()}
-        </div>
-      ) : (
-        /* Main Guides Dashboard Layout */
-        <>
-          <div className="px-6 pt-6 pb-2 space-y-6">
-            {/* Page Header */}
-            <div className="space-y-1">
-              <h2 className="text-3xl font-bold font-display text-brand-navy tracking-tight">Ready to settle into your City?</h2>
-              <p className="text-slate-500 text-sm">Find practical guides, local tips and expert advice to help you feel at home faster.</p>
-            </div>
-
-            {/* Modern Search */}
-            <div className="flex items-center gap-2.5 max-w-xl lg:mx-0 mx-auto">
-              <div className="relative flex-1">
-                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search guides"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-normal text-sm"
-                />
-              </div>
-              <button
-                onClick={() => {
-                  document.getElementById('all-guides-section')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="bg-brand-blue text-white font-semibold text-sm px-5 py-3.5 rounded-2xl flex items-center gap-2 hover:bg-brand-blue/90 active:scale-95 transition-all duration-200 shadow-sm whitespace-nowrap"
-              >
-                <Search className="h-4 w-4" />
-                <span>Search</span>
-              </button>
-            </div>
-          </div>
-
-          {/* "Start Here" Cards */}
-          <div className="px-6 pt-4 pb-2">
-            <div className="flex items-center gap-2 mb-1">
-               <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-               <h3 className="font-bold text-slate-900">Start here</h3>
-            </div>
-            <p className="text-sm text-slate-500 mb-4">The essentials every newcomer needs</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { id: 'housing', title: 'Finding a home', desc: 'Everything you need to know about housing in Valencia.', icon: 'HomeIcon', color: 'text-emerald-500', bg: 'bg-emerald-50' },
-                { id: 'paperwork', title: 'Getting your paperwork sorted', desc: 'Visas, registrations and official processes explained.', icon: 'PaperworkIcon', color: 'text-purple-500', bg: 'bg-purple-50' },
-                { id: 'transport', title: 'Getting around Valencia', desc: 'Public transport, cycling, driving and more.', icon: 'TransportIcon', color: 'text-blue-500', bg: 'bg-blue-50' },
-                { id: 'healthcare', title: 'Accessing healthcare', desc: 'How the system works and how to get started.', icon: 'HealthIcon', color: 'text-orange-500', bg: 'bg-orange-50' },
-              ].map((item) => {
-                const isSelected = selectedCategory === item.id && isNavigatedMode;
-                return (
-                  <button 
-                    key={item.id} 
-                    onClick={() => {
-                      setSelectedCategory(item.id);
-                      setIsNavigatedMode(true);
-                      scrollToTop?.();
-                    }}
-                    className={`${item.bg} p-5 rounded-3xl border border-slate-100 flex flex-col gap-3 relative min-h-[200px] text-left transition-all hover:scale-[1.02] active:scale-95 group shadow-sm hover:shadow-md`}
-                  >
-                    <div className={item.color}>{TopicIcon(item.icon, "w-9 h-9")}</div>
-                    <h4 className="font-extrabold text-sm text-brand-navy leading-tight">{item.title}</h4>
-                    <p className="text-xs text-slate-600 leading-snug">{item.desc}</p>
-                    <div className="pt-2 flex justify-end mt-auto">
-                      <ArrowRight className={`w-5 h-5 ${item.color} group-hover:translate-x-1 transition-transform`} />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Browse by topic */}
-          <div className="px-6 pt-4 pb-2">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-slate-900">Browse by topic</h3>
-              {selectedCategory && !isNavigatedMode && (
-                <button 
-                  onClick={() => setSelectedCategory(null)}
-                  className="text-[10px] font-bold text-brand-blue hover:underline"
-                >
-                  Clear Filter
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {categories.map((cat: any) => {
-                const isSelected = selectedCategory === cat.id && !isNavigatedMode;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => {
-                      const newCat = isSelected ? null : cat.id;
-                      setSelectedCategory(newCat);
-                      setIsNavigatedMode(false);
-                      if (newCat) {
-                        setTimeout(() => {
-                          document.getElementById('all-guides-section')?.scrollIntoView({ behavior: 'smooth' });
-                        }, 50);
-                      } else {
-                        scrollToTop?.();
-                      }
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-full border text-[11px] font-semibold shadow-sm transition-all ${
-                      isSelected 
-                        ? 'bg-brand-blue text-white border-brand-blue active:scale-95' 
-                        : 'bg-white text-slate-700 border-slate-100 hover:border-brand-blue/30 active:scale-95'
-                    }`}
-                  >
-                     <span className={isSelected ? 'text-white' : cat.color.replace('bg-', 'text-')}>
-                       {TopicIcon(cat.icon_name, "w-3.5 h-3.5")}
-                     </span>
-                     {cat.title}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Main Articles List */}
-          <div id="all-guides-section" className="px-6 pt-6 scroll-mt-6">
-            <h3 className="font-bold text-slate-900 mb-4">
-              {selectedCategory && !isNavigatedMode
-                ? `${categories.find(c => c.id === selectedCategory)?.title || 'Selected'} Guides` 
-                : 'All guides'}
-            </h3>
-            {filteredArticles.length > 0 ? (
-              <div className="space-y-4">
-                {filteredArticles.map((article: any) => (
-                  <div 
-                    key={article.id} 
-                    onClick={() => {
-                      setSelectedArticleId(article.id);
-                      setShowArticleModal(true);
-                    }}
-                    className="flex items-center gap-4 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm cursor-pointer hover:border-brand-blue/30 transition-all group"
-                  >
-                    {article.imageUrl && (
-                      <img 
-                        src={article.imageUrl} 
-                        alt={article.title} 
-                        className="w-20 h-20 md:w-32 md:h-32 rounded-xl object-cover" 
-                        referrerPolicy="no-referrer"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0 pr-2">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-brand-blue">{article.categoryTitle}</span>
-                      <h4 className="font-bold text-slate-950 text-sm line-clamp-2 leading-tight group-hover:text-brand-blue transition-colors">
-                        {article.title}
-                      </h4>
-                      <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
-                        {article.excerpt}
-                      </p>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-slate-300 stroke-[1.5]" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center p-12 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200 text-center space-y-4 max-w-lg mx-auto py-16">
-                <div className="p-4 bg-white rounded-full shadow-sm text-slate-400">
-                  <Search className="w-8 h-8" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-bold text-slate-800 text-lg">No guides found</h3>
-                  <p className="text-slate-500 text-sm max-w-xs mx-auto">
-                    We couldn't find any articles matching your search query. Try using another keyword.
-                  </p>
-                </div>
-                <button 
-                  onClick={() => {
-                    setSearchQuery('');
-                  }}
-                  className="px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-bold hover:bg-brand-blue/90 transition-all shadow-sm"
-                >
-                  Reset Search
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="text-center pt-4">
-            <p className="text-slate-400 text-sm font-medium italic">More articles to come...</p>
-          </div>
-        </>
-      )}
-
-
-
-      {/* Article Modal */}
-      <ExpertGuideModal 
-        isOpen={showArticleModal} 
-        onClose={handleCloseModal} 
-        article={selectedArticle}
-      />
-    </div>
-  );
-}
-
-function MarketplaceView({ onAddAd, ads, onSelectAd, scrollToTop }: { onAddAd: () => void, ads: Ad[], onSelectAd: (ad: Ad) => void, scrollToTop?: () => void }) {
-  useEffect(() => {
-    scrollToTop?.();
-  }, []);
-
-  return (
-    <div className="min-h-[80vh] flex items-center justify-center p-6">
-      <div className="max-w-xl w-full text-center space-y-12">
-        {/* Animated Icon Group */}
-        <div className="relative inline-block">
-          <motion.div
-            animate={{ 
-              scale: [1, 1.05, 1],
-              rotate: [0, 5, -5, 0]
-            }}
-            transition={{ 
-              duration: 6, 
-              repeat: Infinity,
-              ease: "easeInOut" 
-            }}
-            className="w-32 h-32 bg-brand-blue/5 rounded-[40px] flex items-center justify-center relative z-10"
-          >
-            <ShoppingBag className="w-12 h-12 text-brand-blue" />
-          </motion.div>
-          
-          {/* Decorative elements */}
-          <motion.div 
-            animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 4, repeat: Infinity }}
-            className="absolute -top-4 -right-4 w-12 h-12 bg-rose-100 rounded-full blur-2xl"
-          />
-          <motion.div 
-            animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
-            transition={{ duration: 5, repeat: Infinity, delay: 1 }}
-            className="absolute -bottom-8 -left-8 w-20 h-20 bg-brand-blue/20 rounded-full blur-3xl"
-          />
-        </div>
-
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <motion.p 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-[10px] font-black text-brand-blue uppercase tracking-[0.5em]"
-            >
-              Exclusive Community Area
-            </motion.p>
-            <motion.h2 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="text-4xl md:text-6xl font-black font-display text-brand-navy tracking-tight"
-            >
-              Marketplace <br/>
-              <span className="text-brand-blue italic font-medium">Coming Soon.</span>
-            </motion.h2>
-          </div>
-          
-          <motion.p 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="text-slate-500 text-sm md:text-base leading-relaxed max-w-md mx-auto"
-          >
-            We're building a secure, private space for our community to trade, share, and connect. Stay tuned for the grand opening.
-          </motion.p>
-        </div>
-
-        {/* Status indicator */}
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="flex items-center justify-center gap-3"
-        >
-          <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-brand-blue animate-pulse" />
-            <div className="w-1.5 h-1.5 rounded-full bg-brand-blue/40" />
-            <div className="w-1.5 h-1.5 rounded-full bg-brand-blue/20" />
-          </div>
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            System Refinement in Progress
-          </span>
-        </motion.div>
-      </div>
-    </div>
-  );
-}
-
-function FeedbackSubPage({ currentUser, onBack }: { currentUser: any, onBack: () => void }) {
-  const [category, setCategory] = useState<string>('suggestion');
-  const [comment, setComment] = useState<string>('');
-  const [submitting, setSubmitting] = useState<boolean>(false);
-  const [submitted, setSubmitted] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [suggestedSql, setSuggestedSql] = useState<string | null>(null);
-
-  const categories = [
-    { id: 'bug', label: 'Bug Report', icon: AlertCircle, color: 'text-rose-500 bg-rose-50 border-rose-100' },
-    { id: 'suggestion', label: 'Suggestion', icon: Lightbulb, color: 'text-amber-500 bg-amber-50 border-amber-100' },
-    { id: 'compliment', label: 'Compliment', icon: Sparkles, color: 'text-teal-500 bg-teal-50 border-teal-100' },
-    { id: 'other', label: 'Other', icon: HelpCircle, color: 'text-slate-500 bg-slate-50 border-slate-100' },
-  ];
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!comment.trim()) {
-      setError('Please write a brief comment');
-      return;
-    }
-
-    setSubmitting(true);
-    setError(null);
-    setSuggestedSql(null);
-
-    try {
-      await feedbackService.submitFeedback({
-        user_id: currentUser?.id,
-        user_email: currentUser?.email || 'anonymous',
-        category,
-        comment: comment.trim(),
-      });
-      setSubmitted(true);
-    } catch (err: any) {
-      console.error('Error submitting feedback:', err);
-      if (err.code === 'RLS_ERROR') {
-        setError('Permission denied by Supabase database (RLS Policy).');
-        setSuggestedSql(err.sql);
-      } else {
-        setError(err.message || 'Could not submit feedback. Please try again.');
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (submitted) {
-    return (
-      <div className="flex flex-col items-center justify-center text-center space-y-6 py-12 px-4 max-w-md mx-auto">
-        <div className="w-16 h-16 bg-emerald-50 border border-emerald-100 text-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/10">
-          <CheckCircle2 className="w-10 h-10 text-emerald-500" />
-        </div>
-        <div className="space-y-2">
-          <h3 className="text-xl font-bold text-slate-900 font-display">Thank you for your feedback!</h3>
-          <p className="text-slate-500 text-xs sm:text-sm leading-relaxed">
-            Your insights have been saved successfully and help us improve the Unlocked experience for everyone.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onBack}
-          className="px-6 py-3 bg-brand-blue text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md shadow-brand-blue/10 hover:bg-blue-600"
-        >
-          Back to Profile
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto pb-10">
-        <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-6 text-left">
-          <div className="flex items-center gap-2 border-b border-slate-50 pb-3">
-            <MessageSquare className="w-5 h-5 text-[#00C2A8]" />
-            <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">Share Your Experience</h3>
-          </div>
-
-          {error && (
-            <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3">
-              <AlertCircle className={`w-5 h-5 shrink-0 text-rose-500 ${!suggestedSql ? 'animate-bounce' : ''}`} />
-              <div className="space-y-3 w-full">
-                <p className="text-xs font-bold tracking-tight text-rose-700">{error}</p>
-                {suggestedSql && (
-                  <div className="space-y-2 bg-white/50 p-3 rounded-xl border border-rose-100 mt-2">
-                    <p className="text-[10px] text-rose-600 font-bold uppercase tracking-wider">Solution: Run this in Supabase SQL Editor</p>
-                    <pre className="p-3 bg-slate-900 text-slate-100 text-[10px] font-mono rounded-lg overflow-x-auto whitespace-pre select-all">
-                      {suggestedSql}
-                    </pre>
-                    <p className="text-[9px] text-slate-500 italic">This will grant permission to the public role to submit feedback forms.</p>
-                    <button 
-                      onClick={() => {
-                        navigator.clipboard.writeText(suggestedSql);
-                        alert('SQL command copied to clipboard!');
-                      }}
-                      className="w-full py-2 bg-brand-blue text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-brand-blue-dark transition-colors shadow-sm"
-                    >
-                      Copy Fix-it SQL
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Categories Selection */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Type of Feedback</label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {categories.map((cat) => {
-                const Icon = cat.icon;
-                const isSelected = category === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setCategory(cat.id)}
-                    className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all active:scale-95 ${
-                      isSelected 
-                        ? `${cat.color} ring-2 ring-offset-2 ring-rose-500/10 scale-[1.02] shadow-sm` 
-                        : 'border-slate-100 bg-white text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5 shrink-0" />
-                    <span className="text-xs font-bold tracking-tight">{cat.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Comment Input */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex justify-between">
-              <span>Comments / Feedback</span>
-              <span className="text-slate-300 font-mono">{comment.length}/500</span>
-            </label>
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value.slice(0, 500))}
-              placeholder="Tell us what you like"
-              rows={5}
-              className="w-full px-4 py-3 bg-white border border-slate-200 focus:ring-2 focus:ring-rose-500/15 focus:border-[#00C2A8] rounded-2xl text-sm font-medium text-slate-700 outline-none transition-all placeholder:text-slate-300 resize-none leading-relaxed"
-            />
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 justify-end pt-2 border-t border-slate-50">
-            <button
-              type="button"
-              onClick={onBack}
-              className="px-6 py-3 bg-slate-50 hover:bg-slate-100 text-slate-500 text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || !comment.trim()}
-              className="px-6 py-3 bg-[#00C2A8] hover:bg-[#00ad95] disabled:bg-slate-205 text-white text-xs font-extrabold uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 shadow-md shadow-teal-500/10 disabled:opacity-50"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                'Submit Feedback'
-              )}
-            </button>
-          </div>
-        </div>
-      </form>
-      <div className="text-center mt-12 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Need help?</p>
-        <a 
-          href="mailto:hello@mycityunlocked.app" 
-          className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-blue transition-all group"
-        >
-          <span className="text-sm font-medium border-b border-slate-200 group-hover:border-brand-blue/30 pb-0.5">hello@mycityunlocked.app</span>
-        </a>
-      </div>
-    </>
-  );
-}
-
-function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProfileUpdate, onAddPro, allPros, refetchPros, unreadConversations = [] }: { scrollToTop?: () => void, onNavigate?: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, currentUser?: any, userProfile?: Profile | null, onProfileUpdate?: () => void, onAddPro?: () => void, allPros?: any[], refetchPros?: () => void, unreadConversations?: string[] }) {
-  const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
-  const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-  const userEmail = currentUser?.email || "";
-  const isAdmin = proService.isAdmin(userEmail) || userProfile?.is_admin;
-
-  const [editName, setEditName] = useState(userProfile?.full_name || "");
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
-  
-  const [selectedDocKey, setSelectedDocKey] = useState<string | null>(null);
-  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
-  const [docContent, setDocContent] = useState<string>('');
-  const [docTitle, setDocTitle] = useState<string>('');
-  const [isLoadingDoc, setIsLoadingDoc] = useState(false);
-
-  useEffect(() => {
-    if (selectedDocKey) {
-      setIsLoadingDoc(true);
-      documentService.getDocument(selectedDocKey)
-        .then(doc => {
-          setDocTitle(doc.title);
-          setDocContent(doc.content);
-        })
-        .catch(err => {
-          console.error('Error loading doc:', err);
-          setDocContent('Failed to load document.');
-        })
-        .finally(() => {
-          setIsLoadingDoc(false);
-        });
-    } else {
-      setDocContent('');
-      setDocTitle('');
-    }
-  }, [selectedDocKey]);
-
-  const [myTestimonies, setMyTestimonies] = useState<any[]>([]);
-  const [loadingTestimonies, setLoadingTestimonies] = useState(false);
-  const [editingTestimonyId, setEditingTestimonyId] = useState<string | number | null>(null);
-  const [editTestimonyRating, setEditTestimonyRating] = useState(0);
-  const [editTestimonyComment, setEditTestimonyComment] = useState("");
-  const [isUpdatingTestimony, setIsUpdatingTestimony] = useState(false);
-
-  useEffect(() => {
-    if (userProfile) {
-      setEditName(userProfile.full_name || "");
-    }
-  }, [userProfile]);
-
-  const [deletingId, setDeletingId] = useState<string | number | null>(null);
-  const [showConfirmAction, setShowConfirmAction] = useState<{ [key: string]: 'approve' | 'delete' | null }>({});
-  const [msg, setMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  const [conversations, setConversations] = useState<any[]>([]);
-  const [loadingConversations, setLoadingConversations] = useState(false);
-
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [activeSettingsView, setActiveSettingsView] = useState<'main' | 'security'>('main');
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [showSqlInstruction, setShowSqlInstruction] = useState(false);
-  const [copiedSql, setCopiedSql] = useState(false);
-
-  const sqlScript = `-- 1. Create public.archive_profiles table\\nCREATE TABLE IF NOT EXISTS public.archive_profiles (\\n  id uuid PRIMARY KEY,\\n  email text NOT NULL,\\n  full_name text,\\n  deleted_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL\\n);\\n\\n-- Enable Row Level Security (RLS)\\nALTER TABLE public.archive_profiles ENABLE ROW LEVEL SECURITY;\\n\\n-- 2. Create the delete function with automatic archiving\\n-- Ensure message constraints are cascading to handle user deletion\\nALTER TABLE public.messages DROP CONSTRAINT IF EXISTS messages_receiver_id_fkey;\\nALTER TABLE public.messages ADD CONSTRAINT messages_receiver_id_fkey FOREIGN KEY (receiver_id) REFERENCES auth.users(id) ON DELETE CASCADE;\\nALTER TABLE public.messages DROP CONSTRAINT IF EXISTS messages_sender_id_fkey;\\nALTER TABLE public.messages ADD CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES auth.users(id) ON DELETE CASCADE;\\n\\nCREATE OR REPLACE FUNCTION public.delete_own_user()\\nRETURNS void AS $$\\nBEGIN\\n  -- Archive the profile\\n  INSERT INTO public.archive_profiles (id, email, full_name, deleted_at)\\n  SELECT id, email, full_name, now()\\n  FROM public.profiles\\n  WHERE id = auth.uid()\\n  ON CONFLICT (id) DO NOTHING;\\n\\n  -- Delete from auth.users (will cascade delete public.profiles)\\n  DELETE FROM auth.users\\n  WHERE id = auth.uid();\\nEND;\\n$$ LANGUAGE plpgsql SECURITY DEFINER;\\n\\n-- 3. Create "avatars" storage bucket & configure delete/upload policies\\nINSERT INTO storage.buckets (id, name, public)\\nVALUES ('avatars', 'avatars', true)\\nON CONFLICT (id) DO NOTHING;\\n\\n-- Enable owners to read/write/delete avatars securely\\nDROP POLICY IF EXISTS "Public Select" ON storage.objects;\\nDROP POLICY IF EXISTS "Auth Insert" ON storage.objects;\\nDROP POLICY IF EXISTS "Auth Update" ON storage.objects;\\nDROP POLICY IF EXISTS "Auth Delete" ON storage.objects;\\n\\nCREATE POLICY "Public Select" ON storage.objects FOR SELECT TO public USING (bucket_id = 'avatars');\\nCREATE POLICY "Auth Insert" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'avatars');\\nCREATE POLICY "Auth Update" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'avatars') WITH CHECK (bucket_id = 'avatars');\\nCREATE POLICY "Auth Delete" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'avatars');`;
-
-  const fetchMyConversations = async () => {
-    if (!currentUser) return;
-    setLoadingConversations(true);
-    try {
-      const list = await chatService.getUserConversations(currentUser.id);
-      setConversations(list || []);
-    } catch (e) {
-      console.error('Error fetching my conversations:', e);
-    } finally {
-      setLoadingConversations(false);
-    }
-  };
-
-  const fetchMyTestimonies = async () => {
-    const name = userProfile?.full_name || currentUser?.email?.split('@')[0] || '';
-    if (!name) return;
-    setLoadingTestimonies(true);
-    try {
-      const list = await proService.getMyTestimonies(name, currentUser?.email || undefined);
-      setMyTestimonies(list);
-    } catch (e) {
-      console.error('Error fetching my testimonies:', e);
-    } finally {
-      setLoadingTestimonies(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeSubPage === 'My Account') {
-      fetchMyTestimonies();
-      fetchMyConversations();
-    }
-  }, [activeSubPage, userProfile]);
-
-  useEffect(() => {
-    if (activeSubPage !== 'Settings') {
-      setActiveSettingsView('main');
-    }
-  }, [activeSubPage]);
-
-  useEffect(() => {
-    scrollToTop?.();
-  }, [activeSubPage]);
-
-  const handlePasswordUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasswordError(null);
-    setPasswordSuccess(null);
-
-    if (!currentPassword) {
-      setPasswordError("Please enter your current password to continue.");
-      return;
-    }
-    if (!newPassword) {
-      setPasswordError("Please enter a new password.");
-      return;
-    }
-    if (newPassword.length < 6) {
-      setPasswordError("Password must be at least 6 characters long.");
-      return;
-    }
-    if (newPassword === currentPassword) {
-      setPasswordError("The new password must be different from your current password.");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError("Passwords do not match.");
-      return;
-    }
-
-    setIsUpdatingPassword(true);
-    try {
-      await authService.updatePassword(newPassword, currentPassword);
-      setPasswordSuccess("Password updated successfully!");
-      setTimeout(() => setPasswordSuccess(null), 5000);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (err: any) {
-      console.error("Error updating password:", err);
-      setPasswordError(err?.message || "Failed to update password. Make sure you are signed in.");
-    } finally {
-      setIsUpdatingPassword(false);
-    }
-  };
-
-  const handleAvatarClick = () => {
-    avatarInputRef.current?.click();
-  };
-
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentUser) return;
-
-    setIsUpdatingAvatar(true);
-    try {
-      // 1. Identify and cleanup OLD avatar if it exists
-      const oldAvatarUrl = userProfile?.avatar_url;
-      if (oldAvatarUrl) {
-        const pathToDelete = storageService.getAvatarPathFromUrl(oldAvatarUrl);
-        if (pathToDelete) {
-          console.log('Cleaning up previous avatar from storage:', pathToDelete);
-          await storageService.deleteFile('avatars', pathToDelete);
-        }
-      }
-
-      const fileName = `${currentUser.id}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-      
-      // 2. Upload new avatar
-      // Use 'avatars' bucket as requested
-      const publicUrl = await storageService.uploadFile('avatars', `avatars/${fileName}`, file);
-      
-      await authService.updateProfile({
-        id: currentUser.id,
-        avatar_url: publicUrl
-      });
-      
-      onProfileUpdate?.();
-    } catch (error) {
-      console.error('Error updating avatar:', error);
-      alert('Failed to update avatar. Please ensure bucket "avatars" is configured.');
-    } finally {
-      setIsUpdatingAvatar(false);
-    }
-  };
-
-  if (!currentUser) {
-    return (
-      <div className="min-h-full flex flex-col items-center justify-center p-8 bg-slate-50 pb-32">
-        <div className="w-20 h-20 bg-brand-blue/10 rounded-[30px] flex items-center justify-center mb-6">
-          <User className="w-10 h-10 text-brand-blue opacity-50" />
-        </div>
-        <div className="text-center space-y-3 mb-10 max-w-xs">
-          <h2 className="text-2xl font-bold font-display text-brand-navy">Your Profile</h2>
-          <p className="text-slate-400 text-sm leading-relaxed">
-            Join the Unlocked community to save your favorite pros, participate in events, and chat with members.
-          </p>
-        </div>
-        <button 
-          onClick={() => onNavigate?.('login')}
-          className="w-full max-w-[280px] py-4 bg-brand-blue text-white rounded-2xl font-bold shadow-lg shadow-brand-blue/20 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all"
-        >
-          <Lock className="w-5 h-5" />
-          Log In or Sign Up
-        </button>
-      </div>
-    );
-  }
-
-  const handleLogout = async () => {
-    try {
-      await authService.signOut();
-      localStorage.removeItem('keep_me_signed_in');
-      localStorage.removeItem('unlocked_active_view');
-      localStorage.removeItem('unlocked_initial_event_id');
-      localStorage.removeItem('unlocked_initial_pro_id');
-      localStorage.removeItem('unlocked_initial_guide_id');
-      localStorage.removeItem('unlocked_initial_chat');
-      onNavigate?.('login');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    setIsDeletingAccount(true);
-    setDeleteError(null);
-    try {
-      // Supprimer l'avatar du stockage avant de supprimer le compte
-      let latestAvatarUrl = userProfile?.avatar_url || null;
-      
-      // Essayer de requêter directement le profil en base si l'avatar n'est pas dans l'état React local
-      if (!latestAvatarUrl && currentUser) {
-        try {
-          const freshProfile = await authService.getProfile(currentUser.id);
-          if (freshProfile?.avatar_url) {
-            latestAvatarUrl = freshProfile.avatar_url;
-          }
-        } catch (fetchErr) {
-          console.warn('Failed to fetch fresh profile for avatar deletion:', fetchErr);
-        }
-      }
-      
-      // Fallback vers les métadonnées de l'utilisateur
-      if (!latestAvatarUrl && currentUser?.user_metadata?.avatar_url) {
-        latestAvatarUrl = currentUser.user_metadata.avatar_url;
-      }
-
-      if (latestAvatarUrl) {
-        try {
-          const pathToDelete = storageService.getAvatarPathFromUrl(latestAvatarUrl);
-          if (pathToDelete) {
-            console.log('Attempting to delete avatar file from bucket:', pathToDelete);
-            await storageService.deleteFile('avatars', pathToDelete);
-          }
-        } catch (storageErr) {
-          console.warn('Failed to delete user profile avatar from bucket on deletion:', storageErr);
-        }
-      }
-
-      await authService.deleteOwnAccount();
-      await authService.signOut();
-      localStorage.setItem('unlocked_account_deletion_success', 'Your account has been successfully deleted.');
-      localStorage.removeItem('keep_me_signed_in');
-      localStorage.removeItem('unlocked_active_view');
-      localStorage.removeItem('unlocked_initial_event_id');
-      localStorage.removeItem('unlocked_initial_pro_id');
-      localStorage.removeItem('unlocked_initial_guide_id');
-      localStorage.removeItem('unlocked_initial_chat');
-      onNavigate?.('login');
-    } catch (error: any) {
-      console.error('Error deleting account:', error);
-      if (
-        error.message?.includes('delete_own_user') || 
-        error.code === '42883' || 
-        error.code === 'P0001'
-      ) {
-        setShowSqlInstruction(true);
-        setDeleteError("The 'delete_own_user' archiving and unregistration function or the 'archive_profiles' table must be installed in Supabase. Please execute the SQL script below to set it up.");
-      } else {
-        setDeleteError(error.message || "An error occurred during account deletion.");
-      }
-    } finally {
-      setIsDeletingAccount(false);
-    }
-  };
-
-  const menuItems = [
-    { label: 'My Account', icon: User, color: 'text-brand-blue font-bold text-brand-blue' },
-    ...(isAdmin ? [{ label: 'Admin Dashboard', icon: ShieldCheck, color: 'text-brand-blue', action: () => onNavigate?.('admin') }] : []),
-    { label: 'Suggest a Pro', icon: Star, color: 'text-brand-yellow', action: () => onAddPro?.() },
-    { label: 'Feedback', icon: MessageSquare, color: 'text-[#00C2A8]' },
-    { label: 'Settings', icon: SlidersHorizontal },
-    { label: 'About MyCityUnlocked', icon: Info },
-    { label: 'Legal', icon: FileText },
-  ];
-
-  return (
-    <div className="pb-12">
-      {/* Profile Header */}
-      <div className="flex flex-col items-center pt-8 pb-10 bg-white border-b border-slate-100">
-        <div 
-          onClick={handleAvatarClick}
-          className="relative w-24 h-24 rounded-full bg-brand-blue/10 border-4 border-white shadow-sm overflow-hidden mb-4 flex items-center justify-center cursor-pointer group"
-        >
-          {userProfile?.avatar_url ? (
-            <img src={userProfile.avatar_url} alt="" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
-          ) : (
-            <User className="w-12 h-12 text-brand-blue group-hover:opacity-50 transition-opacity" />
-          )}
-          
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
-            {isUpdatingAvatar ? (
-              <Loader2 className="w-6 h-6 text-white animate-spin" />
-            ) : (
-              <Camera className="w-6 h-6 text-white" />
-            )}
-          </div>
-          
-          {/* Discreet camera indicator for mobile/tablet only */}
-          {!isUpdatingAvatar && (
-            <div className="absolute bottom-1 right-1 p-1 bg-white rounded-full shadow-sm border border-slate-100 text-brand-blue xl:hidden">
-              <Camera className="w-3.5 h-3.5" />
-            </div>
-          )}
-          <input 
-            type="file"
-            ref={avatarInputRef}
-            onChange={handleAvatarChange}
-            accept="image/*"
-            className="hidden"
-          />
-        </div>
-        <div className="text-center">
-          <h2 className="text-xl font-semibold font-display text-brand-navy flex items-center justify-center gap-2">
-            {userProfile?.full_name || userEmail.split('@')[0]}
-            {unreadConversations.length > 0 && (
-              <motion.button
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                onClick={() => onNavigate?.('messages' as any)}
-                className="relative group active:scale-90 transition-all ml-1"
-                title={`${unreadConversations.length} new message${unreadConversations.length > 1 ? 's' : ''}`}
-              >
-                <div className="w-5 h-5 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-200 group-hover:bg-brand-blue/5 group-hover:border-brand-blue/20 transition-all">
-                  <MessageCircle className="w-3 h-3 text-slate-400 group-hover:text-brand-blue" />
-                </div>
-                <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 border border-white"></span>
-                </span>
-              </motion.button>
-            )}
-          </h2>
-          {isAdmin && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/10 text-brand-blue text-[10px] font-semibold uppercase tracking-widest rounded-full mt-1">
-              <ShieldCheck className="w-3 h-3" /> Admin
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Menu List */}
-      <div className="bg-white border-y border-slate-100">
-        {menuItems.map((item, index) => (
-          <button 
-            key={index}
-            onClick={() => item.action ? item.action() : setActiveSubPage(item.label)}
-            className={cn(
-              "w-full px-6 py-4 flex justify-between items-center active:bg-slate-50 hover:bg-slate-50/50 transition-all group",
-              index !== menuItems.length - 1 && "border-b border-slate-50"
-            )}
-          >
-            <div className="flex items-center gap-3 group-hover:translate-x-1 transition-transform">
-              <item.icon className={cn("w-5 h-5 text-slate-400 group-hover:text-brand-blue transition-colors", item.color)} />
-              <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors uppercase tracking-wider">{item.label}</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-brand-blue transition-colors" />
-          </button>
-        ))}
-      </div>
-
-      {/* Logout Button */}
-      <div className="px-6 mt-8">
-        <button 
-          onClick={handleLogout}
-          className="w-full py-4 text-slate-500 font-medium hover:text-red-500 transition-colors flex items-center justify-center gap-2"
-        >
-          <LogOut className="w-5 h-5" />
-          Logout
-        </button>
-      </div>
-
-      {/* Sub-pages */}
-      <AnimatePresence>
-        {activeSubPage === 'My Account' && (
-          <ProfileSubPage key="subpage-my-account" title="My Account" onBack={() => setActiveSubPage(null)}>
-            <div className="space-y-8 max-w-2xl mx-auto pb-10">
-              {msg && (
-                <div className={cn(
-                  "p-4 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2",
-                  msg.type === 'success' ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-rose-50 text-rose-600 border border-rose-100"
-                )}>
-                  {msg.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-                  <p className="text-sm font-bold tracking-tight">{msg.text}</p>
-                </div>
-              )}
-              
-              {/* Profile Details Edit Form */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
-                <div className="flex items-center gap-2 border-b border-slate-50 pb-3">
-                  <User className="w-5 h-5 text-brand-blue" />
-                  <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">Edit Profile Information</h3>
-                </div>
-                
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email Address</label>
-                    <input 
-                      type="text" 
-                      value={userEmail} 
-                      disabled 
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium text-slate-400 cursor-not-allowed" 
-                    />
-                  </div>
-                  
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Full Name</label>
-                    <input 
-                      type="text" 
-                      value={editName} 
-                      onChange={(e) => setEditName(e.target.value)} 
-                      placeholder="Your full name"
-                      className="w-full px-4 py-3 bg-white border border-slate-200 focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue rounded-xl text-sm font-medium text-slate-700 outline-none transition-all" 
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-2">
-                  <button 
-                    onClick={async () => {
-                      if (!currentUser) return;
-                      setIsSavingProfile(true);
-                      setMsg(null);
-                      try {
-                        await authService.updateProfile({
-                          id: currentUser.id,
-                          full_name: editName.trim()
-                        });
-                        onProfileUpdate?.();
-                        setMsg({ type: 'success', text: 'Profile updated successfully!' });
-                        // Clear success message after 3 seconds
-                        setTimeout(() => setMsg(null), 3000);
-                      } catch (err) {
-                        console.error('Error saving profile:', err);
-                        setMsg({ type: 'error', text: 'Could not update profile information.' });
-                      } finally {
-                        setIsSavingProfile(false);
-                      }
-                    }}
-                    disabled={isSavingProfile || !editName.trim()}
-                    className="px-6 py-3 bg-brand-blue text-white font-extrabold text-xs uppercase tracking-wider rounded-xl hover:bg-blue-600 transition-all shadow-md shadow-brand-blue/15 flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {isSavingProfile ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Changes'
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Testimonials Left */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
-                <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Star className="w-5 h-5 text-brand-yellow fill-brand-yellow" />
-                    <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Testimonials</h3>
-                  </div>
-                  <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full">{myTestimonies.length} Left</span>
-                </div>
-
-                {loadingTestimonies ? (
-                  <div className="py-8 flex justify-center text-slate-400">
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  </div>
-                ) : myTestimonies.length === 0 ? (
-                  <div className="py-8 text-center text-slate-400 italic text-sm">
-                    You have not left any testimonials yet.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {myTestimonies.map((review) => {
-                      const associatedPro = allPros?.find((p) => String(p.id) === String(review.pro_id));
-                      const isEditing = editingTestimonyId === review.id;
-                      const isProcessing = deletingId === review.id;
-                      
-                      return (
-                        <div key={review.id} className={cn(
-                          "p-5 rounded-2xl border transition-all duration-300",
-                          review.status === 'pending' ? "bg-amber-50/30 border-amber-100" : 
-                          review.status === 'refused' ? "bg-rose-50/30 border-rose-100" : "bg-slate-50/55 border-slate-100"
-                        )}>
-                          <div className="flex justify-between items-start gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <p className="font-bold text-slate-800 text-sm truncate">
-                                  {associatedPro ? associatedPro.name : 'Professional'}
-                                </p>
-                                <span className={cn(
-                                  "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md",
-                                  review.status === 'approved' ? "bg-emerald-50 text-emerald-600" : 
-                                  review.status === 'refused' ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600 animate-pulse"
-                                )}>
-                                  {review.status || 'pending'}
-                                </span>
-                              </div>
-                              {associatedPro?.profession && (
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{associatedPro.profession}</p>
-                              )}
-                            </div>
-                            
-                            {!isEditing && (
-                              <div className="flex items-center gap-2">
-                                <button 
-                                  onClick={() => {
-                                    setEditingTestimonyId(review.id);
-                                    setEditTestimonyRating(review.rating);
-                                    setEditTestimonyComment(review.comment);
-                                  }}
-                                  disabled={isProcessing}
-                                  className="h-8 px-3 bg-white text-slate-500 border border-slate-200 rounded-xl hover:text-brand-blue hover:border-brand-blue/30 text-[10px] font-bold uppercase tracking-wide transition-all active:scale-95 flex items-center justify-center disabled:opacity-50"
-                                >
-                                  Edit
-                                </button>
-                                <button 
-                                  onClick={() => setShowConfirmAction(prev => ({ ...prev, [review.id]: 'delete' }))}
-                                  disabled={isProcessing}
-                                  className={cn(
-                                    "h-8 w-8 border rounded-xl transition-all active:scale-95 flex items-center justify-center shrink-0",
-                                    isProcessing ? "bg-slate-50 border-slate-100 text-slate-300" : "bg-white border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-100"
-                                  )}
-                                  title="Delete Review"
-                                >
-                                  {isProcessing ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-
-                          {showConfirmAction[review.id] === 'delete' && (
-                            <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100 flex flex-col gap-3 animate-in fade-in zoom-in-95 my-3">
-                              <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest text-center">Delete this testimonial permanently?</p>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={async () => {
-                                    setDeletingId(review.id);
-                                    try {
-                                      const success = await proService.deleteTestimony(review.id);
-                                      if (success) {
-                                        await fetchMyTestimonies();
-                                        refetchPros?.();
-                                        setMsg({ type: 'success', text: 'Testimonial deleted successfully.' });
-                                      }
-                                    } catch (err) {
-                                      console.error('Delete error:', err);
-                                      setMsg({ type: 'error', text: 'Failed to delete testimonial.' });
-                                    } finally {
-                                      setDeletingId(null);
-                                      setShowConfirmAction(prev => ({ ...prev, [review.id]: null }));
-                                    }
-                                  }}
-                                  disabled={isProcessing}
-                                  className="flex-1 h-9 bg-rose-500 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-rose-600 transition-all disabled:opacity-50"
-                                >
-                                  {isProcessing ? 'Deleting...' : 'Yes, Delete'}
-                                </button>
-                                <button
-                                  onClick={() => setShowConfirmAction(prev => ({ ...prev, [review.id]: null }))}
-                                  disabled={isProcessing}
-                                  className="flex-1 h-9 bg-white text-slate-400 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-slate-100 hover:bg-slate-50 transition-all"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {isEditing ? (
-                            <div className="space-y-3 pt-2 bg-white rounded-xl p-3 border border-slate-200">
-                              <div className="flex items-center gap-1">
-                                <label className="text-xs font-bold text-slate-500 animate-pulse">Rating:</label>
-                                <div className="flex items-center gap-0.5">
-                                  {[1,2,3,4,5].map((s) => (
-                                    <button 
-                                      key={s} 
-                                      onClick={() => setEditTestimonyRating(s)}
-                                      className="p-0.5"
-                                    >
-                                      <Star className={cn("w-4 h-4", s <= editTestimonyRating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200")} />
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <textarea 
-                                value={editTestimonyComment}
-                                onChange={(e) => setEditTestimonyComment(e.target.value)}
-                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-brand-blue/20"
-                                rows={2}
-                              />
-                              <div className="flex justify-end gap-2">
-                                <button 
-                                  onClick={() => setEditingTestimonyId(null)}
-                                  className="px-2.5 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold uppercase rounded-md"
-                                >
-                                  Cancel
-                                </button>
-                                <button 
-                                  onClick={async () => {
-                                    setIsUpdatingTestimony(true);
-                                    try {
-                                      await proService.updateTestimony(review.id, editTestimonyRating, editTestimonyComment);
-                                      setEditingTestimonyId(null);
-                                      await fetchMyTestimonies();
-                                      setMsg({ type: 'success', text: 'Review updated and sent for moderation.' });
-                                    } catch (err) {
-                                      console.error('Error saving testimony changes:', err);
-                                    } finally {
-                                      setIsUpdatingTestimony(false);
-                                    }
-                                  }}
-                                  disabled={isUpdatingTestimony}
-                                  className="px-3 py-1 bg-brand-blue text-white text-[10px] font-bold uppercase tracking-wider rounded-md"
-                                >
-                                  {isUpdatingTestimony ? 'Saving...' : 'Save'}
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="mt-3 space-y-2">
-                              <div className="flex items-center gap-0.5">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star 
-                                    key={i} 
-                                    className={cn(
-                                      "w-3 h-3", 
-                                      i < review.rating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200"
-                                    )} 
-                                  />
-                                ))}
-                              </div>
-                              <p className="text-xs text-slate-600 leading-relaxed italic">
-                                "{review.comment}"
-                              </p>
-                              
-                              {review.status === 'refused' && review.refusal_reason && (
-                                <div className="p-3 bg-rose-50 rounded-xl border border-rose-100 mt-2">
-                                  <div className="flex items-center gap-1.5 mb-1">
-                                    <XCircle className="w-3 h-3 text-rose-500" />
-                                    <span className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Reason for Refusal:</span>
-                                  </div>
-                                  <p className="text-[11px] text-rose-500/80 leading-normal">{review.refusal_reason}</p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Private Chats Access */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
-                <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-emerald-500" />
-                    <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">Private Chats</h3>
-                  </div>
-                </div>
-                
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Connect with other community members regarding testimonials and reviews you have posted or discussed in the past.
-                </p>
-
-                <div className="space-y-3">
-                  {loadingConversations ? (
-                    <div className="py-6 flex justify-center text-slate-400">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    </div>
-                  ) : conversations.length === 0 ? (
-                    <div className="p-4 bg-slate-50/60 rounded-2xl border border-slate-100/80 text-center space-y-2">
-                      <p className="text-xs font-bold text-slate-500">No active discussions yet</p>
-                      <p className="text-[11px] text-slate-400 leading-relaxed">Discover pros and read user reviews to start a private chat with their authors!</p>
-                      <button
-                        onClick={() => {
-                          setActiveSubPage(null);
-                          onNavigate?.('explore');
-                        }}
-                        className="px-4 py-1.5 bg-brand-blue text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all hover:bg-blue-600 active:scale-95 mt-1"
-                      >
-                        Explore Pros
-                      </button>
-                    </div>
-                  ) : (
-                    conversations.slice(0, 3).map((conv) => {
-                      const otherName = conv.otherUser?.full_name || 'Community Member';
-                      const displayedName = formatName(otherName);
-                      const otherAvatar = conv.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayedName)}&background=random`;
-                      
-                      return (
-                        <div 
-                          key={conv.id} 
-                          onClick={() => {
-                            if (onNavigate) {
-                              setActiveSubPage(null);
-                              onNavigate('messages', { chat: conv });
-                            }
-                          }}
-                          className="p-4 flex gap-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer transition-all active:scale-[0.98]"
-                        >
-                          <div className="relative flex-shrink-0">
-                            <img src={otherAvatar} alt="" className="w-10 h-10 rounded-full object-cover border border-slate-100" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start">
-                              <h4 className="text-xs font-bold text-slate-800 truncate">{displayedName}</h4>
-                              <span className="text-[9px] text-slate-400">
-                                {conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : ''}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 truncate mt-0.5">Click to view private conversation</p>
-                          </div>
-                          <div className="flex items-center">
-                            <ChevronRight className="w-4 h-4 text-slate-400" />
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                  {conversations.length > 3 && (
-                    <button
-                      onClick={() => {
-                        setActiveSubPage(null);
-                        onNavigate?.('messages');
-                      }}
-                      className="w-full text-center py-2 text-xs font-bold text-brand-blue hover:text-blue-600 hover:underline transition-all"
-                    >
-                      See all conversations ({conversations.length})
-                    </button>
-                  )}
-                </div>
-              </div>
-
-
-
-            </div>
-          </ProfileSubPage>
-        )}
-
-        {activeSubPage === 'Settings' && (
-          <ProfileSubPage key="subpage-settings" title="Settings" onBack={() => setActiveSubPage(null)}>
-            <div className="max-w-2xl mx-auto space-y-6">
-              {/* Chat Participation Section */}
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                {[
-                  { 
-                    title: 'Chat Participation', 
-                    desc: 'Allow receiving and sending chat messages',
-                    enabled: userProfile?.chat_enabled ?? true,
-                    action: async () => {
-                      if (userProfile) {
-                        try {
-                          const nextValue = userProfile.chat_enabled === undefined ? false : !userProfile.chat_enabled;
-                          await authService.updateProfile({ 
-                            id: userProfile.id, 
-                            chat_enabled: nextValue 
-                          });
-                          onProfileUpdate?.();
-                        } catch (err) {
-                          console.error('Error updating chat participation:', err);
-                        }
-                      }
-                    }
-                  }
-                ].map((item, i) => (
-                  <div key={i} className={cn(
-                    "p-6 flex items-center justify-between",
-                    i !== 0 && "border-b border-slate-50"
-                  )}>
-                    <div className="space-y-1">
-                      <p className="font-bold text-slate-900">{item.title}</p>
-                      <p className="text-xs text-slate-500">{item.desc}</p>
-                    </div>
-                    <div 
-                      onClick={item.action}
-                      className={cn(
-                      "w-12 h-6 rounded-full relative transition-colors",
-                      item.action ? "cursor-pointer" : "opacity-50 cursor-not-allowed",
-                      item.enabled ? "bg-brand-blue" : "bg-slate-200"
-                    )}>
-                      <div className={cn(
-                        "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all",
-                        item.enabled ? "right-1" : "left-1"
-                      )} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Change Password Section */}
-              <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
-                <p className="font-bold text-slate-900">Change Password</p>
-                
-                <form onSubmit={handlePasswordUpdate} className="space-y-4">
-                  {passwordError && (
-                    <div className="p-3 bg-red-50 text-red-700 text-xs font-semibold rounded-xl border border-red-100">
-                      {passwordError}
-                    </div>
-                  )}
-                  {passwordSuccess && (
-                    <div className="p-3 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-xl border border-emerald-100">
-                      {passwordSuccess}
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Current Password</label>
-                    <input 
-                      type="password" 
-                      placeholder="••••••••" 
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-blue outline-none text-slate-800 font-medium" 
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      disabled={isUpdatingPassword}
-                      minLength={6}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">New Password</label>
-                    <input 
-                      type="password" 
-                      placeholder="••••••••" 
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-blue outline-none text-slate-800 font-medium" 
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      disabled={isUpdatingPassword}
-                      minLength={6}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Confirm New Password</label>
-                    <input 
-                      type="password" 
-                      placeholder="••••••••" 
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-blue outline-none text-slate-800 font-medium" 
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      disabled={isUpdatingPassword}
-                      minLength={6}
-                    />
-                  </div>
-                  
-                  <button 
-                    type="submit"
-                    disabled={isUpdatingPassword}
-                    className="w-full py-4 bg-brand-blue text-white rounded-2xl font-bold shadow-lg shadow-brand-blue/20 mt-4 hover:bg-brand-blue/90 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {isUpdatingPassword ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Updating...</span>
-                      </>
-                    ) : (
-                      "Update Password"
-                    )}
-                  </button>
-                </form>
-              </div>
-
-              {/* Discrete Delete Account */}
-              <div className="pt-4 border-t border-slate-100/70">
-                <div className="px-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-semibold text-slate-700">Close Account</p>
-                    <p className="text-[11px] text-slate-400 leading-normal">
-                      Permanently remove your profile and archive your membership info securely.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowConfirmDelete(true);
-                      setDeleteError(null);
-                      setShowSqlInstruction(false);
-                      setDeleteConfirmText("");
-                    }}
-                    className="self-start sm:self-center px-3 py-1.5 hover:bg-rose-50/50 border border-slate-200 hover:border-rose-200 text-slate-500 hover:text-rose-600 font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all"
-                  >
-                    Delete Account
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </ProfileSubPage>
-        )}
-
-
-
-        {activeSubPage === 'About MyCityUnlocked' && (
-          <ProfileSubPage key="subpage-about-mycityunlocked" title="About MyCityUnlocked" onBack={() => setActiveSubPage(null)} className="bg-white">
-            <div className="flex flex-col items-center space-y-12 py-6 px-1">
-              <Logo className="scale-125" />
-              
-              <div className="w-full text-slate-700 space-y-6 text-sm sm:text-base leading-relaxed font-sans text-left max-w-2xl mx-auto">
-                <div className="border-b border-slate-100 pb-5">
-                  <h3 className="text-lg font-bold font-display text-brand-navy mb-2">Welcome to MyCityUnlocked</h3>
-                  <p className="text-slate-600">
-                    Moving to a new city is exciting. It’s also overwhelming.
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <p className="text-slate-600">
-                    Where do you find a trustworthy plumber? Which schools are worth considering? What should you do this weekend? How do you navigate local administration, healthcare, or housing? And perhaps most importantly, how do you start feeling at home?
-                  </p>
-                  
-                  <p className="text-slate-600">
-                    When we moved to Valencia, we quickly realized that the most valuable information wasn’t online. It lived inside WhatsApp groups, private conversations, neighbour recommendations, and community networks.
-                  </p>
-                </div>
-
-                <div className="py-4 px-5 bg-slate-50 border border-slate-100/80 rounded-2xl space-y-3">
-                  <p className="font-semibold text-xs text-slate-400 uppercase tracking-wider mb-2">People were constantly asking the same questions:</p>
-                  <p className="italic text-[13px] text-slate-600 pl-3 border-l-2 border-slate-300">“Can anyone recommend a good electrician?”</p>
-                  <p className="italic text-[13px] text-slate-600 pl-3 border-l-2 border-slate-300">“Does anyone know a reliable lawyer?”</p>
-                  <p className="italic text-[13px] text-slate-600 pl-3 border-l-2 border-slate-300">“What are the best family activities this weekend?”</p>
-                  <p className="text-slate-500 text-xs font-medium pt-2">The answers were there, but they were scattered.</p>
-                </div>
-
-                <div className="space-y-4">
-                  <p className="text-slate-600">
-                    That’s why we created <strong className="font-semibold text-slate-900">MyCityUnlocked</strong>.
-                  </p>
-                  <p className="italic bg-brand-blue/5 border-l-4 border-brand-blue p-4 rounded-r-xl text-slate-800 font-medium">
-                    Our mission is simple: help international residents discover better, connect faster, and feel at home sooner.
-                  </p>
-                  <p className="text-slate-600">
-                    At the heart of MyCityUnlocked is a carefully curated directory of professionals recommended by the community itself. We believe trust is earned through real experiences, not anonymous reviews. That’s why we focus on quality recommendations rather than endless listings.
-                  </p>
-                  <p className="text-slate-600">
-                    But belonging to a city goes beyond finding the right service provider.
-                  </p>
-                  <p className="text-slate-600">
-                    MyCityUnlocked also helps you discover local events and activities, explore the best of Valencia, and access practical guides designed to make everyday life easier. From administrative procedures and schools to healthcare, housing, and local tips, we bring together the information newcomers need most.
-                  </p>
-                  <p className="text-slate-600">
-                    We are building more than a directory.
-                  </p>
-                  <p className="text-slate-600">
-                    We are building a trusted local companion for international residents in Valencia and beyond.
-                  </p>
-                  <p className="font-bold text-left py-3 text-brand-navy border-y border-slate-100/70 my-4 text-xs uppercase tracking-wider">
-                    Because when you discover better, you belong faster.
-                  </p>
-                </div>
-
-                {/* Key pillars */}
-                <div className="space-y-4 pt-2">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0 text-emerald-600">
-                      <Rocket className="w-4 h-4 text-emerald-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">Our Mission</h4>
-                      <p className="text-slate-500 text-xs">Help international residents discover better, connect faster, and feel at home sooner.</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0 text-amber-650">
-                      <Star className="w-4 h-4 text-amber-500" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">How We Select Professionals</h4>
-                      <p className="text-slate-500 text-xs">We prioritize trusted recommendations and quality curation rather than volume.</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center flex-shrink-0 text-purple-600">
-                      <Users className="w-4 h-4 text-purple-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">Our Community</h4>
-                      <p className="text-slate-500 text-xs">Built for international residents, newcomers, and families in Valencia and surrounding areas.</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Contact Section */}
-                <div className="mt-8 pt-6 border-t border-slate-100 bg-slate-50 rounded-2xl p-5 border border-slate-100 text-left space-y-3">
-                  <div className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center text-brand-blue">
-                    <Mail className="w-5 h-5 text-brand-blue" />
-                  </div>
-                  <h4 className="font-bold text-slate-900 text-sm">Let’s Talk</h4>
-                  <p className="text-xs text-slate-500 max-w-sm">
-                    Questions? Feedback? A recommendation we should know about? We’re all ears.
-                  </p>
-                  <a href="mailto:hello@mycityunlocked.app" className="text-sm font-bold text-brand-blue hover:underline cursor-pointer inline-block transition-all">
-                    hello@mycityunlocked.app
-                  </a>
-                  <p className="text-[10px] text-slate-400 font-medium">
-                    We read every message and love hearing from our community.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </ProfileSubPage>
-        )}
-
-        {activeSubPage === 'Legal' && (
-          <ProfileSubPage key="subpage-legal" title="Legal" onBack={() => setActiveSubPage(null)} className="bg-white">
-            <div className="flex flex-col items-center text-center space-y-8 py-8">
-              <Logo className="scale-125 mb-4" />
-              <div>
-                <p className="text-slate-400 text-xs font-mono uppercase tracking-widest">Version 1.0</p>
-              </div>
-              <div className="w-full space-y-2 px-2 max-w-2xl mx-auto">
-                {[
-                  { title: 'Privacy Policy', key: 'privacy_policy' },
-                  { title: 'Community Guidelines', key: 'community_guidelines' },
-                  { title: 'User Terms & Conditions', key: 'user_terms' },
-                  { title: 'Provider Terms & Conditions', key: 'terms_of_service' },
-                  { title: 'Cookie Policy', key: 'cookie_policy' }
-                ].map((item, i) => (
-                  <button 
-                    key={i} 
-                    onClick={() => setSelectedDocKey(item.key)}
-                    className="w-full p-4 bg-white rounded-xl border border-slate-105 flex justify-between items-center hover:bg-slate-50 transition-colors text-left cursor-pointer"
-                  >
-                    <span className="font-medium text-slate-700">{item.title}</span>
-                    <ChevronRight className="w-4 h-4 text-slate-300" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </ProfileSubPage>
-        )}
-
-        {activeSubPage === 'Feedback' && (
-          <ProfileSubPage key="subpage-feedback" title="Feedback" onBack={() => setActiveSubPage(null)}>
-            <FeedbackSubPage currentUser={currentUser} onBack={() => setActiveSubPage(null)} />
-          </ProfileSubPage>
-        )}
-
-        {selectedDocKey && (
-          <ProfileSubPage key={`subpage-doc-${selectedDocKey}`} title={docTitle || "Document"} onBack={() => setSelectedDocKey(null)}>
-            <div className="max-w-2xl mx-auto py-4">
-              <button 
-                onClick={() => setSelectedDocKey(null)}
-                className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors font-medium mb-4 px-2 cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Legal
-              </button>
-              <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-100 shadow-sm">
-                {isLoadingDoc ? (
-                  <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                    <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
-                    <p className="text-slate-400 text-sm font-semibold uppercase tracking-wider">Loading dynamic copy...</p>
-                  </div>
-                ) : (
-                  <div className="text-slate-700 leading-relaxed font-sans space-y-6 text-sm sm:text-base">
-                    <div className="markdown-body">
-                      <SimpleMarkdown>{docContent}</SimpleMarkdown>
-                    </div>
-                    <div className="pt-6 border-t border-slate-100 flex justify-start">
-                      <button 
-                        onClick={() => setSelectedDocKey(null)}
-                        className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors font-medium cursor-pointer"
-                      >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Legal
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </ProfileSubPage>
-        )}
-
-        {showConfirmDelete && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => {
-                if (!isDeletingAccount) {
-                  setShowConfirmDelete(false);
-                  setDeleteError(null);
-                  setShowSqlInstruction(false);
-                  setDeleteConfirmText("");
-                }
-              }}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="bg-white rounded-3xl border border-slate-105 shadow-2xl overflow-hidden max-w-md w-full relative z-10 p-6 space-y-6"
-            >
-              <div className="flex items-center gap-3 border-b border-rose-50 pb-4">
-                <div className="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center flex-shrink-0 animate-pulse">
-                  <AlertTriangle className="w-5 h-5 text-rose-500" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-lg font-display">Delete Account</h3>
-                  <p className="text-xs text-rose-500 font-bold uppercase tracking-wider">This action is permanent</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <p className="text-sm text-slate-600 leading-relaxed">
-                  Are you absolutely sure you want to delete your Unlocked account? This decision will have the following immediate consequences:
-                </p>
-
-                <div className="space-y-2.5 text-xs text-slate-550 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <div className="flex gap-2 items-start">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-450 mt-1.5 shrink-0" />
-                    <span><strong>Loss of Access</strong>: You will no longer be able to log into the application with your credentials.</span>
-                  </div>
-                  <div className="flex gap-2 items-start">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-450 mt-1.5 shrink-0" />
-                    <span><strong>Profile Erased</strong>: Your details, profile photo, and full name will be completely removed from the public directory.</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Type <span className="text-rose-600 font-extrabold text-[11px]">"DELETE"</span> to unlock account deletion:
-                  </label>
-                  <input
-                    type="text"
-                    value={deleteConfirmText}
-                    onChange={(e) => setDeleteConfirmText(e.target.value)}
-                    placeholder="Type DELETE..."
-                    className="w-full px-4 py-3 bg-white border border-slate-200 focus:ring-2 focus:ring-rose-500/15 focus:border-rose-400 rounded-xl text-xs font-semibold text-slate-700 outline-none transition-all uppercase placeholder:text-slate-300"
-                  />
-                </div>
-
-                {deleteError && (
-                  <div className="p-4 bg-red-50/80 border border-red-100 rounded-xl space-y-3">
-                    <p className="text-xs text-red-600 font-bold">{deleteError}</p>
-                    {showSqlInstruction && (
-                      <div className="space-y-2">
-                        <p className="text-[11px] text-slate-500 leading-normal">
-                          To enable custom account deletion and archiving, please run the following SQL code in your <strong>Supabase SQL Editor</strong>:
-                        </p>
-                        <div className="relative">
-                          <pre className="p-3 bg-slate-900 text-[10px] text-slate-300 font-mono rounded-lg overflow-x-auto max-h-48 whitespace-pre leading-normal border border-slate-800">
-                            {sqlScript.replace(/\\n/g, '\n')}
-                          </pre>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(sqlScript.replace(/\\n/g, '\n'));
-                              setCopiedSql(true);
-                              setTimeout(() => setCopiedSql(false), 2000);
-                            }}
-                            className="absolute top-2 right-2 px-2.5 py-1 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded text-[10px] font-bold flex items-center gap-1 transition-all"
-                          >
-                            {copiedSql ? (
-                              <>
-                                <Check className="w-3 h-3 text-emerald-400" />
-                                Copied!
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3 h-3" />
-                                Copy SQL
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-2 pt-2 border-t border-slate-50">
-                <button
-                  onClick={handleDeleteAccount}
-                  disabled={isDeletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE"}
-                  className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 shadow-md shadow-rose-500/10 disabled:opacity-40"
-                >
-                  {isDeletingAccount ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Decomissioning...
-                    </>
-                  ) : (
-                    "Confirm Account Deletion"
-                  )}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowConfirmDelete(false);
-                    setDeleteError(null);
-                    setShowSqlInstruction(false);
-                    setDeleteConfirmText("");
-                  }}
-                  disabled={isDeletingAccount}
-                  className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all border border-slate-200/50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// Reusable hook for swipe-to-go-back lateral gesture (left-to-right)
-function useSwipeBack(onBack: () => void) {
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
-  const touchEndX = useRef<number | null>(null);
-  const touchEndY = useRef<number | null>(null);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const target = e.target as HTMLElement;
-    const tagName = target.tagName?.toLowerCase();
-    
-    // Don't intercept swipe when interacting with form inputs, textareas, select, buttons, links, map gesture controls
-    if (
-      tagName === 'input' || 
-      tagName === 'textarea' || 
-      tagName === 'select' || 
-      target.closest('button') || 
-      target.closest('a') ||
-      target.closest('.no-swipe')
-    ) {
-      touchStartX.current = null;
-      touchStartY.current = null;
-      return;
-    }
-    
-    touchStartX.current = e.targetTouches[0].clientX;
-    touchStartY.current = e.targetTouches[0].clientY;
-    touchEndX.current = null;
-    touchEndY.current = null;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartX.current === null) return;
-    touchEndX.current = e.targetTouches[0].clientX;
-    touchEndY.current = e.targetTouches[0].clientY;
-  };
-
-  const handleTouchEnd = () => {
-    if (
-      touchStartX.current === null ||
-      touchStartY.current === null ||
-      touchEndX.current === null ||
-      touchEndY.current === null
-    ) {
-      return;
-    }
-
-    const diffX = touchEndX.current - touchStartX.current;
-    const diffY = touchEndY.current - touchStartY.current;
-
-    const minSwipeDistance = 60; // minimum distance to count as a real swipe
-
-    // Trigger onBack only on left-to-right gesture and verify it's primarily horizontal
-    if (diffX > minSwipeDistance && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
-      onBack();
-    }
-
-    touchStartX.current = null;
-    touchStartY.current = null;
-    touchEndX.current = null;
-    touchEndY.current = null;
-  };
-
-  return {
-    onTouchStart: handleTouchStart,
-    onTouchMove: handleTouchMove,
-    onTouchEnd: handleTouchEnd
-  };
-}
-
-function ProfileSubPage({ title, onBack, children, className }: { title: string, onBack: () => void, children: React.ReactNode, className?: string, key?: string }) {
-  const swipeProps = useSwipeBack(onBack);
-
-  return (
-    <motion.div
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      {...swipeProps}
-      className={cn("fixed inset-0 z-[60] flex flex-col touch-pan-y", className || "bg-slate-50")}
-    >
-      <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
-        <h2 className="text-xl font-semibold font-display text-brand-navy">{title}</h2>
-      </div>
-      <div className="flex-1 overflow-y-auto p-6 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
-        <div className="max-w-2xl mx-auto mb-5">
-          <button 
-            onClick={onBack} 
-            className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-900 font-semibold text-xs uppercase tracking-wider transition-colors group cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-            <span>Back</span>
-          </button>
-        </div>
-        {children}
-      </div>
-    </motion.div>
-  );
-}
-
-function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void }) {
-  const [docContent, setDocContent] = useState<string>("");
-  const [docTitle, setDocTitle] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(true);
-  const swipeProps = useSwipeBack(onBack);
-
-  useEffect(() => {
-    async function loadDoc() {
-      setIsLoading(true);
-      try {
-        const doc = await documentService.getDocument(docKey);
-        if (doc) {
-          setDocContent(doc.content);
-          setDocTitle(doc.title);
-        }
-      } catch (error) {
-        console.error("Failed to load document:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadDoc();
-  }, [docKey]);
-
-  return (
-    <div 
-      {...swipeProps}
-      className="min-h-screen bg-white touch-pan-y"
-    >
-      <div className="max-w-4xl mx-auto px-6 py-12 pb-32">
-        <button 
-          onClick={onBack}
-          className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors font-medium mb-12 group cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-          Back home
-        </button>
-
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 space-y-4">
-            <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
-            <p className="text-slate-400 text-sm font-semibold uppercase tracking-wider">Loading dynamic copy...</p>
-          </div>
-        ) : (
-          <div className="max-w-2xl mx-auto">
-            <h1 className="text-4xl font-display font-black text-slate-900 mb-4">{docTitle}</h1>
-            <div className="h-1 w-20 bg-brand-yellow mb-12" />
-            
-            <div className="prose prose-slate max-w-none">
-              <div className="markdown-body">
-                <SimpleMarkdown>{docContent}</SimpleMarkdown>
-              </div>
-            </div>
-
-            <div className="mt-16 pt-12 border-t border-slate-100 flex flex-col items-center gap-8">
-              <div className="text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Need translation or help?</p>
-                <a 
-                  href="mailto:hello@mycityunlocked.app" 
-                  className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-blue transition-all group"
-                >
-                  <span className="text-sm font-medium border-b border-slate-200 group-hover:border-brand-blue/30 pb-0.5">hello@mycityunlocked.app</span>
-                </a>
-              </div>
-
-              <button 
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400 hover:text-brand-blue transition-colors cursor-pointer"
-              >
-                Back to top
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
-  return (
-    <footer className="hidden xl:block bg-[#E9ECFF] text-[#0A0F2C] py-16 px-8 border-t border-[#0A0F2C]/5 mt-20 mb-0">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-12">
-        <div className="space-y-6 col-span-1 lg:col-span-1 flex flex-col items-center text-center">
-          <Logo />
-          <p className="text-[13px] leading-relaxed max-w-xs text-[#0A0F2C]/70 font-medium">
-            MyCityUnlocked is a local discovery platform helping international residents find trusted recommendations, local events, and practical guides in the city.
-          </p>
-          <div className="flex gap-4 pt-2 justify-center">
-            <a 
-              href="https://www.instagram.com/mycityunlocked" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="w-9 h-9 rounded-full bg-[#0A0F2C]/10 flex items-center justify-center hover:bg-[#0A0F2C]/20 transition-all cursor-pointer"
-            >
-              <Instagram className="w-4 h-4" />
-            </a>
-            <a 
-              href="mailto:hello@mycityunlocked.app"
-              className="w-9 h-9 rounded-full bg-[#0A0F2C]/10 flex items-center justify-center hover:bg-[#0A0F2C]/20 transition-all cursor-pointer"
-            >
-              <Mail className="w-4 h-4" />
-            </a>
-          </div>
-          <div className="pt-3 flex flex-col items-center gap-2">
-            <a 
-              href="https://apps.apple.com/es/app/mycityunlocked/id6780855463?l=en-GB"
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-block transition-transform hover:scale-105"
-            >
-              <img 
-                src="/app-store-vector.svg" 
-                alt="Download on the App Store" 
-                className="h-12 w-auto object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const svgSibling = e.currentTarget.nextElementSibling as HTMLElement;
-                  if (svgSibling) svgSibling.style.display = 'flex';
-                }}
-              />
-              <div style={{ display: 'none' }} className="h-12 px-4 bg-black text-white rounded-lg flex items-center gap-2 border border-white/10 select-none shadow-md">
-                <svg viewBox="0 0 384 512" className="w-5 h-5 fill-white">
-                  <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-48.7-22.9-76.9-22.4-36.6.6-70.3 21.6-89.2 54-38.5 66.7-9.8 165.2 27.5 219 18 26 39.5 54.8 67.7 53.8 27.1-1 37.5-17.5 70.3-17.5 32.7 0 42.1 17.5 70.3 17 28.7-.5 47.7-26 65.5-52 20.7-30.2 29.2-59.4 29.7-61-.7-.3-57-21.9-57.5-86.8zM286.7 82.3c15.3-18.5 25.6-44.2 22.8-69.8-22 1-48.6 14.8-64.4 33.3-13.8 16-25.9 42-23 67.2 24.3 1.9 49.3-12.2 64.6-30.7z" />
-                </svg>
-                <div className="flex flex-col items-start leading-none text-left">
-                  <span className="text-[8px] font-normal tracking-wide uppercase">Download on the</span>
-                  <span className="text-sm font-semibold tracking-tight">App Store</span>
-                </div>
-              </div>
-            </a>
-
-            <a 
-              href="https://play.google.com/store/apps/details?id=com.mycityunlocked.app"
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-block transition-transform hover:scale-105"
-            >
-              <img 
-                src="/google-play-vector.svg" 
-                alt="GET IT ON Google Play" 
-                className="h-12 w-auto object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const svgSibling = e.currentTarget.nextElementSibling as HTMLElement;
-                  if (svgSibling) svgSibling.style.display = 'flex';
-                }}
-              />
-              <div style={{ display: 'none' }} className="h-12 px-4 bg-black text-white rounded-lg flex items-center gap-2 border border-slate-700 select-none shadow-md">
-                <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0">
-                  <path fill="#4285F4" d="M3.609 1.814C3.224 2.23 3 2.807 3 3.43v17.14c0 .623.224 1.2.609 1.616l.084.084 9.613-9.613v-.228L3.693 1.73l-.084.084z"/>
-                  <path fill="#34A853" d="M16.482 15.17l-3.176-3.17-9.697 9.697c.473.475 1.22.545 1.954.133l10.919-6.66z"/>
-                  <path fill="#EA4335" d="M16.482 8.83L5.563 2.17C4.829 1.758 4.082 1.828 3.609 2.303l9.697 9.697 3.176-3.17z"/>
-                  <path fill="#FBBC05" d="M16.482 12l3.41-1.968c.84-.484.84-1.275 0-1.759l-3.41-1.968v5.695z"/>
-                </svg>
-                <div className="flex flex-col items-start leading-none text-left">
-                  <span className="text-[8px] font-normal tracking-wide uppercase text-slate-300">GET IT ON</span>
-                  <span className="text-sm font-semibold tracking-tight text-white">Google Play</span>
-                </div>
-              </div>
-            </a>
-          </div>
-        </div>
-
-        <div>
-          <h4 className="text-[#0A0F2C] font-black mb-8 text-[10px] uppercase tracking-[0.2em]">Platform</h4>
-          <ul className="space-y-5 text-[12px] font-bold uppercase tracking-wider">
-            <li onClick={() => onNavigate('explore')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
-               <ChevronRight className="w-3 h-3" />
-               Find a Professional
-            </li>
-            <li onClick={() => onNavigate('events')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
-               <ChevronRight className="w-3 h-3" />
-               Local Events
-            </li>
-            <li onClick={() => onNavigate('guides')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
-               <ChevronRight className="w-3 h-3" />
-               Guides
-            </li>
-            <li onClick={() => onNavigate('marketplace')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
-               <ChevronRight className="w-3 h-3" />
-               Marketplace
-            </li>
-            <li onClick={() => onNavigate('feedback')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
-               <ChevronRight className="w-3 h-3" />
-               Feedback
-            </li>
-          </ul>
-        </div>
-
-        <div>
-           <h4 className="text-[#0A0F2C] font-black mb-8 text-[10px] uppercase tracking-[0.2em]">Legal</h4>
-           <ul className="space-y-5 text-[12px] font-bold uppercase tracking-wider">
-             <li onClick={() => onNavigate('privacy-policy')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
-                <ChevronRight className="w-3 h-3" />
-                Privacy Policy
-             </li>
-             <li onClick={() => onNavigate('community-guidelines')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
-                <ChevronRight className="w-3 h-3" />
-                Community Guidelines
-             </li>
-             <li onClick={() => onNavigate('user-terms')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
-                <ChevronRight className="w-3 h-3" />
-                User Terms & Conditions
-             </li>
-             <li onClick={() => onNavigate('provider-terms')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
-                <ChevronRight className="w-3 h-3" />
-                Provider Terms & Conditions
-             </li>
-             <li onClick={() => onNavigate('cookie-policy')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
-                <ChevronRight className="w-3 h-3" />
-                Cookie Policy
-             </li>
-           </ul>
-        </div>
-
-        <div>
-          <h4 className="text-[#0A0F2C] font-black mb-8 text-[10px] uppercase tracking-[0.2em]">Community</h4>
-          <ul className="space-y-5 text-[12px] font-bold uppercase tracking-wider text-[#0A0F2C]/50">
-             <li className="flex items-center gap-3 grayscale opacity-60 italic cursor-not-allowed">
-                <ChevronRight className="w-3 h-3" />
-                Expert Program
-             </li>
-             <li className="flex items-center gap-3 grayscale opacity-60 italic cursor-not-allowed">
-                <ChevronRight className="w-3 h-3" />
-                Ambassadors
-             </li>
-             <li className="flex items-center gap-3 grayscale opacity-60 italic cursor-not-allowed">
-                <ChevronRight className="w-3 h-3" />
-                Partnerships
-             </li>
-
-          </ul>
-        </div>
-      </div>
-      
-      <div className="max-w-7xl mx-auto mt-20 pt-10 border-t border-[#0A0F2C]/10 flex flex-col lg:flex-row justify-between items-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-[#0A0F2C]/60">
-        <p>© {new Date().getFullYear()} MYCITYUNLOCKED. ALL RIGHTS RESERVED.</p>
-        <p className="flex items-center gap-2 group">
-          Made with <Heart className="w-3.5 h-3.5 text-[#0A0F2C] fill-[#0A0F2C] transition-transform group-hover:scale-125" /> for the Community
-        </p>
-      </div>
-    </footer>
-  );
-}
-
+                <div className="w-12 h-12 bg-brand-blue/10 rounded-fulx���z�H�(��OV��T�H���$�,+3���%��Qyl��(�A��ZR��g����&�$sΉ "���]�o�*-K�'ξ��2�oY��Ӵ3��O���,��?�����g�t�%_C?e��K�w���[��l�+�/�o��E�E��E8��S/�;�,���j����qpm�W��ә7�;w��}H3�YC:e�qc�ñ:�Ȼ�[��w/�Y������ ���x������O�n���:k��mʛOC���cS�s(�I}/]a7���˼/�Y|	=���ԏ���͒��O� �AA�1�"���f~r�2h9]��}t֕�\\~x���_�=�)a�Sv
+�@�����3���Y�\���O:���ע��v˾��NK9���G�VY⍾�
+vn�1l�������}��kY�wc�$3��3�ô3`oә�w��-���
+3� ��!u'w�u���My���o`�л���B��{��O�X,�9�I�����a ���]�#����u����|�35�%�a6���W� ��{�]{0��{��?�#*�����M�������ٽ�A�Fq���=�w3/��Y�����N�g��H���r��$ó��O�a����>������<�,�3��Yd�;ڼ��+���sD;��m(έ~|���f�]��~���Y`��G�t'A �?
+�X]�ŻʝAa���D1��ʃ��8��&~O��Q N�x0�7i�Q L�U�����D'�y��IgDڬKh; �xFx����A.��?�?�]司Z����|ڝz�6"|��$d�_���{|�AB9�����^^���*?+��f�M�"��9N0�B��ŀCV�C�D�rG�w�k@6)���@C/�W�uG�uj�;l34p����S��n��_���7����������.����5��
+��u��8�B���އb'8�_�@|<ǁ�c��7���Z��[�%���7m�FO�M~S4�:H3	v����[o�!�*�d�~g��q��I<e�'��٭�f����Kq�i���54��Q�s�Ik)�|}���0�0y��.D��͐ r�c���[�9�z�{�c�ڧ�?K��M�+�a}Oṽ���M�E�VA��o�_��C��N��A��1��?�2��eU�|Nm~r���l�ca<���,N Wv�`�qi��\��?�:|��V�i������>�j*.KU�8�8��~��I�j��-`,�d��W^z�{���ku�B�����v�f��k� �YF\�>~說��zs��SP��.B�wo.]=?t?���Z2KW�e�媠���?!Q��\Zq�n�H��Ί0o��^A�;�#Q�!�o�1���<�B�C֋H$O3��������Q!x��ZI'�P�+$�&^�"2���.$�����ITŠ����Ta�P��r��V��E�H$+���B�뼿��� c�9�WD$�ƂU#��.�#p_="���e�þ j���?e`m8�����e�{�������C3����k�Ld��w+�]nUǉ�S�ye�����m:e���{K�N�2o��(�)�����?!�l;6𸈳,�W����	^��'���.�67�������߉W𲴐 ���q&9�oo�/�: �-,;������9Bz�m��WA���X�(��]��G �N�֗j3_�_�6��*X�'�ˮ�c����?B�9���{¸��f4�V��hJ�J�;	)�@|-�&���J:ݡ�I|�߭��?���H�6x2`��T�r���6h�IE�u�M��=�> ���W�`�����
+[�Dʒv�\�+��b�*NiQҪ�	RM���C{D|��S���D
+�g?uJH�Q\����Jl`@&r�t��2��>��% �8I�V`��{��0�%�f�A0�#��afi����HW�&,�fr�;A�Feb��ᥐ�a��W��?��z��^�$<//=t{��Ct"�K-�
+́������q�"˱��Y�E��+/�������~�A|#�7�j����{J*��Q釧��2�1��`�[�#!����E��{��=CyM��PC p�����-�΢6ǭ;u9��0�\�1�S�o��s#�إ7��*�l��� GŎA2A�$���ۖ�����/0�}�hBtt�"[CT���L��k�W�օ��y���Ç6PD:�Y�18t��SM���e�q�Ը4\*�>_��'r�DȀUGp��8`�>4����朡���f�?��1�i4�8q�G`P�S*�[t���$ϻ,r5t��V"������J�m't���~�k�
+��|*q��|}���=�΄[�iJw�	ٽ��`��=��|E��!��P_>Biku���0�n`ŭ�FX�nMlo��_7�|]~��WЀE���}4)0(����&��3nO�f612�(#�l@X��!��IG^�w��Z��/d`s"��W"�Ek���:�����n^����;�%b�!H�5�\h��4eh	.Q��%��ֹZs^�7Gd�Y���꯵�Z�e����Hs�Ton?`uP�Y����5�M����9EڽVbF�����%�I�]�jS5��1.h?u.�d��:[K,�g�N��
+�u)�4D���S��0/���RҮ��ҏ���5�[�V��|�շ���pr��Y��GQ�Z��/�e�R�'YԜz(,��j�{%^(U
+���U�Py�ڛ��f�zLO-u�|�8�������m>@�I�3(�]���8�i۝��Jע�"���]XlvXo����^�	�E{�OO[.��\u�A�l���7����d�+)�WT=��Vn3�N������x�˘��t����s�1<�>X��#����p�����p�����i���$����v�`�;lm�;���^aa4�a�^wmscV���7?;
+2���ތ��ŕ��^5� �5���Mvp,\��8/t�ㄗ�?�����৳���g������N}o����#gW����B��?�>�?���@8���^�&&9��*�l��^����A������q��y)�ã���
+���aK���<[�:;�_8Lu�Yg�ń��xv����y����z�4K�hr��Q���G���钅̿dKpȼ���uR�/�2dK�
+�ʶ��C�H���+�l6g�Wj��0~�pc��[U��Z�
+��-4�B]���g���/3���ކ�El�e����N����[���Vy,{�7$�c%�giv�e1�FCq�ԡ����W+���u�'T��,ź�}�����axJ�SDΨ�����Ђ�'@~��Nz�AU�~l}�Ґ� W;N���}���0�����`��5B�>%��R�TX��6O�q0�
+�
+;򒤏�����4_$�I�o�Nu�����4�D�Vz��|:������p�?*�&]pР֫��x��~��?CΦ�J���x�XO}��H(���9]a�����p@w,�3`���!1&��(��ߺ��`��Z��,	����Q�F�||�Z�JO"T��Q<�Q+��c a��F�������� 	�ǯ��� � �8NZY���mZ���[b�r���SL�Ralt�P���=x�i�
+*N��r�fY���8�N��!�|�Ai����C=(�����/��~��,�������S��V�[`�-������:���FT�8�[}	H��T]�$�JM{��K?��oع���� #�,q�`��LuP_�scf�U*��NI�©?Lc�f�|�\Y
+�CZ�^r{=Z�jx	5�D!~ e��9`!��M��P#�A�d�Ҍ�R/|�A/UTXt�(�ϒ�3�q�	�ť��r:�f��Sg��:	O��О$!�
+4p�
+U�%�#CM��ئ��Ƀ@(f�y!���U�0��Gj!5~U�"x��Y����=G?e''(�+�,oi��g�jO�=��PV֥�pRH�\*D��Č���.\�֍�C%j��3q���,c�%��d��O��Z�bxrfA�6�Mk~����n:[�U(J�߻,��~e!x�raÉ���WbL�]c�*�9
+��]��=��?أ��"i7��sNGq⋥�/콦�����~X�?����L�$|A��I��R�ADw,��T���CQ"N�֮�Y#�usx�Ϡ�VIju�\�n�;��;���h �o��Y�I���,���Kۄ�4��C�T�0B�K>��غs�?G�����v0Λ=��C$I���4!M�\L�d�!�j*']���z�{�X>w��~L�$8�/�j�n0L�����P��#X�������T�f��J�cj&~�X�+����u�_)-!��M���<wvk��vïz��g��Bg��ۖ�D�e�8�\� �DR�s�k[32Y�t(���'�znO;�}����@Lʝ��&�l�"�h���uP���)]�±����{�y#��:�*Tٓ��T|�2�P}��c�1�������I3�զ*L�>.'
+3ġ&<�9p�	�N�Uc\&a�NI���y��h��r�
+����b{�w�n��^�(��2xf.�ڀ+~����# m�[�]�k2F����w�͡L"�� :K�������N����N��yw$��9�w]vBH�Z��8�
+�t^�Vq��&-�t��>�B8~*�B�h��+�����cJf��ƕ����������ʣ�	�c?�O��a]�Je@�lc��@;�Z7��կ�0��Z�$���UAb�Y�r�)ga垢8l"L��#�w8�}��y �%���[��u{��O���u�´�����c��_��=;DV��Ke(����]��0GM҆
+�����7zm֔(�K�@L�mLg��[]4&EW�5� �5t����]E�	�\q��ʅ!�6�� x`��A�~�{����l�y	D�ZZ����f<(^:{�6c�ά�9��B]%Zv�;\�ݘ`�uI���Jޣ;n��Be�����[Ë,U�Z�9]h�UBE�A^�F�ՙ�r��q�]�d(L�	p�@�k��[C�>H������^��F���1�W�gTP�� ��B����P����J��8�m_yCD����yrNs�f��Ǣ�س0.=5��κ��	~J{�+
+��X��e��j��X�@�lkW����~'@'77.r�U����`�	]˵b�4��a��ĺ��R�Qq�^5h��OI��ҳ:
+f�7֩J�r}��=�q]@�]�2Y��2�D����)u��@���C���8����g��+l���1����y���U9��x,q�Zl� Z�0J������ o�D"�­��tG���C�O�|6W6�V��BFSAc�LD�f]di����֦r����$%`S4O3
+=F���'c�\�,RMt?�i��k*SU��׬�F�4x]B���uc�,�� ��d>[a��h�b��X�b4�Q��GhN�"�ӗ� p]uia�c�{0�[~�~�	���,�,]����:�R׃+%S�y2KT� Y�x(w_0�����Mg�^�� gR�s�ؽ9�<�j�Ku1��S���e%���f��C�p"b/�6.�D��n��$��^y�S����-0�n���E��x�J.X��������� �7H�5�e@\���h�߁���"p]hPi]����i*@u��o,�:�[�vԅ�@n3?�G��|�z�� �l'RR�h�d��X�uhz�3Pb�>��rC����)�,�f�������(���mD���m5�r{�q�n��5���"��`.�������N��G�<�唔_J=_���8gPe���T8����<f0�3��fys��dX�á�tw�x!���
+e�M��� !Ь����:j�(��N��yr��Á%�@mʶ�A��K�w)�=y�+�:S�A)����'�2�-�O�v��|w0~SL5H���g��5f�N[\��y	2�U]v�`���KY�|�`���w7�ǥ�\ߒZ�^�y�"�U�3/��1��	w�R8��.1|��p�f���
+���,��e�x/䥭|�q�J#�a9"`�]!���5f �hj��ˮ�!���w_|0���>��������L��+?��P
+�u
+09��Cꂳ�z�w��*����*~şx+��.�o(�+���U�n�Py9�x&+���ֶ)��LVp�V��%?�Bq��S8+����$W:vu1���-e���<J|o|G�;��$��u�	�˔_,-G~'�^)/����z�W��3��v�9ϗ�	@��`lNn�L]K[����6�`�o��ĞI]t<��)�WHD�~O��QkW8n����(�s�8�i1ǧl����#pQ|c�`x[����Q���n�m[fYT}�����X6�?���n�"��H3.b���������O���O�hDK!�4qXj����n�$Z�k��iRK����v�R4'�m��ȣ�5#.:��Vm�~M�I��K4�7�Az�]�S{M���w��x�ٱ�������A ����$#B��c��:�ˀ�ji��|������-�=%I�a�t>��[��-��E߂�2n��"a�=�{�'d�GF�a3e���z~~W�x>�]^,�0�dз~4��)��<g�y����"��׫��sH]�m��_?�gq���+תR�TQ ��횵�N�� ?+���e�@-�(�5�ܜ��cg��8ߓ*M�+6 ���m�3�Og�Ӑ'>
+$<yjoo�;�@�>u]�<�).�؀θ zH���╗�`̹$�Gzaio1�Q��Dwa<i9W��OL$�і��G_�$��7{x���o8�S?�F~w��|�_a��AvA������T��-3����۳Ŀ���o���/�`��s�:K}k�g��g������c{�@�!b94����Dh>f�)����1���fJ�����0�*		S9₂L�]1�v� �㰘C5o���o�y�]4beUC�A�T��`d �P��MC��� ��Q�\�?b{GƦ��{F�/�$�G��Ŀ����r������(�u�H�|�P�b^�e<�z�1r<ڛE���{�㢿7�9�|EP-b}��S*��0����s�K�]���`�8�m���^+��qv�R@	�ʶ]��� ���ŧ��=��W��*l\�#�S�T@J�V�ⶊ<�x���M�2+";����T�A���m�P�6u8�m��GY,D<9�θø�	k�5៣1 �6P�����#eLX.a�(���^���׶�%�N��r�l���{�b��O�a/*hX��T�G�8�)����s�A��2��<�o�ͽ�P�м� j�b|���~�ڥ��Hx�@���%�)�ִ���/�,S1X�U��n���ؒB�d6��eA�,�N*����I\�*m��(���+=�r�i��(�'�PX�</iUA���@�/�W��)�lޒ5���g�e��������0;���	�ǧ�J�K"cל㲲:0��ͼY��b���t���+[D�dif����*�k��t�ژ�����dCwϺ��t���v0���G����ޚ���''�s��p��{��8/�r	�� ��(,dwM�^�m������ۗABJpoL�cv��%JRxGZ	_���(�I�@D���㏳�۔�f%�Ө༆���Q��(!��%�_3{J�NY�4�ߨ����\%���d�nc��ג�6.~��r��0U2H < <=�
+�i ���By�}*�!3I��Pr�(w��)��'$�$S<%��G��
+i�O��z��+���}=5�C%�N*����<�S���
+��G"�m�;LW���Ui��ю8�ϼ8�<�hD	y�X���O��g�$G����.�/�ڭ#��K_�s
+�V;�i�05�b����k��(�����s�ޝ�:>ӚS�G�4I�F/D�~�<FsM��A�+d3��d�Jщ -���  3 ��U7�u����Ɣ�Y���³�\���/Y��sc�<��0�ՙSx6�Fm���#�y��¨�^�FIxV��偋Ш�M����{�y��S��ZaT�QB�SJ���y"8zQ�o(�;��~��bc4�3�<�3��l.���?�t:����ck���	�)�+��&��u�Q���X��'��{Y�E��CHӷ�޹��~w�������5���_�9 �3$�(O�0�NB�8f��.��+��ީ�%c�I1��с�f�=��-�k��{W�b4�I�@W
+I��V6�~h7��dOq��6��f��.���I%��K���'��؛j"��5�d���S>O���-���a��P"lg�Xy�ڑ��GT��V�w�p�,_�3�צ>�$�YV:��s�I�����k�ڹ� ۆ�1��4��p#����w�a>;���^kX#s��X��C�Ki5��#%&2�y �2����ޱ�`�^q��	�H��_a抙�A���(�R���`g��ó�^w�]l�#��a;��JO>�Xv\'+�%��Wd����Jϓ�E��J�2_sU�R��&B��iMA,uH�2�S�4q]ʔAtT^�2.P����f���%@|��$,3��Io��Dm�#�AΝl�ܲ)�(}�ơ�{7t7B�\�@	V�V� ����8�4��5p��������(�t���n��;��@1��'����"i��0�
+җK�?F���J���vަ�<��^ve����}����|N���ٔ��v\���L0����"F]���8����� �-�oL-}��o��N�4�]"c����C���q�>C�<50�Pa���,��	u��!��<s���	�����~��b.����,F[�p��\�V5����k�v�$��x���|���F��i�c�$b!ͥ�����x�p�x��-�H��;��y�_�3<]���C�51Fm,�y����ҋ{CF>�e��q�a���1_�t�],�tp��lb���9�Ō������7�DW����>NTU7��u�l��E��2+�s�AyԲ�~m8B9��>'��sG`_N��srבx3w�A��TH���N�d�,�v����x>t�+Y)U+��M�NK�f��Q��M�����r�����O/Q�C�Y6�;Y ��/�Q�*U�$ɪf�bMTs�y���b�`z�ҷ���M���M�Z}��O :rt�Qp?�q���T��� ����qQ�<3��R�!����M�RS�!J�2�>�K^�U���u���Q8Tw�"�	��u*5�?�M����t���PF�e^޴0�raiNhnxj�/��f��[o6�WM]D�ݹ���Ҫ:inn6i[��lbe���ON{]ci����>}O�@T���,�`mY2D�����BP�|>4#�chO�2,��4؀�8��=6�6e����_�4�r����?'
+�Gi�ڞ�����؅QW�#�Q2�Z���b�j)1*�2���L(��W~0�0m}��ȔGŨV3*���y��16��&�׃�M5�"��hL�j��m�#�H�֠�+�gq����y�`%�y1K���N���x��(�;3!CM^�Yᝲ�|&��Z�w��0D���θ�'�\�(�k7
+B}�	F��Si�(��/\�� ����	]iN{e��^��_c�@��s@���s��J>PEX�0"4W� ���p�Dޝt�]�S�2Sr�����N�v\�<��\~�a�e+~ÒMK.i���:+2S���٬N�+Z��J��h�VH���4������MY�0��1�����r9β�+0�0��Z/@��׽�/�y���A�\�a��E��0Q�����2p|�"���o�*�a(o,kP�z����D=�Z�����N�=(C�0�.<̿�T�[�#�:L���e�,HȧL5q)��[Cqx9[�U��`��̫¨���0Ʃ��?��}E�� �O��F�{Fv�`�S��gZ)��rpZ�:��K�LI���zƦ�Y��*Y���7�TC!8%�`P�?��J��w�T�AI��%�C�}�)ᛡ���΄�o2�~�U��o��<�V��L�G��s����6�s�9�
+�W�[^�L-�+�\�#o.R����Dk�XU@T��#C�S6	�MjW4��!C_��`�B P��c�N(��Ӡ�C#��m�`͒"�Q���GRI6�1��7���I 6Em�rt �F����(�	��IS*�utŧ����$����:~㥋�x��cc{t���䔨�gl�EAzț�@�8����܆
+le�%�l��=�wb��H�gq��xQ<��h�JY����N����I_�r���x,�i(
+�� E�'���g�n���A�9㒚H�˫�	����d���G��RF��0S�vt�c]e�#W�#�<>�Ҏd�;C���~w��Vc�2�,
+�����3p[�Q��/i�{��s�vy߿Ϯ�i�����o����:��*t��L���Qt�Mn����?OiP���Z�x�I�N�� �%���"����}z"9*T�|�������n�3�5ݸ1����k�ė���2�	L��ô�]�� o�tB�+S8ue�	������������"F��^~�s��Kp¯Ba6�R�6�t+|:�o��s�C�%��� �^$���!���˛q��Um�_bH��򹋊�n�Xa�ɲx�fiH�L#ƈ{F�'fn"m�&>0q3@���:t	�I��Dc~�;�p�S�w�"�n��r��ȓ�1��؀��k9�F��#�t$3 qXP��X��/Ꮗ�\DA��QFAE|��#���@PK��7Mx���G߆t	g
+]���Eyv�g�'�ƭ�=��<
+y�Zȝt"�W[�{�C:��==�@?J
+,���P�k���zR��q^>�U��2��s;x"���^�Q�"Y�,af�^��.�Hì��	_���{�p��V������"���p�.=
+�5k�U�z�B�2�ü�2%V���bɄާ"��M�|���OE*缜�^kn�n;T�a���Qm�۪\�zY�MM��GϜ*
+����ŷ��_Ew�u�H�N����H0��y�)�y^,�b�o֟(WV������f�ݿ艬�n����ږ�ܞ�*O�rV��t�N�_�:8a���K)���,�=��t�zy�G%żڴ�&>/>�'�b+�^4c�K�$��-R�k��L���a�, �+��Y���ZaZ"䅫i�w���n���V�Qy�3�aK���E(ik�]�<�E�PX?�顕���v��}m!��H��:.f�"��vQ��(8����!�YY��$9JN��\˖�iA�u1�rJ�dЖ��b�F�#u�\�IgT�@)mZ]�,�#g���^��\��+hoC�p�-x��(�ЎGC��&�!��d ��8
+0�e���)�[�t��jK6+e�v�eQ�>��x�px
+6�s'�ȕ��ޖ������=���J��w����; ;����O:���-�*jD搳�/xO�-�vK��KЉ���dʨ,��qkTN.o��>u�����	6��>P��Hçq���P���������j�����AGw�x��h���9A�4�_@��'G��?���%��xt��<	q0_��l�΃���<7]�f��K��ZJxO��q����-?��$dBXi!<.,���GxuG��k44`�M�U��c4I6�X�U���.����&������*'�.F&CK���zۻ%����h�VK"�l��)�>�"k��1��#[�d�h9��#�P�&�����������A�XSw����[/�9e� ��zEn`�Fdݕ��̏�)9�}����j�§�i��8�]��W�<"����ٳ�H����VV�j�K(JW���<I�#
+D��`�Bx'WS��V��HHF�^��j!�(�@�)�ֲ2���,؊nY�SY˞�]+tة��L',MF{�
+z`^��--��X�����<���9�[b��5I�KX��h�9�\����B�cv�_�*Vj���ի1jC�"mE9�W�Y��kU]�(@f-?�.>fg�EUY���dbS�`wN}�jh�Ü�b�V
+�	G�3����Mp� ��	7����k\������9��mwCGa31B D����9%��繩��>"����v2Xv���8�0߻�_�|�'����r�垬�Hd�-^Yy�U�,�8��;�U���]���-�J{���鸁�����.6YQɰ��2��Zs/BeqO�s�{}ʂ
+LhT�}.틡-0�'��Vx}��Y|,�s�Ϥb�3+jD��
+5Z�{j4T�U���v�)~y]A�P�����Ȋ���p�d�����	ϒ�02ma�H��훕����y�����oMe���9c��av@i�e��o����׵�ʩX����:�\3�+��^UePU4�l���F���N_t\0]����ʹR��*kX��m5��q9��b���Vf�UQ/k�6 �䒾Q!�Z"Z�[7��ԙ���~E�Y2��%�!:��8z�_f��F�h���2�.��^VE;. ���Mh�2��O��֪`{p�]�Z��� �C����z󺻻.��	ժad���Z�'�s��	�!��P8־��&s�pB��B�����#��m'�.͛p%�k�3��zϟ�aUO�����sh�".ȌX��>kZ��i�0�q},�R%ˍ��?��jхpo��;oؔ�R���X�J��(j9��u��z�l�FhP��:wdS�eAB�b�T��!E|'�/q��~L��D�t��
+��|�Z69��:�ГSu��e=�J����Md%+�=ų�z,��(7�ǀ�J���F�5��S��6?V=4~����E��ŅXd�"W�i�-����J ��}��X�ǩ��)�&�><-�$i�%-��D;���ϣ�� ��_�f��\r Tv�� ���Si:�ɏ6J
+m4$/PO�WZ2�Q�QF=�+�������] ��9�%��ּd̛xbG��r��V9��[K�(͂P7�l�>Ò�*���}�rBR�����e�7�[9J�G����R��L��G��8 ��g�rűy�P�V]�.����A )���J2����Q���}tڏ2Jm |�D��G�~��ʗ�d�I�|a����1k�,�>S�}ΎY��po{`ذ�)�(�l&�rzU�������d7F;=)��d0�5W5`I]�sq��9&�� t tK�)�ę8T�U���*��M ^��ߦeOģhBɇ"����3@ᰮA`��y�O�#1�'^B��rxy��["��V=d	8Q�}���|�t�9 ~MӺ�R���(�ul9M)%�KQdZHw����%[��s!����ͻ)�	OJi�CjXUh�pv����OH��Ϝ)�*�V���Q�Za13lAY҉��w���C���V���7��ڂ
+�_$���s�`���*�;7�7[ڿW��Cr(�Q*�vTD;�4#cJ�!��V���1H9-��A)�4z!Qv�Tc�M�&��}��ς�f|�|�3&ZߧA��r��i����V��A������2K�GUc;y⇲���=�f������/��I��(sLfq�� ����EgX�����@\��1�u.���Rܔ�}TF��<I�Zkw)�K���Ef�R��#�Y&�z�L֛�a���N}
+,M�3<m6�2.���l�b	���W��§J�.����P�1ٹ�E�=rsj�k���� V[M�A!}�4g�E\P�)��~#�ɀM/�n;�H���� �o��p��<��Vo*3S�u[�vl����x��;%�RJ��ԭ���I��6nK�BzB�Z���n*E�Q#�t`:�	՞bU�8��	ߥ;9�O��	7�.uh@@b�O���hI+tfMQ����q҂�����t��c��o������1I���Ԣ<@�Qؘ�~4/v�n�����<�|�NGIqm؊���_��m�}= Ҳ���w84�##w�]|cEsNOיx�?�?9Ce{��ɋqy��?��բ���%T1��L���E[@�Z~JP�My@ruw����VT���@V��(\���\{ ���	s�'N'5�����$����lS��s��Y��+�9?�[:��qE����n�NJ$s�w�确��6a	aA-�z�s:)������B7�O�:T3�ga��E��e�^LGG1�����m�vA"�[�3��W�p�S��f�k���S�U
+7�9��o��s̝�j�(�$.l��.6 B~M��3¯�#�"+���F"r�hb��5�=H���t[9�I{(��� �*�8C�R�K�tn���X��7A��2��a蓌�o0����Ǚ~��º��xk��⛲'�8D�A2
+����,���bUs��P>w��J&8knȿ"���B4w��ի���	TtJ�FX����KQ�v#�D��#e����&��T��Kp�O����a��Z*	�H�����`\P2�<�>�?9co�޾::a��޼���}���M��R��%�R������S�RM�'��H.u D�UtzZ0���z��3<	�`��~�S�Y��"�k�u � ��n�S������FY�#���2�։�nZ#��k��	�S	�u�#�5_:�.��.�����+�غp�['���@)kΟ�,Y&ݶбFIw*|]��l��>�i�ҋ��i��:(�e�9�Gq�t.�?��02N	���țf�)�+�ʻ��FL��Fe�zb��_�p"0���3��� %�w�}�2	����w��JxEw�Ա_����x�%0�)��X9+�oN-��ـ�,��7��ꇥ5,�2Vԡ�H3ᦍ�m�
+ �`�%w���]��\k^����
+yTM���+�	�'ʋ%���AA�FjS�$X�a4�U�nU�a�U�rA�H���T����/�w������E~������.�¿l�}Ĥ�{�h;��X�|�&������	�.��(G4J��Q�[��F�Ez�I%������ ��vW9�/d��g:�"�0ks�e/\�>�؍+�蔋�]��)�9�i��j�{�C�mM=�ڗu=�Jf��E�t1��o�^��S]U�U������!\��*�R�m��]%U�\K�&I0f��p)L���Jgc�eJh®ۦoU9BUQ��w�N�k�k8� ��7M��,rP���ԍ�UQ�kK�U�!L�w����yB��M�v�b��p!}��"�C��M������2`�w/h�����7L�������x�����K��4Ƃ����h/V^���+/\"��"^T<�����Vt\�b��2:an*����7��R�^*�S�e;�{�f H@3���v�zɾ�ʋh!5x�`>��x`����}R��˿*��\�]ز�����vhp�bhi�'�	
+�B�2�3��b�ф$'>^�ɸO�]���OП�YL�2�I�*�9L4���Y.����̊ �%���}X�ܤ+��;8m.�1�e���^b�L���E{�	l�ژ��|/���ī�W�������=��G<@�b��:,\�'͒�
+%�*⻬� ~B�4�V"���0�.;�c�V�3���y����(v�a�c�餯c�$��o�5���ZA�ao���F�k�����G+؇�{2ƾvE�<�\E{�K*���q��4H5.��6�J\5V,�رn��g<$U�)�����'+�/����}�:�>
+}T��Z��x�Û`�3 �V�J�3^+7�5F ˔Ȃ���GW������hN�v����JW�+GѸ�����8˻�۰�'�7ʺt����ɼ��Xz���X��V�KM"5��O]^�/Tk�>����7�Gum`oJ�lm���,�[��w� �zh��N�<z��i�.ZY�dq���co���_ئ��'��B�V��57�O-�~��"[��*S��d��qW��!�$�1^8�|���M�~hQi��S[vb���_Ϋ����1�N�A�(D9Jl���w���u��t�N4a�6WxI9��'~O�����D4�w����Wj^�2�S���=�SE� l��t���â��x��|R���z��M�P�b�'�.��F�������~��Sy!�M]ql�{�W^zb
+�;��?�/]��
+����8�.5�	* �L�~k��i������	��WG��BQ!��*�ۯK�����w��?�Z��!�U����Z�Rn�.�fŊ�P�h��&�@h�w�ĳ��Y��+x*}�����2��G����j	:���+M�2h@+��l��#��'>5����FAc��.�r�`-{���x،�p�$
+����,`l����ô�J&�*�䋢��@8E�U��`��4���/!���|��M!���OXKG�Uu�kI��Հ�˲�=H��Oi{��n�|��dK���iL`:G�wp�1J&_Tܠ��bw���p���"��E��)/n,S��,=F�V<�|��f��]�۲�m)S�BI}D�Dgu�%O(�c��Z.�t�i0�/NT��+f�;M�;��Wmzy:�)_z�/��l��`4��)}�#s���ms�GVײ.���:C�I�+�J B�":���5� �d�kc��Ԡ�P܎��4�	8,eV��낌 ?��qtL@��T��e��i��{�m�t3����N� ��<�-9��r��(�-�$s��
+�%.�ʘ���m��NK<���1������i �c�L!^�,$NM�aV�����yC���5	`pf��8펽�s0�O�S�ە?W����̶*ִ�*K��|sdzu^!����	ִ�"��3=I჊����@*ȡ��ɉ��S���K
+ZV�K�O�����#@x�|HŎD%�u��m�}0�m	+�h0+�/uf�}�3��B5ǁO0ᢴ�?��AT����`ʃ-5��h\�0@@.`g�%�C���W��8e	���TWgn��1�I��'�(�H��]��E�f"���s���14����%e��薓�Q�����GkW�q?ȩ�k��9=j�^��T/J�Z�"����x��HM[�����Q{��,;x���ܢ �����S�'��lv��1�P���	/��T�O�II���J�ɦ�JO�!۶c^�aL# :;hhM�1P`�����
+�x��|O�6?��$l>��v�'7f?�9u�4	�(��>�p&���6H��!��PΆ)���.z�_�HȁHTlղNi5`�l���^J�d h�I3q�E�:�R�Q�ʣ"�^y)v%UO0&�1�R@��<*�p �5�@_/i�i�� �񜥑�/�.����3��+�+�Y�U���?myFb삉�B]�`�|6'�S�ぐE5j�Y��E>��TUX0�w�_P��=|VZ�-}~qϷ��ź�bvo��4� �����V�NT�"��k�����h�����"Fڽ�#��2 �>�P�þ�(����n1�d�W�yp%����:?K��)�>��cZw\�����~�:;h���M��=��Sr.�%�4��<�wb�Q@U�'qEE#B姥��R�\�'�^�Y�}Y�wY�U��Vz!����~����Kn�oQ\�t����f����x�l�U����Y�B�s���5jo�(��]�1ꬃ!>"xj�����LL�w�>#L�|��#��x��"Ű��^���"�X-9��	��;t����u��R�����_Q<F��� ����2xT�솗`x}	�v6V��^w�~�[����Ŕ>C�C�0D]���
+O��E�98|3oBcT3e*^ҫ���Ŏ���_=��Ij��,'��p��:�������s���Zu�Y���S���El*eD��\qV������* �oV�p���'���Wd�z˂��+-R��_^��
+x]����0� z(ߘy��a/��d��?���AO6=�z�!.�j�G@��O� 092����1@� �	.@�Z�X쏑��'8T�( 
+̇N�y����<	w�u*��fZ��jP�) �K#/:u_m�kgUh�T��ÙX�o�=����c�]��Ǟ^�~:��$K�4XN�����Mt���K�]���g :m����"�}��	<���ڊw,��Y�6��zO^ؒ7�gw
+YD_\R�JE0��Q�����E#���U��<Mn�9`rgN�'^8V��)��<I�աS��:,�����7��?�RBd1k�8���+r�Q#�:Ɯ.�Z13��5D��z��*�U�kc��S_T�RM��_�,�mUWU�徔J�V0���<^������m0h�C艠D��N��@�qV0Z��B��{�0�f�^����-5 ���>�LM���ܝp�j�TE�������Қ�z�r�ez/�K�qF�?���z�TY4uT��|e)˙/�`�KB��h���D�WJm���ݴ&/vgR.[sr)�``o�&	�3՘�V�`� ymLE���Y"�������1�5=Y���U�g�>(Ù(K�~���P��W誺W����]R��cr�1nQ�J��^�I�������R�2�c��?G�SL{��������K՝�8�rѳ�ȳ�]���%%f�qWq6�����Wve'w$���9�|�l�Kjڦ��Q�N=j�&w<7�RK\�ǈ����<��H��!}c�Ȯb/ձ�.ю�0�7� ����<�}ُ�0f�Ž����/,O?,����|�E��<�Q�I;\"��8�Z�<͋�sEp1����^;哏Y��a�95��f�#�my܃��t;f�
+��	�?�O�W��ۅ��x�8�=l��	�oT�X����:KbH�<F����6	(|q�S��j��6I��zzZ��~����?kL'~\yw`U�V''���p���$���TAF��K�ڍ�
+9v��q>��l��I�	d��p�S�\�ܣ��m��#���E,�u�����Y��<��JC���qt�W��5������R���\_J%f�+���<ۑƢ���kH�J���M�Uu8A�6��ߒ��ʹ���ή�Wgы�|��эE�QZ�@}U��� )�7{�A��Xmz슌T_2?�yQL���C���+ԼՕn�d�(����(ѭ���|�]��i�܅�����͕���l��Zz�.�|�o���k�V�[$Cʊ�C��U|����`0��W�҉��xo�m ��6����`���g��zwsc���[�}���n��g��`{��������fk���0�������� .l���ۛ[p���p���7|���c�Q㳵I߷������7����ӵ�������G�n��Y�n���zo����ov�׷;�Ao����;���Z�l�j����>�Os���>|��m���&L}{m���c��u�wk��ۄY�៵��n�߶�apg��o�j�����m��Bs�����`x��߆1�\6����w��w�8��`�;��nn�	a�[ݭ��
+,po���ۀ�`��Zp\�/��=9�� c��s�Lnm×~n�no��oúA����@w�
+mllnw��������6�Yws��nmy0
+�N�s�^�������p��pk���6����vp<[0X	��&^\[�n�A�0��`������d`��p���Z�f`���+�9nt�� ��?�F�c���pjֺp@d�6�<<���C������6l��qz��`�����~�3���K�w�Kױ6�u
+��FCC� ����6W{"������a}67��ks����� 
+�E�X�q�I?��03hw��	6�`�7�l����n�_�O1�)�COt�;j+�.U��U�hM(�U��ҝ���;�W_h�����O����׫��#�����-}����r4{KQ��Pn����d鿃6ɱ����*w�}y��
+���[쩊�P�1
+SA�r8�,�M��2��*���V�v�w��|�܅��~�7ٽ7�����xZx�*X���d�:�x�)+��;,G/�7*z2�AţnTQ��o�UST�X��U|��9v�?i�_��m�o�훛��u�_�rt[����" �I�M�Sq�wWu4fxֿ��ȧ�>Ū(��xoO�Y)����՜h����ƚ?�����M���?��_�|�Su	�p�_�C��쭒Y	��ϙ�v�|I���U(y�_�G9=��<���K]I����m���"��N改�A�xw� ��m���4��Wj�5b\�HU'��0��V���]�	k`@��*�F�#���#�
+���lC�|�	߯���>����?˕�ㄑ�ȕN�"�n��X��V���Pg!���t'q<��@����)L&Y}�͂��X� �h4{/��h���'Ǉ�tG�H�"ǻ\E�J��1���t4r�Y��6�Y�?�:շ��CU�E��I���c����o��=��B>:I����y%�@;S������"SdG�ow��K��jT��4X��ڣ[�ۭ5>�mmo�(`�3Ӛ� ����1�6��U��'����E�4���4��ǹu��&��J�ˡ���u����(ʞ9ת�����t﾿^���|��ڃ߻o�u�Qr^�g&y�;�x�w���uo����������~\�z��U�?��_�����|Š�X˘+]�Z� ��S��ho�ߎ���í%6	�fWd������K��WG�����@]����U���G\+JT������fh����]��s�J�Jr�eB�b��#��־P]�ż|oڻ���u�Ҽ:�L���:4=�������j��v�%4��XJ���@_��.Օ�u6I��=4r�+s��aj��UF�&�z�c����9�����U���S��f;<E��{�+�hX��k%�;�0�,�^&>��O�k̶F�D<c�L2�檵�����r�����������d��VO���u;�Gw�_gE����QKz���T��.��6#S�d֤+C����N�I��/^�c��Ɋ��vxuy�WS�'�~du�E�`K	j�v��._ҫ�B.�%�r�,�\��lw�j�PE-
+h5@^Թ����"���t�oŃ���b୍;�ƀ��F��q�J-g�S��ǵ
+�@?Tӥ�6m7r��ߏ�D3q�b�����
+���X�zϪ�og����!���B	�A�#gE]��<@��Sby�����qd��C�e�gm�n��e��1U�����Q�X]�+��� �����+x��#��|�O���y�pL���tq�sި���|�'&~)raK���\�����-������
+s�``k�"�=�\��$@"�'��]���eG_�*!�Ē�-�����W󤭔zl�D��[U����5�U7����ϒ���#�B�@�����F��oR��.*;=\S�3DUZ���N޴���iN*��c2���[ɞv��s!N��W�^���I�v��<�a_����Z:�>2�x��\�T"* ���ה��`�<k^8�#�D�=Jru�g�����ai�KI���)�G0��̙��2u��ŜN(y��e����yrQ���ï���f��Klۮ�q�n��Eǆ')�6��8B-�zZ���>��j����(�i5}�Z�6��
+��L�^XN���sv�R�K�%2.��v��x����0�ʎH9���z4aˮk��ڇ����׼V�l��4_cE��f�3召ti0۵��GQ2&3��E��Ӟ[���f�%�����g��cd5�������S4��Q��1���T96i�<T�������s̸�( 8P̌���?������
+�e���ա}K�Y�u���1��Zj��L��s�6���y�VP����O\�Ike,�M2M�`�2)���
+KٮLS.�����4(�^Y26�X4۔*�1���n�U��j�M��j�"'��b�07f��!ڍF��X��c���$G#�"?,9m��q {Nў� ��*�֦B�u�ɮݚ��c/���%�V��UU�k��Ќ �Ma����8�Qhx~qv�6�K�-j -C�+��w�^���Ϻ�UU�c�P5;�d��U�N@�E7�W�Է��r����,[�FDn$ff|�ڥ��ZK�Ra>�����1���՚SW�
+e�m:6L�߫z]��fe��.��UUO/V.7<X/����^ގ��`�5�ch]ņ��4Q�(RD�+�i��(�ЭO��ٻ��(��H��+�:��7X;��\��ܶH񄃴���uC�$ r��i:���ds4#)��jgW�����a���9�Qk|��I�v�����?��:�oR��_G�{�wJMק�:H���W�˸n-?XI}o�o�/��WjM�r�/���1�t��:��'�M�ϓ�_�{����������S�c��R��-�Ot��CoU�ѳ�o��Y��}�s�f��9�J�z �e�v����jM��?}y����e��˱Y���D��<�EYv #�����_Vx���ۥȧ_�p�'*�̅(Y�Z�d�K�#bz�1���P�K���������< �z�
+l9O*j�R�TG�yݼKm��*��P9�S]\��W��	�WK¾��![V�����Jѥ&OW�_T�U����6��~�Zf�~�(��|=I� �oY0��]��W��p���<Q\[�F��2���lr�=�@L}.�:5怳+/����9�+"��aW�3�@��bd�hS1rb�n�=}Fu�H�#��f��y�U��1ȝ0�TL�R��XMsv�-2�%ϛ�����,�T�TZ�Pq"�c��軪,��^�T�G��K�8v��%��;t�laʨN�-h�Ǜ��Bw���B��ZZ�|�%w@�䛠|���m���u��rvh./*���zf�����K��w�E[�a΢��D�����H`�G u��pЮ	�s!+�&η*|bA��q�8ʒ �>�{����Ͽ"o�I�韓@�&Z�G���*�ӹ�,R��8�"��#Ї^������o���2�;��W%r7P�uGZ��F8N���BS�o�K��&�Yԡ!n8ˉfў��#�VF:������R�e�W�95V��%K�byL�c��	�\�8c���TE�+��� ����	p�e�+뚳�8B����֢��Q�V��  �d^Ow��">W��0��j
+���@��E=��5�TJC��d6����Y0��P��/lmj`��[^�m�|��TT��$p�]l���
+�ث�~��ʛ�meLT��O=�Z.�������u�����7h-/7�$��K��)QxW�)��6�����r�Ey?��~'^H�����>�U����F~��W����U�_�����W�m^����+U?�G����W��5���5�FwT�~<� �
+K��	,X�2�rZ��9���p�}����*]���=Ug�ߥZ�+6�N��K�7ؘ)�{���
+!O�\+kY7	N9�G�HJ�]��E�}�L:3<+�J���<�n=�^�3@L�<�Y����v4�8)&]M�{��8|4Z-�}��@\����\��u*�#�����K�!*|�K�ߔG�|+p����f��߶^/�/�%����'������`W�����F��
+"	��t:��e����������7e�O�`���������){�N/��޽f-�Z���՛��g�߳/س�G�oN�8��y>9:|���g��~>~Gz�7��)h�������1*����5�>��O�r���?���9���x<-`�Ͽ���M�x�
+��L�'�2{��������~<;b-Z=�r��'�q|zv�ZH?�>�3�3��(k'YW�&ї�tœ|:�ٮ���DÇ����~l��#�@����ۋ?>{�0���?���ǻ�~�^}��;8;z�~�����xz�󻃳�'G���ৣ7}F/���I�.u�Ţ̟�%�,X��<'U��|��ğ�m��=�hD ���(w^�7.��� _�+姪$���GVS:�_��_��_����Q�!c����O�m'Ȉ5B&�?�x����>o5j�6?V��@����ۋ�Ֆ��)�D������B�D���_�~�p��Xo�؀h��SX>W+�V����56+�bD9�:S�#$+�QY������Z�b���[��=�i$s��/�����Ck���ü'��z�)m�*�ڪ/��ߚ�Zh$Uo-p/��⦳���#�z�W꒓J��-�k6�"F���6�g�ɫ�x�2�:~j�|M�@�d�k�QB��+u@�ٰ:��|/~\���~��i/�+>3Fyׯ`(p���|���T����n�[�S����"$��Y8�W^4�3��#{�_l�]��K֜^�TJ��ە��2���,?P(N���ј��cr_��X�f?~	"DQMV�z��bԅ'�vV���m"-(�X,��[��YʝlH܎`kީa��E�����Y팪ۚt�����-��������+FX��1)oXɑ�#�F\Xp�'9�.N0
+7�6�)Az�7j6Yy� �=p��Yf����Q�� ��������=���)��W�z�Mga�Qi���'���M1XD�լw^�m��	�ڰ�� d��a��O�7A���Y�/�E�4 �x���,�k�����ݘO��: ����2��]���� �%ӄ9��I7ʻE`�#�6yC@���R���
+_{���gK@�������ˏ��L�{͞�D�U/"?�����X�O`o��n��!�ǡ���з~�u��9��
+��N�$INP�"�RW���3Ψ'�輎�(b�Bn��3\b��C�s�y/��M� ;lr�LT�l#�q����Z&��ЪQ���^���LB���?�d�^�j�=�o�t���u�3�i��Dg6{J#Ö��ݲeHZ7�}�g����~���ٳ�y���Qj�?!���>>t�ޡ&`�܆�I�g�Y<z�ƌ��v����'$�!3�7	w9/r�Q�7����"5{��=p����97�c�����T������KW�h��*+���ы�Qr~�/%si�"yb6�)@"㶏���:� ��)[���w�L������]y�gh��kC��}��{�i��`� �|
+v �"�K��e0�'����޾?���G:zwv��'��M���W�~�t3-�I�-r7�&qw�+�t5`ۗ��3J�xty	0�m��*{����� D1�Q� ���u���R�:��ٕ�J|`,f������(_����|��r�Q,�AV���B��w@���l��S��^����HHIVr��N�h8G|E���н�q��T�b������HTc�6�\,>���X >%�ϋ��T0v��V��t�䃋#9�Y�g��;�1w1Q�����Ͳ#�+ǟ6��۽��nk����2s��y�wF\����������3t�!�!���W��Z'}t��#���3��N��y���r��]�s/p]�i����}��]�:���g�Eh����q�A!f� � ����\���*��}�K�N�?���4�D�R6�b�c���R���N�;��'��5ҥm�z*� D2��k��cC��8��Q�����-�,e���)cyɸ�\Q
+C�{��e����J�,b;�*�g���w{T*e�L��L��OF�$� U=0/���@�`���j\���;��(��|��iBa���l�[���>�����:����;0�fϊ-͌�w�Z���\߯@�̩��i_�I���S6�#&�"H�� ���hHG^�_�\����'Z�1o�U��q���V��O���I�0�>EһO�x��,vW+��KjYW�
+G�}�����qѥ���h2���Sm��ĳp�	�1{Vf΋;�1Am�������֍�}(ߘy��0_��u���O~���5�.�B8;L�>v� n}���I��O��ăm��K�j�`<" �A̋N�W��ė]*�*�.gč��6��%�$�}�%Q���^��K�y��6�;P�S�������&ms��;�T���a[Bi�g�ԏ��/5Ar�
+�z.��b+_�sF�f�a,���X��5�Q�_�b���&���
+'iT���%�za��&�s,��n	����������rT8,�<��E�ZUs��+����fO5wEy�-��"�?g4q�=�X2{Ĭ-׆;\�7�K�<�Q��$Цy�F[��ۓ�Լ1"�-y>4�Q�Yi3[�)��j\z6�|�L�I��9�J�ٌF)j�y��.?��=to�0,����v�
+��łË�l(Oa�� �_X��0�ێdò~M�Z_�~�y��f�l���l�:�<O찬@�qD0�Ҿ$� X*��J��V��π��%= 2ycI`�^��ǥtɸP��隌ܯ�L�U�z��#L��k�����S)�=�	C!���J
+��f���֥��ʪX�/��ʤL�}�g�"gÍGtMXy�[�)H7�p�щ�M �e����o^�G����b�1A�"h�	�4����v�����7ou�Mk��
+�jb%A��^˱��	p!;��`��/x?k�}q�V_�+�/>!9=̶��*�R�N@�(!�-�3�<�"�8��\��"��}*�Vw\����;����b늿�ꆡ�ɽ�u��K������k�6jo�(��]�S���f��(C{&�^^n)������]jo�-	�P�q%�&4��-����%B�@��hϥT�i�s�%@�Ώg���H0�s ����]����,�=ŪXJ�"���Le�����{_�dh��H�Q(�]V�nٕ��ԥ�f�SS_�����A`:�*�SS}S#m�o�kj�ij�gj�e��1Y4L��[��V�<F��D��J�?   ����vG�.��O�By��E-�MQ��SԥI�.�FNI"� $�	��9\�_c֚�3�zc�M�If���{&H�v�U�j�Hd�#v�뷝��F��@�M�\Bȫϯ>��D@q����Gi�R㉥.R�E��D�z�]M�Gi*�M?��а�Pq�3�0lŐkQ�n�* � bf���d`}�r^3HS���^ƥ�!$������42�Z��z�1�����MYS&Tr��W�/��R<�[�Ir�IȵΥ��q�B���A��[���Ё�t�6[�ճ�4�Ҧjg)05��Z*1_ԫC5`j�,yޖ�k(K�/��Q�a�w=���^�p�̓�XΜT��ci˰���ߚ�PKOv-c����w��:��;+��$���KςO����+@��q���`aR��t<%/�+����e���P��e�<���u��9��9�+����
+�����,�1<}���M��h�d�r�J&�3[�>%.���Y1&y��ż!���gGP�,���Ma{U��  ��p#`�Ph�	� �U��dVCrƛ���	�(I����\o��&,
+ݚ,����Y6޻�n�^�J��<O^���{���Q��X�o����)���_j��8|B�e���6�P{�c�x��AW��4���y�y�Ӽ��F������s��c�4�|�iOx��wѥ�E�gP�z㘮��-$��'�Y]5~%a�V�5��b�f�Y��}1�L�@��{�4�
+y�I������H.���&-T�x�[�U�]���f8�M�������6�S̮�9'��'�C������囓���p��}{�(�w|����u���<�+���p�P6M&+�_kQ���(�|�'" ɚ ��X);=�L��z�i?�yoJ8��+$� �8R��B��\L����Ķ����W^�ٍN�>7���-<�	�^�����-�7\�w�ٜf(�6�M��u����t��^$�h6�~R�;O���]Ɵ�'�������<��}|�B����#��d˘��HN9S��)isF�$�4_dc⛻����ZY?��x�
+��#�bժ�R�dTr�m!�rV�!$���Ds��(�I��2��*~�f٨0���ǃ9��xZ���@6`�̉ȁK��cw�EIffO�eWE9�Sy�e_a���L�?�}Dأg��=-8���E��P<�i��x��Eъ'�G{�^5�rI?����UgRs+��P������cJ�!b���<�<�P~ך䷳������e��"�� �+Yc���3�U��_Ug>��m }?��E�ޞ]�
+ikq˻�Pk��xOD荄��#�9��^�����r���<��qqW�%.��T�U�&����j������v�r�����,���Z4*���f	������������-�vͷ/�0++�W����vZ�� �N�`o/b�F���ͬ��D�-z`�΄B�x@��@�oE��sf�×��:��O�=���߻]-i8��d�8�M�"EcA5�/f B�A�b�m+P`(_�y�́���W��6$⩁��ؗ�	uD�U�/���Ϧ*�0U�=+�3uC3=��;9-���Kd�y�����e�&|�Dj
+���r��&<����5~��mPN�.�����Xp�k�]���2l��I�I`l{uuS��B�S�vK�)0�/v{�Lƙ6�������Ѻ�|��4�R�� �M�[��/��ī�~+'�d��Q��?��zIt�����9f�?P��
+��.#�)^M���Z�#T���e�(�T�^��U�Lhġz�7ʁ{��&�)�νP�������?�*�P<��s?ɧ3�6���>�]#z���q�F���F�Z��Z��/���:�e����m��$�QE��68fv�p����|1\W{��k���n��i������f��j�uТWW�e�:�t�e��_+�6�b��u����!�f��Ը]�\�yt�#�\�6J#��!C!�`n0͡c�_"��l~њ"�	�Ԏ�e���*���N.es��ٖ�<0S���nhI+��=�B�fgSը&�m4��)`f$�Ű�^�=�J1RU�P���{�����{p�\��(X]�Vgl�
+��x��~�Jav�m��vV��fŹ]��ҡ"v2����M��`�Ǻ;<KV����q�{,�������k��Y�g�_;Oaw�	��ʰ�WMc?7=�<��ROLu���,��P�D�h�psCXdՎ>!� ��;��OE� �p_��#њb��d?���ְ�ɉ�6�#?��M}"�������1yy&˃�]��hȣd�U9@L�a�H%��jb|��v
+�eSU�����F�)���
+�Zq����#��G+��ۺ��w��\=�2@�lu�=
+P�� ��J�w��D�e�k=F��`���ῄ��T�U���%0�I�&�ݻ@��xTxƲ#���(0"��N4�+ ����d3o�8"�s(0F�LC=�X�J��:���èH��t*�[E�xV'9�!PW�6�ʮ:;	:vʳ�#:Uɔ�Ƅ����cno��I��M��/�l]��V����~�8��a2�!�5��7�z�l�2���Oq:��S(J�C��kE�d���h`bS�~��T��nW�x� �ȑ/Q�ά��3�D�Iqɒ!�r)XF ��<��p.��7(��HPI�Ώ���~a�S�p���lF�
+/�߾�=�֞y�b�{�6����:K9��ИE� �n؍a2�b��e���(����_�Z<|�f�T�X��WN�G�noI~���K�A�*��e%��j�:�(C�hu֚�=����a{���hN�[ѵN7�8p��8�L�.�wӈ�nz-�
+����y�E��"��D)�/@�d)���^`(xCM6f�/9S�WӤhiQ�Ө�Ϛ韦 ��se��@�Y�kH�-e�@ Z��t�E�l	��4W�y��1��s��O)Z~��8�f�&�1� LR��#�@����X=me<*5�z�Q5�@]�i���w�a�K5̐�n�Auc��N�	+�Cڨ�����8��� 7"t�*�7��a�X��N��`>����"�u�}ˍkY�ǟ�Cl��K���0&��8&QR0�4K=I��p���G2(�+.����QZ7�dm���;k�D���fsLX�\q�M��Ѣ��?�	�aw��c���xc�Mγb�3�=\�i܆���Tq}�
+´|J)�tqϵ�R�v�7��T�d*��!���'�Q��dP�Ǵ��!ɓ��:Ȍ'�./S����1	������[L�ptoPcL�y>%Ɛ��Јf�?�1��h���r,o(�g$�Bo�y�������,O�讨��S�?����S�q�(�?�l.�	�g���}0>�X ��f����"�v(��L�}���x�#K`t]>tt�g�D�.H�b�lu=��
+���]dص��ΧϏ�1�CJDސG�SSu�2P�C���+�'t����Q|�����6���;}#�+�m�,�d˹�.n��@nۼ�U�w�v����	�ty��""xڙ���dXJhĴ�o�(F�D�.�^��2|�X�h+\��2�va)����z䣦�P�CT Qs1�_���x,�̠-�Y�j�[6��8a�n~ŷ��J<���*�P������8v$�&P��{
+�-tm�����L�3�8KyQ�3���X$���?���O`����B�d4U������(*֋�<��G��\��ݛ�j�
+ҷu�7�M�.Q�n;�)3T�"eǮ��E�GY;���-ʳ&&ׇd�WƶO΋�p�\���ꖹ�é����$Z :!����۵h˟e/�tMC�Ç�R���O���Äsf\�]`��(�ĉ�e�y�a�1�NU�e=5y���^�e[�cv:6c�՚��c	��r���h�~3RB|�)u�PJ'b�P5�~��K�#ꖡ�\w_�� C�t�>q��J����}�nc	���y�Y7Q�'����.��]X��Hl��-7'�b��wY�\��Y��e��8��=\깶,/�.�̲�K%Y���[q��<U�.*���,��Q�����<�>'��G�`�,��'r���<d��ğ�ߥ��K���.�-]TPZ��Ux���̗w`�f�����:�T�3�pcYW<Yl�]O�2�^��,ϙ�;�k\c��[7��4�sw����?�횮�2�ƫ��,���g��sq�u�`��0�|4�41�n2@��tcH���0�>�@kG���1R<�V؊k�m�&w�5�$����Yí�����O���&�kg�Dr�=Fj7l��U��^�	�;���&�̏P6�GڅJ��p�p�t�26�����l��;N̜�� ʔr�W%ӊ��#"[Y|m)�<>"�%b���i�@"{7&����f��D����%z�.P~܉{lFB,W�d���� cf"�0�`��'���#Pl7:�{��W�>^��.���2n�١��ʀ�i i����V T����2v�GXp� "p�����^߰�P� g��z\�3ۀ�?�8�<1���Z�mw���4s��z`��^h��w�k�L�)`�V��^3˓i�z���%Ɨ/̞�|�����|f����8
+H"0�:���eR��&�k����p ON�p#=���t�#�^<��?����p��$L�jy��yH�G����(�G�����6�x^�rq7׬����al�T	-�+��/X����3���Nm��X��zS�aOAG����jO��=�0�V��d�,;٘[
+*$��О�׬7�n��|�����d=����L�'牞�Ƴl�a��X���mD�$ꐧaGl%��a�����p�p6����Il���l�'q���gq�z71���	��ҩ��s���|*�	0���Z���z:�3,�g̵�\.D���g�/�nK��g�6�'����P�1�}�Y��3H�{���4�����#�X$�y��E�<����D7;%��<�t�`3&��/pF���������(:~]��uL34��V�>T&������E�n�}�0�s_�k�"_�w��i�Īm{S+Ղ�(W%D��.̯��%���]D��>�1EI;��N�b�/TSϬɶ^�K	j��=ka�z8c���	� ģ���<�ʓ�к���J�V� �<I�R}6���!�x*;��D�@H\S~ ���5 )4�*ʣ���J��_!�7��U�H8�+`�����qJά�P~uCڈ����(��,}�I6���W���<�Q�7
+� ܋�W6������(�HF����
+�wfN��$��9��>��R�% �k�"�m���[S��l�L}�=��b>�0�,]�M�E4ʾ;Z�]3��Y�VՇ�ճ)p	�=�5:K�h��-����I��4��g��HFS猖���S�xc�-P6�3Kx�d��*?��1��TTI{�',1'��
+����L�y	e����R2-��/`o]F�X��d�1���<���T֭��[^��:^'C�ԋ�t�s+h��T	�&g�%���&�d�#�%zF�x�M�l^4�b�Oؔ�F���J�#���ӢBrC��`�`B��E%���a�Br0�6��3$�ӓ�G���O�@�X�$�E�W� 8&]z6������cꉘ�sUC�4�[/~-Q�,W*�4�9���Xq�K�J6P9�v��@�Tz���4�Fu?+�Qug+Q	�O�LM����*��o;b�ؤ���g咷y�mdi�#-��0x���}W3�i�P%�����+�R�zW�`�dh��pi ��Máw��ݭP0LW̼�O��ɛ9O>��`8Xd;��iԪ6f}.�b�+-ۺ�d�}?c[)p�p@�1-*�7�� v>Ŷ�-X�
+�/�02������	jx�b�f�e�D�ylaG~��Y}iD�r�z�掵hm�R��^~Y�^�r�ٹ�J�:�0��t������2%�4�f��t�Ut�G{Qa�a�n=�ZD��G�/Z�	3�elF�7��y܅�w�StٲS	��|���Hoh"��KF��~�cVK�W»�t:����a)C5�qU]\�k<a	L���cyG~(��+sBqg �i6yg_1K#�?{�p��p�br�����{�@�5�IU�Ћ>9�6����%���,�s�3bGY/M����!KehB*+���}�;ʤ��C7;�kD.�x������*�ťS�$���d8�s�tRr`g�v�Y��������2
+\�}�!�����g�LN\�2�'HJ:6�,�H��>N�by<�֡������u%���G�:%��x2��%O��C�2�,�5���Ito�q�ǚ	P.�V��X��@�B�t`������<u����ۧ?^�5vEлĭ��*��z�������Ƿ1����s��ʳ}��~����bԓ�ݔ����a��U��t^�)"���2����
+F٥�>^��� ����6W�W0��#xT�iotG\�D�*��~��/_]~�8A��*���� ����+��ym3@���B,4BD�r�Ovy�HE��``����%ApDE�j?M�yW<Ѷ�i\�+��z�I�-y4/R���� j��f�C���p�}t�hN5iY�����̕��i���h]!zN07�t��<.��x�[�>;n{���b��� ��x��t�X� V�HN���[���ͭ!l�'@
+��e��MF�G+����n�L�����n���%��h2�HW%}��yQ)Dj����ij [T�b�X�<��n�����&�el4����Y�BI�����������Q��
+�VM��Ԛ6H*j�եU�V�Q�4Da��CL�;2��*0?L�0�'*��(�z̤�	��[�����x�h�l���^g˫m+!:�q�i�,M�0��-;��pF�4�c���L�!cd�d������vp�c��z�ɭt��0	�b]6?+��>Wc�ڀغ�Vf*I1U΀�T��h]��X8n��sH���[8�����1a��B�/Tq��z�Xe�yr����h���ˣ�_��Ns�o�ө��t��D��}Q򂁘3G�d�ǈq���x�i�-\1��Y��W$v��8�C��;�+����!��t�4��r����t@���?<[�<�_G�Lf�!�2� k38�&0܂��E��3'�׿���tx7�n�E�8���>'���
+��2����,UKK�<�ǳO�Y�y��PM��KF�x��Rr�j�c�M���kC%�4^uL�N��Ε�:��r��O��ZJ�W>��^���`�Ҙ^!��4�do��_��<��"k��6N�Y��<��F�|;-���#�"��t!�J�+b|Gq�x�)�_���m�Z���"��>}g1��sD��=�L^Y��y�����yh٣e�'�ǿ#�z�<�*���-�[� ��|aT�3���_���cQ���(�<��SY>p��7�����j�2j�:*�@�Q�>��
+%�nφ�dJ�j/e��3e6u�SK��,mj�N�%�9A��)��	O����3�����K%�O����2g��A*}h4��?M�GΣ|,2jꫢ�~|7^����"��K�I�<�f-'��png�8������z�;������:Nc�Pyd?׺��Vr��s9~Ъ1I��<d!�R�ϗ?�
+]֝�8W_p��r�(o�{�������z����O�їi>f��k[{��}���,���~7jw�$Mh�I��?	Q����ͭ��`����2jEї�=�M�*#r����������U�{�*Oj��C�����aO--RbN-{>�l6y�䕋�>lx΍1Tނ�%K�<�f�	�ʄ��B)@h�uH�	g���I0��M��,еIr��|U~��a�m��j���c�qx]���#��F}�O$�:c�^��?[�e$����J�O�l�rp���K9��f?�ut_�N^����0�pf?����utF���_Z��ێA��	{}�18�����I��������(:?xzr?�^�>���v|v~�-���
+Ds��7��/N��z����D$bT٫�''����36��1f�e���u:���7�?;z~��䜞����|�o�va-�d��}-��ZW���0GJ�s�]G' Ȏ�3~��w^:89?:������|������ǣ����������eC=9��$�FI� @�p��k ���d1ϓHx�Ҋ�@|fED>^q�g�#fa!78�X+P�{��"zv��Mt��������s\d���y�O`��������+�<x�L��[O�������psD+ʯ�����ӣW�Gg81�6��X�_^��?9�Myxpvx�쨪75X$�z���胓�-=���>��oN���o_����olG}Ȯ'��ܺ�G�oO_��(�����o��ӣ�_�т�u�v2s�a��~:~uvt
+�������*���Zyrה�JU��x�#��t6�积_��D��O/`������J����1TO���5��ǯ~��Fc|��Z����Vȋ��y ��v��P�
+���Ə^=��|�mtr�ꇷ?�&M��Kڀd����iI#6$�h0EM� ./���_���Y�]D�������$�)F�4i����mV���|6X�'oa3�4y���Y�I"7�U=�%A�}��	Ue��z��'����RG(H'��k��g�t6xr�ai����00��{�X�.�$�SI�:�KI��|%��̋W�8F�<Fo�`ޣ��h�5�-h4S1��8��fLv�'x����_D�/���l��i�߾yF̅�`pp��m�;��/ם�Q�,R�\��vKf�M��呱T����!���B]���&����UdNSJ\�ZA&碡KUDEs�l�xi�(��dm�p"��݁Eڴ+*�s�o�0�tͳ�~����b:Jg+�m��뼧 ���%}+�tj��S�W�"l��o���欭�^۹�Z�ʺꮤڼ{�j$̀�"�^.".�)�v�(��]�r��1�[�T����B���T_��AU#x�l���@�r"5����v5�}#��ߵ�S�����+n��DfX�`2^8��{2O��� ����J���Ƙ3@�Wن҄��~m[C��K8�d�؁Y��t3s"s5�&W˴��q��5�<SG*�3HaҤS�\��:�'�Pdՙ�"d�JД��>��Z>z�H0� ����r��Μ��펋�_.-�PC|�P��	|�<
+;���wg��ժh�_�a�k����+�|��^�m��,kE��}5@�QZ��<��*zL"҇�o$�?��
+Ai�I����b)�d6ur�"�^ݔ��`�M�9!�UG^���~ �k��->�|�"�iJ"�~��3a����5���z�;��9< k|��f���1�F�O��9����$���(��2��рՏ����~��#�M��j	5���7�g���{��W�&V���(ԡWX9�-��U��v�]�41���֌�>L�y!FN��wy#�J՚�(��a&?O�pZ�ߞ:����x)7�+������߶��y��Mj�F�7d'eڌ�w�{�����?:�G���WkQ�Cs���p�zm��H����o�+4Y�HB{��~�S��k&Ӳ]���0����:	����5��U��^�����ka@Zh��&�-�,�l�tC��kT��������m���ԔG�Y$��/�D�+Q*�0�P)��@�T���VG�Â-1j�hN���;���e��z@��� eP�/�%�\0�}�#!��;�|�v��������'_�9��߳t��,hXt���#�Oa�LɝqJ��4������hu4A֔q���bI�շ�S�!�+M�
+Pl��3���(�z;��������1Gk���*�a�����:�k�~+��2ܽO���x�:�.
+e�k@>�<T��]��0ώ|������&�Gg\�'c��c�����$�~''����e�3�6��;v�b������.e�8ܱ$��ޱ,�����X,u���o�����3�U@Ν�2�8Y�_UX���|:�SL�=�G4�#w����
+<�P"�v<�	�h%B�X�j�Ȫcglv���u������� �ѝ��GW}D�EZvz�L�a�9<�����$�����u?0���w��B7�K�-��b(ܲ�gxs�yyѢ/jU�L���)VK:����_b���v�[����k�۬%a@%� �U������Û��0�%|"M���d���|�]0j�g�(-`��������o��ԞNu��*s+��QU�Xg�a�"�lgHw38N����,�L�&�q�A	�K�x��+��E��#DlQU\��ҕ�Ui% s�����z"�n)�,yA#	7oZ�����	B*����%
+���|qτv�;�����b��bim�O�ܠ���$��I4$�J�p�iR�Q�Dr����l4����t:]vh�=�}f2C�� U�����D�:�J��\Ƥ���n�:M��'��)tnҔJУR=�9�Ϲw��[�"e�$����;�*jv�:,m5H�{0ae}�N�,�$Aj+!����4��%�q��[V�(
+�Yx�A�*��75�D�m��+"j?zW��=��!��ȹ�4���.����K*��)�ܷ�]�د����Q�R}�0Œ9Z\`�㵣MA׆�f2&WT�!��Ȩ�]�4��~b8m^����7��xd�9�@Q���0�-�VA�?�\fv���*�w�fFr8��!K�B��E���j�� �SL6B�&n����X �.�e��h.dz��Vo5e�!d��V���� ��l�p%c��j���l5|㓤̨vJ�JQո���-�?m4z��T3�jĥ:Oա�f�hw��9��ި�ڪ6�ؑ2�\ɬUC�$z�q��@'���&BDR���o�WW�d'
+��n�
+� �3Y�a����j���sM�R�W��䩩2�
+�����:]�Ȑ�e���<���&S.)��F,�SS|Vf���E67���.;�6�kV˴����M�5%�#���ì#^ ���n��Q!J��8kd�)b
+��R(���ގ20>��wR�W�����H�i�����<�~�8��;���� y5�UT�{���y����a���nѓǇ����m�W�W�&�2Q|�˻.S������s<jum�:
+C޻�����ޒ	��-�"L}qi	Ek�瀙�,h`M��Tp��͇>�!r9�h=s&�	x9j��"9Bbd"�rc/�&�*�S�u��d{�'Mp]�~��aU'r��U��%�^8/crs���w�íƓ ��پ������Q��M�fv�z[�`ík�"x+��!�9����m����C�.��[ 7&��$��PQ̤8s$�~�������5�W�9�ʬxH*�22/A��N�a�/ޘ��"$��H���D�!�|&2���$��A�}�W�9��f�,B��
+��&:u�A>�^A�O�M���m3��Q�L�r ��$�N�$3O+��U���o�� ��>P����i��cC���yj�3�e(�'�n�{�� �a>q�u@�Zt�=n��=@�V]��up�xC�
+>����+�)7�o��$�S�MN	���_"*.7W&��IxK`K�`p#/�[:2@�vT�F�7C�;c�94�ETf!OX"{�j��NMȭW��e��'`4
+)vzL(�Ԫ5��Tebyr�7yR`��Ԇ#*�[�1���Hh�l�-��mpN�QV�����e�����6LV���N��||���s��u;(7~&����U"�!�׳�3~��m\��K�����gҲ�l[������WCɇ��Gp'^��s5�uw7��H�l�'�������c64S?�5w^'�nIp�nR4�ϒ��e��0B���P#_%�����j�K���5�I������d
+�h1�����$ϚYd�k-���l�'�6��,�E���`�{�&,uX˦
+���Te�l��
+G��:�[ߋq��{�����0� �a���&%Kɮ��g����8�����q6���e+ F�Np��K�/}�[��N��gP��N�����Z�\��o�
+��/�Km|s��u=���n�J�#9o�������폍�izNX�,�T�M�c����q!��"E�ԡ�F�Hq�ro�[��%��'UN`�5��Kl;��aHT.�H���y����&�"�9+�Q��Z���7Z3�x�~}�ǝ�6�p�s�n�gQ��S����E>�iɸ�Csi��8�`��Ө��ܓ����7�r)��ضUir�d�4���~ef+ �V�ɥRWnyq�+����}�Z����g'�>���8�����B��yʺQ�٧y�q9��/�|�[ß�y���5��$����$�4s�P�?�f�}� �Փ�|�'�wUHs��=�G���/&�\h+��<z�DN:g�~n��Da�h�Ђ�KDZZq��UnV��F&�K��/�sSS^�!�V>�)S���2�qp�)�:�Lh4ֈ%���3>�X^g�t1�.����a��rC[&٩[c�
+3m~Ȣ����u�]� �E��Sd������ 1�++S�⌰FW�2C��V��|���~j�0�5U��s���k�."��*+a��U�yH�>�.d��M�V+xŧ1U��4~!ӵ`�����P��ټ`��)Z0B�cL*�6��${���U�'��"�ʹ�W�[�y�n��#nٶXo�n���>1S�t�I�}�&T)h�n��]E��ޘ'y���TD׸��D��Q3�c�󾯟Bg����P��x���Uz�˰��d\��E|�<�ur���ew,�H�7��8�=X԰�T�@#�å�UĹǚ�ʾ�@"}s� ���������E(:Ae�l�c����������}Meԗ2�h$�ٻd���;���m	�?Iv����^�➭13�c����ɴ�O����ǙcE��M��#���&�ow�J$��u�Ā�*��V?�����T��1�㳪�6�|*lKbzpқ-�P�*Oq�SDM����Cq�k�<�q��;W��D�"ߵ�ok�;y<0U�Hrk�u}��~�y��-���u���g�\z?���u�H.�5N�� =���9"�GȸiT ᩪ"�������g�Ǻ����2G�Ƙ�z���4��'�K4?��b�k�nsu��z���lͧ*?7V�!�>0>T��J����!���}m oyݜ~˲1z9�a/<JK�ou�J�%�4����3�������8��K��~Л�y	6k�K���T�hɭ���6P���pc����H�d-����52ڙ֓�s�G��4���J���P�5h�3?u���O�c�B�R�jw��"j��(Gt��c������{���89��ͯo5��@�rm�z���8�鄻K]����VRvS���d�j�+H�o?c~H��kiN��"~/!Bl�?h�X"��yo�����a�p��O�MsO���m�d�+��A��-U��>#�y�١�d!�����fs��v���x�,���S��K.��z�X�wݵ�������{f,���@_�+%�Cְ��gi~l�R���~T/MP�ruf?�+�C����ZTD��!��?*j9;�F*�-�rWL��o�/5R*T_%|��pLq��՛B��5���=�9[�X�)��f��/�XA7rUI:���e�;n-?��M�g���M�j$�[��i�����Z}������ȵ2tt۝je�b1�3^�w��;� y����g5�%�3�V�ؿ�"����%L/|��MX���k*E~���Nӈ�WPZ�BT����@�97�{���豹��'�۵K�N�F�_C<���<1ې���̼���q��$ʽ�	��^�������p*-V��,��_���/��߼��<��x������kQZ��g<l���0-j��w0�R�Y�+0���H��߃��դ?fL��`ҫ��zܴm��\�,��������^��Y�j�jX7*~�	y?}��\m|�>�Q���1�~���p�R4{���VՒG� �(�K�U%T��
+�(�,�i��9����xr��S�>��\��3u�;��2�u�������r�O0�	�蝻��WV����y+P>X����zb_���V؊7��M�~2��gl�q�q/��x� Sz����v��q�X���U7Ԗ}C9��0�L�>O��͆
+!34�Kp=\��@�5(��!v���Hq�S�!d9���yQ04r�ƅ#R��D�ޓ�l�(D􍞔ۧ-w�l�=��Q��_-o/B���y����MU����	8�(�����T3��]���7��ʸc��+�l�d�;*.��@e�~D�%\gL1�7o<`Y3�6F|
+a��-v��|c��Ӝɳ�x�c�yp	W\7�RH���L���Q�'�@�������51]Vd���/)&c;���@$�DO�������E�����Qu�F� ���Jg-�Xe�%�\#d�h3O��E���Ѱ{���~�$���uqL�d�+g���!۬2��8Z��;=��/��lZ쮯��ώ���z<M��q{��$������2���kE����w�~������l���������$w+F�����W��j���uI����E7D�ؕS��1�A՝q1IG<4h��Y�$����W ��̒"���e��$H.�NH��
+��LX�!w��gT����x&�Bp������l�`��o�Y�� v]���h$���fecnQ���m��*���f��� ��>�zc�����Yv�Y�|� �{G���-��`F�A��o�9�:i�y��п+5KՊ�:��:<ٖ�x{�.��]���,��Rn�
+5��&`V�`?�*�$��^��n�7�Z��(�$��k�l�m�[ʃ��G��mt۫@�h���EbY���eϐ��iP�Sͷ�gI� :��8�˹�a�ձ�p,�0n��x]G�-S��\�2��R��/%�g��/�=k#�
+1w�"��C�N�Ff��Pس�a��AU�������븻�R�EĲ�F��X�I���[d�ɓ~Rf�+XX2�KN�YM2a^�zb\,��������ˋeuQ�fB|t��q&p�DW&=���}�帰�@`0Y��"~�+�+a��F�T�hr�P����7��W("������t��s�8ۈSuWW{C�.����콖��k9.�M�Z�&��PU���˔�t���>>�/NjM��i��4��'J�#�т�ʐ���
+0^!=�d��,լH�x/�m�r�.�|P˂�Хb��+��غ�z%���[-ZE�����(����\�T8�ލC^���`����PyV5$BQ��~�b?ƙ�~�����^�p��˘l����q7:�<�v娨���8��4�v�ܺȓ��f�K��/y����~(L�B��Y����Șꡛ����N�P�x�CA�����W�T� ���sໂ��ksv���Y4th��BX���D��E������������C���\y� ��uv
+�vr9�f��{]a�zѺ.�Ӫ���䄤���m�;y��<��9���m�W��?���Γ��.[�UY�v;~�=3č����qf�{'��cw������؞)��u�ˏʓ��o�'��a�L��ʁ��#���ȕ���{[/��i��/L�9W_�������Ȓ�Dt��n�-owmo0�G�1�����~�v��|��i��|�p��&��:��ĉ���E{�
+���Q1ޥ����z��ak}W�?�$�
+'e!�2e��2��jY8���7oJ%���p�љ3��-P���a*~�^��tJi/0��<OFw�8��~��X�ި�l��X�d��F�u�:�k?�ut<)�V��~���>��J�4>�n%Q/��%�Z�MM߄ISİ!����|j|\���g��@yz��[q��:�=�M��-���%�Y�4KZ=�vσ̋�rqw���(��a7�m�1��/����=�U}MۨKh
+���$�=��J��M��v�_L}��er���\�w�j�/sqI��Շ3¬��!͸-F�a+��)ǀe�q��-*�,�^8�+�����r��/�%L�O�rQ�d��ƨ7��7���qS�y.��4΢�ܕpFi%���ݎ�g����g��\}=LFc��y<��;+g�"���c�i��I4�(��/���3�f��js����Ŵ?���0�0�
+�d�D��ŗb �CJ�B�\���d2؏^ ��p�h�^Q���S�Q�j��x4���5���:j� �%�0��8���)t$�J�����2IFd�G��q�_wA܂̝�wÏ�� ���O�i��O��}N�G<J�p1X����� j~��:.&��f@�PJ����Og�+A�PL�,�u���+�Ǔ$�^ K�',s ~B�����$�>_|7�Tdr�N�L��P�pH����3���4���S�7I6�����BN�墸�H�֬@�_�#���X?�gj�w���Ec:�U�Q�� ~�_�����
+��p���l�П�)�������{v�Y��_'p6c�妴�G�����#�PH�p�.��2���� 9�k$�n�LWOU��I3Y:��!
+�5F��fB�g r����؂0ɠ��/�a�讻bO#w	�1P�P��N1z��5+��6���]�U�)]+* 28/S�:�}��x�a�rB��)�2B�2��Q:��I�ч��dVP��XOp�א�P�e\�w��xo�K+*28@�������{�]�5�K������Ƅ�*Z�A
+�f��,2U�%��.Tyy��3����OxGiB�sJ�A&t��\�nVhs
+'"Zb.�x�Mc`
+D�Z�ښ�܅[H2l��¼�"|;���ܤyW~��~
+g�^2��T^!��H�^�7�^�C�p8ϟ�b��}46 񶸯Y���Č{�ĭM�IH�"~W[�%%��&��4�bX�����2��0�iL��|1 9`�^·�Ha��y6�X�O4=�d0�����2���%��,En	v�EΖ�*�D��@@���$�"��u�N	^Y�tD[b�������]�RB"�&dOR���#}�D.?�;��w|!ٕ�@���I�¥XE|��ʼ������9�|�l�v.qǇ�s�~o.�>a��Fq��H�����H�2���VM�D�]C�A�=f*�"Z$����k<8E��U�rg-��F�mZ���y|�9�}x�؇P@VN����Wa:�����U��LUv��3�m���kV�\��?~k����I��[���V�	o�4���-�7��_��W���Ԙ�O�h>N���t���=�Ki���]���Go3�`2����)���Vr_�f���R��[�֍�e��>�<v�̇0e����QX3̐6����!�ݔ�|3�+�P�Y�^�[��]���PB/�Q�������̽~I�e7�I���x�ѷ�kA1�7��	�~�$s؏���W�3�ڹ���Cs1� z��sA�Ǩ?8e��a�U7����a�Tˉ̊-cA7�����j��κ��==�~9G�\�@�͠�秄���)b������K��\� ��t��X�ϯ|�CQO��x��v�E����}���.H���v����J�AN�W���ڴ��$����n���
+��6�JoP���jYl=Q�" �p����M6J���.?<�����qt�
+*k)�w~@E�B�%�Ƈ��Ǫ��Γ|\D���: �QV�Q�f�{eUo��,T��!����m5F�}Ls�����5����!�� z�#����Y��k����P�ǝԕ��]��ފh'� Sް?��1�����&��j�1����K���2�^F���|>��� ��n�K^J^�僻��Ң-߂$@���ۚ7����NI�ٸ�EL� 뷾5j���O��|�!X~�#�q�1���a�2�y�I%���Ǩ/-1C��t
+/n�����.�0-p�� ^��Ϊ�p⒠рX�(��mmp�b�;%��*��u���	�����8u/�P"��t�a�T��+�iKL��h%�%diQ�����D��$�}�ɧr:_���lnN��~���;��TI���#�	�b�E@II����'HyP1�p�׍�?2\�C����Uf��+��ߕXU�+�	M,M��'D�d�w��\�;���l:�[w�I����.��:�o(�w�W+�������8 0Rc�x�ws��ݨc��sڧ�ֵ_K>c��J��y�"	(ww��8c�N�u��`Ά5=��K`����џ�����/Y����lR-���m�)˸������E�J�.�se��x���d+.�r�k��7dl�ɑPbZo��&7e��}��\�ؘ^��7BJm3?G=u�n�12p����(�g�yO����;�c�g��꼫q���[8�s{�l^�`�v�*p�[��=!ѫ��I�/��~i-iņ������n�k}�S|X$��h�(��:�̔�FV:V��ޏh:I?%�u�8��R ݏ.3�%B�6#{�ݹ���99��:�k�����e���O��d ���	㹪p-�5�M�,m��-
+���%�W� 5wa�(�Q�� �����ϸ��,�,B��șy�O��h��z��)\�܎������<A#&f�D��F��� g뢣��@����,NG��^��Yƭ�؁	���D_���O��0[eԘ_��o����.�G�q�����˙�f؁�{1M<��zP"<�c52�dOώN�Ώ|�p�2� D�J!r�s����g��pKA0a`��nA��`s�� 4$
+�Y6;�v�����d�����٥�[���Ḳ�W�R:A�ߔ���j��������T˓���a��L���OC�MIz�.⣗}�%�0��7�<q�b�x��F�������F��f�2m�u%̝����R^���`?���$���nCw���g�iL��f������7����Tτ�%V�����!�І�dr�rW���3lm�Dt�يb��r8��N%R�M��謟��Y;O�|�����uX���'�`*8��<	NME^�,��#A�Y����E��u�be������AH8�4����J������J	�#�`��5��;�����.m�p�X�7�+��i���4y�'=;��L�a$< k���O�f싙@ǈO BF�r8L����P%դp̮N#�>l]T�����Լ5ǖM������}��U鎃�?~�|�I�<��׶��IRǠS�U�!�8T����ڞ��xS��E��.G�I�A-xpW+ƨ�8�R��:��e$������.rW�%hV��vl�M��Z�y�����[��r�$_��&��3t�d���c5q��S�����{��17����"�T�����y`���Ar^ہ�[q	�@��Ҥi�-PA~	����#P�� �\;�0�����bp��J+�n���=�x���7yR����#_�Ż�����4�����f��N�Ik����j"n���I1C��
+����j�~s9�0Al^$gX͟+̧f�'����f	c�,fټ?�H���XF�����N��#������f���*r4,��lA�`w׹�\IvaZ��l��#�U�:o��#�ГDq�8yr4J�+�{��+<�2W������Z\m���,�4g,���LglYY�$=D��IR��9���5:+��1G*�F�.�(�|������E2G,�%�@���F�6������WѢ���g��>B���&�as5�JL�z~lO��P�%8*���Nms8X��[o��y�%{d�n�UrW-6m��x�y�������7�-��R
+����r�;~�u����}_��qC8���X�����Z�at=<�A8��]�Ǡ�*�Ҹ��G�}Ǯ�؞��R�� ��D�g��r��{���Jџ�E.�*e���g)��q�lw�G�������,���KW�o	;��<�*A���Ih׏�C�@� Xc����h �_��2�,Oè��\U69O��~�]�2���E�^Z���'?�F�u�[���	����lT���W�_��1��Ԯue�����5Ϲ�4�k��*�\��c�
+��_�s����h _+���v���/(դx_�"ʲ��п��A�T�_V�1Y�oѭʄ�n��Nvݛ�˪:��(�(|��ϻQ����Y�����g͡D8�8ʔ�'�0����l����0=�����Q�����x�粱=���c��M��՚Ɠ֢���L+��g5�����~F�ƅ���%ń�Z�hڦ� պ���:�Q%�|Z)�ˤ�<C�f�M�"`�W��u��8�%_�xسm#ÆB;l<�!	Þ��|{��J���;��/Z�h$�y2�o��\d�Ό�p@���J����{t�tJ!�mt#�EEub��agͰ����N&v��I0zoNCR
+ym��ӟ��R-�y��:���-w42����n[�3�A�n�-d�x�:E%_R$�?��5�9�
+
+Ɉ'{��:|W�%���/���q�U�D��e�sF�YI�R��������Z��5,C�ᇣ�KVT&��k��8�֠�+���vB7r�9o���,9�G���W4�h�-��#!�#���ڜ���>�[S�(�K�%R��IMb�ii�����q:b�N8r�JU���
+o+F���.m�t�ѭ"�ȉ&�d����{ץ��vV]cL�=l!�;H��Qo���(��ï!��hm��a�4)������F�4}A��5�" ĬQȞ �%���P"�P�/"��Ƙj=C�]��S1�ZC����x�]s��r'R��=�<P77�|�=�b�P�^ڶ�뚢-#�Y���3����uK���'P�b��m��볣ɨ�)@R��w�E�b{��������G��8�	�@H,מ./�ò�u�* X�W�'���6����n/���TU�Q�N��N�՜6�݀(h=�ۣPN�ݲ�?TZmᬮo��>e�͎�s���1�l�N'p��p�g��y���:k�E2�?�Yr^1β�d�p����#��:�^2��G*�_�����/�5o.s�#*�g�QD��pv��9L\�ìf�W��d��;�%�غ�$aI:gvI�i��E�|�2[����r�����s>����9�<��'���0�X�N����N�=�eJ���*l�U}�p�
+�oFW���M����e8(�h��g�(������6a��q�.�I �f�*�p�,��a(��0A� f�g��!e�(L!e ��ɭiX��_�M��b� �1��	��4=���� F���ٴ�]_���n����c���f��83�5> �3�h���טd�4���O2h�$�h|�#�3Y~��vk`�I3wY�g�6�'�r�i��j�~��W]��x�d�՚"��ۡ�U���\��a��f�q�'>1��z:�~����������%��O�u����=Vʘl�8.Tg�bY���_y��cn3�T�Ţ��OW�/� �3O���+��q�et��R�>����fZ���S��P6!G"�r�I����I����^�D	����Z�OWg�eWٳ*���]	�K.��:���U��s������_�z�׸�G�)�$K�T��0J׮{�H'`�P��3��Kށ��Yz�}�kt�N���m��&�LG#'��lφ�`��r���~����~��kml���v{���ن�;����N��i��ۏZ���n�!�𰵹��nml��Z=x��f{#�u�ǝ����uZ�P�׃���k�����tᯝG�^�?`�m�H�Q{:��{�����6��-�Y��:���+]��6��V_ǚ�_=x�m���H�E=�|�QA���m�V��|��C�Z[�`.ே��nKl����.e���n���������ko��[�4���f	j��~�ً�8%�Q'�fzcKlЀ[P�������AQ��.>{�o���6M<t�7O�0��Hh���q����������Ha��AhRw)5�T0�MKˎhh�v��IU��e]���T�T\�HQ�WYv��D��\�����`��nev�/u+�9h�|Ը8:��ϣׯ��\����y'�/}'*��|)��No��D�!p+�չ���fog�9�D�d{�7O{��y���am �pm�w:��͍Op�t7�����c/u�=^p��=jw����׍��	����	����ÍQK��[Í��qc�`gk�����W��݇����M�bC�F�o�����p��kom����nl������\��u�>:������a�.�m����C��z8��[;���S�ۉ�t�5��)���N����O;z�������~{g��7�0އȇ`g��>���h���?�j"L>���ߥ���FJ��E.V����D<1н՟bM_����+iO�pM�	��x>r)�D�=�Q3���(5�ӥ�t���'5uev;�`�m��ր�� �؛2 j�f{Β��&�U�ˍ��{�A��&��������-�ܣ%(�{�-�Ɍ���܃}Yv�~#ظ��
+���X��G�)�W"��f�e�:��jm9*z��{�n+|�%�thwc�ֶ��Dqo)(��p���wx�ŀ����@��wD��I����D ��?1��T�|9��uȾ7�������F�կ�Oy��ҙE�j��|�'���ٵD�N�y��q)��Uk��?�X��^<�C�=�7q>�$y1L�ΑT�V�/�Y�c
+�fA��N��k����v��<����y�� �T�?��o����������$���!A]EW������$�W��������緯N^���Y;:89�N�xq~����5#O�G�����{���e���F��-o��Jwf��wE��XR:e;L���:s�*=��   �� �y�
