@@ -15813,7 +15813,7 @@ function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
             </a>
 
             <a 
-              href="https://play.google.com/store/apps/details?id=com.mycityunlocked.app"
+              href="https://play.google.com/store/apps/details?id=app.mycityunlocked.twa"
               target="_blank" 
               rel="noopener noreferrer"
               className="inline-block transition-transform hover:scale-105"
