@@ -26,12 +26,11 @@ export interface AppDocument {
 //   on public.app_documents for select
 //   using (true);
 // 
-// -- Create policy to allow admin updates (by email check or is_admin flag)
+// -- Create policy to allow admin updates (by is_admin flag)
 // create policy "Allow admins to modify documents"
 //   on public.app_documents for all
 //   using (
-//     auth.jwt() ->> 'email' = 'vincentdurroux@gmail.com' 
-//     or (select is_admin from public.profiles where id = auth.uid())
+//     (select is_admin from public.profiles where id = auth.uid())
 //   );
 // 
 // -- Insert starting data

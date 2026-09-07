@@ -1,0 +1,97 @@
+144:  return (
+159:            return (
+169:          return (
+276:    return () => document.removeEventListener('mousedown', handleClickOutside);
+320:  return (
+360:  return (
+364:        return (
+650:  return (
+775:      return () => clearTimeout(timer);
+957:    return () => {
+1019:    return () => { active = false; };
+1254:    return () => {
+1596:    return () => {
+1688:      return () => clearTimeout(timer);
+1692:  return (
+2186:                          return (
+2662:  return (
+2940:  return (
+3139:    return () => {
+3160:  return (
+4351:  return (
+4918:                      return (
+5183:                      return (
+5261:                return (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
+5269:            return (
+5353:                    return (
+5641:                return (
+5879:                      return (
+5975:                      return (
+6093:                      return (
+6117:                      return (
+6129:                      return (
+6134:                            return (
+6201:                      return (
+6225:                      return (
+6237:                      return (
+6242:                            return (
+6308:                      return (
+6334:                      return (
+6348:                      return (
+6353:                            return (
+6420:                      return (
+6441:                      return (
+6453:                      return (
+6458:                            return (
+6819:                          return (
+6971:      return () => clearTimeout(timer);
+6997:  return (
+7141:  return (
+7301:  return (
+7556:  return (
+7967:  return (
+8155:            return (
+8227:                                    return (
+8298:            return (
+8399:            return (
+8566:  return (
+8734:  return (
+8840:  return (
+8980:    return (
+9004:  return (
+9286:    return () => clearTimeout(timer);
+9306:      return () => clearTimeout(timer);
+9557:  return (
+9779:                        return (
+10095:                            return (
+10294:    return () => {
+10528:    return () => {
+10620:    return () => {
+10778:  return (
+10842:              return (
+11002:                  return (
+11014:                  return (
+11407:    return () => {
+11412:  return (
+11472:                    return (
+12015:  return (
+12143:  return (
+12308:    return () => { active = false; };
+12346:      return (
+12355:    return (
+12364:    return (
+12371:  return (
+12391:             return (
+12497:                return (
+12535:                return (
+12651:  return (
+12784:    return (
+12806:  return (
+12848:              return (
+13099:    return (
+13231:  return (
+13427:                      return (
+13644:                      return (
+14167:  return (
+14217:  return (
+14260:  return (

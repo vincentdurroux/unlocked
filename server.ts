@@ -11,7 +11,8 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
   // Lazily initialize Gemini to prevent the server from crashing on boot if the API key is missing
   let aiClient: GoogleGenAI | null = null;

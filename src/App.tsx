@@ -10327,10 +10327,23 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
       let serverFailed = false;
 
       try {
+        const briefPros = allPros.map((p: any) => ({
+          id: String(p.id),
+          name: p.name,
+          company_name: p.company_name || "",
+          category: p.category || p.profession || "",
+          categories: p.categories || [],
+          bio: p.bio || p.description || "",
+          top_qualities: p.top_qualities || [],
+          languages: p.languages || [],
+          rating: p.rating || 0,
+          location: p.location || ""
+        }));
+
         const response = await fetch("/api/ai-search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: trimmed, professionals: allPros }),
+          body: JSON.stringify({ query: trimmed, professionals: briefPros }),
         });
         
         if (response.status === 404 || response.status === 405) {

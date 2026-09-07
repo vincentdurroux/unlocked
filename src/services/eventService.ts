@@ -48,7 +48,7 @@ export const eventService = {
    * );
    * 
    * create policy "Allow users to update/delete their own events" on events for all using (
-   *   auth.uid() = user_id or auth.email() = 'vincentdurroux@gmail.com'
+   *   auth.uid() = user_id or (select is_admin from public.profiles where id = auth.uid()) = true
    * );
    */
 

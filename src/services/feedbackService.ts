@@ -41,7 +41,6 @@ export interface Feedback {
  * CREATE POLICY "Allow admins to read feedback" ON feedbacks 
  *   FOR SELECT TO authenticated
  *   USING (
- *     auth.email() = 'vincentdurroux@gmail.com' OR 
  *     (SELECT is_admin FROM profiles WHERE id = auth.uid()) = true
  *   );
  * 
