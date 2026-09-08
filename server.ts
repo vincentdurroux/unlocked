@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { Resend } from "resend";
 import dotenv from "dotenv";
 
@@ -154,7 +154,7 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
 4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).`;
 
       const response = await getAiClient().models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite",
         contents: `User Query: "${query}"
 
 Professionals:
@@ -181,6 +181,9 @@ ${JSON.stringify(proListBrief, null, 2)}`,
               }
             },
             required: ["exactMatchFound", "results"]
+          },
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.MINIMAL
           },
           temperature: 0.1
         }
@@ -234,7 +237,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     try {
       const locationContext = `${city}, ${region || ''}, ${country || ''}`;
       const response = await getAiClient().models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         contents: `Target: Identify the nearest major metropolitan city for "${locationContext}". 
         Rules: 
         1. Return ONLY the name of the major city.

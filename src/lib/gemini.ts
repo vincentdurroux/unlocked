@@ -7,7 +7,7 @@ export async function getReflection(entry: string) {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: entry,
       config: {
         systemInstruction: `You are Lumina, a gentle and insightful journaling companion. 
@@ -29,7 +29,7 @@ export async function getMood(entry: string) {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: entry,
       config: {
         systemInstruction: "Analyze the mood of this journal entry. Return exactly one word from this list: Peaceful, Melancholic, Energetic, Anxious, Grateful, Reflective, Frustrated.",
