@@ -424,7 +424,7 @@ import { documentService } from './services/documentService';
 import { guideService, MOCK_GUIDE_CATEGORIES_DATA } from './services/guide_service';
 import { feedbackService } from './services/feedbackService';
 import { emailService } from './services/emailService';
-import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -1568,7 +1568,7 @@ export default function App() {
           const locationContext = `${city}, ${region || ''}, ${country || ''}`;
           
           const response = await ai.models.generateContent({
-            model: "gemini-3.5-flash",
+            model: "gemini-2.5-flash",
             contents: `Target: Identify the nearest major metropolitan city for "${locationContext}". 
             Rules: 
             1. Return ONLY the name of the major city.
@@ -10428,7 +10428,7 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
 4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).`;
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.1-flash-lite",
+          model: "gemini-2.5-flash",
           contents: `User Query: "${trimmed}"
 
 Professionals:
@@ -10455,9 +10455,6 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                 }
               },
               required: ["exactMatchFound", "results"]
-            },
-            thinkingConfig: {
-              thinkingLevel: ThinkingLevel.MINIMAL
             },
             temperature: 0.1
           }
