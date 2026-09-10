@@ -13463,15 +13463,19 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                 <span className="text-[10px] font-bold bg-brand-blue/5 text-brand-blue px-2 py-1 rounded-full">{event.category}</span>
               </div>
               <div className="flex items-center gap-4 text-xs text-slate-500">
-                <div className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {event.start_time || event.time}
-                  {event.end_time && ` - ${event.end_time}`}
-                </div>
-                <div className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  {event.location}
-                </div>
+                {(event.start_time || event.time) && (event.start_time || event.time).trim() !== "" && (
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {event.start_time || event.time}
+                    {event.end_time && ` - ${event.end_time}`}
+                  </div>
+                )}
+                {event.location && (
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {event.location}
+                  </div>
+                )}
               </div>
               <div className="flex justify-end pt-2">
                 <span className="text-brand-blue font-bold text-xs flex items-center gap-1 group-hover:gap-2 transition-all">
@@ -13593,11 +13597,13 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
                 {event.start_date || event.date}
                 {event.end_date && ` to ${event.end_date}`}
               </div>
-              <div className="flex items-center gap-1.5 font-medium">
-                <Clock className="w-4 h-4 text-brand-blue" />
-                {event.start_time || event.time}
-                {event.end_time && ` - ${event.end_time}`}
-              </div>
+              {(event.start_time || event.time) && (event.start_time || event.time).trim() !== "" && (
+                <div className="flex items-center gap-1.5 font-medium">
+                  <Clock className="w-4 h-4 text-brand-blue" />
+                  {event.start_time || event.time}
+                  {event.end_time && ` - ${event.end_time}`}
+                </div>
+              )}
               <div className="flex items-center gap-1.5 font-medium">
                 <MapPin className="w-4 h-4 text-brand-blue" />
                 {event.location}
