@@ -633,7 +633,7 @@ CRITICAL DISCRIMINATION & RELEVANCE RULES:
    - If the user is specifically looking for a service/pro:
      * Match relevant pros (Score 50-100).
      * Only include a guide if directly related to that subject.
-     * DO NOT include unrelated events.
+     * Proactively match any events that relate to the user's query topic, community meetups, social gatherings, expat networking, or local workshops (score >= 40). If an event is entirely unrelated, set score to 0. But do not hesitate to recommend events when they fit the user's general interest or provide a social angle.
 
 2. SCORING & REASONS:
    - Score: 0 to 100. Only return items with score >= 40.
