@@ -265,28 +265,35 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
     let success = false;
     let data: AISearchResponse | null = null;
 
-    try {
-      const response = await fetch("/api/ai-multi-search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: q,
-          professionals: proListBrief,
-          events: eventsBrief,
-          guides: guidesBrief,
-          conversationHistory: [],
-          userLocation: userLocation || null
-        }),
-      });
+    const isVercel = typeof window !== 'undefined' && (
+      window.location.hostname.includes('vercel.app') || 
+      window.location.hostname.includes('vercel')
+    );
 
-      if (response.ok) {
-        data = await response.json();
-        success = true;
-      } else if (response.status === 429) {
-        throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+    if (!isVercel) {
+      try {
+        const response = await fetch("/api/ai-multi-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: q,
+            professionals: proListBrief,
+            events: eventsBrief,
+            guides: guidesBrief,
+            conversationHistory: [],
+            userLocation: userLocation || null
+          }),
+        });
+
+        if (response.ok) {
+          data = await response.json();
+          success = true;
+        } else if (response.status === 429) {
+          throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+        }
+      } catch (err: any) {
+        console.warn("Server AI multi-search failed, attempting client fallback:", err);
       }
-    } catch (err: any) {
-      console.warn("Server AI multi-search failed, attempting client fallback:", err);
     }
 
     // Client-side fallback if server fails
@@ -295,6 +302,88 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
         const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
         if (!apiKey) {
           throw new Error("AI search is temporarily unavailable. You can browse the directory below.");
+        }
+
+        const googleMapsKey = (typeof process !== 'undefined' && process.env?.GOOGLE_MAPS_PLATFORM_KEY) || '';
+        let clientGooglePlacesPros: any[] = [];
+
+        if (googleMapsKey) {
+          try {
+            const targetZone = detectTargetZone(q, userLocation);
+            const centerLat = targetZone.centerCoords.lat;
+            const centerLng = targetZone.centerCoords.lng;
+            const textQuery = targetZone.isSpecificZone
+              ? `${q} ${targetZone.zoneName} Valencia Spain`
+              : `${q} in Valencia Spain`;
+
+            const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": googleMapsKey,
+                "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.photos,places.location"
+              },
+              body: JSON.stringify({
+                textQuery,
+                locationBias: {
+                  circle: {
+                    center: { latitude: centerLat, longitude: centerLng },
+                    radius: 25000.0
+                  }
+                },
+                maxResultCount: 6,
+                languageCode: "en"
+              })
+            });
+
+            if (gpResponse.ok) {
+              const gpData = await gpResponse.json();
+              const places = gpData.places || [];
+              clientGooglePlacesPros = places.map((place: any, idx: number) => {
+                let photoUrl = "";
+                if (place.photos && place.photos.length > 0) {
+                  photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${googleMapsKey}`;
+                }
+
+                const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
+
+                let coords = {
+                  lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
+                  lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
+                };
+
+                if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
+                  coords = {
+                    lat: place.location.latitude,
+                    lng: place.location.longitude
+                  };
+                }
+
+                const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+
+                return {
+                  id: `google_${place.id}`,
+                  name: place.displayName?.text || "Professional",
+                  company_name: place.displayName?.text || "",
+                  category: place.primaryTypeDisplayName?.text || "Professional",
+                  bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
+                  location: cleanAddress,
+                  coordinates: coords,
+                  distanceKm: dist,
+                  rating: typeof place.rating === 'number' ? place.rating : 0,
+                  reviews_count: place.userRatingCount || 0,
+                  phone: place.nationalPhoneNumber || "",
+                  website: place.websiteUri || "",
+                  googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
+                  image: photoUrl,
+                  source: 'google_places',
+                  is_community_recommended: false
+                };
+              });
+            }
+          } catch (gpErr) {
+            console.warn("Client-side fallback Google Places fetch failed:", gpErr);
+          }
         }
 
         const ai = new GoogleGenAI({ apiKey });
@@ -374,7 +463,8 @@ Rules:
           matched_topics: topics,
           pros: prosResults,
           events: eventsResults,
-          guides: guidesResults
+          guides: guidesResults,
+          google_places_pros: clientGooglePlacesPros
         };
         success = true;
       } catch (clientErr: any) {

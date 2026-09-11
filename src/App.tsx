@@ -109,6 +109,7 @@ import { eventService } from './services/eventService';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
+import { detectTargetZone, calculateDistanceKm, DEFAULT_VALENCIA_CENTER } from './lib/locationUtils';
 
 // Custom Tooth Icon matching screenshot
 const ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -892,6 +893,60 @@ function OrientationLock() {
 export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
+
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(() => {
+    try {
+      const saved = localStorage.getItem('unlocked_user_location');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [hasRealLocation, setHasRealLocation] = useState(() => {
+    return localStorage.getItem('unlocked_has_real_location') === 'true';
+  });
+  const [showLocationBanner, setShowLocationBanner] = useState(() => {
+    return localStorage.getItem('unlocked_show_location_banner') !== 'false';
+  });
+  const [mapCenterTrigger, setMapCenterTrigger] = useState(0);
+
+  const requestGeolocation = (onSuccess?: (coords: { lat: number, lng: number }) => void) => {
+    if (!hasRealLocation) {
+      setShowLocationBanner(true);
+    }
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const loc = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setUserLocation(loc);
+          setHasRealLocation(true);
+          setShowLocationBanner(false);
+          setMapCenterTrigger((prev) => prev + 1);
+          try {
+            localStorage.setItem('unlocked_user_location', JSON.stringify(loc));
+            localStorage.setItem('unlocked_has_real_location', 'true');
+            localStorage.setItem('unlocked_show_location_banner', 'false');
+          } catch (e) {
+            console.error(e);
+          }
+          onSuccess?.(loc);
+        },
+        () => {
+          setHasRealLocation(false);
+          try {
+            localStorage.setItem('unlocked_has_real_location', 'false');
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      );
+    } else {
+      setHasRealLocation(false);
+    }
+  };
 
   useEffect(() => {
     const lockOrientation = async () => {
@@ -2396,6 +2451,7 @@ export default function App() {
                 <HomeView 
                   allPros={allPros}
                   events={events}
+                  userLocation={userLocation}
                   onNavigate={handleNavigate}
                   userProfile={userProfile}
                   currentUser={currentUser}
@@ -2443,6 +2499,15 @@ export default function App() {
                     currentUser={currentUser}
                     userProfile={userProfile}
                     isActive={activeView === 'explore'}
+                    userLocation={userLocation}
+                    setUserLocation={setUserLocation}
+                    hasRealLocation={hasRealLocation}
+                    setHasRealLocation={setHasRealLocation}
+                    showLocationBanner={showLocationBanner}
+                    setShowLocationBanner={setShowLocationBanner}
+                    mapCenterTrigger={mapCenterTrigger}
+                    setMapCenterTrigger={setMapCenterTrigger}
+                    requestGeolocation={requestGeolocation}
                   />
                 )}
               </motion.div>
@@ -8975,7 +9040,8 @@ function HomeView({
   highlightedTestimoniesIds = [],
   allArticles = [],
   announcement,
-  onContactAdmin
+  onContactAdmin,
+  userLocation
 }: { 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   allPros: Professional[], 
@@ -9002,7 +9068,8 @@ function HomeView({
     cta_text?: string;
     cta_type?: string;
   },
-  onContactAdmin?: () => void
+  onContactAdmin?: () => void,
+  userLocation?: { lat: number; lng: number } | null
 }) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [localSearch, setLocalSearch] = useState('');
@@ -9088,6 +9155,7 @@ function HomeView({
           allPros={allPros}
           events={events}
           allArticles={allArticles}
+          userLocation={userLocation}
           onSelectPro={(pro) => {
             if (pro.source === 'google_places' || pro.id?.toString().startsWith('google_') || !isCommunityPro(pro)) {
               const googleUrl = (pro as any).googleMapsUri || (pro.website && pro.website.length > 5 ? pro.website : null) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((pro.company_name || pro.name) + ' ' + (pro.location || 'Valencia'))}`;
@@ -10212,7 +10280,29 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
   );
 }
 
-function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModalClose, scrollToTop, onProUpdate, currentUser, userProfile, blockedUsers = [], usersWhoBlockedMe = [], isActive = false }: { 
+function ExploreView({ 
+  allPros, 
+  onNavigate, 
+  initialProId, 
+  initialSearch, 
+  onModalClose, 
+  scrollToTop, 
+  onProUpdate, 
+  currentUser, 
+  userProfile, 
+  blockedUsers = [], 
+  usersWhoBlockedMe = [], 
+  isActive = false,
+  userLocation,
+  setUserLocation,
+  hasRealLocation,
+  setHasRealLocation,
+  showLocationBanner,
+  setShowLocationBanner,
+  mapCenterTrigger,
+  setMapCenterTrigger,
+  requestGeolocation
+}: { 
   allPros: Professional[], 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   initialProId?: string | null, 
@@ -10224,7 +10314,16 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
   userProfile?: any,
   blockedUsers?: string[],
   usersWhoBlockedMe?: string[],
-  isActive?: boolean
+  isActive?: boolean,
+  userLocation: { lat: number; lng: number } | null,
+  setUserLocation: React.Dispatch<React.SetStateAction<{ lat: number; lng: number } | null>>,
+  hasRealLocation: boolean,
+  setHasRealLocation: React.Dispatch<React.SetStateAction<boolean>>,
+  showLocationBanner: boolean,
+  setShowLocationBanner: React.Dispatch<React.SetStateAction<boolean>>,
+  mapCenterTrigger: number,
+  setMapCenterTrigger: React.Dispatch<React.SetStateAction<number>>,
+  requestGeolocation: (onSuccess?: (coords: { lat: number, lng: number }) => void) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState(initialSearch || '');
@@ -10333,56 +10432,147 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
       let data = null;
       let serverFailed = false;
 
-      try {
-        const briefPros = allPros.map((p: any) => ({
-          id: String(p.id),
-          name: p.name,
-          company_name: p.company_name || "",
-          category: p.category || p.profession || "",
-          categories: p.categories || [],
-          bio: p.bio || p.description || "",
-          top_qualities: p.top_qualities || [],
-          languages: p.languages || [],
-          rating: p.rating || 0,
-          location: p.location || ""
-        }));
+      const isVercel = typeof window !== 'undefined' && (
+        window.location.hostname.includes('vercel.app') || 
+        window.location.hostname.includes('vercel')
+      );
 
-        const response = await fetch("/api/ai-search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: trimmed, professionals: briefPros }),
-        });
-        
-        if (response.status === 404 || response.status === 405) {
-          serverFailed = true;
-        } else if (!response.ok) {
-          if (response.status === 429) {
-            throw new Error("Jane is not available at the moment. Please use manual search in the pages");
-          }
-          try {
-            const errJson = await response.json();
-            if (errJson && errJson.error) {
-              throw new Error(errJson.error);
-            }
-          } catch (e: any) {
-            if (e.message && (e.message.includes("Jane is") || e.message.includes("Jane est très sollicitée"))) {
-              throw e;
-            }
-          }
-          throw new Error("Sorry, an error occurred during AI search.");
-        } else {
-          data = await response.json();
-        }
-      } catch (fetchErr) {
-        console.warn("[Search] Server search failed or is unavailable, attempting client fallback:", fetchErr);
+      if (isVercel) {
         serverFailed = true;
+      } else {
+        try {
+          const briefPros = allPros.map((p: any) => ({
+            id: String(p.id),
+            name: p.name,
+            company_name: p.company_name || "",
+            category: p.category || p.profession || "",
+            categories: p.categories || [],
+            bio: p.bio || p.description || "",
+            top_qualities: p.top_qualities || [],
+            languages: p.languages || [],
+            rating: p.rating || 0,
+            location: p.location || ""
+          }));
+
+          const response = await fetch("/api/ai-search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: trimmed, professionals: briefPros, userLocation }),
+          });
+          
+          if (response.status === 404 || response.status === 405) {
+            serverFailed = true;
+          } else if (!response.ok) {
+            if (response.status === 429) {
+              throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+            }
+            try {
+              const errJson = await response.json();
+              if (errJson && errJson.error) {
+                throw new Error(errJson.error);
+              }
+            } catch (e: any) {
+              if (e.message && (e.message.includes("Jane is") || e.message.includes("Jane est très sollicitée"))) {
+                throw e;
+              }
+            }
+            throw new Error("Sorry, an error occurred during AI search.");
+          } else {
+            data = await response.json();
+          }
+        } catch (fetchErr) {
+          console.warn("[Search] Server search failed or is unavailable, attempting client fallback:", fetchErr);
+          serverFailed = true;
+        }
       }
+
+      let clientGooglePlacesPros: any[] = [];
 
       if (serverFailed) {
         // Fallback to client-side search using the client-side API key
         const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
         if (!apiKey) {
           throw new Error("The server AI search service is busy or unavailable (Error 404). To use client-side AI search (e.g., on Vercel), please configure the VITE_GEMINI_API_KEY environment variable in your Vercel project settings.");
+        }
+
+        // Try to fetch Google Places pros directly from the client side if GOOGLE_MAPS_KEY is available
+        if (GOOGLE_MAPS_KEY) {
+          try {
+            const targetZone = detectTargetZone(trimmed, userLocation);
+            const centerLat = targetZone.centerCoords.lat;
+            const centerLng = targetZone.centerCoords.lng;
+            const textQuery = targetZone.isSpecificZone
+              ? `${trimmed} ${targetZone.zoneName} Valencia Spain`
+              : `${trimmed} in Valencia Spain`;
+
+            const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": GOOGLE_MAPS_KEY,
+                "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.photos,places.location"
+              },
+              body: JSON.stringify({
+                textQuery,
+                locationBias: {
+                  circle: {
+                    center: { latitude: centerLat, longitude: centerLng },
+                    radius: 25000.0
+                  }
+                },
+                maxResultCount: 6,
+                languageCode: "en"
+              })
+            });
+
+            if (gpResponse.ok) {
+              const gpData = await gpResponse.json();
+              const places = gpData.places || [];
+              clientGooglePlacesPros = places.map((place: any, idx: number) => {
+                let photoUrl = "";
+                if (place.photos && place.photos.length > 0) {
+                  photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${GOOGLE_MAPS_KEY}`;
+                }
+
+                const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
+
+                let coords = {
+                  lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
+                  lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
+                };
+
+                if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
+                  coords = {
+                    lat: place.location.latitude,
+                    lng: place.location.longitude
+                  };
+                }
+
+                const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+
+                return {
+                  id: `google_${place.id}`,
+                  name: place.displayName?.text || "Professional",
+                  company_name: place.displayName?.text || "",
+                  category: place.primaryTypeDisplayName?.text || "Professional",
+                  bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
+                  location: cleanAddress,
+                  coordinates: coords,
+                  distanceKm: dist,
+                  rating: typeof place.rating === 'number' ? place.rating : 0,
+                  reviews_count: place.userRatingCount || 0,
+                  phone: place.nationalPhoneNumber || "",
+                  website: place.websiteUri || "",
+                  googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
+                  image: photoUrl,
+                  source: 'google_places',
+                  is_community_recommended: false
+                };
+              });
+            }
+          } catch (gpErr) {
+            console.warn("Client-side fallback Google Places fetch failed:", gpErr);
+          }
         }
 
         const ai = new GoogleGenAI({ apiKey });
@@ -10471,6 +10661,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         });
 
         const parsedContent = JSON.parse(response.text || "{}");
+        parsedContent.google_places_pros = clientGooglePlacesPros;
         data = parsedContent;
       }
 
@@ -10659,21 +10850,6 @@ ${JSON.stringify(proListBrief, null, 2)}`,
       }
     }
   }, [initialProId, allPros, selectedPro]);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(() => {
-    try {
-      const saved = localStorage.getItem('unlocked_user_location');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [mapCenterTrigger, setMapCenterTrigger] = useState(0);
-  const [hasRealLocation, setHasRealLocation] = useState(() => {
-    return localStorage.getItem('unlocked_has_real_location') === 'true';
-  });
-  const [showLocationBanner, setShowLocationBanner] = useState(() => {
-    return localStorage.getItem('unlocked_show_location_banner') !== 'false';
-  });
   const [maxDistance, setMaxDistance] = useState<number | 'All'>(() => {
     const saved = localStorage.getItem('unlocked_max_distance');
     if (saved === 'All' || !saved) return 'All';
@@ -10688,47 +10864,6 @@ ${JSON.stringify(proListBrief, null, 2)}`,
       setMaxDistance('All');
     }
   }, [hasRealLocation]);
-
-  const requestGeolocation = (onSuccess?: (coords: { lat: number, lng: number }) => void) => {
-    if (!hasRealLocation) {
-        setShowLocationBanner(true);
-    }
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const loc = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          setUserLocation(loc);
-          setHasRealLocation(true);
-          setShowLocationBanner(false);
-          setMapCenterTrigger((prev) => prev + 1);
-          try {
-            localStorage.setItem('unlocked_user_location', JSON.stringify(loc));
-            localStorage.setItem('unlocked_has_real_location', 'true');
-            localStorage.setItem('unlocked_show_location_banner', 'false');
-          } catch (e) {
-            console.error(e);
-          }
-          onSuccess?.(loc);
-        },
-        () => {
-          // Do not set fallback location, just mark that we do not have real location
-          setHasRealLocation(false);
-          // Do not hide the banner if denied, so users can try again
-          try {
-            localStorage.setItem('unlocked_has_real_location', 'false');
-          } catch (e) {
-            console.error(e);
-          }
-        }
-      );
-    } else {
-      // If navigator.geolocation is not available, just set hasRealLocation to false
-      setHasRealLocation(false);
-    }
-  };
 
   // Selected pro details view open
   useEffect(() => {
