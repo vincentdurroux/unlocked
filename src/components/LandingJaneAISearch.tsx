@@ -1,0 +1,1318 @@
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { motion } from 'motion/react';
+import { 
+  Search, 
+  Sparkles, 
+  X, 
+  Star, 
+  Calendar, 
+  MapPin, 
+  BookOpen, 
+  User, 
+  Compass, 
+  Briefcase, 
+  ChevronRight, 
+  ChevronDown,
+  Clock, 
+  AlertCircle,
+  Loader2,
+  Stethoscope,
+  Wrench,
+  PartyPopper,
+  FileCheck2,
+  Home as HomeIcon,
+  MessageSquareHeart,
+  MessageSquare,
+  Send,
+  RotateCcw,
+  Award
+} from 'lucide-react';
+import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
+import {
+  detectTargetZone,
+  calculateDistanceKm,
+  sortProfessionalsByProximityAndRating,
+  DEFAULT_VALENCIA_CENTER,
+  Coordinates
+} from '../lib/locationUtils';
+
+interface Professional {
+  id: string;
+  name: string;
+  company_name?: string;
+  category: string;
+  rating: number;
+  review_count?: number;
+  languages: string[];
+  image: string;
+  bio: string;
+  phone?: string;
+  whatsapp?: string;
+  email?: string;
+  website?: string;
+  instagram?: string;
+  facebook?: string;
+  location?: string;
+  coordinates?: { lat: number; lng: number };
+  is_highlighted?: boolean;
+  top_qualities?: string[];
+  has_filled_form?: boolean;
+  categories?: string[];
+  source?: string;
+  is_community_recommended?: boolean;
+  distanceKm?: number | null;
+}
+
+interface Event {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  start_date?: string;
+  end_date?: string;
+  start_time?: string;
+  end_time?: string;
+  location: string;
+  category: string;
+  image: string;
+  description?: string;
+  coordinates?: { lat: number; lng: number };
+  is_highlighted?: boolean;
+}
+
+interface AISearchMatch {
+  id: string;
+  score: number;
+  reason: string;
+}
+
+interface AISearchResponse {
+  jane_message: string;
+  matched_topics: string[];
+  pros: AISearchMatch[];
+  events: AISearchMatch[];
+  guides: AISearchMatch[];
+  google_places_pros?: Professional[];
+  target_zone?: {
+    zoneName: string;
+    centerCoords: Coordinates;
+    isSpecificZone: boolean;
+  };
+}
+
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'jane';
+  text: string;
+}
+
+interface LandingJaneAISearchProps {
+  allPros: Professional[];
+  events: Event[];
+  allArticles: any[];
+  userLocation?: { lat: number; lng: number } | null;
+  onSelectPro: (pro: Professional) => void;
+  onSelectEvent: (event: Event) => void;
+  onSelectArticle: (article: any) => void;
+  onNavigate: (view: any, params?: any) => void;
+}
+
+const QUICK_INSPIRATIONS = [
+  {
+    icon: Stethoscope,
+    label: "English doctor or pediatrician",
+    query: "English speaking doctor or pediatrician in Valencia",
+    color: "bg-blue-50 text-blue-700 border-blue-200/80 hover:bg-blue-100/70"
+  },
+  {
+    icon: PartyPopper,
+    label: "Things to do this weekend",
+    query: "Fun family events, concerts and activities in Valencia this week",
+    color: "bg-amber-50 text-amber-800 border-amber-200/80 hover:bg-amber-100/70"
+  },
+  {
+    icon: FileCheck2,
+    label: "NIE & Residency steps",
+    query: "How to get NIE number or legal residency in Valencia",
+    color: "bg-emerald-50 text-emerald-800 border-emerald-200/80 hover:bg-emerald-100/70"
+  },
+  {
+    icon: Wrench,
+    label: "Handyman or Plumber",
+    query: "Emergency plumber or handyman in Valencia",
+    color: "bg-purple-50 text-purple-800 border-purple-200/80 hover:bg-purple-100/70"
+  },
+  {
+    icon: HomeIcon,
+    label: "Neighborhoods & Renting",
+    query: "Best neighborhood to live in Valencia and rent advice",
+    color: "bg-rose-50 text-rose-800 border-rose-200/80 hover:bg-rose-100/70"
+  }
+];
+
+export const isCommunityPro = (p: any) => {
+  if (!p) return false;
+  return p.source !== 'google' && p.source !== 'google_places' && p.is_community_recommended !== false;
+};
+
+export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
+  allPros,
+  events,
+  allArticles,
+  userLocation,
+  onSelectPro,
+  onSelectEvent,
+  onSelectArticle,
+  onNavigate
+}) => {
+  const [query, setQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searchResult, setSearchResult] = useState<AISearchResponse | null>(null);
+  const [googlePlacesPros, setGooglePlacesPros] = useState<Professional[]>([]);
+  const [selectedTopicTab, setSelectedTopicTab] = useState<'all' | 'pros' | 'events' | 'guides'>('all');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Conversational thread state
+  const [conversation, setConversation] = useState<ChatMessage[]>([]);
+  const [followUpQuery, setFollowUpQuery] = useState('');
+  const [isFollowUpLoading, setIsFollowUpLoading] = useState(false);
+
+  // Ref to automatically scroll and center on the discussion / latest received message
+  const discussionRef = useRef<HTMLDivElement>(null);
+  const latestMessageRef = useRef<HTMLDivElement>(null);
+
+  // Topic expansion state (max 2 by default, unveiled via arrow)
+  const [showAllPros, setShowAllPros] = useState(false);
+  const [showAllEvents, setShowAllEvents] = useState(false);
+  const [showAllGuides, setShowAllGuides] = useState(false);
+
+  // Smooth scroll and center on the latest received response
+  useEffect(() => {
+    if (hasSearched && !isSearching && !isFollowUpLoading && searchResult) {
+      const timer = setTimeout(() => {
+        if (latestMessageRef.current) {
+          latestMessageRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else if (discussionRef.current) {
+          discussionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [hasSearched, isSearching, isFollowUpLoading, searchResult, conversation.length]);
+
+  const getBriefData = () => {
+    const combined = [...allPros, ...googlePlacesPros];
+    const map = new Map<string, any>();
+    combined.forEach((p: any) => map.set(String(p.id), p));
+    const uniquePros = Array.from(map.values());
+
+    const proListBrief = uniquePros.map((p: any) => ({
+      id: String(p.id),
+      name: p.name,
+      company_name: p.company_name || "",
+      category: p.category || p.profession || "",
+      categories: p.categories || [],
+      bio: (p.bio || p.description || "").slice(0, 180),
+      top_qualities: p.top_qualities || [],
+      languages: p.languages || [],
+      rating: p.rating || 0,
+      location: p.location || "",
+      coordinates: p.coordinates || null,
+      is_community_recommended: isCommunityPro(p),
+      source: p.source || 'community'
+    }));
+
+    const eventsBrief = events.map((e: any) => ({
+      id: String(e.id),
+      title: e.title,
+      category: e.category || "",
+      start_date: e.start_date || e.date || "",
+      end_date: e.end_date || "",
+      start_time: e.start_time || e.time || "",
+      location: e.location || "",
+      description: (e.description || "").slice(0, 180)
+    }));
+
+    const guidesBrief = allArticles.map((g: any) => ({
+      id: String(g.id),
+      title: g.title,
+      categoryTitle: g.categoryTitle || g.category_title || "",
+      excerpt: (g.excerpt || g.description || "").slice(0, 180),
+      author: g.author?.businessName || g.author?.name || ""
+    }));
+
+    return { proListBrief, eventsBrief, guidesBrief };
+  };
+
+  const handleSearch = async (overrideQuery?: string) => {
+    const q = (overrideQuery !== undefined ? overrideQuery : query).trim();
+    if (!q) return;
+
+    if (overrideQuery !== undefined) {
+      setQuery(overrideQuery);
+    }
+
+    setIsSearching(true);
+    setErrorMessage(null);
+    setShowAllPros(false);
+    setShowAllEvents(false);
+    setShowAllGuides(false);
+    setFollowUpQuery('');
+
+    const { proListBrief, eventsBrief, guidesBrief } = getBriefData();
+
+    let success = false;
+    let data: AISearchResponse | null = null;
+
+    try {
+      const response = await fetch("/api/ai-multi-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: q,
+          professionals: proListBrief,
+          events: eventsBrief,
+          guides: guidesBrief,
+          conversationHistory: [],
+          userLocation: userLocation || null
+        }),
+      });
+
+      if (response.ok) {
+        data = await response.json();
+        success = true;
+      } else if (response.status === 429) {
+        throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+      }
+    } catch (err: any) {
+      console.warn("Server AI multi-search failed, attempting client fallback:", err);
+    }
+
+    // Client-side fallback if server fails
+    if (!success) {
+      try {
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
+        if (!apiKey) {
+          throw new Error("AI search is temporarily unavailable. You can browse the directory below.");
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
+        const sysInstruction = `You are Jane, the AI assistant for "Unlocked" in Valencia.
+Match items selectively across pros, events, and guides for the user query.
+Rules:
+- Only include a category if there are genuinely relevant items.
+- Score 0-100, only return items with score >= 40.
+- Return warm, concise jane_message in the user's query language.`;
+
+        const response = await ai.models.generateContent({
+          model: "gemini-3.1-flash-lite",
+          contents: `Query: "${q}"\nPros: ${JSON.stringify(proListBrief.slice(0, 30))}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                jane_message: { type: Type.STRING },
+                matched_topics: { type: Type.ARRAY, items: { type: Type.STRING } },
+                pros: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      score: { type: Type.INTEGER },
+                      reason: { type: Type.STRING }
+                    },
+                    required: ["id", "score", "reason"]
+                  }
+                },
+                events: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      score: { type: Type.INTEGER },
+                      reason: { type: Type.STRING }
+                    },
+                    required: ["id", "score", "reason"]
+                  }
+                },
+                guides: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      score: { type: Type.INTEGER },
+                      reason: { type: Type.STRING }
+                    },
+                    required: ["id", "score", "reason"]
+                  }
+                }
+              },
+              required: ["jane_message", "matched_topics", "pros", "events", "guides"]
+            },
+            thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
+          }
+        });
+
+        const parsed = JSON.parse(response.text || "{}");
+        const prosResults = (parsed.pros || []).filter((p: any) => (p.score || 0) >= 40);
+        const eventsResults = (parsed.events || []).filter((e: any) => (e.score || 0) >= 40);
+        const guidesResults = (parsed.guides || []).filter((g: any) => (g.score || 0) >= 40);
+
+        const topics: string[] = [];
+        if (prosResults.length > 0) topics.push("pros");
+        if (eventsResults.length > 0) topics.push("events");
+        if (guidesResults.length > 0) topics.push("guides");
+
+        data = {
+          jane_message: parsed.jane_message || "Here is what I found for you in Valencia:",
+          matched_topics: topics,
+          pros: prosResults,
+          events: eventsResults,
+          guides: guidesResults
+        };
+        success = true;
+      } catch (clientErr: any) {
+        console.error("Client AI search fallback error:", clientErr);
+        const errMsg = clientErr.message || JSON.stringify(clientErr) || "";
+        const errLower = errMsg.toLowerCase();
+        if (
+          errLower.includes("quota") ||
+          errLower.includes("limit") ||
+          errLower.includes("exhausted") ||
+          errLower.includes("429") ||
+          errLower.includes("too many requests") ||
+          errLower.includes("busy") ||
+          errLower.includes("rate limit") ||
+          errLower.includes("sollicitée")
+        ) {
+          setErrorMessage("Jane is not available at the moment. Please use manual search in the pages");
+        } else {
+          setErrorMessage(clientErr.message || "An error occurred during search. Please try again.");
+        }
+      }
+    }
+
+    if (data) {
+      setSearchResult(data);
+      if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
+        setGooglePlacesPros(data.google_places_pros);
+      }
+      setSelectedTopicTab('all');
+      setHasSearched(true);
+      setConversation([
+        { id: '1', role: 'user', text: q },
+        { id: '2', role: 'jane', text: data.jane_message }
+      ]);
+    }
+    setIsSearching(false);
+  };
+
+  const handleFollowUp = async (customFollowUpText?: string) => {
+    const text = (customFollowUpText !== undefined ? customFollowUpText : followUpQuery).trim();
+    if (!text || isFollowUpLoading || isSearching) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      text
+    };
+
+    const updatedConversation = [...conversation, userMessage];
+    setConversation(updatedConversation);
+    setFollowUpQuery('');
+    setIsFollowUpLoading(true);
+    setErrorMessage(null);
+
+    const { proListBrief, eventsBrief, guidesBrief } = getBriefData();
+
+    const historyForApi = updatedConversation.map(m => ({
+      role: m.role === 'jane' ? 'assistant' : 'user',
+      content: m.text
+    }));
+
+    let success = false;
+    let data: AISearchResponse | null = null;
+
+    try {
+      const response = await fetch("/api/ai-multi-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: text,
+          professionals: proListBrief,
+          googlePlacesPros: googlePlacesPros,
+          events: eventsBrief,
+          guides: guidesBrief,
+          conversationHistory: historyForApi,
+          userLocation: userLocation || null
+        }),
+      });
+
+      if (response.ok) {
+        data = await response.json();
+        success = true;
+      } else if (response.status === 429) {
+        throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+      }
+    } catch (err: any) {
+      console.warn("Server AI follow-up search failed, fallback:", err);
+    }
+
+    if (!success) {
+      try {
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
+        if (apiKey) {
+          const ai = new GoogleGenAI({ apiKey });
+          const historyFormatted = historyForApi.map(m => `${m.role === 'user' ? 'User' : 'Jane'}: ${m.content}`).join('\n');
+          const sysInstruction = `You are Jane, the AI assistant for "Unlocked" in Valencia.
+Continue the conversation to refine search results according to the user's latest follow-up.
+Match relevant pros, events, and guides. Return a warm, helpful response answering their specific query and refining the list.`;
+
+          const response = await ai.models.generateContent({
+            model: "gemini-3.1-flash-lite",
+            contents: `User Follow-Up: "${text}"\n\nHistory:\n${historyFormatted}\n\nPros: ${JSON.stringify(proListBrief.slice(0, 30))}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
+            config: {
+              systemInstruction: sysInstruction,
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  jane_message: { type: Type.STRING },
+                  matched_topics: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  pros: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        id: { type: Type.STRING },
+                        score: { type: Type.INTEGER },
+                        reason: { type: Type.STRING }
+                      },
+                      required: ["id", "score", "reason"]
+                    }
+                  },
+                  events: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        id: { type: Type.STRING },
+                        score: { type: Type.INTEGER },
+                        reason: { type: Type.STRING }
+                      },
+                      required: ["id", "score", "reason"]
+                    }
+                  },
+                  guides: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        id: { type: Type.STRING },
+                        score: { type: Type.INTEGER },
+                        reason: { type: Type.STRING }
+                      },
+                      required: ["id", "score", "reason"]
+                    }
+                  }
+                },
+                required: ["jane_message", "matched_topics", "pros", "events", "guides"]
+              },
+              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
+            }
+          });
+
+          const parsed = JSON.parse(response.text || "{}");
+          const prosResults = (parsed.pros || []).filter((p: any) => (p.score || 0) >= 40);
+          const eventsResults = (parsed.events || []).filter((e: any) => (e.score || 0) >= 40);
+          const guidesResults = (parsed.guides || []).filter((g: any) => (g.score || 0) >= 40);
+
+          const topics: string[] = [];
+          if (prosResults.length > 0) topics.push("pros");
+          if (eventsResults.length > 0) topics.push("events");
+          if (guidesResults.length > 0) topics.push("guides");
+
+          data = {
+            jane_message: parsed.jane_message || "I've updated the matches according to your request:",
+            matched_topics: topics,
+            pros: prosResults,
+            events: eventsResults,
+            guides: guidesResults
+          };
+          success = true;
+        }
+      } catch (clientErr: any) {
+        console.error("Client follow-up error:", clientErr);
+        const errMsg = clientErr.message || JSON.stringify(clientErr) || "";
+        const errLower = errMsg.toLowerCase();
+        if (
+          errLower.includes("quota") ||
+          errLower.includes("limit") ||
+          errLower.includes("exhausted") ||
+          errLower.includes("429") ||
+          errLower.includes("too many requests") ||
+          errLower.includes("busy") ||
+          errLower.includes("rate limit") ||
+          errLower.includes("sollicitée")
+        ) {
+          setErrorMessage("Jane is not available at the moment. Please use manual search in the pages");
+        } else {
+          setErrorMessage(clientErr.message || "Could not process follow-up. Please try again.");
+        }
+      }
+    }
+
+    if (data) {
+      setSearchResult(data);
+      if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
+        setGooglePlacesPros(prev => {
+          const map = new Map<string, Professional>();
+          prev.forEach(p => map.set(String(p.id), p));
+          data?.google_places_pros?.forEach(p => map.set(String(p.id), p));
+          return Array.from(map.values());
+        });
+      }
+      const janeMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'jane',
+        text: data.jane_message
+      };
+      setConversation([...updatedConversation, janeMessage]);
+    }
+    setIsFollowUpLoading(false);
+  };
+
+  const handleClear = () => {
+    setQuery('');
+    setHasSearched(false);
+    setSearchResult(null);
+    setGooglePlacesPros([]);
+    setErrorMessage(null);
+    setConversation([]);
+    setFollowUpQuery('');
+    setSelectedTopicTab('all');
+    setShowAllPros(false);
+    setShowAllEvents(false);
+    setShowAllGuides(false);
+  };
+
+  // Combine Unlocked directory pros and dynamically discovered Google Places pros
+  const combinedPros = useMemo(() => {
+    const map = new Map<string, Professional>();
+    allPros.forEach(p => map.set(String(p.id), p));
+    googlePlacesPros.forEach(p => {
+      if (!map.has(String(p.id))) {
+        map.set(String(p.id), p);
+      }
+    });
+    return Array.from(map.values());
+  }, [allPros, googlePlacesPros]);
+
+  // Active target zone and center coordinates
+  const activeTargetZone = useMemo(() => {
+    if (searchResult?.target_zone) {
+      return searchResult.target_zone;
+    }
+    return detectTargetZone(query || '', userLocation);
+  }, [searchResult, query, userLocation]);
+
+  // Find full objects and sort via 3-Tier priority system:
+  // 1. App recommended pros within 25 km
+  // 2. Google Places pros within 25 km (highest rated first)
+  // 3. Other pros (> 25 km)
+  const rawMatchedPros = (searchResult?.pros || []).map(match => {
+    const pro = combinedPros.find(p => String(p.id) === String(match.id));
+    return pro ? { ...pro, matchReason: match.reason, matchScore: match.score } : null;
+  }).filter(Boolean) as (Professional & { matchReason: string; matchScore: number })[];
+
+  const matchedPros = useMemo(() => {
+    const centerCoords = activeTargetZone.centerCoords;
+    return sortProfessionalsByProximityAndRating(rawMatchedPros, centerCoords, 25);
+  }, [rawMatchedPros, activeTargetZone]);
+
+  const matchedEvents = (searchResult?.events || []).map(match => {
+    const ev = events.find(e => String(e.id) === String(match.id));
+    return ev ? { ...ev, matchReason: match.reason, matchScore: match.score } : null;
+  }).filter(Boolean) as (Event & { matchReason: string; matchScore: number })[];
+
+  const matchedGuides = (searchResult?.guides || []).map(match => {
+    const art = allArticles.find(a => String(a.id) === String(match.id));
+    return art ? { ...art, matchReason: match.reason, matchScore: match.score } : null;
+  }).filter(Boolean) as (any & { matchReason: string; matchScore: number })[];
+
+  const hasPros = matchedPros.length > 0;
+  const hasEvents = matchedEvents.length > 0;
+  const hasGuides = matchedGuides.length > 0;
+  const totalResultsCount = matchedPros.length + matchedEvents.length + matchedGuides.length;
+
+  // Max 2 results by default, full list when expanded
+  const displayedPros = showAllPros ? matchedPros : matchedPros.slice(0, 2);
+  const displayedEvents = showAllEvents ? matchedEvents : matchedEvents.slice(0, 2);
+  const displayedGuides = showAllGuides ? matchedGuides : matchedGuides.slice(0, 2);
+
+  return (
+    <div id="jane-ai-search-section" className="relative z-10 -mt-3 md:mt-0 space-y-4">
+      {/* Clean & Airy Container with subtle light blue border */}
+      <div className="relative overflow-hidden rounded-[28px] bg-white p-5 sm:p-7 md:p-8 border border-blue-200/90 shadow-sm shadow-blue-500/5 transition-all duration-300">
+
+        <div className="relative z-10 space-y-5">
+          
+          {/* 1. INITIAL SEARCH BAR STATE (Shown when no search has been made yet) */}
+          {!hasSearched && (
+            <>
+              {/* Header */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <h3 className="text-xl sm:text-2xl md:text-3xl font-bold font-display text-brand-navy tracking-tight leading-tight">
+                    Looking for something in Valencia? <br className="hidden sm:block" />
+                    <span className="text-brand-blue font-bold">Ask Jane anything.</span>
+                  </h3>
+                </div>
+              </div>
+
+              {/* Search Input Box */}
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSearch();
+                }}
+                className="relative"
+              >
+                <div className="relative flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-1.5 sm:p-2 bg-white rounded-2xl border border-blue-200 focus-within:border-brand-blue focus-within:ring-3 focus-within:ring-brand-blue/10 shadow-xs transition-all duration-200">
+                  <div className="relative flex-1 flex items-center">
+                    <input
+                      type="text"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Ask Jane e.g. English pediatrician, concerts this weekend, NIE help..."
+                      disabled={isSearching}
+                      className="w-full px-4 pr-8 py-2.5 bg-transparent text-slate-800 text-sm sm:text-base font-normal placeholder:text-slate-400 placeholder:font-normal outline-none"
+                    />
+                    {query && !isSearching && (
+                      <button
+                        type="button"
+                        onClick={() => setQuery('')}
+                        className="absolute right-2 p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSearching || !query.trim()}
+                    className="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-2.5 sm:py-3 bg-brand-blue hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl font-semibold text-xs sm:text-sm tracking-normal shadow-xs transition-all duration-200 active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {isSearching ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>Searching...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-brand-yellow fill-brand-yellow" />
+                        <span>Ask Jane</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              {/* Quick Inspiration Chips */}
+              {!isSearching && (
+                <div className="space-y-2 pt-0.5">
+                  <span className="text-xs font-medium text-slate-400">
+                    Popular questions to try:
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {QUICK_INSPIRATIONS.map((item, idx) => {
+                      const IconComp = item.icon;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSearch(item.query)}
+                          className={`group inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${item.color}`}
+                        >
+                          <IconComp className="w-3.5 h-3.5 shrink-0 text-current" />
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Loading State Animation */}
+              {isSearching && (
+                <div className="py-8 flex flex-col items-center justify-center text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-brand-blue/10 flex items-center justify-center text-brand-blue">
+                    <Sparkles className="w-6 h-6 text-brand-blue animate-spin" />
+                  </div>
+                  <div className="space-y-1 max-w-sm px-4">
+                    <p className="text-base font-semibold text-brand-navy">Jane is finding matches...</p>
+                    <p className="text-xs sm:text-sm text-slate-500 font-normal leading-relaxed">
+                      Scanning recommended pros, upcoming events, and practical guides in Valencia.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Error Notice */}
+          {errorMessage && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs sm:text-sm text-rose-700 font-normal">
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+        </div>
+
+        {/* 2. JANE'S CHAT & RESULTS SECTION (Takes the place of the search bar) */}
+        {hasSearched && !isSearching && searchResult && (
+          <motion.div 
+            ref={discussionRef}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className="space-y-6 scroll-mt-20"
+          >
+            {/* Jane's Chat Card */}
+            <div id="jane-discussion-thread" className="p-4 sm:p-5 md:p-6 rounded-2xl bg-blue-50/50 border border-blue-200/70 space-y-4">
+              
+              {/* Header with Jane title & New Search Button */}
+              <div className="flex items-center justify-between gap-3 pb-3 border-b border-blue-200/60 flex-wrap">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-brand-blue text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <MessageSquareHeart className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base sm:text-lg font-bold text-brand-navy">Jane's chat</span>
+                      <span className="px-2 py-0.5 rounded-md bg-white text-brand-blue border border-blue-200/80 text-[10px] font-semibold uppercase tracking-wider">
+                        Matched
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 font-normal">
+                      {totalResultsCount} result{totalResultsCount > 1 ? 's' : ''} found in Valencia
+                    </p>
+                  </div>
+                </div>
+
+                {/* New Search Button (Clears and brings back the search bar) */}
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-blue-50 text-brand-blue border border-blue-200 hover:border-brand-blue text-xs sm:text-sm font-semibold shadow-2xs transition-all active:scale-95 cursor-pointer ml-auto"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-brand-blue" />
+                  <span>New search</span>
+                </button>
+              </div>
+
+              {/* Conversational History Thread */}
+              <div className="space-y-3 pt-1">
+                {conversation.length > 2 ? (
+                  // Multi-turn conversational flow
+                  <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                    {conversation.map((msg, index) => {
+                      const isLatest = index === conversation.length - 1;
+                      return (
+                        <div
+                          key={msg.id}
+                          ref={isLatest ? latestMessageRef : undefined}
+                          className={`flex gap-2.5 scroll-mt-24 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                        >
+                          {msg.role === 'jane' && (
+                            <div className="w-6 h-6 rounded-lg bg-brand-blue/10 flex items-center justify-center shrink-0 mt-0.5">
+                              <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
+                            </div>
+                          )}
+                          <div
+                            className={`px-3.5 py-2 rounded-2xl text-xs sm:text-sm leading-relaxed max-w-[85%] ${
+                              msg.role === 'user'
+                                ? 'bg-brand-navy text-white font-medium rounded-tr-xs'
+                                : 'bg-white border border-blue-100 text-slate-700 font-normal rounded-tl-xs shadow-2xs'
+                            }`}
+                          >
+                            {msg.text}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  // Initial search answer view
+                  <div className="space-y-2">
+                    {conversation.length > 0 && conversation[0]?.role === 'user' && (
+                      <div className="flex justify-end">
+                        <div className="px-3.5 py-1.5 rounded-2xl text-xs sm:text-sm font-medium bg-brand-navy text-white rounded-tr-xs max-w-[85%]">
+                          "{conversation[0].text}"
+                        </div>
+                      </div>
+                    )}
+                    <div 
+                      ref={latestMessageRef}
+                      className="flex gap-2.5 items-start scroll-mt-24"
+                    >
+                      <div className="w-6 h-6 rounded-lg bg-brand-blue/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
+                      </div>
+                      <div className="flex-1 px-3.5 py-2.5 rounded-2xl bg-white border border-blue-100 text-xs sm:text-sm text-slate-700 font-normal leading-relaxed rounded-tl-xs shadow-2xs">
+                        {searchResult.jane_message}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Follow-up loading state */}
+                {isFollowUpLoading && (
+                  <div className="flex items-center gap-2 text-xs text-brand-blue font-medium bg-white/80 p-2.5 rounded-xl border border-blue-100">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-blue" />
+                    <span>Jane is refining search results...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Follow-up Input Bar (Placed directly below the last discussion bubble) */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleFollowUp();
+                }}
+                className="pt-1"
+              >
+                <div className="relative flex items-center gap-2 bg-white rounded-xl border border-blue-200 focus-within:border-brand-blue focus-within:ring-2 focus-within:ring-brand-blue/10 p-1 shadow-2xs transition-all">
+                  <input
+                    type="text"
+                    value={followUpQuery}
+                    onChange={(e) => setFollowUpQuery(e.target.value)}
+                    placeholder="Type here..."
+                    disabled={isFollowUpLoading}
+                    className="flex-1 px-3 py-1.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 font-normal outline-none bg-transparent"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isFollowUpLoading || !followUpQuery.trim()}
+                    className="px-3.5 py-1.5 bg-brand-blue hover:bg-blue-700 disabled:bg-slate-100 disabled:text-slate-300 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
+                  >
+                    {isFollowUpLoading ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <>
+                        <span>Ask</span>
+                        <Send className="w-3 h-3" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+            </div>
+
+            {/* Filter Tabs (Shown ONLY if results exist) */}
+            {totalResultsCount > 0 && (
+              <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTopicTab('all')}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    selectedTopicTab === 'all'
+                      ? 'bg-brand-navy text-white shadow-2xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                  }`}
+                >
+                  All Matches ({totalResultsCount})
+                </button>
+
+                {hasPros && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTopicTab('pros')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      selectedTopicTab === 'pros'
+                        ? 'bg-brand-blue text-white shadow-2xs'
+                        : 'bg-blue-50 text-brand-blue hover:bg-blue-100/60 border border-blue-200/60'
+                    }`}
+                  >
+                    <Briefcase className="w-3.5 h-3.5" />
+                    <span>Pros ({matchedPros.length})</span>
+                  </button>
+                )}
+
+                {hasEvents && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTopicTab('events')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      selectedTopicTab === 'events'
+                        ? 'bg-amber-600 text-white shadow-2xs'
+                        : 'bg-amber-50 text-amber-800 hover:bg-amber-100/60 border border-amber-200/60'
+                    }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Events ({matchedEvents.length})</span>
+                  </button>
+                )}
+
+                {hasGuides && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTopicTab('guides')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      selectedTopicTab === 'guides'
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100/60 border border-emerald-200/60'
+                    }`}
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Guides ({matchedGuides.length})</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Zero Results State */}
+            {totalResultsCount === 0 && (
+              <div className="py-8 text-center space-y-3 bg-slate-50/50 rounded-2xl border border-slate-200/80 p-6">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                  <Compass className="w-5 h-5 text-brand-blue" />
+                </div>
+                <div className="space-y-1 max-w-md mx-auto">
+                  <h4 className="text-sm sm:text-base font-semibold text-slate-800">No exact matches found</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed font-normal">
+                    Try phrasing your question differently, or browse through the sections directly:
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
+                  <button
+                    onClick={() => onNavigate('explore')}
+                    className="px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-medium shadow-2xs hover:bg-blue-700 transition-colors"
+                  >
+                    Browse Pros
+                  </button>
+                  <button
+                    onClick={() => onNavigate('events')}
+                    className="px-4 py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 rounded-xl text-xs font-medium transition-colors"
+                  >
+                    Explore Events
+                  </button>
+                  <button
+                    onClick={() => onNavigate('guides')}
+                    className="px-4 py-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-medium transition-colors"
+                  >
+                    Read Guides
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 1. MATCHED PROS */}
+            {hasPros && (selectedTopicTab === 'all' || selectedTopicTab === 'pros') && (
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-brand-blue text-white flex items-center justify-center">
+                      <Briefcase className="w-3.5 h-3.5" />
+                    </div>
+                    <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
+                      Recommended Professionals ({matchedPros.length})
+                    </h4>
+                  </div>
+
+                  {/* Active Zone Status Pill */}
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200/80 text-brand-blue text-[11px] font-semibold shrink-0">
+                    <MapPin className="w-3.5 h-3.5 text-brand-blue shrink-0" />
+                    <span>Centered on: {activeTargetZone.zoneName} (within 25 km)</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {displayedPros.map((pro) => {
+                    const isCommunity = isCommunityPro(pro);
+                    const hasDist = typeof pro.distanceKm === 'number';
+                    const isWithin25km = hasDist && (pro.distanceKm as number) <= 25;
+
+                    return (
+                      <div
+                        key={pro.id}
+                        onClick={() => {
+                          if (!isCommunity) {
+                            const googleUrl = (pro as any).googleMapsUri || (pro.website && pro.website.length > 5 ? pro.website : null) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((pro.company_name || pro.name) + ' ' + (pro.location || 'Valencia'))}`;
+                            window.open(googleUrl, '_blank', 'noopener,noreferrer');
+                          } else {
+                            onSelectPro(pro);
+                          }
+                        }}
+                        className={`p-4 sm:p-5 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 group ${
+                          isCommunity
+                            ? 'bg-white border-2 border-emerald-500/80 hover:border-emerald-600 shadow-xs shadow-emerald-500/10 hover:shadow-md'
+                            : 'bg-slate-50/70 border border-slate-200/80 hover:border-slate-300 hover:bg-white'
+                        }`}
+                      >
+                        <div>
+                          {/* Unlocked Community Recommendation Badge & Distance Badge */}
+                          <div className="mb-2.5 flex items-center justify-between gap-2 flex-wrap">
+                            {isCommunity ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white font-bold text-[11px] tracking-tight shadow-xs shadow-emerald-500/20">
+                                <Award className="w-3.5 h-3.5 text-white shrink-0" />
+                                <span>Recommended by MyCityUnlocked community</span>
+                              </span>
+                            ) : null}
+
+                            {hasDist && (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                isWithin25km 
+                                  ? 'bg-blue-50 text-brand-blue border border-blue-200/80' 
+                                  : 'bg-slate-100 text-slate-500 border border-slate-200'
+                              }`}>
+                                <MapPin className="w-3 h-3 text-brand-blue shrink-0" />
+                                <span>{pro.distanceKm} km</span>
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-start gap-3.5">
+                            <div className="w-13 h-13 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200/70">
+                              {pro.image ? (
+                                <img src={pro.image} alt={pro.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                  <User className="w-6 h-6" />
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <h5 className="text-sm sm:text-base font-bold text-slate-900 truncate group-hover:text-brand-blue transition-colors">
+                                  {pro.company_name || pro.name}
+                                </h5>
+                                {isCommunity && pro.rating > 0 && (
+                                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 text-amber-800 text-xs font-semibold shrink-0">
+                                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                    <span>{pro.rating.toFixed(1)}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              <p className="text-xs font-medium text-brand-blue line-clamp-1 mt-0.5">
+                                {pro.category}
+                              </p>
+
+                              {pro.location && (
+                                <p className="text-xs text-slate-500 font-normal flex items-center gap-1 mt-1 truncate">
+                                  <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span>{pro.location}</span>
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Jane's reasoning */}
+                        {pro.matchReason && (
+                          <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 bg-blue-50/40 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 p-3 px-4 sm:px-5 rounded-b-2xl">
+                            <p className="text-xs text-slate-600 font-normal line-clamp-1 italic flex items-center gap-1.5">
+                              <Sparkles className="w-3 h-3 text-brand-yellow shrink-0" />
+                              "{pro.matchReason}"
+                            </p>
+                            <span className="text-xs font-medium text-brand-blue shrink-0 group-hover:translate-x-0.5 transition-transform">
+                              View →
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Show more arrow button */}
+                {matchedPros.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllPros(!showAllPros)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200 text-brand-blue text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
+                  >
+                    <span>{showAllPros ? 'Show fewer pros' : `Show all ${matchedPros.length} pros`}</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllPros ? 'rotate-180' : ''}`} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* 2. MATCHED EVENTS */}
+            {hasEvents && (selectedTopicTab === 'all' || selectedTopicTab === 'events') && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center">
+                    <Calendar className="w-3.5 h-3.5" />
+                  </div>
+                  <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
+                    Matching Events ({matchedEvents.length})
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {displayedEvents.map((ev) => (
+                    <div
+                      key={ev.id}
+                      onClick={() => onSelectEvent(ev)}
+                      className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 hover:border-amber-400/80 hover:shadow-xs transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 group"
+                    >
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-14 h-14 rounded-xl bg-amber-50 overflow-hidden shrink-0 border border-amber-200/70 relative">
+                          {ev.image ? (
+                            <img src={ev.image} alt={ev.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-amber-500">
+                              <Calendar className="w-6 h-6" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 text-[10px] font-semibold uppercase tracking-wide">
+                              {ev.category || 'Event'}
+                            </span>
+                            {(ev.start_date || ev.date) && (
+                              <span className="text-xs font-semibold text-amber-700">
+                                {ev.start_date || ev.date}
+                              </span>
+                            )}
+                          </div>
+
+                          <h5 className="text-sm sm:text-base font-bold text-slate-900 truncate mt-1 group-hover:text-amber-700 transition-colors">
+                            {ev.title}
+                          </h5>
+
+                          <div className="flex items-center gap-2.5 text-xs text-slate-500 font-normal mt-0.5">
+                            {ev.location && (
+                              <span className="flex items-center gap-1 truncate">
+                                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span>{ev.location}</span>
+                              </span>
+                            )}
+                            {(ev.start_time || ev.time) && (
+                              <span className="flex items-center gap-1 shrink-0">
+                                <Clock className="w-3 h-3 text-slate-400" />
+                                <span>{ev.start_time || ev.time}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {ev.matchReason && (
+                        <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 bg-amber-50/40 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 p-3 px-4 sm:px-5 rounded-b-2xl">
+                          <p className="text-xs text-slate-600 font-normal line-clamp-1 italic flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                            "{ev.matchReason}"
+                          </p>
+                          <span className="text-xs font-medium text-amber-700 shrink-0 group-hover:translate-x-0.5 transition-transform">
+                            Details →
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Show more arrow button */}
+                {matchedEvents.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllEvents(!showAllEvents)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-amber-50/70 border border-slate-200 text-amber-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
+                  >
+                    <span>{showAllEvents ? 'Show fewer events' : `Show all ${matchedEvents.length} events`}</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllEvents ? 'rotate-180' : ''}`} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* 3. MATCHED GUIDES */}
+            {hasGuides && (selectedTopicTab === 'all' || selectedTopicTab === 'guides') && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+                    <BookOpen className="w-3.5 h-3.5" />
+                  </div>
+                  <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
+                    Practical Guides ({matchedGuides.length})
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {displayedGuides.map((guide) => (
+                    <div
+                      key={guide.id}
+                      onClick={() => onSelectArticle(guide)}
+                      className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 hover:border-emerald-400/80 hover:shadow-xs transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 group"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 text-[10px] font-semibold uppercase tracking-wide">
+                            {guide.categoryTitle || 'Guide'}
+                          </span>
+                          {guide.author?.businessName && (
+                            <span className="text-xs font-normal text-slate-400 truncate">
+                              By {guide.author.businessName}
+                            </span>
+                          )}
+                        </div>
+
+                        <h5 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-emerald-700 transition-colors line-clamp-1">
+                          {guide.title}
+                        </h5>
+
+                        <p className="text-xs text-slate-500 line-clamp-2 mt-1 leading-relaxed font-normal">
+                          {guide.excerpt || guide.description}
+                        </p>
+                      </div>
+
+                      {guide.matchReason && (
+                        <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 bg-emerald-50/40 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 p-3 px-4 sm:px-5 rounded-b-2xl">
+                          <p className="text-xs text-slate-600 font-normal line-clamp-1 italic flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
+                            "{guide.matchReason}"
+                          </p>
+                          <span className="text-xs font-medium text-emerald-700 shrink-0 group-hover:translate-x-0.5 transition-transform">
+                            Read →
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Show more arrow button */}
+                {matchedGuides.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllGuides(!showAllGuides)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-emerald-50/70 border border-slate-200 text-emerald-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
+                  >
+                    <span>{showAllGuides ? 'Show fewer guides' : `Show all ${matchedGuides.length} guides`}</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllGuides ? 'rotate-180' : ''}`} />
+                  </button>
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </div>
+    </div>
+  );
+};
+

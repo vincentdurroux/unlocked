@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Logo } from './components/Logo';
+import { LandingJaneAISearch, isCommunityPro } from './components/LandingJaneAISearch';
 import { 
   Home, 
   Search, 
@@ -101,7 +102,7 @@ import { compressImage } from './services/imageService';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { APIProvider, Map, AdvancedMarker, Pin, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
+import { APIProvider, Map as GoogleMap, AdvancedMarker, Pin, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
 import { useProfessionals } from './hooks/useProfessionals';
 import { proService } from './services/proService';
 import { eventService } from './services/eventService';
@@ -686,6 +687,8 @@ interface Professional {
   top_qualities?: string[];
   has_filled_form?: boolean;
   categories?: string[];
+  source?: string;
+  is_community_recommended?: boolean;
 }
 
 interface Event {
@@ -9080,37 +9083,23 @@ function HomeView({
           </div>
         </div>
 
-        {/* Hero Search Card */}
-        <div 
-          onClick={() => onNavigate('explore')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onNavigate('explore');
+        {/* Hero AI Multi-Search with Jane */}
+        <LandingJaneAISearch
+          allPros={allPros}
+          events={events}
+          allArticles={allArticles}
+          onSelectPro={(pro) => {
+            if (pro.source === 'google_places' || pro.id?.toString().startsWith('google_') || !isCommunityPro(pro)) {
+              const googleUrl = (pro as any).googleMapsUri || (pro.website && pro.website.length > 5 ? pro.website : null) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((pro.company_name || pro.name) + ' ' + (pro.location || 'Valencia'))}`;
+              window.open(googleUrl, '_blank', 'noopener,noreferrer');
+            } else {
+              setSelectedPro(pro);
             }
           }}
-          className="relative z-10 -mt-3 md:mt-0 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#f8fafc] p-5 md:p-8 border border-blue-200/60 hover:border-blue-300/80 transition-all duration-300 hover:scale-[1.015] active:scale-[0.99] group/card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
-        >
-          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-            <div className="flex items-start md:items-center gap-4">
-              <div className="space-y-1 text-left">
-                <h3 className="text-base md:text-lg font-bold text-brand-navy tracking-tight">Looking for a trusted local pro?</h3>
-                <p className="text-slate-500 text-[11px] md:text-[13px] font-medium leading-relaxed">
-                  Search member recommendations or let <strong className="text-brand-blue font-semibold">Jane, your AI assistant</strong>, match you instantly.
-                </p>
-              </div>
-            </div>
-
-            <div 
-              className="w-fit self-center sm:self-auto shrink-0 inline-flex items-center justify-center gap-2 px-6 py-2.5 md:px-8 md:py-3 bg-brand-blue group-hover/card:bg-[#0958d9] text-white rounded-xl font-bold text-xs md:text-sm shadow-sm transition-all"
-            >
-              <Search className="w-3.5 h-3.5 md:w-4 h-4 text-white shrink-0" />
-              <span>Start searching</span>
-            </div>
-          </div>
-        </div>
+          onSelectEvent={(event) => setSelectedEvent(event)}
+          onSelectArticle={(article) => setSelectedArticle(article)}
+          onNavigate={onNavigate}
+        />
 
         {/* Hero Recommend Pro Card */}
         <div 
@@ -10167,7 +10156,7 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
   return (
     <div className="w-full h-full">
       <APIProvider apiKey={GOOGLE_MAPS_KEY}>
-        <Map
+        <GoogleMap
           defaultCenter={center}
           defaultZoom={13}
           mapId="e8677c77d4677732"
@@ -10197,22 +10186,27 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
                 }}
               >
                 <Pin 
-                  background={'#0038FF'} 
+                  background={pro.source === 'google_places' || pro.source === 'google' ? '#64748B' : '#0038FF'} 
                   borderColor={'#fff'} 
                   glyphColor={'#fff'}
                   glyph={(index + 1).toString()}
                 />
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-white rounded-lg shadow-xl border border-slate-100 whitespace-nowrap opacity-0 group-hover/pin:opacity-100 transition-opacity pointer-events-none z-50">
-                  <p className="text-[10px] font-bold text-brand-navy">{pro.name}</p>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-white rounded-xl shadow-xl border border-slate-100 whitespace-nowrap opacity-0 group-hover/pin:opacity-100 transition-opacity pointer-events-none z-50 flex flex-col items-center">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    {pro.source === 'google_places' || pro.source === 'google' ? null : (
+                      <span className="text-[8px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded">Unlocked Community</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-bold text-slate-900">{pro.name}</p>
                   {pro.company_name && (
-                    <p className="text-[9px] text-slate-600 font-medium italic">{pro.company_name}</p>
+                    <p className="text-[9px] text-slate-500 font-medium italic">{pro.company_name}</p>
                   )}
                   <p className="text-[8px] text-slate-400 font-medium whitespace-nowrap mt-0.5">Touch to see details</p>
                 </div>
               </div>
             </AdvancedMarker>
           ))}
-        </Map>
+        </GoogleMap>
       </APIProvider>
     </div>
   );
@@ -10270,6 +10264,7 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
 
   // AI-powered Search states
   const [aiResults, setAiResults] = useState<{ [key: string]: { score: number; reason: string } } | null>(null);
+  const [googlePlacesPros, setGooglePlacesPros] = useState<Professional[]>([]);
   const [aiExactMatch, setAiExactMatch] = useState<boolean>(true);
   const [aiSummaryMessage, setAiSummaryMessage] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -10277,11 +10272,23 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
   const [aiQuery, setAiQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'standard' | 'ai'>('ai');
 
+  const combinedPros = useMemo(() => {
+    const map = new Map<string, Professional>();
+    (allPros || []).forEach(p => map.set(String(p.id), p));
+    (googlePlacesPros || []).forEach(p => {
+      if (!map.has(String(p.id))) {
+        map.set(String(p.id), p);
+      }
+    });
+    return Array.from(map.values());
+  }, [allPros, googlePlacesPros]);
+
   useEffect(() => {
     // If the input gets cleared, instantly reset all AI search filters
     if (search.trim() === '') {
       setDeferredSearch('');
       setAiResults(null);
+      setGooglePlacesPros([]);
       setAiExactMatch(true);
       setAiSummaryMessage(null);
       setAiError(null);
@@ -10350,7 +10357,7 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
           serverFailed = true;
         } else if (!response.ok) {
           if (response.status === 429) {
-            throw new Error("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
+            throw new Error("Jane is not available at the moment. Please use manual search in the pages");
           }
           try {
             const errJson = await response.json();
@@ -10358,7 +10365,7 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
               throw new Error(errJson.error);
             }
           } catch (e: any) {
-            if (e.message && (e.message.includes("Jane is very busy") || e.message.includes("Jane est très sollicitée"))) {
+            if (e.message && (e.message.includes("Jane is") || e.message.includes("Jane est très sollicitée"))) {
               throw e;
             }
           }
@@ -10498,6 +10505,12 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         exactMatch = false;
       }
 
+      if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
+        setGooglePlacesPros(data.google_places_pros);
+      } else {
+        setGooglePlacesPros([]);
+      }
+
       setAiResults(resultsDict);
       setAiExactMatch(exactMatch);
       setAiSummaryMessage(summaryMsg);
@@ -10515,12 +10528,13 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         errorLower.includes("busy") ||
         errorLower.includes("rate limit")
       ) {
-        setAiError("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
+        setAiError("Jane is not available at the moment. Please use manual search in the pages");
       } else {
         setAiError(err.message || "Connection error with the AI service.");
       }
       // Fallback: clear AI results
       setAiResults(null);
+      setGooglePlacesPros([]);
       setAiExactMatch(true);
       setAiSummaryMessage(null);
     } finally {
@@ -10779,7 +10793,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   const hasStrongAiMatches = aiResults !== null && aiExactMatch && (Object.values(aiResults) as any[]).some(r => r.score >= 30);
 
   const filteredPros = hasActiveFilter 
-    ? (allPros || []).filter(pro => {
+    ? (combinedPros || []).filter(pro => {
         if (!pro) return false;
         const matchesCategory = selectedCategory === 'All' || 
                                 (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
@@ -10824,9 +10838,16 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         return matchesCategory && matchesLanguage && matchesSearch && matchesDistance && matchesRating;
       })
       .sort((a, b) => {
+        const aComm = isCommunityPro(a) ? 1 : 0;
+        const bComm = isCommunityPro(b) ? 1 : 0;
+        if (aComm !== bComm) return bComm - aComm; // Unlocked community pros first!
+
         if (aiResults) {
           const scoreA = aiResults[String(a.id)]?.score || 0;
           const scoreB = aiResults[String(b.id)]?.score || 0;
+          if (!aComm && !bComm) {
+            return (b.rating || 0) - (a.rating || 0) || scoreB - scoreA;
+          }
           if (scoreA !== scoreB) return scoreB - scoreA;
         }
 
@@ -11263,11 +11284,28 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  onClick={() => setSelectedPro(pro)}
-                  className="group relative bg-white rounded-[32px] p-6 flex flex-col lg:flex-row gap-6 border border-slate-100 transition-all shadow-sm hover:shadow-xl hover:shadow-slate-200/50 hover:border-brand-blue/10 cursor-pointer overflow-hidden"
+                  onClick={() => {
+                    if (!isCommunityPro(pro)) {
+                      const googleUrl = (pro as any).googleMapsUri || (pro.website && pro.website.length > 5 ? pro.website : null) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((pro.company_name || pro.name) + ' ' + (pro.location || 'Valencia'))}`;
+                      window.open(googleUrl, '_blank', 'noopener,noreferrer');
+                    } else {
+                      setSelectedPro(pro);
+                    }
+                  }}
+                  className={cn(
+                    "group relative bg-white rounded-[32px] p-6 flex flex-col lg:flex-row gap-6 transition-all shadow-sm hover:shadow-xl cursor-pointer overflow-hidden",
+                    isCommunityPro(pro)
+                      ? "border-2 border-emerald-500/80 hover:border-emerald-600 shadow-emerald-500/10"
+                      : "border border-slate-200/80 hover:border-slate-300 bg-slate-50/20"
+                  )}
                 >
                   {/* Number Badge to match map pins */}
-                  <div className="absolute top-6 right-6 w-8 h-8 bg-brand-blue text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-lg shadow-brand-blue/20 z-10 transition-transform group-hover:scale-110">
+                  <div className={cn(
+                    "absolute top-6 right-6 w-8 h-8 text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-lg z-10 transition-transform group-hover:scale-110",
+                    isCommunityPro(pro)
+                      ? "bg-emerald-600 shadow-emerald-600/30"
+                      : "bg-slate-600 shadow-slate-600/30"
+                  )}>
                     {index + 1}
                   </div>
 
@@ -11291,6 +11329,14 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   
                   <div className="relative flex-1 flex flex-col justify-between min-w-0 py-1">
                     <div className="space-y-2">
+                      {isCommunityPro(pro) && (
+                        <div className="mb-1">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white font-bold text-[10px] tracking-tight shadow-xs shadow-emerald-500/30">
+                            <Award className="w-3.5 h-3.5 text-white shrink-0" />
+                            <span>Recommended by MyCityUnlocked community</span>
+                          </span>
+                        </div>
+                      )}
                       <div className="space-y-0.5">
                         <h4 className="font-bold text-slate-900 text-xl truncate group-hover:text-brand-blue transition-colors tracking-tight pr-8">{pro.name}</h4>
                         {pro.company_name && (
@@ -11298,20 +11344,26 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                         )}
                         <div className="flex items-center gap-2">
                            <span className="text-[11px] font-medium text-brand-blue uppercase tracking-widest">{pro.category}</span>
-                           <span className="text-slate-200">•</span>
-                           <div className={cn(
-                             "flex items-center gap-1 transition-all",
-                             !currentUser && "filter blur-[4px] select-none pointer-events-none"
-                           )}>
-                             <Star className="w-3 h-3 text-brand-yellow fill-brand-yellow" />
-                             <span className="text-xs font-normal text-slate-700">
-                               {pro.review_count && pro.review_count > 0 ? (
-                                 <span className="flex items-center gap-1">
-                                   {pro.rating} <span className="text-slate-400 font-medium font-sans">({pro.review_count})</span>
+                           {isCommunityPro(pro) && (
+                             <>
+                               <span className="text-slate-200">•</span>
+                               <div className={cn(
+                                 "flex items-center gap-1 transition-all",
+                                 !currentUser && "filter blur-[4px] select-none pointer-events-none"
+                               )}>
+                                 <Star className="w-3 h-3 text-brand-yellow fill-brand-yellow" />
+                                 <span className="text-xs font-normal text-slate-700">
+                                   {pro.review_count && pro.review_count > 0 ? (
+                                     <span className="flex items-center gap-1">
+                                       {pro.rating} <span className="text-slate-400 font-medium font-sans">({pro.review_count})</span>
+                                     </span>
+                                   ) : (
+                                     'Recommended by the community. Reviews coming soon'
+                                   )}
                                  </span>
-                               ) : 'Recommended by the community. Reviews coming soon'}
-                             </span>
-                           </div>
+                               </div>
+                             </>
+                           )}
                         </div>
                       </div>
                       {pro.top_qualities && pro.top_qualities.length > 0 && (
@@ -12798,13 +12850,15 @@ function ProfessionalDetailView({
                   <Briefcase className="w-3.5 h-3.5" />
                   {pro.category}
                 </div>
-                <div className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-xl font-medium border border-slate-100 transition-all",
-                  !currentUser && "filter blur-[4px] select-none pointer-events-none"
-                )}>
-                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                  <span>{displayReviewCount > 0 ? `${displayRating} (${displayReviewCount})` : 'Recommended by the community. Reviews coming soon'}</span>
-                </div>
+                {isCommunityPro(pro) && (
+                  <div className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-xl font-medium border border-slate-100 transition-all",
+                    !currentUser && "filter blur-[4px] select-none pointer-events-none"
+                  )}>
+                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                    <span>{displayReviewCount > 0 ? `${displayRating} (${displayReviewCount})` : 'Recommended by the community. Reviews coming soon'}</span>
+                  </div>
+                )}
               </div>
 
               {pro.top_qualities && pro.top_qualities.length > 0 && (
@@ -12926,7 +12980,7 @@ function ProfessionalDetailView({
                         {/* Mini Map */}
                         {pro.coordinates && (
                           <div className="w-full h-32 rounded-2xl overflow-hidden border border-slate-100 shadow-sm relative group/map">
-                            <Map
+                            <GoogleMap
                               defaultCenter={pro.coordinates}
                               defaultZoom={15}
                               gestureHandling={'none'}
@@ -12937,7 +12991,7 @@ function ProfessionalDetailView({
                               <AdvancedMarker position={pro.coordinates}>
                                 <Pin background="#E11D48" glyphColor="#fff" borderColor="#BE123D" />
                               </AdvancedMarker>
-                            </Map>
+                            </GoogleMap>
                             <div className="absolute inset-0 bg-transparent cursor-pointer" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pro.location!)}`, '_blank')} />
                           </div>
                         )}
@@ -13621,7 +13675,7 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
             <div className="space-y-4">
               <h3 className="font-bold text-slate-900">Location</h3>
               <div className="h-48 w-full rounded-2xl overflow-hidden border border-slate-100 shadow-inner group">
-                <Map
+                <GoogleMap
                   defaultCenter={event.coordinates}
                   defaultZoom={15}
                   gestureHandling="none"
@@ -13631,7 +13685,7 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
                   <AdvancedMarker position={event.coordinates}>
                     <Pin background={'#0870B8'} glyphColor={'#FFFFFF'} borderColor={'#0870B8'} />
                   </AdvancedMarker>
-                </Map>
+                </GoogleMap>
               </div>
               <p className="text-[10px] text-slate-400 flex items-center gap-1">
                 <Info className="w-3 h-3" />
