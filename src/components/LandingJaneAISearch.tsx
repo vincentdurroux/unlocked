@@ -265,35 +265,28 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
     let success = false;
     let data: AISearchResponse | null = null;
 
-    const isVercel = typeof window !== 'undefined' && (
-      window.location.hostname.includes('vercel.app') || 
-      window.location.hostname.includes('vercel')
-    );
+    try {
+      const response = await fetch("/api/ai-multi-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: q,
+          professionals: proListBrief,
+          events: eventsBrief,
+          guides: guidesBrief,
+          conversationHistory: [],
+          userLocation: userLocation || null
+        }),
+      });
 
-    if (!isVercel) {
-      try {
-        const response = await fetch("/api/ai-multi-search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: q,
-            professionals: proListBrief,
-            events: eventsBrief,
-            guides: guidesBrief,
-            conversationHistory: [],
-            userLocation: userLocation || null
-          }),
-        });
-
-        if (response.ok) {
-          data = await response.json();
-          success = true;
-        } else if (response.status === 429) {
-          throw new Error("Jane is not available at the moment. Please use manual search in the pages");
-        }
-      } catch (err: any) {
-        console.warn("Server AI multi-search failed, attempting client fallback:", err);
+      if (response.ok) {
+        data = await response.json();
+        success = true;
+      } else if (response.status === 429) {
+        throw new Error("Jane is not available at the moment. Please use manual search in the pages");
       }
+    } catch (err: any) {
+      console.warn("Server AI multi-search failed, attempting client fallback:", err);
     }
 
     // Client-side fallback if server fails

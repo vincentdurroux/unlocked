@@ -10432,58 +10432,49 @@ function ExploreView({
       let data = null;
       let serverFailed = false;
 
-      const isVercel = typeof window !== 'undefined' && (
-        window.location.hostname.includes('vercel.app') || 
-        window.location.hostname.includes('vercel')
-      );
+      try {
+        const briefPros = allPros.map((p: any) => ({
+          id: String(p.id),
+          name: p.name,
+          company_name: p.company_name || "",
+          category: p.category || p.profession || "",
+          categories: p.categories || [],
+          bio: p.bio || p.description || "",
+          top_qualities: p.top_qualities || [],
+          languages: p.languages || [],
+          rating: p.rating || 0,
+          location: p.location || ""
+        }));
 
-      if (isVercel) {
-        serverFailed = true;
-      } else {
-        try {
-          const briefPros = allPros.map((p: any) => ({
-            id: String(p.id),
-            name: p.name,
-            company_name: p.company_name || "",
-            category: p.category || p.profession || "",
-            categories: p.categories || [],
-            bio: p.bio || p.description || "",
-            top_qualities: p.top_qualities || [],
-            languages: p.languages || [],
-            rating: p.rating || 0,
-            location: p.location || ""
-          }));
-
-          const response = await fetch("/api/ai-search", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: trimmed, professionals: briefPros, userLocation }),
-          });
-          
-          if (response.status === 404 || response.status === 405) {
-            serverFailed = true;
-          } else if (!response.ok) {
-            if (response.status === 429) {
-              throw new Error("Jane is not available at the moment. Please use manual search in the pages");
-            }
-            try {
-              const errJson = await response.json();
-              if (errJson && errJson.error) {
-                throw new Error(errJson.error);
-              }
-            } catch (e: any) {
-              if (e.message && (e.message.includes("Jane is") || e.message.includes("Jane est très sollicitée"))) {
-                throw e;
-              }
-            }
-            throw new Error("Sorry, an error occurred during AI search.");
-          } else {
-            data = await response.json();
-          }
-        } catch (fetchErr) {
-          console.warn("[Search] Server search failed or is unavailable, attempting client fallback:", fetchErr);
+        const response = await fetch("/api/ai-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: trimmed, professionals: briefPros, userLocation }),
+        });
+        
+        if (response.status === 404 || response.status === 405) {
           serverFailed = true;
+        } else if (!response.ok) {
+          if (response.status === 429) {
+            throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+          }
+          try {
+            const errJson = await response.json();
+            if (errJson && errJson.error) {
+              throw new Error(errJson.error);
+            }
+          } catch (e: any) {
+            if (e.message && (e.message.includes("Jane is") || e.message.includes("Jane est très sollicitée"))) {
+              throw e;
+            }
+          }
+          throw new Error("Sorry, an error occurred during AI search.");
+        } else {
+          data = await response.json();
         }
+      } catch (fetchErr) {
+        console.warn("[Search] Server search failed or is unavailable, attempting client fallback:", fetchErr);
+        serverFailed = true;
       }
 
       let clientGooglePlacesPros: any[] = [];
