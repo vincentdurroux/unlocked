@@ -461,7 +461,7 @@ const parseAnnouncement = (ann: any) => {
   };
 };
 
-const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || (typeof process !== 'undefined' ? process.env.GOOGLE_MAPS_PLATFORM_KEY : '') || '';
+const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 
 const LANGUAGES_LIST = ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Russian', 'Chinese', 'Japanese', 'Arabic'];
 
@@ -1619,7 +1619,7 @@ export default function App() {
       }
 
       // If server failed (e.g. Vercel 404), attempt client-side fallback if an API key is available
-      const localKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || '';
+      const localKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
       if (localKey) {
         try {
           const ai = new GoogleGenAI({ apiKey: localKey });
@@ -10494,7 +10494,7 @@ function ExploreView({
 
       if (serverFailed) {
         // Fallback to client-side search using the client-side API key
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || '';
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
         if (!apiKey) {
           throw new Error("The server AI search service is busy or unavailable (Error 404). To use client-side AI search (e.g., on Vercel), please configure the VITE_GEMINI_API_KEY environment variable in your Vercel project settings.");
         }

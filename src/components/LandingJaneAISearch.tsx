@@ -303,12 +303,12 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
     // Client-side fallback if server fails
     if (!success) {
       try {
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || '';
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
         if (!apiKey) {
           throw new Error("The server AI search service is busy or unavailable (Error 404). To use client-side AI search on static hosts (e.g., Vercel), please configure the VITE_GEMINI_API_KEY environment variable in your Vercel project settings.");
         }
 
-        const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || (typeof process !== 'undefined' ? process.env.GOOGLE_MAPS_PLATFORM_KEY : '') || '';
+        const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
         let clientGooglePlacesPros: any[] = [];
 
         if (googleMapsKey) {
@@ -605,7 +605,7 @@ Rules:
 
     if (!success) {
       try {
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || '';
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
         if (apiKey) {
           const ai = new GoogleGenAI({ apiKey });
           const historyFormatted = historyForApi.map(m => `${m.role === 'user' ? 'User' : 'Jane'}: ${m.content}`).join('\n');
