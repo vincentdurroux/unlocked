@@ -84,6 +84,41 @@ export const VALENCIA_ZONES: ZoneInfo[] = [
     keywords: ["la eliana", "l'eliana", "eliana"]
   },
   {
+    name: "Mas Camarena",
+    coords: { lat: 39.5370, lng: -0.4480 },
+    keywords: ["mas camarena", "mascamarena", "camarena", "sector mas camarena"]
+  },
+  {
+    name: "La Cañada / El Plantío",
+    coords: { lat: 39.5210, lng: -0.4680 },
+    keywords: ["la canada", "la cañada", "la canyada", "canyada", "plantio", "el plantio", "el plantío"]
+  },
+  {
+    name: "Godella",
+    coords: { lat: 39.5180, lng: -0.4130 },
+    keywords: ["godella", "campolivar", "campo olivar"]
+  },
+  {
+    name: "Rocafort",
+    coords: { lat: 39.5290, lng: -0.4070 },
+    keywords: ["rocafort", "santa barbara", "santa bárbara"]
+  },
+  {
+    name: "Moncada",
+    coords: { lat: 39.5440, lng: -0.3940 },
+    keywords: ["moncada", "montcada"]
+  },
+  {
+    name: "San Antonio de Benagéber",
+    coords: { lat: 39.5600, lng: -0.5000 },
+    keywords: ["san antonio de benageber", "san antonio de benagéber", "san antonio", "san antonio de benagever", "colinas de san antonio"]
+  },
+  {
+    name: "Puzol / Puçol",
+    coords: { lat: 39.6170, lng: -0.3010 },
+    keywords: ["puzol", "puçol", "alfinach", "monasterios", "los monasterios"]
+  },
+  {
     name: "Torrent",
     coords: { lat: 39.4372, lng: -0.4651 },
     keywords: ["torrent", "torrente"]
@@ -91,12 +126,12 @@ export const VALENCIA_ZONES: ZoneInfo[] = [
   {
     name: "Paterna",
     coords: { lat: 39.5028, lng: -0.4402 },
-    keywords: ["paterna", "valterna", "heron city"]
+    keywords: ["paterna", "valterna", "heron city", "tactica", "táctica", "parque tecnologico", "parc tecnologic"]
   },
   {
     name: "Alboraya / Alboraia",
     coords: { lat: 39.5010, lng: -0.3500 },
-    keywords: ["alboraya", "alboraia", "port saplaya"]
+    keywords: ["alboraya", "alboraia", "port saplaya", "patacona", "la patacona"]
   },
   {
     name: "Burjassot",
@@ -111,12 +146,17 @@ export const VALENCIA_ZONES: ZoneInfo[] = [
   {
     name: "Bétera",
     coords: { lat: 39.5910, lng: -0.4620 },
-    keywords: ["betera", "bétera"]
+    keywords: ["betera", "bétera", "torre en conill", "torre conill"]
   },
   {
     name: "Sagunto / Sagunt",
     coords: { lat: 39.6800, lng: -0.2780 },
     keywords: ["sagunto", "sagunt", "puerto de sagunto"]
+  },
+  {
+    name: "Cullera",
+    coords: { lat: 39.1650, lng: -0.2540 },
+    keywords: ["cullera"]
   },
   {
     name: "Gandia",
@@ -336,6 +376,10 @@ export function cleanTradeSearchTerm(query: string): string {
   q = q.replace(/\b(i('m|\s+am)?\s+looking\s+for\s+(a|an)?|looking\s+for\s+(a|an)?|need\s+(a|an)?|find\s+(a|an)?|search\s+for\s+(a|an)?|can\s+you\s+recommend\s+(a|an)?)\b/gi, '');
   q = q.replace(/\b(busco\s+(un|una)?|necesito\s+(un|una)?|encuentra\s+(un|una)?|recomiéndame\s+(un|una)?)\b/gi, '');
 
+  // Strip location phrases when specific zone is handled separately
+  q = q.replace(/\b(situ[ée]e?(\s+[aà]|\s+vers|\s+au)?|located\s+(in|at|around)?|ubicad[oa]\s+(en)?)\b/gi, '');
+  q = q.replace(/\b(dans\s+le\s+quartier\s+(de|d')?|dans\s+la\s+zone\s+(de|d')?|vers|around)\b/gi, '');
+
   // Strip proximity tokens
   q = q.replace(/\b(autour\s+de\s+moi|proche\s+de\s+moi|près\s+de\s+moi|près\s+d'ici|autour|proche|near\s+me|around\s+me|close\s+to\s+me|cerca\s+de\s+mí|cerca\s+de\s+mi|alrededor)\b/gi, '');
   q = q.replace(/\s+/g, ' ').trim();
@@ -349,15 +393,50 @@ export function buildOptimizedPlacesQuery(rawQuery: string, isSpecificZone: bool
   const clean = cleanTradeSearchTerm(rawQuery);
   const lower = clean.toLowerCase();
 
-  // Map common trades to precise Spanish search terms for Google Places Spain
+  // Map common trades and activity queries to precise Spanish search terms for Google Places Spain
   let spanishTerms = "";
-  if (/\b(ost[ée]opathe?|osteopath)\b/i.test(lower)) {
-    spanishTerms = "osteopata osteopatia";
-  } else if (/\b(kin[ée]sith[ée]rapeute?|kin[ée]|kine|physiotherapist|physio)\b/i.test(lower)) {
+
+  // Check if query is just a generic leisure/activity request
+  const isGenericActivity = /^(choses?\s+[aà]\s+faire|activit[ée]s?|loisirs?|sorties?|que\s+faire|things?\s+to\s+do|activities|experiences?|sortir|what\s+to\s+do|leisure)$/i.test(lower);
+
+  if (isGenericActivity) {
+    spanishTerms = "actividades ocio tours experiencias talleres deportes";
+  } else if (isActivityQuery(lower)) {
+    // Keep user's specific activity and translate the sports/leisure type precisely
+    let specificQuery = clean;
+    // Strip common generic words
+    specificQuery = specificQuery.replace(/\b(activit[ée]s?(\s+de)?|choses?\s+[aà]\s+faire(\s+comme|\s+de)?|things?\s+to\s+do|activities?(\s+of)?|experiences?)\b/gi, '');
+    specificQuery = specificQuery.replace(/\s+/g, ' ').trim();
+
+    if (specificQuery) {
+      const lowerSpecific = specificQuery.toLowerCase();
+      if (/\b(sports?\s+de\s+raquettes?|raquettes?|racket\s+sports?|padel|tennis|squash|badminton|ping\s*pong|table\s+tennis)\b/i.test(lowerSpecific)) {
+        spanishTerms = "club de padel tenis deportes raqueta";
+      } else if (/\b(sports?\s+nautiques?|activit[ée]s?\s+nautiques?|water\s+sports?|paddle\s*surf|sup|kayak|cano[eë]|voile|sailing|bateau|boat\s+rental)\b/i.test(lowerSpecific)) {
+        spanishTerms = "alquiler de barcos paddle surf kayak deportes acuaticos";
+      } else if (/\b(creative|art|pottery|poterie|ceramics?|c[ée]ramique|peinture|painting|crafts|loisirs\s+cr[ée]atifs)\b/i.test(lowerSpecific)) {
+        spanishTerms = "taller de ceramica alfareria pintura manualidades";
+      } else if (/\b(cuisine|cooking|chef|paella|cours?\s+de\s+cuisine|gastronom[ie]|gastronomy|wine|vin|degustation)\b/i.test(lowerSpecific)) {
+        spanishTerms = "clase de cocina paella cata de vinos gastronomia";
+      } else if (/\b(v[ée]lo|bike|scooter|trottinette|cycling|balade\s+a\s+velo)\b/i.test(lowerSpecific)) {
+        spanishTerms = "alquiler de bicicletas cicloturismo bike rental";
+      } else if (/\b(escalade|climbing|randonn[ée]e|hiking|trekking|montagne|mountain)\b/i.test(lowerSpecific)) {
+        spanishTerms = "senderismo escalada rocodromo excursiones";
+      } else if (/\b(danse|dance|salsa|bachata|tango)\b/i.test(lowerSpecific)) {
+        spanishTerms = "academia de baile salsa bachata clases de danza";
+      } else {
+        spanishTerms = specificQuery;
+      }
+    } else {
+      spanishTerms = "actividades ocio tours experiencias talleres deportes";
+    }
+  } else if (/\b(ost[ée]opathe?|osteopath|mal\s+au\s+dos|mal\s+de\s+dos|dos\s+coinc[eé]|lumbago|sciatique|mal\s+aux\s+muscles|mal\s+aux\s+articulations|douleur\s+dos|back\s+pain)\b/i.test(lower)) {
+    spanishTerms = "osteopata fisioterapeuta osteopatia";
+  } else if (/\b(kin[ée]sith[ée]rapeute?|kin[ée]|kine|physiotherapist|physio|reeducation|r[eé]éducation)\b/i.test(lower)) {
     spanishTerms = "fisioterapeuta fisioterapia";
-  } else if (/\b(dentiste?|dentist|orthodontiste?)\b/i.test(lower)) {
+  } else if (/\b(dentiste?|dentist|orthodontiste?|mal\s+aux\s+dents|mal\s+de\s+dents|rage\s+de\s+dents|toothache)\b/i.test(lower)) {
     spanishTerms = "dentista clinica dental";
-  } else if (/\b(m[ée]decin(\s+g[ée]n[ée]raliste)?|docteur|doctor|gp|m[ée]decine)\b/i.test(lower)) {
+  } else if (/\b(m[ée]decin(\s+g[ée]n[ée]raliste)?|docteur|doctor|gp|m[ée]decine|malade|fi[eè]vre|grippe)\b/i.test(lower)) {
     spanishTerms = "medico consulta medica";
   } else if (/\b(p[ée]diatre?|pediatrician)\b/i.test(lower)) {
     spanishTerms = "pediatra clinica pediatrica";
@@ -407,9 +486,18 @@ export function isTradeMismatched(rawQuery: string, placeName: string, placeCate
   const q = rawQuery.toLowerCase();
   const text = `${placeName} ${placeCategory}`.toLowerCase();
 
-  // User specifically wants an osteopath: reject dentists, vets, animal, hotels, general doctors with no osteopathy
-  if (/\b(ost[ée]opathe?|osteopath|osteopata|osteopatia)\b/i.test(q)) {
-    if (/\b(dental|dentist|odontol|ortodonc|dientes|veterinar|animal|pet|hotel|restauran|bar|tapas)\b/i.test(text)) {
+  // User specifically wants activities / sports / leisure: reject all clinical, legal, accounting, home repairs, real estate and admin trades
+  if (isActivityQuery(q)) {
+    const isMismatchedActivityCategory = /\b(dentist|odontol|ortodonc|medico|doctor|clinica\s+dental|consulta\s+medica|pediatr|abogad|notari|notaire|fontaner|plombier|plumber|electric|cerrajer|serrurier|locksmith|taller\s+mecanico|mecanicien|inmobiliar|immobilier|real\s+estate|realtor|relocation|accountant|comptable|fiscaliste|gestor|asesor|padr[oó]n|nie|taxes|lawyer|avocat|plumbing)\b/i.test(text);
+    if (isMismatchedActivityCategory) {
+      return true;
+    }
+  }
+
+  // User specifically wants an osteopath or has back pain/muscle pain symptoms: reject all unrelated lifestyle, retail, food, beauty, or professional trades (like hairdressers, bakeries, shopping malls, bars, restaurants, lawyers, real estate, plumbers, mechanics)
+  if (/\b(ost[ée]opathe?|osteopath|osteopata|osteopatia|mal\s+au\s+dos|mal\s+de\s+dos|dos\s+coinc[eé]|lumbago|sciatique|back\s+pain|mal\s+aux\s+muscles|mal\s+aux\s+articulations|douleur\s+dos)\b/i.test(q)) {
+    const isMismatchedBackPainCategory = /\b(peluquer|hair|coiffeur|pasteler|baker|panader|reposter|comercial|mall|tienda|store|restauran|bar|tapas|cafe|abogad|lawyer|notari|notaire|inmobiliar|immobilier|real\s+estate|realtor|fontaner|plombier|plumber|electric|cerrajer|serrurier|locksmith|taller|mecanic|dental|dentist|odontol|ortodonc|dientes|veterinar|animal|pet|hotel)\b/i.test(text);
+    if (isMismatchedBackPainCategory) {
       return true;
     }
   }
@@ -444,3 +532,13 @@ export function isTradeMismatched(rawQuery: string, placeName: string, placeCate
 
   return false;
 }
+
+/**
+ * Checks if a query is asking for things to do, activities, leisure, sports, entertainment, or outings.
+ */
+export function isActivityQuery(query?: string | null): boolean {
+  if (!query || typeof query !== 'string') return false;
+  const q = query.toLowerCase();
+  return /\b(choses?\s+[aà]\s+faire|activit[ée]s?|loisirs?|sorties?|que\s+faire|things?\s+to\s+do|activities|experiences?|sortir|spectacles?|concerts?|events?|[ée]v[ée]nements?|weekend|visiter|visite|divertissement|sports?|entertainment|divertir|amuser|escapades?)\b/i.test(q);
+}
+

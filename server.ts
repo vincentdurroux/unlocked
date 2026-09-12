@@ -11,7 +11,8 @@ import {
   DEFAULT_VALENCIA_CENTER,
   Coordinates,
   buildOptimizedPlacesQuery,
-  isTradeMismatched
+  isTradeMismatched,
+  isActivityQuery
 } from "./src/lib/locationUtils";
 
 dotenv.config();
@@ -319,7 +320,7 @@ Return real establishments with accurate names, addresses, and accurate latitude
       // Map community professionals list with coordinates and distance to target center
       const centerCoords = targetZone ? targetZone.centerCoords : DEFAULT_VALENCIA_CENTER;
 
-      const proListBrief = professionals.slice(0, 50).map((p: any) => {
+      const proListBrief = professionals.map((p: any) => {
         let lat = p.coordinates?.lat ?? p.lat;
         let lng = p.coordinates?.lng ?? p.lng;
         const dist = calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng);
@@ -527,49 +528,67 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
     }
 
     try {
-      // 1. Synthesize effective search query for Google Places if conversation history exists
+      // 1. Intelligent Topic & Follow-up Intent Analysis if conversation history exists
       let placesSearchQuery = query;
+      let isNewTopic = false;
+      let topicTransitionReason = "";
 
       if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
         try {
-          const userMsgList = conversationHistory
-            .filter((m: any) => (m.role === 'user' || m.role === 'User') && (m.content || m.text))
-            .map((m: any) => m.content || m.text);
-          userMsgList.push(query);
+          const historyFormattedForClassification = conversationHistory
+            .map((m: any) => `${(m.role === 'user' || m.role === 'User') ? 'User' : 'Jane'}: ${m.content || m.text}`)
+            .join('\n');
 
-          const fullUserIntent = userMsgList.join(" | ");
-
-          const qExtract = await getAiClient().models.generateContent({
+          const topicAnalysis = await getAiClient().models.generateContent({
             model: "gemini-3.1-flash-lite",
-            contents: `Analyze this search conversation thread for local services.
-Extract the CURRENT core trade/profession + location/neighborhood (ONLY if explicitly specified by user) (2-6 words max in English or French) to search on Google Places.
-CRITICAL: Do NOT append any neighborhood or city name (like Valencia, Ruzafa, etc.) unless the user EXPLICITLY typed that specific location in their messages!
+            contents: `You are an expert conversation flow and search intent analyzer for Unlocked (a local guide & directory in Valencia, Spain).
 
-Conversation History: "${fullUserIntent}"
+Analyze the conversation thread and the latest message to determine whether the user is:
+1. CONTINUING & REFINING the existing discussion (e.g. asking for a French-speaking professional, asking about closer locations, asking about prices/hours/details of previously mentioned places, asking for alternative options within the same domain/trade).
+2. STARTING A NEW DISCUSSION / SWITCHING TOPIC (e.g. was discussing dentists, now asking for a plumber, a restaurant, cultural events, NIE administrative help, or asking a completely separate service or question).
 
-Examples:
-- History: "Je cherche un dentiste" | "avez vous des options proches" -> "dentiste"
-- History: "besoin d'un plombier" | "qui parle anglais" -> "plombier anglais"
-- History: "recherche un pédiatre à Bétera" -> "pédiatre Bétera"
-- History: "un avocat fiscaliste" -> "avocat fiscaliste"
+Conversation History:
+${historyFormattedForClassification}
 
-Return ONLY the concise 2-6 word search query string.`,
+Latest User Message:
+"${query}"
+
+Rules:
+- is_new_topic: true if user is asking for a different service, profession, activity, or unrelated request.
+- is_new_topic: false if user is refining, filtering, clarifying, or asking questions about the existing topic/service.
+- effective_search_query:
+  * If is_new_topic is true: Extract ONLY the new trade/service/activity + location (2-5 words max, e.g. "plombier", "restaurant paella", "concert jazz"). DO NOT keep keywords from the old topic!
+  * If is_new_topic is false: Synthesize the current trade with the new refinement/filter (e.g. "dentiste francophone", "ostéopathe Ruzafa").
+- DO NOT append city/neighborhood name (like Valencia, Ruzafa) unless the user explicitly mentioned it in their query.`,
             config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  is_new_topic: { type: Type.BOOLEAN, description: "True if user switched to a new topic/service, false if continuing/refining the previous topic" },
+                  topic_transition_reason: { type: Type.STRING, description: "Brief reason explaining whether it is a new topic or follow-up" },
+                  effective_search_query: { type: Type.STRING, description: "Precise 2-5 word search query for Google Places and local search" }
+                },
+                required: ["is_new_topic", "effective_search_query"]
+              },
               thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
             }
           });
 
-          const extractedQuery = qExtract.text?.trim().replace(/['"]/g, '');
-          if (extractedQuery && extractedQuery.length >= 3) {
-            placesSearchQuery = extractedQuery;
-          } else {
-            placesSearchQuery = `${query} ${conversationHistory.map((m: any) => m.content || m.text).join(" ")}`;
+          const parsedAnalysis = JSON.parse(topicAnalysis.text || "{}");
+          isNewTopic = Boolean(parsedAnalysis.is_new_topic);
+          topicTransitionReason = parsedAnalysis.topic_transition_reason || "";
+          if (parsedAnalysis.effective_search_query && parsedAnalysis.effective_search_query.trim().length >= 2) {
+            placesSearchQuery = parsedAnalysis.effective_search_query.trim();
           }
         } catch (err) {
-          console.warn("[Google Places] Error extracting refined query:", err);
-          placesSearchQuery = `${query} ${conversationHistory.map((m: any) => m.content || m.text).join(" ")}`;
+          console.warn("[Multi-Search] Error during conversation topic analysis:", err);
+          placesSearchQuery = query;
         }
       }
+
+      // If user switched to a new topic, discard previous Google Places pros from the old topic!
+      const existingPlacesToConsider = isNewTopic ? [] : (Array.isArray(clientGooglePlacesPros) ? clientGooglePlacesPros : []);
 
       // 2. Fetch live Google Places results in target zone/user location (up to 6 max, closest first)
       let newlyFetchedPlaces: any[] = [];
@@ -588,18 +607,14 @@ Return ONLY the concise 2-6 word search query string.`,
         ? targetZone.centerCoords
         : (userLocation || DEFAULT_VALENCIA_CENTER);
 
-      // 3. Merge existing client Google Places pros with newly fetched ones
+      // 3. Merge existing (if same topic) and newly fetched Google Places pros
       const combinedPlacesMap = new Map<string, any>();
-      if (Array.isArray(clientGooglePlacesPros)) {
-        clientGooglePlacesPros.forEach((p: any) => {
-          if (p && p.id) combinedPlacesMap.set(String(p.id), p);
-        });
-      }
-      if (Array.isArray(newlyFetchedPlaces)) {
-        newlyFetchedPlaces.forEach((p: any) => {
-          if (p && p.id) combinedPlacesMap.set(String(p.id), p);
-        });
-      }
+      existingPlacesToConsider.forEach((p: any) => {
+        if (p && p.id) combinedPlacesMap.set(String(p.id), p);
+      });
+      newlyFetchedPlaces.forEach((p: any) => {
+        if (p && p.id) combinedPlacesMap.set(String(p.id), p);
+      });
 
       const rawGooglePlacesPros = Array.from(combinedPlacesMap.values()).map((p: any) => {
         let lat = p.coordinates?.lat ?? p.lat;
@@ -619,8 +634,8 @@ Return ONLY the concise 2-6 word search query string.`,
 
       const googlePlacesPros = rawGooglePlacesPros.slice(0, 6);
 
-      // Format community pros with distance
-      const proListBrief = professionals.slice(0, 50).map((p: any) => {
+      // Format community pros with distance - DO NOT slice to 50 items so all community pros are considered
+      const proListBrief = professionals.map((p: any) => {
         let lat = p.coordinates?.lat ?? p.lat;
         let lng = p.coordinates?.lng ?? p.lng;
         const dist = calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng);
@@ -696,11 +711,22 @@ Return ONLY the concise 2-6 word search query string.`,
         ? `\n\nPrevious Conversation Context:\n${conversationHistory.map((m: any) => `${m.role === 'user' ? 'User' : 'Jane'}: ${m.text || m.content}`).join('\n')}`
         : '';
 
+      const conversationFlowDirective = isNewTopic
+        ? `CRITICAL CONVERSATION FLOW - NEW TOPIC DETECTED:
+The user has shifted context or started a brand NEW search discussion for: "${placesSearchQuery}".
+- Completely reset search focus to this new subject: evaluate professionals, events, and guides specifically for this new topic.
+- In your "jane_message", smoothly and warmly acknowledge the new request (e.g. "Bien sûr, voici ce que j'ai trouvé pour votre recherche de...") and introduce the matching items without referencing past unrelated topics.`
+        : `CONVERSATION FLOW - CONTINUING DISCUSSION:
+The user is continuing, refining, or asking follow-ups regarding the ongoing search topic: "${placesSearchQuery}".
+- Keep the discussion thread natural, answering their refinement criteria (e.g. spoken language, neighborhood, specific details) accurately.`;
+
       const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" — a premier community-curated directory and city guide for Valencia, Spain and surrounding areas.
 Your mission is to evaluate the user's natural language request (and any ongoing conversation history for refining search criteria) and match relevant items across THREE distinct categories:
 1. "pros": Verified local professionals, tradespeople, legal/medical/wellness experts, services.
 2. "events": Local community events, festivals, concerts, cultural activities, workshops.
 3. "guides": Practical informational guides, administrative help (NIE, Padrón, Healthcare, Real Estate, Taxes), and neighborhood advice.
+
+${conversationFlowDirective}
 
 TARGET CENTER / ZONE FOR GEOGRAPHIC LOCATION:
 - Active Target Zone: ${targetZone ? targetZone.zoneName : 'Valencia'} (${centerCoords.lat}, ${centerCoords.lng})
@@ -724,9 +750,8 @@ CRITICAL TRADE COHERENCE & ZERO CROSS-SPECIALTY POLLUTION (MANDATORY):
    - Any candidate professional whose actual trade does not match the requested service MUST receive score 0 and be omitted from "pros".
 
 2. HONEST & HELPFUL JANE MESSAGE:
-   - If there are no community recommended professionals in Unlocked for the specific trade, be completely honest and transparent with the user in "jane_message":
-     * For example: "Nous n'avons pas encore d'ostéopathe recommandé directement au sein de la communauté Unlocked, mais voici les professionnels les plus proches trouvés autour de vous :" (or equivalent in user's query language).
-     * NEVER claim an unrelated doctor or dentist is a match.
+   - When community-recommended professionals ('is_community_recommended: true') exist in the candidate list matching the requested trade, YOU MUST explicitly celebrate and present them as members of the Unlocked community in your "jane_message" (e.g. "Voici les dentistes recommandés par notre communauté Unlocked :").
+   - ONLY if there are truly NO community-recommended professionals for that specific trade in the candidate list, then state honestly that none are registered in the community yet and present the verified nearby professionals found on Google Places.
    - Write a warm, helpful, conversational response in the SAME language as the user's query (French, Spanish, English, etc.).
    - Directly address their question or refinement with precision and empathy.
    - If a specific neighborhood/zone was detected (${targetZone?.zoneName}), gently confirm in your message that results are centered on ${targetZone?.zoneName} within 10 km.
@@ -739,7 +764,22 @@ CRITICAL TRADE COHERENCE & ZERO CROSS-SPECIALTY POLLUTION (MANDATORY):
    - Include ONLY topic names that actually have at least one matching item (e.g. ["pros"] or ["pros", "guides"]). If none match, return [].
 
 4. PRESENTATION TONE FOR PROFESSIONALS:
-   - Do NOT mention or emphasize Google ratings, scores, or review counts in your message (jane_message) or in the reason field (e.g. NEVER say 'bénéficie d'une excellente note Google de 4.9' or 'très bien noté sur Google'). Simply present them neutrally and naturally by their profession, service, specialty, or location in Valencia.`;
+   - Do NOT mention or emphasize Google ratings, scores, or review counts in your message (jane_message) or in the reason field (e.g. NEVER say 'bénéficie d'une excellente note Google de 4.9' or 'très bien noté sur Google'). Simply present them neutrally and naturally by their profession, service, specialty, or location in Valencia.
+
+5. ACTIVITÉS & CHOSES À FAIRE (THINGS TO DO, LEISURE, SPORTS, ENTERTAINMENT):
+   - When user asks for "choses à faire", "activités", "que faire", "sorties", "loisirs", "things to do", "sports", or "entertainment":
+     * PRIORITY ORDER: PROPOSE EVENTS FIRST! In "matched_topics", place "events" first if there are matching events (e.g. ["events", "pros", "guides"]).
+     * IN "jane_message": Present upcoming community events, festivals, concerts, cultural activities and meetups FIRST in your message, followed by recommended entertainment, sports, and leisure professionals, and discovery guides.
+     * IN "pros": Broadly DIVERSIFY suggestions across premium leisure options while maintaining strict coherence! Propose relevant professionals in:
+       - Entertainment & Culture: Live music, stand-up comedy clubs, escape rooms, theaters, flamenco shows, art galleries, museums.
+       - Sports, Water & Outdoor: Paddle surf (SUP), kayak/boat rentals, sailing excursions, bike & electric scooter rentals, hiking guides, golf, tennis/padel clubs, surfing/diving.
+       - Wellness & Mind: Spas, thermal baths, yoga & pilates studios, meditation centers.
+       - Gastronomy & Creativity: Paella cooking classes, pottery/ceramics workshops, wine tasting courses, walking food tours, salsa/bachata dance classes.
+       - Event, Services & Outing Prep: Professional vacation photographers & videographers (to capture moments, portraits), private chefs & home catering, private drivers & chauffeurs, local tour guides, massage therapists, beauty therapists, and nail artists (pre-outing pampering).
+       - STRICT COHERENCE RULE: NEVER match dentists, general doctors, pediatricians, lawyers, accountants, realtors, or plumbers for activity queries. Unrelated professional categories MUST receive score 0 and be omitted from "pros"!
+     * DO NOT limit activity suggestions solely to children or kids playgrounds unless the user explicitly mentions kids ("enfants", "pour les enfants", "kids"). Provide engaging, high-quality activities for adults, couples, friends, and the broader community as well!
+     * IN "events": Include relevant community events, concerts, social meetups, workshops, cultural festivals.
+     * IN "guides": Match relevant city guides, neighborhood discoveries, itineraries, and activity recommendations in Valencia.`;
 
       const response = await getAiClient().models.generateContent({
         model: "gemini-3.1-flash-lite",
@@ -869,7 +909,9 @@ ${JSON.stringify(guidesBrief, null, 2)}`,
         events: eventsResults,
         guides: guidesResults,
         google_places_pros: googlePlacesPros,
-        target_zone: targetZone
+        target_zone: targetZone,
+        is_new_topic: isNewTopic,
+        effective_search_query: placesSearchQuery
       });
     } catch (error: any) {
       console.error("[api] Gemini AI Multi-Search matching error:", error);

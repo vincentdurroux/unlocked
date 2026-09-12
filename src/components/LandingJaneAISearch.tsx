@@ -35,7 +35,8 @@ import {
   DEFAULT_VALENCIA_CENTER,
   Coordinates,
   buildOptimizedPlacesQuery,
-  isTradeMismatched
+  isTradeMismatched,
+  isActivityQuery
 } from '../lib/locationUtils';
 
 interface Professional {
@@ -100,6 +101,8 @@ interface AISearchResponse {
     centerCoords: Coordinates;
     isSpecificZone: boolean;
   };
+  is_new_topic?: boolean;
+  effective_search_query?: string;
 }
 
 interface ChatMessage {
@@ -168,6 +171,7 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
   onNavigate
 }) => {
   const [query, setQuery] = useState('');
+  const [activeQuery, setActiveQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchResult, setSearchResult] = useState<AISearchResponse | null>(null);
@@ -449,6 +453,18 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
 Match items selectively across pros, events, and guides for the user query.
 Rules:
 - STRICT TRADE COHERENCE: Match ONLY professionals whose specialty directly corresponds to the requested service. (e.g. if searching for an osteopath, NEVER match dentists, doctors, or lawyers).
+- ACTIVITÉS & CHOSES À FAIRE (THINGS TO DO, LEISURE, SPORTS, ENTERTAINMENT):
+  * When the user searches for activities ("choses à faire", "activités", "que faire", "sorties", "loisirs", "things to do", "sports", or "entertainment"):
+    - PRIORITY ORDER: PROPOSE EVENTS FIRST! In "matched_topics", place "events" first if there are matching events (e.g. ["events", "pros", "guides"]).
+    - IN "jane_message": Present upcoming community events, festivals, concerts, cultural activities and meetups FIRST in your message, followed by recommended entertainment, sports, and leisure professionals, and discovery guides.
+    - IN "pros": Broadly DIVERSIFY suggestions across premium leisure options while maintaining strict coherence! Propose relevant professionals in:
+      * Entertainment & Culture: Live music, stand-up comedy clubs, escape rooms, theaters, flamenco shows, art galleries, museums.
+      * Sports, Water & Outdoor: Paddle surf (SUP), kayak/boat rentals, sailing excursions, bike & electric scooter rentals, hiking guides, golf, tennis/padel clubs, surfing/diving.
+      * Wellness & Mind: Spas, thermal baths, yoga & pilates studios, meditation centers.
+      * Gastronomy & Creativity: Paella cooking classes, pottery/ceramics workshops, wine tasting courses, walking food tours, salsa/bachata dance classes.
+      * Event, Services & Outing Prep: Professional vacation photographers & videographers (to capture moments, portraits), private chefs & home catering, private drivers & chauffeurs, local tour guides, massage therapists, beauty therapists, and nail artists (pre-outing pampering).
+      - STRICT COHERENCE RULE: NEVER match dentists, general doctors, pediatricians, lawyers, accountants, realtors, or plumbers for activity queries. Unrelated professional categories MUST receive score 0 and be omitted from "pros"!
+    - DO NOT limit suggestions only to children/kids activities unless explicitly requested!
 - Include a category in "matched_topics" if there are relevant items.
 - Score 0-100, only return items with score >= 40.
 - Proactively match events that relate to community, expats, socializing, learning local culture (like tapas or wine), networking, beach, or local activities.
@@ -456,7 +472,7 @@ Rules:
 
         const response = await ai.models.generateContent({
           model: "gemini-3.1-flash-lite",
-          contents: `Query: "${q}"\nPros: ${JSON.stringify(allCandidatePros.slice(0, 45))}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
+          contents: `Query: "${q}"\nPros: ${JSON.stringify(allCandidatePros)}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
           config: {
             systemInstruction: sysInstruction,
             responseMimeType: "application/json",
@@ -556,6 +572,7 @@ Rules:
       }
       setSelectedTopicTab('all');
       setHasSearched(true);
+      setActiveQuery(q);
       setConversation([
         { id: '1', role: 'user', text: q },
         { id: '2', role: 'jane', text: data.jane_message }
@@ -632,41 +649,62 @@ Rules:
         if (apiKey) {
           const ai = new GoogleGenAI({ apiKey });
           const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
-          let clientGooglePlacesPros: any[] = [...googlePlacesPros];
 
-          // 1. Synthesize target search query from conversation history
+          // 1. Analyze topic transition vs follow-up continuation
           let placesSearchQuery = text;
-          let isProximityGlobal = false;
+          let isNewTopic = false;
           if (Array.isArray(historyForApi) && historyForApi.length > 0) {
             try {
-              const userMsgList = historyForApi
-                .filter(m => (m.role === 'user' || m.role === 'User') && m.content)
-                .map(m => m.content);
-              userMsgList.push(text);
-              
-              const fullUserIntent = userMsgList.join(" | ");
-              const responseExtract = await ai.models.generateContent({
+              const historyFormattedForClassification = historyForApi
+                .map(m => `${(m.role === 'user' || m.role === 'User') ? 'User' : 'Jane'}: ${m.content}`)
+                .join('\n');
+
+              const topicAnalysis = await ai.models.generateContent({
                 model: "gemini-3.1-flash-lite",
                 contents: `Analyze this search conversation thread for local services in Valencia, Spain.
-Extract the CURRENT core trade/profession + location/neighborhood (2-6 words max in English or French) to search on Google Places.
+Determine whether the user is:
+1. CONTINUING & REFINING the existing discussion (is_new_topic: false)
+2. STARTING A NEW DISCUSSION / SWITCHING TOPIC (is_new_topic: true)
 
-Conversation History: "${fullUserIntent}"
+Conversation History:
+${historyFormattedForClassification}
 
-Examples:
-- History: "Je cherche un dentiste" | "avez vous des options à Ruzafa" -> "dentiste Ruzafa"
-- History: "besoin d'un plombier à Valence" | "qui parle anglais" -> "plombier anglais"
-- History: "recherche un pédiatre" | "vers Godella" -> "pédiatre"
+Latest User Message:
+"${text}"
 
-Return ONLY the concise 2-6 word search query string.`,
+Rules:
+- is_new_topic: true if user is asking for a different service, profession, activity, or unrelated request.
+- is_new_topic: false if user is refining, filtering, clarifying, or asking questions about the existing topic/service.
+- effective_search_query:
+  * If is_new_topic is true: Extract ONLY the new trade/service/activity + location (2-5 words max, e.g. "plombier", "restaurant paella", "concert jazz"). DO NOT keep keywords from the old topic!
+  * If is_new_topic is false: Synthesize the current trade with the new refinement/filter (e.g. "dentiste francophone", "ostéopathe Ruzafa").
+- DO NOT append city/neighborhood name unless explicitly typed.`,
+                config: {
+                  responseMimeType: "application/json",
+                  responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                      is_new_topic: { type: Type.BOOLEAN },
+                      effective_search_query: { type: Type.STRING }
+                    },
+                    required: ["is_new_topic", "effective_search_query"]
+                  },
+                  thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
+                }
               });
-              const extractedQuery = responseExtract.text?.trim().replace(/['"]/g, '');
-              if (extractedQuery && extractedQuery.length >= 3) {
-                placesSearchQuery = extractedQuery;
+
+              const parsedAnalysis = JSON.parse(topicAnalysis.text || "{}");
+              isNewTopic = Boolean(parsedAnalysis.is_new_topic);
+              if (parsedAnalysis.effective_search_query && parsedAnalysis.effective_search_query.trim().length >= 2) {
+                placesSearchQuery = parsedAnalysis.effective_search_query.trim();
               }
             } catch (err) {
-              console.warn("Client-side fallback error extracting query:", err);
+              console.warn("Client fallback topic detection error:", err);
             }
           }
+
+          let clientGooglePlacesPros: any[] = isNewTopic ? [] : [...googlePlacesPros];
+          let isProximityGlobal = false;
 
           if (googleMapsKey) {
             try {
@@ -778,14 +816,14 @@ Return ONLY the concise 2-6 word search query string.`,
                       is_community_recommended: false
                     };
                   })
-                  .filter((place: any) => !isTradeMismatched(text, place.name, place.category));
+                  .filter((place: any) => !isTradeMismatched(placesSearchQuery, place.name, place.category));
 
                 // Merge and sort strictly by distance to center
                 const mergedMap = new Map<string, any>();
                 clientGooglePlacesPros.forEach(p => mergedMap.set(String(p.id), p));
                 newlyFetched.forEach(p => mergedMap.set(String(p.id), p));
                 const allPlaces = Array.from(mergedMap.values()).filter((p: any) =>
-                  !isTradeMismatched(text, p.name, p.category)
+                  !isTradeMismatched(placesSearchQuery, p.name, p.category)
                 );
                 allPlaces.sort((a: any, b: any) => {
                   const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
@@ -817,20 +855,46 @@ Return ONLY the concise 2-6 word search query string.`,
             source: 'google_places'
           }));
 
+          // Sort candidate pros prioritizing proximity
           const allCandidatePros = [...proListBrief, ...googleProsBrief].filter((p: any) =>
-            !isTradeMismatched(text, p.name, p.category)
+            !isTradeMismatched(placesSearchQuery, p.name, p.category)
           );
+
+          allCandidatePros.sort((a: any, b: any) => {
+            const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+            const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+            return distA - distB;
+          });
+
           const filteredCandidatePros = (isProximityGlobal && userLocation)
             ? allCandidatePros.filter(p => (p as any).distanceKm !== null && (p as any).distanceKm <= 4.5)
             : allCandidatePros;
 
           const historyFormatted = historyForApi.map(m => `${m.role === 'user' ? 'User' : 'Jane'}: ${m.content}`).join('\n');
           const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" in Valencia.
-Continue the conversation to refine search results according to the user's latest follow-up.
-STRICT TRADE COHERENCE:
+${isNewTopic ? `The user has switched to a NEW SEARCH TOPIC for: "${placesSearchQuery}". Completely reset search context, evaluate new matches and smoothly acknowledge the new search.` : `Continue the ongoing discussion and refine search results for "${placesSearchQuery}".`}
+
+3-TIER RANKING PRIORITY FOR PROFESSIONALS:
+1. TIER 1 (Unlocked Community Pros): Prioritize relevant professionals registered in the Unlocked app within the target zone / 25km.
+2. TIER 2 (Google Places Pros): When community pros do not cover the requested trade, include Google Places professionals sorted strictly by proximity to the user's GPS location (or requested location). Limit Google Places pros to a maximum of 6.
+3. TIER 3 (Distant Pros): Professionals beyond 25km should only be suggested as backup with lower relevance.
+
+CRITICAL TRADE COHERENCE:
 - Match ONLY professionals whose specialty directly corresponds to the requested service.
 - If searching for an osteopath, NEVER match dentists, doctors, or lawyers. Mismatched pros get score 0.
-- Match relevant pros, events (score >= 40 for community, expat, social, cultural, networking, tapas, beach, workshops, or query-related events), and guides. Return a warm, helpful response answering their specific query and refining the list.`;
+- ACTIVITÉS & CHOSES À FAIRE (THINGS TO DO, LEISURE, SPORTS, ENTERTAINMENT):
+  * When the user searches for activities ("choses à faire", "activités", "que faire", "sorties", "loisirs", "things to do", "sports", or "entertainment"):
+    - PRIORITY ORDER: PROPOSE EVENTS FIRST! In "matched_topics", place "events" first if there are matching events (e.g. ["events", "pros", "guides"]).
+    - IN "jane_message": Present upcoming community events, festivals, concerts, cultural activities and meetups FIRST in your message, followed by recommended entertainment, sports, and leisure professionals, and discovery guides.
+    - IN "pros": Broadly DIVERSIFY suggestions across premium leisure options while maintaining strict coherence! Propose relevant professionals in:
+      * Entertainment & Culture: Live music, stand-up comedy clubs, escape rooms, theaters, flamenco shows, art galleries, museums.
+      * Sports, Water & Outdoor: Paddle surf (SUP), kayak/boat rentals, sailing excursions, bike & electric scooter rentals, hiking guides, golf, tennis/padel clubs, surfing/diving.
+      * Wellness & Mind: Spas, thermal baths, yoga & pilates studios, meditation centers.
+      * Gastronomy & Creativity: Paella cooking classes, pottery/ceramics workshops, wine tasting courses, walking food tours, salsa/bachata dance classes.
+      * Event, Services & Outing Prep: Professional vacation photographers & videographers (to capture moments, portraits), private chefs & home catering, private drivers & chauffeurs, local tour guides, massage therapists, beauty therapists, and nail artists (pre-outing pampering).
+      - STRICT COHERENCE RULE: NEVER match dentists, general doctors, pediatricians, lawyers, accountants, realtors, or plumbers for activity queries. Unrelated professional categories MUST receive score 0 and be omitted from "pros"!
+    - DO NOT limit activity suggestions solely to children or kids playgrounds unless the user explicitly mentions kids ("enfants", "pour les enfants", "kids"). Provide engaging, high-quality activities for adults, couples, friends, and the broader community as well!
+- Match relevant pros, events, and guides. Return a warm, helpful response answering their specific query.`;
 
           const response = await ai.models.generateContent({
             model: "gemini-3.1-flash-lite",
@@ -903,7 +967,9 @@ STRICT TRADE COHERENCE:
             pros: prosResults,
             events: eventsResults,
             guides: guidesResults,
-            google_places_pros: clientGooglePlacesPros
+            google_places_pros: clientGooglePlacesPros,
+            is_new_topic: isNewTopic,
+            effective_search_query: placesSearchQuery
           };
           success = true;
         }
@@ -930,8 +996,15 @@ STRICT TRADE COHERENCE:
 
     if (data) {
       setSearchResult(data);
-      if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
+      if (data.is_new_topic) {
+        setGooglePlacesPros(data.google_places_pros || []);
+      } else if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
         setGooglePlacesPros(data.google_places_pros.slice(0, 6));
+      }
+      if (data.effective_search_query) {
+        setActiveQuery(data.effective_search_query);
+      } else {
+        setActiveQuery(text);
       }
       const janeMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -945,6 +1018,7 @@ STRICT TRADE COHERENCE:
 
   const handleClear = () => {
     setQuery('');
+    setActiveQuery('');
     setHasSearched(false);
     setSearchResult(null);
     setGooglePlacesPros([]);
@@ -974,14 +1048,15 @@ STRICT TRADE COHERENCE:
     if (searchResult?.target_zone) {
       return searchResult.target_zone;
     }
-    return detectTargetZone(query || '', userLocation);
-  }, [searchResult, query, userLocation]);
+    return detectTargetZone(activeQuery || query || '', userLocation);
+  }, [searchResult, activeQuery, query, userLocation]);
 
   // Find full objects and sort via 3-Tier priority system:
   // 1. App recommended pros within 25 km
   // 2. Google Places pros within 25 km (closest distance first, strictly max 6)
   // 3. Other pros (> 25 km)
   const rawMatchedPros = useMemo(() => {
+    const currentEffectiveQuery = activeQuery || query || '';
     const list: (Professional & { matchReason: string; matchScore: number })[] = [];
     const addedIds = new Set<string>();
 
@@ -1020,7 +1095,7 @@ STRICT TRADE COHERENCE:
           gpId === `google_${String(p.id)}`
         ) || gp;
 
-        if (!isTradeMismatched(query || '', fullPro.name, fullPro.category)) {
+        if (!isTradeMismatched(currentEffectiveQuery, fullPro.name, fullPro.category)) {
           addedIds.add(gpId);
           list.push({
             ...fullPro,
@@ -1032,7 +1107,7 @@ STRICT TRADE COHERENCE:
     });
 
     return list;
-  }, [searchResult, combinedPros, googlePlacesPros, query]);
+  }, [searchResult, combinedPros, googlePlacesPros, activeQuery, query]);
 
   const matchedPros = useMemo(() => {
     const centerCoords = activeTargetZone.centerCoords;
@@ -1418,222 +1493,447 @@ STRICT TRADE COHERENCE:
               </div>
             )}
 
-            {/* 1. MATCHED PROS */}
-            {hasPros && (selectedTopicTab === 'all' || selectedTopicTab === 'pros') && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-brand-blue text-white flex items-center justify-center">
-                    <Briefcase className="w-3.5 h-3.5" />
-                  </div>
-                  <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
-                    Recommended Professionals ({matchedPros.length})
-                  </h4>
-                </div>
+            {/* 1. MATCHED PROS (and/or MATCHED EVENTS, conditionally ordered) */}
+            {isActivityQuery(activeQuery) ? (
+              <>
+                {/* 2. MATCHED EVENTS (Rendered First for Activity Queries) */}
+                {hasEvents && (selectedTopicTab === 'all' || selectedTopicTab === 'events') && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center">
+                        <Calendar className="w-3.5 h-3.5" />
+                      </div>
+                      <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
+                        Matching Events ({matchedEvents.length})
+                      </h4>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                  {displayedPros.map((pro) => {
-                    const isCommunity = isCommunityPro(pro);
-                    const hasDist = typeof pro.distanceKm === 'number';
-                    const isWithin25km = hasDist && (pro.distanceKm as number) <= 25;
-
-                    return (
-                      <div
-                        key={pro.id}
-                        onClick={() => {
-                          if (!isCommunity) {
-                            const googleUrl = (pro as any).googleMapsUri || (pro.website && pro.website.length > 5 ? pro.website : null) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((pro.company_name || pro.name) + ' ' + (pro.location || 'Valencia'))}`;
-                            window.open(googleUrl, '_blank', 'noopener,noreferrer');
-                          } else {
-                            onSelectPro(pro);
-                          }
-                        }}
-                        className={`p-4 sm:p-5 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 group ${
-                          isCommunity
-                            ? 'bg-white border-2 border-emerald-500/80 hover:border-emerald-600 shadow-xs shadow-emerald-500/10 hover:shadow-md'
-                            : 'bg-slate-50/70 border border-slate-200/80 hover:border-slate-300 hover:bg-white'
-                        }`}
-                      >
-                        <div>
-                          {/* Unlocked Community Recommendation Badge & Distance Badge */}
-                          <div className="mb-2.5 flex items-center justify-between gap-2 flex-wrap">
-                            {isCommunity ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white font-bold text-[11px] tracking-tight shadow-xs shadow-emerald-500/20">
-                                <Award className="w-3.5 h-3.5 text-white shrink-0" />
-                                <span>Recommended by MyCityUnlocked community</span>
-                              </span>
-                            ) : null}
-
-                            {hasDist && (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                                isWithin25km 
-                                  ? 'bg-blue-50 text-brand-blue border border-blue-200/80' 
-                                  : 'bg-slate-100 text-slate-500 border border-slate-200'
-                              }`}>
-                                <MapPin className="w-3 h-3 text-brand-blue shrink-0" />
-                                <span>{pro.distanceKm} km</span>
-                              </span>
-                            )}
-                          </div>
-
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {displayedEvents.map((ev) => (
+                        <div
+                          key={ev.id}
+                          onClick={() => onSelectEvent(ev)}
+                          className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 hover:border-amber-400/80 hover:shadow-xs transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 group"
+                        >
                           <div className="flex items-start gap-3.5">
-                            <div className="w-13 h-13 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200/70">
-                              {pro.image ? (
-                                <img src={pro.image} alt={pro.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            <div className="w-14 h-14 rounded-xl bg-amber-50 overflow-hidden shrink-0 border border-amber-200/70 relative">
+                              {ev.image ? (
+                                <img src={ev.image} alt={ev.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center text-slate-300">
-                                  <User className="w-6 h-6" />
+                                <div className="w-full h-full flex items-center justify-center text-amber-500">
+                                  <Calendar className="w-6 h-6" />
                                 </div>
                               )}
                             </div>
 
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-2">
-                                <h5 className="text-sm sm:text-base font-bold text-slate-900 truncate group-hover:text-brand-blue transition-colors">
-                                  {pro.company_name || pro.name}
-                                </h5>
-                                {isCommunity && pro.rating > 0 && (
-                                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 text-amber-800 text-xs font-semibold shrink-0">
-                                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                    <span>{pro.rating.toFixed(1)}</span>
-                                  </div>
+                                <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 text-[10px] font-semibold uppercase tracking-wide">
+                                  {ev.category || 'Event'}
+                                </span>
+                                {(ev.start_date || ev.date) && (
+                                  <span className="text-xs font-semibold text-amber-700">
+                                    {ev.start_date || ev.date}
+                                  </span>
                                 )}
                               </div>
 
-                              <p className="text-xs font-medium text-brand-blue line-clamp-1 mt-0.5">
-                                {pro.category}
-                              </p>
+                              <h5 className="text-sm sm:text-base font-bold text-slate-900 truncate mt-1 group-hover:text-amber-700 transition-colors">
+                                {ev.title}
+                              </h5>
 
-                              {pro.location && (
-                                <p className="text-xs text-slate-500 font-normal flex items-center gap-1 mt-1 truncate">
-                                  <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                                  <span>{pro.location}</span>
-                                </p>
-                              )}
+                              <div className="flex items-center gap-2.5 text-xs text-slate-500 font-normal mt-0.5">
+                                {ev.location && (
+                                  <span className="flex items-center gap-1 truncate">
+                                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                    <span>{ev.location}</span>
+                                  </span>
+                                )}
+                                {(ev.start_time || ev.time) && (
+                                  <span className="flex items-center gap-1 shrink-0">
+                                    <Clock className="w-3 h-3 text-slate-400" />
+                                    <span>{ev.start_time || ev.time}</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Jane's reasoning */}
-                        {pro.matchReason && (
-                          <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 bg-blue-50/40 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 p-3 px-4 sm:px-5 rounded-b-2xl">
-                            <p className="text-xs text-slate-600 font-normal line-clamp-1 italic flex items-center gap-1.5">
-                              <Sparkles className="w-3 h-3 text-brand-yellow shrink-0" />
-                              "{pro.matchReason}"
-                            </p>
-                            <span className="text-xs font-medium text-brand-blue shrink-0 group-hover:translate-x-0.5 transition-transform">
-                              View →
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Show more arrow button */}
-                {matchedPros.length > 2 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllPros(!showAllPros)}
-                    className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200 text-brand-blue text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
-                  >
-                    <span>{showAllPros ? 'Show fewer pros' : `Show all ${matchedPros.length} pros`}</span>
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllPros ? 'rotate-180' : ''}`} />
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* 2. MATCHED EVENTS */}
-            {hasEvents && (selectedTopicTab === 'all' || selectedTopicTab === 'events') && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center">
-                    <Calendar className="w-3.5 h-3.5" />
-                  </div>
-                  <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
-                    Matching Events ({matchedEvents.length})
-                  </h4>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                  {displayedEvents.map((ev) => (
-                    <div
-                      key={ev.id}
-                      onClick={() => onSelectEvent(ev)}
-                      className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 hover:border-amber-400/80 hover:shadow-xs transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 group"
-                    >
-                      <div className="flex items-start gap-3.5">
-                        <div className="w-14 h-14 rounded-xl bg-amber-50 overflow-hidden shrink-0 border border-amber-200/70 relative">
-                          {ev.image ? (
-                            <img src={ev.image} alt={ev.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-amber-500">
-                              <Calendar className="w-6 h-6" />
+                          {ev.matchReason && (
+                            <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 bg-amber-50/40 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 p-3 px-4 sm:px-5 rounded-b-2xl">
+                              <p className="text-xs text-slate-600 font-normal line-clamp-1 italic flex items-center gap-1.5">
+                                <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                                "{ev.matchReason}"
+                              </p>
+                              <span className="text-xs font-medium text-amber-700 shrink-0 group-hover:translate-x-0.5 transition-transform">
+                                Details →
+                              </span>
                             </div>
                           )}
                         </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 text-[10px] font-semibold uppercase tracking-wide">
-                              {ev.category || 'Event'}
-                            </span>
-                            {(ev.start_date || ev.date) && (
-                              <span className="text-xs font-semibold text-amber-700">
-                                {ev.start_date || ev.date}
-                              </span>
-                            )}
-                          </div>
-
-                          <h5 className="text-sm sm:text-base font-bold text-slate-900 truncate mt-1 group-hover:text-amber-700 transition-colors">
-                            {ev.title}
-                          </h5>
-
-                          <div className="flex items-center gap-2.5 text-xs text-slate-500 font-normal mt-0.5">
-                            {ev.location && (
-                              <span className="flex items-center gap-1 truncate">
-                                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                                <span>{ev.location}</span>
-                              </span>
-                            )}
-                            {(ev.start_time || ev.time) && (
-                              <span className="flex items-center gap-1 shrink-0">
-                                <Clock className="w-3 h-3 text-slate-400" />
-                                <span>{ev.start_time || ev.time}</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {ev.matchReason && (
-                        <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 bg-amber-50/40 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 p-3 px-4 sm:px-5 rounded-b-2xl">
-                          <p className="text-xs text-slate-600 font-normal line-clamp-1 italic flex items-center gap-1.5">
-                            <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
-                            "{ev.matchReason}"
-                          </p>
-                          <span className="text-xs font-medium text-amber-700 shrink-0 group-hover:translate-x-0.5 transition-transform">
-                            Details →
-                          </span>
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                {/* Show more arrow button */}
-                {matchedEvents.length > 2 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllEvents(!showAllEvents)}
-                    className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-amber-50/70 border border-slate-200 text-amber-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
-                  >
-                    <span>{showAllEvents ? 'Show fewer events' : `Show all ${matchedEvents.length} events`}</span>
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllEvents ? 'rotate-180' : ''}`} />
-                  </button>
+                    {/* Show more arrow button */}
+                    {matchedEvents.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllEvents(!showAllEvents)}
+                        className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-amber-50/70 border border-slate-200 text-amber-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
+                      >
+                        <span>{showAllEvents ? 'Show fewer events' : `Show all ${matchedEvents.length} events`}</span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllEvents ? 'rotate-180' : ''}`} />
+                      </button>
+                    )}
+                  </div>
                 )}
-              </div>
+
+                {/* 1. MATCHED PROS (Rendered Second for Activity Queries) */}
+                {hasPros && (selectedTopicTab === 'all' || selectedTopicTab === 'pros') && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-brand-blue text-white flex items-center justify-center">
+                        <Briefcase className="w-3.5 h-3.5" />
+                      </div>
+                      <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
+                        Recommended Professionals ({matchedPros.length})
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {displayedPros.map((pro) => {
+                        const isCommunity = isCommunityPro(pro);
+                        const hasDist = typeof pro.distanceKm === 'number';
+                        const isWithin25km = hasDist && (pro.distanceKm as number) <= 25;
+
+                        return (
+                          <div
+                            key={pro.id}
+                            onClick={() => {
+                              if (!isCommunity) {
+                                const googleUrl = (pro as any).googleMapsUri || (pro.website && pro.website.length > 5 ? pro.website : null) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((pro.company_name || pro.name) + ' ' + (pro.location || 'Valencia'))}`;
+                                window.open(googleUrl, '_blank', 'noopener,noreferrer');
+                              } else {
+                                onSelectPro(pro);
+                              }
+                            }}
+                            className={`p-4 sm:p-5 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 group ${
+                              isCommunity
+                                ? 'bg-white border-2 border-emerald-500/80 hover:border-emerald-600 shadow-xs shadow-emerald-500/10 hover:shadow-md'
+                                : 'bg-slate-50/70 border border-slate-200/80 hover:border-slate-300 hover:bg-white'
+                            }`}
+                          >
+                            <div>
+                              {/* Unlocked Community Recommendation Badge & Distance Badge */}
+                              <div className="mb-2.5 flex items-center justify-between gap-2 flex-wrap">
+                                {isCommunity ? (
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white font-bold text-[11px] tracking-tight shadow-xs shadow-emerald-500/20">
+                                    <Award className="w-3.5 h-3.5 text-white shrink-0" />
+                                    <span>Recommended by MyCityUnlocked community</span>
+                                  </span>
+                                ) : null}
+
+                                {hasDist && (
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                    isWithin25km 
+                                      ? 'bg-blue-50 text-brand-blue border border-blue-200/80' 
+                                      : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                  }`}>
+                                    <MapPin className="w-3 h-3 text-brand-blue shrink-0" />
+                                    <span>{pro.distanceKm} km</span>
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-start gap-3.5">
+                                <div className="w-13 h-13 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200/70">
+                                  {pro.image ? (
+                                    <img src={pro.image} alt={pro.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                      <User className="w-6 h-6" />
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <h5 className="text-sm sm:text-base font-bold text-slate-900 truncate group-hover:text-brand-blue transition-colors">
+                                      {pro.company_name || pro.name}
+                                    </h5>
+                                    {isCommunity && pro.rating > 0 && (
+                                      <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 text-amber-800 text-xs font-semibold shrink-0">
+                                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                        <span>{pro.rating.toFixed(1)}</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <p className="text-xs font-medium text-brand-blue line-clamp-1 mt-0.5">
+                                    {pro.category}
+                                  </p>
+
+                                  {pro.location && (
+                                    <p className="text-xs text-slate-500 font-normal flex items-center gap-1 mt-1 truncate">
+                                      <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                      <span>{pro.location}</span>
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Jane's reasoning */}
+                            {pro.matchReason && (
+                              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 bg-blue-50/40 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 p-3 px-4 sm:px-5 rounded-b-2xl">
+                                <p className="text-xs text-slate-600 font-normal line-clamp-1 italic flex items-center gap-1.5">
+                                  <Sparkles className="w-3 h-3 text-brand-yellow shrink-0" />
+                                  "{pro.matchReason}"
+                                </p>
+                                <span className="text-xs font-medium text-brand-blue shrink-0 group-hover:translate-x-0.5 transition-transform">
+                                  View →
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Show more arrow button */}
+                    {matchedPros.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllPros(!showAllPros)}
+                        className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200 text-brand-blue text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
+                      >
+                        <span>{showAllPros ? 'Show fewer pros' : `Show all ${matchedPros.length} pros`}</span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllPros ? 'rotate-180' : ''}`} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* 1. MATCHED PROS (Rendered First for standard Queries) */}
+                {hasPros && (selectedTopicTab === 'all' || selectedTopicTab === 'pros') && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-brand-blue text-white flex items-center justify-center">
+                        <Briefcase className="w-3.5 h-3.5" />
+                      </div>
+                      <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
+                        Recommended Professionals ({matchedPros.length})
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {displayedPros.map((pro) => {
+                        const isCommunity = isCommunityPro(pro);
+                        const hasDist = typeof pro.distanceKm === 'number';
+                        const isWithin25km = hasDist && (pro.distanceKm as number) <= 25;
+
+                        return (
+                          <div
+                            key={pro.id}
+                            onClick={() => {
+                              if (!isCommunity) {
+                                const googleUrl = (pro as any).googleMapsUri || (pro.website && pro.website.length > 5 ? pro.website : null) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((pro.company_name || pro.name) + ' ' + (pro.location || 'Valencia'))}`;
+                                window.open(googleUrl, '_blank', 'noopener,noreferrer');
+                              } else {
+                                onSelectPro(pro);
+                              }
+                            }}
+                            className={`p-4 sm:p-5 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 group ${
+                              isCommunity
+                                ? 'bg-white border-2 border-emerald-500/80 hover:border-emerald-600 shadow-xs shadow-emerald-500/10 hover:shadow-md'
+                                : 'bg-slate-50/70 border border-slate-200/80 hover:border-slate-300 hover:bg-white'
+                            }`}
+                          >
+                            <div>
+                              {/* Unlocked Community Recommendation Badge & Distance Badge */}
+                              <div className="mb-2.5 flex items-center justify-between gap-2 flex-wrap">
+                                {isCommunity ? (
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white font-bold text-[11px] tracking-tight shadow-xs shadow-emerald-500/20">
+                                    <Award className="w-3.5 h-3.5 text-white shrink-0" />
+                                    <span>Recommended by MyCityUnlocked community</span>
+                                  </span>
+                                ) : null}
+
+                                {hasDist && (
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                    isWithin25km 
+                                      ? 'bg-blue-50 text-brand-blue border border-blue-200/80' 
+                                      : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                  }`}>
+                                    <MapPin className="w-3 h-3 text-brand-blue shrink-0" />
+                                    <span>{pro.distanceKm} km</span>
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-start gap-3.5">
+                                <div className="w-13 h-13 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200/70">
+                                  {pro.image ? (
+                                    <img src={pro.image} alt={pro.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                      <User className="w-6 h-6" />
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <h5 className="text-sm sm:text-base font-bold text-slate-900 truncate group-hover:text-brand-blue transition-colors">
+                                      {pro.company_name || pro.name}
+                                    </h5>
+                                    {isCommunity && pro.rating > 0 && (
+                                      <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 text-amber-800 text-xs font-semibold shrink-0">
+                                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                        <span>{pro.rating.toFixed(1)}</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <p className="text-xs font-medium text-brand-blue line-clamp-1 mt-0.5">
+                                    {pro.category}
+                                  </p>
+
+                                  {pro.location && (
+                                    <p className="text-xs text-slate-500 font-normal flex items-center gap-1 mt-1 truncate">
+                                      <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                      <span>{pro.location}</span>
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Jane's reasoning */}
+                            {pro.matchReason && (
+                              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 bg-blue-50/40 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 p-3 px-4 sm:px-5 rounded-b-2xl">
+                                <p className="text-xs text-slate-600 font-normal line-clamp-1 italic flex items-center gap-1.5">
+                                  <Sparkles className="w-3 h-3 text-brand-yellow shrink-0" />
+                                  "{pro.matchReason}"
+                                </p>
+                                <span className="text-xs font-medium text-brand-blue shrink-0 group-hover:translate-x-0.5 transition-transform">
+                                  View →
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Show more arrow button */}
+                    {matchedPros.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllPros(!showAllPros)}
+                        className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200 text-brand-blue text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
+                      >
+                        <span>{showAllPros ? 'Show fewer pros' : `Show all ${matchedPros.length} pros`}</span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllPros ? 'rotate-180' : ''}`} />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* 2. MATCHED EVENTS (Rendered Second for standard Queries) */}
+                {hasEvents && (selectedTopicTab === 'all' || selectedTopicTab === 'events') && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center">
+                        <Calendar className="w-3.5 h-3.5" />
+                      </div>
+                      <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
+                        Matching Events ({matchedEvents.length})
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {displayedEvents.map((ev) => (
+                        <div
+                          key={ev.id}
+                          onClick={() => onSelectEvent(ev)}
+                          className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 hover:border-amber-400/80 hover:shadow-xs transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 group"
+                        >
+                          <div className="flex items-start gap-3.5">
+                            <div className="w-14 h-14 rounded-xl bg-amber-50 overflow-hidden shrink-0 border border-amber-200/70 relative">
+                              {ev.image ? (
+                                <img src={ev.image} alt={ev.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-amber-500">
+                                  <Calendar className="w-6 h-6" />
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 text-[10px] font-semibold uppercase tracking-wide">
+                                  {ev.category || 'Event'}
+                                </span>
+                                {(ev.start_date || ev.date) && (
+                                  <span className="text-xs font-semibold text-amber-700">
+                                    {ev.start_date || ev.date}
+                                  </span>
+                                )}
+                              </div>
+
+                              <h5 className="text-sm sm:text-base font-bold text-slate-900 truncate mt-1 group-hover:text-amber-700 transition-colors">
+                                {ev.title}
+                              </h5>
+
+                              <div className="flex items-center gap-2.5 text-xs text-slate-500 font-normal mt-0.5">
+                                {ev.location && (
+                                  <span className="flex items-center gap-1 truncate">
+                                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                    <span>{ev.location}</span>
+                                  </span>
+                                )}
+                                {(ev.start_time || ev.time) && (
+                                  <span className="flex items-center gap-1 shrink-0">
+                                    <Clock className="w-3 h-3 text-slate-400" />
+                                    <span>{ev.start_time || ev.time}</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {ev.matchReason && (
+                            <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 bg-amber-50/40 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 p-3 px-4 sm:px-5 rounded-b-2xl">
+                              <p className="text-xs text-slate-600 font-normal line-clamp-1 italic flex items-center gap-1.5">
+                                <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                                "{ev.matchReason}"
+                              </p>
+                              <span className="text-xs font-medium text-amber-700 shrink-0 group-hover:translate-x-0.5 transition-transform">
+                                Details →
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Show more arrow button */}
+                    {matchedEvents.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllEvents(!showAllEvents)}
+                        className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-amber-50/70 border border-slate-200 text-amber-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
+                      >
+                        <span>{showAllEvents ? 'Show fewer events' : `Show all ${matchedEvents.length} events`}</span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllEvents ? 'rotate-180' : ''}`} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             {/* 3. MATCHED GUIDES */}
