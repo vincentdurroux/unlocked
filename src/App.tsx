@@ -10793,10 +10793,11 @@ Your purpose is to examine the user's natural language request and return the mo
 
 Review the list of professionals provided and evaluate BOTH trade/service criteria AND location criteria:
 
-1. CRITICAL TRADE COHERENCE (STRICT RELEVANCE):
+1. CRITICAL TRADE COHERENCE & SPOKEN LANGUAGES (STRICT RELEVANCE):
    - Match ONLY professionals whose actual trade directly matches the requested trade.
    - If the user searches for an osteopath, NEVER match dentists, doctors, pediatricians, or lawyers! Mismatched trades must receive a score of 0.
    - If the user searches for a dentist, NEVER match osteopaths or general doctors.
+   - Geographic Proximity & Spoken Languages: Distance and location are paramount. Professionals located far away (> 25 km from target) MUST NOT be selected or returned, regardless of language. Simply asking in French or another language does NOT restrict or filter results by language. ONLY when the user explicitly specifies a language requirement (e.g. "francophone", "parlant français", "en français", "french", "English", "Spanish", "Español"), prioritize local pros within 25 km who speak that language.
    - Trade / Profession Synonyms & Translations:
      * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "hair salon", "barber" ALL match "Hairdresser", "Coiffeur", "Beauty & Wellness", or hair care services.
      * "doctor", "physician", "médecin", "gp" ALL match Doctor/Medical services.

@@ -184,6 +184,62 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
   const [followUpQuery, setFollowUpQuery] = useState('');
   const [isFollowUpLoading, setIsFollowUpLoading] = useState(false);
 
+  const detectLanguage = (text: string): 'en' | 'fr' | 'es' => {
+    if (!text) return 'en';
+    const lower = text.toLowerCase();
+    if (/\b(hola|por favor|busco|donde|está|gracias|plomero|dentista|osteopata|actividades|cosas|que hacer|barrio|español|españa)\b/.test(lower)) {
+      return 'es';
+    }
+    if (/\b(bonjour|cherche|trouve|où|est|merci|plombier|dentiste|ostéopathe|activités|choses|faire|quartier|cabinet|médecin|français|france)\b/.test(lower)) {
+      return 'fr';
+    }
+    return 'en';
+  };
+
+  const activeLang = detectLanguage(activeQuery || query || (conversation[0]?.text ?? ''));
+
+  const t = {
+    en: {
+      janeChat: "Jane's chat",
+      matched: "Matched",
+      resultsFound: "results found in Valencia",
+      newSearch: "New search",
+      refining: "Jane is refining search results...",
+      typePlaceholder: "Type here...",
+      askBtn: "Ask",
+      tabAll: "All Matches",
+      tabPros: "Pros",
+      tabEvents: "Events",
+      tabGuides: "Guides",
+    },
+    fr: {
+      janeChat: "Discussion avec Jane",
+      matched: "Résultat",
+      resultsFound: "résultats trouvés à Valencia",
+      newSearch: "Nouvelle recherche",
+      refining: "Jane affine les résultats...",
+      typePlaceholder: "Posez votre question...",
+      askBtn: "Envoyer",
+      tabAll: "Tous",
+      tabPros: "Professionnels",
+      tabEvents: "Événements",
+      tabGuides: "Guides",
+    },
+    es: {
+      janeChat: "Chat de Jane",
+      matched: "Coincidencia",
+      resultsFound: "resultados encontrados en Valencia",
+      newSearch: "Nueva búsqueda",
+      refining: "Jane está refinando los resultados...",
+      typePlaceholder: "Escribe aquí...",
+      askBtn: "Preguntar",
+      tabAll: "Todos",
+      tabPros: "Profesionales",
+      tabEvents: "Eventos",
+      tabGuides: "Guías",
+    }
+  }[activeLang];
+
   // Ref to automatically scroll and center on the discussion / latest received message
   const discussionRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
@@ -453,6 +509,7 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
 Match items selectively across pros, events, and guides for the user query.
 Rules:
 - STRICT TRADE COHERENCE: Match ONLY professionals whose specialty directly corresponds to the requested service. (e.g. if searching for an osteopath, NEVER match dentists, doctors, or lawyers).
+- GEOGRAPHIC PROXIMITY IS KING & SPOKEN LANGUAGES: Distance and location are paramount. Professionals located far away (> 25 km from the target area) MUST NOT be selected, prioritized, or returned, regardless of what language they speak! Spoken language must NEVER override distance or pull distant professionals into results. Simply asking in French or another language does NOT restrict or filter results by language. ONLY when the user explicitly specifies a language requirement (e.g. "francophone", "parlant français", "en français", "french speaking", "anglophone", "English", "Spanish", "Español"), prioritize local pros within 25 km who speak that language.
 - ACTIVITÉS & CHOSES À FAIRE (THINGS TO DO, LEISURE, SPORTS, ENTERTAINMENT):
   * When the user searches for activities ("choses à faire", "activités", "que faire", "sorties", "loisirs", "things to do", "sports", or "entertainment"):
     - PRIORITY ORDER: PROPOSE EVENTS FIRST! In "matched_topics", place "events" first if there are matching events (e.g. ["events", "pros", "guides"]).
@@ -879,6 +936,10 @@ ${isNewTopic ? `The user has switched to a NEW SEARCH TOPIC for: "${placesSearch
 2. TIER 2 (Google Places Pros): When community pros do not cover the requested trade, include Google Places professionals sorted strictly by proximity to the user's GPS location (or requested location). Limit Google Places pros to a maximum of 6.
 3. TIER 3 (Distant Pros): Professionals beyond 25km should only be suggested as backup with lower relevance.
 
+GEOGRAPHIC PROXIMITY IS KING & SPOKEN LANGUAGES:
+- Distance and location are paramount. Professionals located far away (> 25 km from the target area) MUST NOT be selected or returned, regardless of what language they speak! Spoken language must NEVER override distance. Simply asking in French or another language does NOT restrict or filter results by language.
+- ONLY when the user explicitly specifies a language requirement (e.g. "francophone", "parlant français", "en français", "french speaking", "anglophone", "English", "Spanish", "Español"), strictly prioritize local pros within 25 km who speak that language. Community pros matching both trade and language rank highest in Tier 1.
+
 CRITICAL TRADE COHERENCE:
 - Match ONLY professionals whose specialty directly corresponds to the requested service.
 - If searching for an osteopath, NEVER match dentists, doctors, or lawyers. Mismatched pros get score 0.
@@ -1060,35 +1121,7 @@ CRITICAL TRADE COHERENCE:
     const list: (Professional & { matchReason: string; matchScore: number })[] = [];
     const addedIds = new Set<string>();
 
-    // 1. Guarantee all valid community-recommended professionals from combinedPros are included if they match the query
-    combinedPros.forEach((pro) => {
-      const proId = String(pro.id);
-      if (isCommunityPro(pro) && !isTradeMismatched(currentEffectiveQuery, pro.name, pro.category)) {
-        // Find if Gemini already gave a specific reasoning or score in searchResult
-        const match = (searchResult?.pros || []).find(m => 
-          String(m.id) === proId || 
-          String(m.id) === `google_${proId}` || 
-          proId === `google_${String(m.id)}`
-        );
-
-        let sc = match && typeof match.score === 'number' ? match.score : 0;
-        if (sc > 0 && sc <= 10) sc = sc * 10;
-        
-        const score = sc >= 40 ? sc : 95; // Default score 95 for community recommendations to prioritize them
-        const reason = match?.reason || pro.bio || `Recommandé par la communauté Unlocked`;
-
-        if (!addedIds.has(proId)) {
-          addedIds.add(proId);
-          list.push({
-            ...pro,
-            matchReason: reason,
-            matchScore: score
-          });
-        }
-      }
-    });
-
-    // 2. Include any other matching pros from searchResult.pros that weren't added yet
+    // 1. First include matching pros from searchResult.pros
     (searchResult?.pros || []).forEach(match => {
       let sc = typeof match.score === 'number' ? match.score : 0;
       if (sc > 0 && sc <= 10) sc = sc * 10;
@@ -1300,15 +1333,15 @@ CRITICAL TRADE COHERENCE:
                   <div className="w-9 h-9 rounded-xl bg-brand-blue text-white flex items-center justify-center shrink-0 shadow-2xs">
                     <MessageSquareHeart className="w-5 h-5" />
                   </div>
-                  <div>
+                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-base sm:text-lg font-bold text-brand-navy">Jane's chat</span>
+                      <span className="text-base sm:text-lg font-bold text-brand-navy">{t.janeChat}</span>
                       <span className="px-2 py-0.5 rounded-md bg-white text-brand-blue border border-blue-200/80 text-[10px] font-semibold uppercase tracking-wider">
-                        Matched
+                        {t.matched}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 font-normal">
-                      {totalResultsCount} result{totalResultsCount > 1 ? 's' : ''} found in Valencia
+                      {totalResultsCount} {t.resultsFound}
                     </p>
                   </div>
                 </div>
@@ -1320,7 +1353,7 @@ CRITICAL TRADE COHERENCE:
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-blue-50 text-brand-blue border border-blue-200 hover:border-brand-blue text-xs sm:text-sm font-semibold shadow-2xs transition-all active:scale-95 cursor-pointer ml-auto"
                 >
                   <RotateCcw className="w-3.5 h-3.5 text-brand-blue" />
-                  <span>New search</span>
+                  <span>{t.newSearch}</span>
                 </button>
               </div>
 
@@ -1383,7 +1416,7 @@ CRITICAL TRADE COHERENCE:
                 {isFollowUpLoading && (
                   <div className="flex items-center gap-2 text-xs text-brand-blue font-medium bg-white/80 p-2.5 rounded-xl border border-blue-100">
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-blue" />
-                    <span>Jane is refining search results...</span>
+                    <span>{t.refining}</span>
                   </div>
                 )}
               </div>
@@ -1401,7 +1434,7 @@ CRITICAL TRADE COHERENCE:
                     type="text"
                     value={followUpQuery}
                     onChange={(e) => setFollowUpQuery(e.target.value)}
-                    placeholder="Type here..."
+                    placeholder={t.typePlaceholder}
                     disabled={isFollowUpLoading}
                     className="flex-1 min-w-0 w-full px-3 text-base md:text-sm text-slate-800 placeholder:text-slate-400 font-normal outline-none bg-transparent"
                   />
@@ -1414,7 +1447,7 @@ CRITICAL TRADE COHERENCE:
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <>
-                        <span>Ask</span>
+                        <span>{t.askBtn}</span>
                         <Send className="w-3.5 h-3.5" />
                       </>
                     )}
@@ -1436,7 +1469,7 @@ CRITICAL TRADE COHERENCE:
                       : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
                   }`}
                 >
-                  All Matches ({totalResultsCount})
+                  {t.tabAll} ({totalResultsCount})
                 </button>
 
                 {hasPros && (

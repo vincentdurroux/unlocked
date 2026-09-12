@@ -26,7 +26,7 @@ export const VALENCIA_ZONES: ZoneInfo[] = [
   {
     name: "Ciutat Vella / Center",
     coords: { lat: 39.4745, lng: -0.3763 },
-    keywords: ["ciutat vella", "centre", "center", "centro", "valencia centro", "valencia center", "downtown"]
+    keywords: ["ciutat vella", "valencia centro", "valencia centre", "el centro", "el centre", "downtown"]
   },
   {
     name: "Benimaclet",
@@ -214,21 +214,26 @@ export function detectTargetZone(
     DEFAULT_VALENCIA_CENTER.lat, DEFAULT_VALENCIA_CENTER.lng
   )! <= 80;
 
+  const defaultCenter = (isNearbyValencia && userLocation) ? userLocation : DEFAULT_VALENCIA_CENTER;
+  const defaultName = (isNearbyValencia && userLocation) ? "Your location" : "Valencia";
+
   if (!query || typeof query !== 'string') {
     return {
-      centerCoords: (isNearbyValencia && userLocation) ? userLocation : DEFAULT_VALENCIA_CENTER,
-      zoneName: (isNearbyValencia && userLocation) ? "Your location" : "Valencia",
+      centerCoords: defaultCenter,
+      zoneName: defaultName,
       isSpecificZone: false
     };
   }
 
   const normalized = query.toLowerCase().trim();
 
-  // Search through known Valencia zones
+  // Search through known Valencia zones ONLY if explicitly requested with location preposition or explicit mention
   for (const zone of VALENCIA_ZONES) {
     for (const keyword of zone.keywords) {
-      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-      if (regex.test(normalized)) {
+      const regex = new RegExp(`(\\b[àavversenon\\s]+\\b)?\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      // Check if query explicitly targets this zone
+      const zoneRegex = new RegExp(`\\b(à|a|en|in|near|cerca de|vers|to)\\s+${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b|\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+(a|en|in)\\s+valencia\\b`, 'i');
+      if (zoneRegex.test(normalized)) {
         return {
           centerCoords: zone.coords,
           zoneName: zone.name,
@@ -238,10 +243,10 @@ export function detectTargetZone(
     }
   }
 
-  // Default to user location if within Valencia area (<80km), otherwise central Valencia
+  // Always return user GPS location if available
   return {
-    centerCoords: (isNearbyValencia && userLocation) ? userLocation : DEFAULT_VALENCIA_CENTER,
-    zoneName: (isNearbyValencia && userLocation) ? "Your location" : "Valencia",
+    centerCoords: defaultCenter,
+    zoneName: defaultName,
     isSpecificZone: false
   };
 }

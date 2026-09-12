@@ -379,20 +379,25 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
    - Broad categories like "Health & Wellness" or "Medical" MUST NEVER be used to justify returning an unrelated medical specialty. A dentist is NOT an osteopath.
    - Any professional whose trade does not correspond to the requested service MUST receive score 0 and NOT be returned.
 
-2. 3-TIER RANKING PRIORITY SYSTEM (APPLIES EXCLUSIVELY TO GENUINE TRADE MATCHES):
+2. STRICT GEOGRAPHIC PROXIMITY & SPOKEN LANGUAGES RULE:
+   - GEOGRAPHIC PROXIMITY IS KING: Distance and location are paramount. Professionals located far away (> 25 km from the target area) MUST NOT be selected, prioritized, or returned, regardless of what language they speak! Spoken language must NEVER override distance or pull distant professionals into the results.
+   - SPOKEN LANGUAGES AS LOCAL BONUS ONLY: Inspect the 'languages' array of each professional ONLY among local pros within 25 km. Simply asking a question in French (or another language) does NOT restrict or filter results by language. 
+   - EXPLICIT LANGUAGE FILTER REQUIREMENT: Language is a filter ONLY when explicitly requested in the query (e.g. "francophone", "parlant français", "en français", "french speaking", "anglophone", "English", "Spanish", "Español"). When explicitly requested, prioritize local pros within 25 km who speak that language.
+
+3. 3-TIER RANKING PRIORITY SYSTEM (APPLIES EXCLUSIVELY TO GENUINE TRADE MATCHES):
    - TIER 1 (Highest Priority): Recommended App Professionals ('is_community_recommended: true') WITHIN 25 KM of the target area WHO PRACTICE THE REQUESTED TRADE. Give score 85-100. If no community pro practices this trade, return score 0 for all community pros. DO NOT force unrelated community pros!
    - TIER 2: Google Places professionals ('source: google_places') WHO PRACTICE THE REQUESTED TRADE: Up to 6 provided, sorted SOLELY by closest distance to user location (closest first). Any mismatched Google Places entry MUST receive score 0. Score: 60-80.
    - TIER 3: Other genuine matching professionals further than 25 km away (score 40-55).
 
-3. PRESENTATION TONE & REASONS:
+4. PRESENTATION TONE & REASONS:
    - Do NOT mention or emphasize Google ratings, star scores or review counts in reasonUrlExcerpt or summaryMessage (e.g. NEVER say 'bénéficie d'une note Google de 4.9' or 'très bien noté sur Google').
-   - Clarify why they match simply and neutrally (mentioning their trade, specialty, or neighborhood/town in Valencia).
+   - Clarify why they match simply and neutrally (mentioning their trade, specialty, language, or neighborhood/town in Valencia).
 
-4. "exactMatchFound" & "summaryMessage" RULES:
+5. "exactMatchFound" & "summaryMessage" RULES:
    - If AT LEAST ONE professional is a genuine match (score >= 40), set "exactMatchFound" to true, and "summaryMessage" to null.
    - If NO professionals match the requested trade at all, set "exactMatchFound" to false and provide a friendly explanation in summaryMessage.
 
-5. Under "reasonUrlExcerpt" for each matched professional, write a single concise sentence clarifying why they fit the user's need.`;
+6. Under "reasonUrlExcerpt" for each matched professional, write a single concise sentence clarifying why they fit the user's need.`;
 
       const response = await getAiClient().models.generateContent({
         model: "gemini-3.1-flash-lite",
@@ -732,6 +737,11 @@ TARGET CENTER / ZONE FOR GEOGRAPHIC LOCATION:
 - Active Target Zone: ${targetZone ? targetZone.zoneName : 'Valencia'} (${centerCoords.lat}, ${centerCoords.lng})
 - Radius rule: Search prioritizes professionals within 25 km of ${targetZone ? targetZone.zoneName : 'this location'}.
 
+STRICT GEOGRAPHIC PROXIMITY & SPOKEN LANGUAGES RULE:
+- GEOGRAPHIC PROXIMITY IS KING: Distance and location are paramount. Professionals located far away (> 25 km from the target area) MUST NOT be selected, prioritized, or returned, regardless of what language they speak! Spoken language must NEVER override distance or pull distant professionals into the results.
+- SPOKEN LANGUAGES AS LOCAL BONUS ONLY: Inspect the 'languages' array of each professional ONLY among local pros within 25 km. Simply asking in French or another language does NOT restrict or filter results by language.
+- EXPLICIT LANGUAGE FILTER REQUIREMENT: Language is a filter ONLY when explicitly requested in the query (e.g. "francophone", "parlant français", "en français", "french speaking", "anglophone", "English", "Spanish", "Español"). When explicitly requested, prioritize local pros within 25 km who speak that language.
+
 3-TIER RANKING PRIORITY FOR PROFESSIONALS:
 - TIER 1: Recommended App Pros ('is_community_recommended: true') WITHIN 25 KM of ${targetZone ? targetZone.zoneName : 'the target center'} WHO PRACTICE THE REQUESTED TRADE. Must rank highest (scores 85-100). If no community pro practices the requested trade, return score 0 for all community pros. DO NOT force unrelated community pros!
 - TIER 2: Google Places pros ('source: google_places') WHO PRACTICE THE REQUESTED TRADE: Strictly max 6 provided, sorted SOLELY by closest distance to user location (or requested location). DO NOT sort or reorder by ratings or reviews; preserve closest distance first (scores 60-80). Mismatched Google Places entries MUST receive score 0.
@@ -749,11 +759,11 @@ CRITICAL TRADE COHERENCE & ZERO CROSS-SPECIALTY POLLUTION (MANDATORY):
    - Broad categories like "Health & Wellness" or "Medical" MUST NEVER be used to justify returning an unrelated specialty. A dentist is NOT an osteopath.
    - Any candidate professional whose actual trade does not match the requested service MUST receive score 0 and be omitted from "pros".
 
-2. HONEST & HELPFUL JANE MESSAGE:
-   - When community-recommended professionals ('is_community_recommended: true') exist in the candidate list matching the requested trade, YOU MUST explicitly celebrate and present them as members of the Unlocked community in your "jane_message" (e.g. "Voici les dentistes recommandés par notre communauté Unlocked :").
+2. HONEST & HELPFUL JANE MESSAGE & DYNAMIC LANGUAGE RULE:
+   - CRITICAL LANGUAGE RULE: You MUST write your 'jane_message' response in the EXACT same language (French, Spanish, English, etc.) as the user used in their query or ongoing conversation. If the user asks in French, reply in French. If the user asks in Spanish, reply in Spanish. If the user asks in English, reply in English.
+   - When community-recommended professionals ('is_community_recommended: true') exist in the candidate list matching the requested trade, YOU MUST explicitly celebrate and present them as members of the Unlocked community in your "jane_message".
    - ONLY if there are truly NO community-recommended professionals for that specific trade in the candidate list, then state honestly that none are registered in the community yet and present the verified nearby professionals found on Google Places.
-   - Write a warm, helpful, conversational response in the SAME language as the user's query (French, Spanish, English, etc.).
-   - Directly address their question or refinement with precision and empathy.
+   - Directly address their question or refinement with precision and empathy in the user's language.
    - If a specific neighborhood/zone was detected (${targetZone?.zoneName}), gently confirm in your message that results are centered on ${targetZone?.zoneName} within 10 km.
 
 3. SELECTIVE INCLUSION & TOPICS:
@@ -876,29 +886,7 @@ ${JSON.stringify(guidesBrief, null, 2)}`,
         return { ...g, score: sc };
       }).filter((g: any) => g.score >= 40);
 
-      // GUARANTEE 1: Ensure valid community-recommended pros matching the trade query are present in prosResults
-      const validCommunityPros = proListBrief.filter((p: any) => 
-        p.is_community_recommended === true && 
-        !isTradeMismatched(placesSearchQuery || query, p.name, p.category)
-      );
-
-      validCommunityPros.forEach((cp: any, idx: number) => {
-        const cpId = String(cp.id);
-        const existing = prosResults.find((pr: any) => 
-          String(pr.id) === cpId ||
-          String(pr.id) === `google_${cpId}` ||
-          cpId === `google_${String(pr.id)}`
-        );
-        if (!existing) {
-          prosResults.push({
-            id: cpId,
-            score: 95 - idx,
-            reason: cp.bio || `Recommandé par la communauté Unlocked`
-          });
-        }
-      });
-
-      // GUARANTEE 2: Ensure valid Google Places pros matching the trade query are present in prosResults
+      // GUARANTEE: Ensure valid Google Places pros matching the trade query are present in prosResults
       const validGooglePros = googlePlacesPros.filter((p: any) => 
         !isTradeMismatched(placesSearchQuery || query, p.name, p.category)
       );
