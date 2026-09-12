@@ -347,7 +347,27 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
                   ? `${q} ${targetZone.zoneName} Valencia Spain`
                   : `${q} in Valencia Spain`);
 
-            const biasRadius = (isProximity && userLocation) ? 3000.0 : 25000.0;
+            const requestBody: any = {
+              textQuery,
+              maxResultCount: 6,
+              languageCode: "en"
+            };
+
+            if (isProximity && userLocation) {
+              requestBody.locationRestriction = {
+                circle: {
+                  center: { latitude: centerLat, longitude: centerLng },
+                  radius: 5000.0 // Strict 5 km limit around the user
+                }
+              };
+            } else {
+              requestBody.locationBias = {
+                circle: {
+                  center: { latitude: centerLat, longitude: centerLng },
+                  radius: 25000.0 // Soft 25 km bias
+                }
+              };
+            }
 
             const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
               method: "POST",
@@ -356,17 +376,7 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
                 "X-Goog-Api-Key": googleMapsKey,
                 "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.photos,places.location"
               },
-              body: JSON.stringify({
-                textQuery,
-                locationBias: {
-                  circle: {
-                    center: { latitude: centerLat, longitude: centerLng },
-                    radius: biasRadius
-                  }
-                },
-                maxResultCount: 6,
-                languageCode: "en"
-              })
+              body: JSON.stringify(requestBody)
             });
 
             if (gpResponse.ok) {
@@ -636,17 +646,51 @@ Rules:
       try {
         const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
         if (apiKey) {
+          const ai = new GoogleGenAI({ apiKey });
           const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
           let clientGooglePlacesPros: any[] = [...googlePlacesPros];
+
+          // 1. Synthesize target search query from conversation history
+          let placesSearchQuery = text;
+          if (Array.isArray(historyForApi) && historyForApi.length > 0) {
+            try {
+              const userMsgList = historyForApi
+                .filter(m => (m.role === 'user' || m.role === 'User') && m.content)
+                .map(m => m.content);
+              userMsgList.push(text);
+              
+              const fullUserIntent = userMsgList.join(" | ");
+              const responseExtract = await ai.models.generateContent({
+                model: "gemini-3.1-flash-lite",
+                contents: `Analyze this search conversation thread for local services in Valencia, Spain.
+Extract the CURRENT core trade/profession + location/neighborhood (2-6 words max in English or French) to search on Google Places.
+
+Conversation History: "${fullUserIntent}"
+
+Examples:
+- History: "Je cherche un dentiste" | "avez vous des options à Ruzafa" -> "dentiste Ruzafa"
+- History: "besoin d'un plombier à Valence" | "qui parle anglais" -> "plombier anglais"
+- History: "recherche un pédiatre" | "vers Godella" -> "pédiatre"
+
+Return ONLY the concise 2-6 word search query string.`,
+              });
+              const extractedQuery = responseExtract.text?.trim().replace(/['"]/g, '');
+              if (extractedQuery && extractedQuery.length >= 3) {
+                placesSearchQuery = extractedQuery;
+              }
+            } catch (err) {
+              console.warn("Client-side fallback error extracting query:", err);
+            }
+          }
 
           if (googleMapsKey) {
             try {
               // Extract target zone and query based on follow-up and history
-              const targetZone = detectTargetZone(text, userLocation);
+              const targetZone = detectTargetZone(placesSearchQuery, userLocation);
               const centerLat = targetZone.centerCoords.lat;
               const centerLng = targetZone.centerCoords.lng;
 
-              const normalizedQuery = text.toLowerCase();
+              const normalizedQuery = placesSearchQuery.toLowerCase();
               const isProximity = normalizedQuery.includes('autour') || 
                                   normalizedQuery.includes('proche') || 
                                   normalizedQuery.includes('near') || 
@@ -656,9 +700,9 @@ Rules:
                                   normalizedQuery.includes('me') || 
                                   normalizedQuery.includes('ici');
 
-              let cleanQuery = text;
+              let cleanQuery = placesSearchQuery;
               if (isProximity) {
-                cleanQuery = text
+                cleanQuery = placesSearchQuery
                   .replace(/autour de moi/gi, '')
                   .replace(/proche de moi/gi, '')
                   .replace(/autour/gi, '')
@@ -666,17 +710,38 @@ Rules:
                   .replace(/near me/gi, '')
                   .replace(/around me/gi, '')
                   .replace(/close to me/gi, '')
+                  .replace(/\bde\b/gi, '')
                   .trim();
-                if (!cleanQuery) cleanQuery = text;
+                if (!cleanQuery) cleanQuery = placesSearchQuery;
               }
 
               const textQuery = (isProximity && userLocation)
                 ? cleanQuery
                 : (targetZone.isSpecificZone
-                    ? `${text} ${targetZone.zoneName} Valencia Spain`
-                    : `${text} in Valencia Spain`);
+                    ? `${placesSearchQuery} ${targetZone.zoneName} Valencia Spain`
+                    : `${placesSearchQuery} in Valencia Spain`);
 
-              const biasRadius = (isProximity && userLocation) ? 3000.0 : 25000.0;
+              const requestBody: any = {
+                textQuery,
+                maxResultCount: 6,
+                languageCode: "en"
+              };
+
+              if (isProximity && userLocation) {
+                requestBody.locationRestriction = {
+                  circle: {
+                    center: { latitude: centerLat, longitude: centerLng },
+                    radius: 5000.0 // Strict 5 km radius limit
+                  }
+                };
+              } else {
+                requestBody.locationBias = {
+                  circle: {
+                    center: { latitude: centerLat, longitude: centerLng },
+                    radius: 25000.0 // Soft 25 km bias
+                  }
+                };
+              }
 
               const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
                 method: "POST",
@@ -685,17 +750,7 @@ Rules:
                   "X-Goog-Api-Key": googleMapsKey,
                   "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.photos,places.location"
                 },
-                body: JSON.stringify({
-                  textQuery,
-                  locationBias: {
-                    circle: {
-                      center: { latitude: centerLat, longitude: centerLng },
-                      radius: biasRadius
-                    }
-                  },
-                  maxResultCount: 6,
-                  languageCode: "en"
-                })
+                body: JSON.stringify(requestBody)
               });
 
               if (gpResponse.ok) {
@@ -774,7 +829,6 @@ Rules:
 
           const allCandidatePros = [...proListBrief, ...googleProsBrief];
 
-          const ai = new GoogleGenAI({ apiKey });
           const historyFormatted = historyForApi.map(m => `${m.role === 'user' ? 'User' : 'Jane'}: ${m.content}`).join('\n');
           const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" in Valencia.
 Continue the conversation to refine search results according to the user's latest follow-up.

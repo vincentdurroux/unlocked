@@ -69,9 +69,58 @@ async function startServer() {
     const centerLng = targetZone.centerCoords.lng;
 
     try {
-      const textQuery = targetZone.isSpecificZone
-        ? `${query} ${targetZone.zoneName} Valencia Spain`
-        : `${query} in Valencia Spain`;
+      const normalizedQuery = query.toLowerCase();
+      const isProximity = normalizedQuery.includes('autour') || 
+                          normalizedQuery.includes('proche') || 
+                          normalizedQuery.includes('near') || 
+                          normalizedQuery.includes('around') || 
+                          normalizedQuery.includes('close to') || 
+                          normalizedQuery.includes('moi') || 
+                          normalizedQuery.includes('me') || 
+                          normalizedQuery.includes('ici');
+
+      let cleanQuery = query;
+      if (isProximity) {
+        cleanQuery = query
+          .replace(/autour de moi/gi, '')
+          .replace(/proche de moi/gi, '')
+          .replace(/autour/gi, '')
+          .replace(/proche/gi, '')
+          .replace(/near me/gi, '')
+          .replace(/around me/gi, '')
+          .replace(/close to me/gi, '')
+          .replace(/\bde\b/gi, '')
+          .trim();
+        if (!cleanQuery) cleanQuery = query;
+      }
+
+      const textQuery = (isProximity && userLocationCoords)
+        ? cleanQuery
+        : (targetZone.isSpecificZone
+            ? `${query} ${targetZone.zoneName} Valencia Spain`
+            : `${query} in Valencia Spain`);
+
+      const requestBody: any = {
+        textQuery,
+        maxResultCount: maxResults,
+        languageCode: "en"
+      };
+
+      if (isProximity && userLocationCoords) {
+        requestBody.locationRestriction = {
+          circle: {
+            center: { latitude: centerLat, longitude: centerLng },
+            radius: 5000.0 // Strict 5 km radius
+          }
+        };
+      } else {
+        requestBody.locationBias = {
+          circle: {
+            center: { latitude: centerLat, longitude: centerLng },
+            radius: 25000.0 // Soft 25 km bias
+          }
+        };
+      }
 
       const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
         method: "POST",
@@ -80,17 +129,7 @@ async function startServer() {
           "X-Goog-Api-Key": apiKey,
           "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.photos,places.location"
         },
-        body: JSON.stringify({
-          textQuery,
-          locationBias: {
-            circle: {
-              center: { latitude: centerLat, longitude: centerLng },
-              radius: 25000.0 // 25 km radius around target center
-            }
-          },
-          maxResultCount: maxResults,
-          languageCode: "en"
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (response.ok) {

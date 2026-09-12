@@ -10536,7 +10536,27 @@ function ExploreView({
                   ? `${trimmed} ${targetZone.zoneName} Valencia Spain`
                   : `${trimmed} in Valencia Spain`);
 
-            const biasRadius = (isProximity && userLocation) ? 3000.0 : 25000.0;
+            const requestBody: any = {
+              textQuery,
+              maxResultCount: 6,
+              languageCode: "en"
+            };
+
+            if (isProximity && userLocation) {
+              requestBody.locationRestriction = {
+                circle: {
+                  center: { latitude: centerLat, longitude: centerLng },
+                  radius: 5000.0 // Strict 5 km limit around the user
+                }
+              };
+            } else {
+              requestBody.locationBias = {
+                circle: {
+                  center: { latitude: centerLat, longitude: centerLng },
+                  radius: 25000.0 // Soft 25 km bias
+                }
+              };
+            }
 
             const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
               method: "POST",
@@ -10545,17 +10565,7 @@ function ExploreView({
                 "X-Goog-Api-Key": GOOGLE_MAPS_KEY,
                 "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.photos,places.location"
               },
-              body: JSON.stringify({
-                textQuery,
-                locationBias: {
-                  circle: {
-                    center: { latitude: centerLat, longitude: centerLng },
-                    radius: biasRadius
-                  }
-                },
-                maxResultCount: 6,
-                languageCode: "en"
-              })
+              body: JSON.stringify(requestBody)
             });
 
             if (gpResponse.ok) {
