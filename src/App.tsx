@@ -10505,9 +10505,38 @@ function ExploreView({
             const targetZone = detectTargetZone(trimmed, userLocation);
             const centerLat = targetZone.centerCoords.lat;
             const centerLng = targetZone.centerCoords.lng;
-            const textQuery = targetZone.isSpecificZone
-              ? `${trimmed} ${targetZone.zoneName} Valencia Spain`
-              : `${trimmed} in Valencia Spain`;
+
+            const normalizedQuery = trimmed.toLowerCase();
+            const isProximity = normalizedQuery.includes('autour') || 
+                                normalizedQuery.includes('proche') || 
+                                normalizedQuery.includes('near') || 
+                                normalizedQuery.includes('around') || 
+                                normalizedQuery.includes('close to') || 
+                                normalizedQuery.includes('moi') || 
+                                normalizedQuery.includes('me') || 
+                                normalizedQuery.includes('ici');
+
+            let cleanQuery = trimmed;
+            if (isProximity) {
+              cleanQuery = trimmed
+                .replace(/autour de moi/gi, '')
+                .replace(/proche de moi/gi, '')
+                .replace(/autour/gi, '')
+                .replace(/proche/gi, '')
+                .replace(/near me/gi, '')
+                .replace(/around me/gi, '')
+                .replace(/close to me/gi, '')
+                .trim();
+              if (!cleanQuery) cleanQuery = trimmed;
+            }
+
+            const textQuery = (isProximity && userLocation)
+              ? cleanQuery
+              : (targetZone.isSpecificZone
+                  ? `${trimmed} ${targetZone.zoneName} Valencia Spain`
+                  : `${trimmed} in Valencia Spain`);
+
+            const biasRadius = (isProximity && userLocation) ? 3000.0 : 25000.0;
 
             const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
               method: "POST",
@@ -10521,7 +10550,7 @@ function ExploreView({
                 locationBias: {
                   circle: {
                     center: { latitude: centerLat, longitude: centerLng },
-                    radius: 25000.0
+                    radius: biasRadius
                   }
                 },
                 maxResultCount: 6,

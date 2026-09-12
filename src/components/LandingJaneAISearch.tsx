@@ -316,9 +316,38 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
             const targetZone = detectTargetZone(q, userLocation);
             const centerLat = targetZone.centerCoords.lat;
             const centerLng = targetZone.centerCoords.lng;
-            const textQuery = targetZone.isSpecificZone
-              ? `${q} ${targetZone.zoneName} Valencia Spain`
-              : `${q} in Valencia Spain`;
+
+            const normalizedQuery = q.toLowerCase();
+            const isProximity = normalizedQuery.includes('autour') || 
+                                normalizedQuery.includes('proche') || 
+                                normalizedQuery.includes('near') || 
+                                normalizedQuery.includes('around') || 
+                                normalizedQuery.includes('close to') || 
+                                normalizedQuery.includes('moi') || 
+                                normalizedQuery.includes('me') || 
+                                normalizedQuery.includes('ici');
+
+            let cleanQuery = q;
+            if (isProximity) {
+              cleanQuery = q
+                .replace(/autour de moi/gi, '')
+                .replace(/proche de moi/gi, '')
+                .replace(/autour/gi, '')
+                .replace(/proche/gi, '')
+                .replace(/near me/gi, '')
+                .replace(/around me/gi, '')
+                .replace(/close to me/gi, '')
+                .trim();
+              if (!cleanQuery) cleanQuery = q;
+            }
+
+            const textQuery = (isProximity && userLocation)
+              ? cleanQuery
+              : (targetZone.isSpecificZone
+                  ? `${q} ${targetZone.zoneName} Valencia Spain`
+                  : `${q} in Valencia Spain`);
+
+            const biasRadius = (isProximity && userLocation) ? 3000.0 : 25000.0;
 
             const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
               method: "POST",
@@ -332,7 +361,7 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
                 locationBias: {
                   circle: {
                     center: { latitude: centerLat, longitude: centerLng },
-                    radius: 25000.0
+                    radius: biasRadius
                   }
                 },
                 maxResultCount: 6,
@@ -616,9 +645,38 @@ Rules:
               const targetZone = detectTargetZone(text, userLocation);
               const centerLat = targetZone.centerCoords.lat;
               const centerLng = targetZone.centerCoords.lng;
-              const textQuery = targetZone.isSpecificZone
-                ? `${text} ${targetZone.zoneName} Valencia Spain`
-                : `${text} in Valencia Spain`;
+
+              const normalizedQuery = text.toLowerCase();
+              const isProximity = normalizedQuery.includes('autour') || 
+                                  normalizedQuery.includes('proche') || 
+                                  normalizedQuery.includes('near') || 
+                                  normalizedQuery.includes('around') || 
+                                  normalizedQuery.includes('close to') || 
+                                  normalizedQuery.includes('moi') || 
+                                  normalizedQuery.includes('me') || 
+                                  normalizedQuery.includes('ici');
+
+              let cleanQuery = text;
+              if (isProximity) {
+                cleanQuery = text
+                  .replace(/autour de moi/gi, '')
+                  .replace(/proche de moi/gi, '')
+                  .replace(/autour/gi, '')
+                  .replace(/proche/gi, '')
+                  .replace(/near me/gi, '')
+                  .replace(/around me/gi, '')
+                  .replace(/close to me/gi, '')
+                  .trim();
+                if (!cleanQuery) cleanQuery = text;
+              }
+
+              const textQuery = (isProximity && userLocation)
+                ? cleanQuery
+                : (targetZone.isSpecificZone
+                    ? `${text} ${targetZone.zoneName} Valencia Spain`
+                    : `${text} in Valencia Spain`);
+
+              const biasRadius = (isProximity && userLocation) ? 3000.0 : 25000.0;
 
               const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
                 method: "POST",
@@ -632,7 +690,7 @@ Rules:
                   locationBias: {
                     circle: {
                       center: { latitude: centerLat, longitude: centerLng },
-                      radius: 25000.0
+                      radius: biasRadius
                     }
                   },
                   maxResultCount: 6,
