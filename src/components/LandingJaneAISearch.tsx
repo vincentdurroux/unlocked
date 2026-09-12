@@ -979,12 +979,60 @@ STRICT TRADE COHERENCE:
 
   // Find full objects and sort via 3-Tier priority system:
   // 1. App recommended pros within 25 km
-  // 2. Google Places pros within 25 km (highest rated first)
+  // 2. Google Places pros within 25 km (closest distance first, strictly max 6)
   // 3. Other pros (> 25 km)
-  const rawMatchedPros = (searchResult?.pros || []).map(match => {
-    const pro = combinedPros.find(p => String(p.id) === String(match.id));
-    return pro ? { ...pro, matchReason: match.reason, matchScore: match.score } : null;
-  }).filter(Boolean) as (Professional & { matchReason: string; matchScore: number })[];
+  const rawMatchedPros = useMemo(() => {
+    const list: (Professional & { matchReason: string; matchScore: number })[] = [];
+    const addedIds = new Set<string>();
+
+    // 1. First include matching pros from searchResult.pros
+    (searchResult?.pros || []).forEach(match => {
+      let sc = typeof match.score === 'number' ? match.score : 0;
+      if (sc > 0 && sc <= 10) sc = sc * 10;
+      if (sc >= 40) {
+        const matchIdStr = String(match.id);
+        const pro = combinedPros.find(p => 
+          String(p.id) === matchIdStr ||
+          String(p.id) === `google_${matchIdStr}` ||
+          matchIdStr === `google_${String(p.id)}`
+        );
+        if (pro && !addedIds.has(String(pro.id))) {
+          addedIds.add(String(pro.id));
+          list.push({ ...pro, matchReason: match.reason, matchScore: sc });
+        }
+      }
+    });
+
+    // 2. Guarantee all valid Google Places pros from searchResult or state are included if not trade-mismatched
+    const gpList = (searchResult?.google_places_pros && searchResult.google_places_pros.length > 0)
+      ? searchResult.google_places_pros
+      : (googlePlacesPros || []);
+
+    gpList.forEach((gp, idx) => {
+      const gpId = String(gp.id);
+      const isAlreadyInList = addedIds.has(gpId) || 
+                              addedIds.has(`google_${gpId}`) || 
+                              (gpId.startsWith('google_') && addedIds.has(gpId.replace(/^google_/, '')));
+      if (!isAlreadyInList) {
+        const fullPro = combinedPros.find(p => 
+          String(p.id) === gpId ||
+          String(p.id) === `google_${gpId}` ||
+          gpId === `google_${String(p.id)}`
+        ) || gp;
+
+        if (!isTradeMismatched(query || '', fullPro.name, fullPro.category)) {
+          addedIds.add(gpId);
+          list.push({
+            ...fullPro,
+            matchReason: fullPro.bio || (fullPro.distanceKm !== null ? `Professionnel situé à ${fullPro.distanceKm} km` : `Professionnel à Valence`),
+            matchScore: 75 - idx
+          });
+        }
+      }
+    });
+
+    return list;
+  }, [searchResult, combinedPros, googlePlacesPros, query]);
 
   const matchedPros = useMemo(() => {
     const centerCoords = activeTargetZone.centerCoords;
@@ -1006,8 +1054,8 @@ STRICT TRADE COHERENCE:
   const hasGuides = matchedGuides.length > 0;
   const totalResultsCount = matchedPros.length + matchedEvents.length + matchedGuides.length;
 
-  // Max 2 results by default, full list when expanded
-  const displayedPros = showAllPros ? matchedPros : matchedPros.slice(0, 2);
+  // Display all matched pros up to 6 by default (full list when expanded)
+  const displayedPros = showAllPros ? matchedPros : matchedPros.slice(0, 6);
   const displayedEvents = showAllEvents ? matchedEvents : matchedEvents.slice(0, 2);
   const displayedGuides = showAllGuides ? matchedGuides : matchedGuides.slice(0, 2);
 

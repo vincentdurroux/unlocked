@@ -10874,7 +10874,8 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
       let highestScore = 0;
 
       rawResults.forEach((item: any) => {
-        const sc = typeof item.score === 'number' ? item.score : 0;
+        let sc = typeof item.score === 'number' ? item.score : 0;
+        if (sc > 0 && sc <= 10) sc = sc * 10;
         if (sc > highestScore) highestScore = sc;
         resultsDict[String(item.id)] = {
           score: sc,
@@ -10893,16 +10894,24 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         );
         const top6 = validGooglePros.slice(0, 6);
         setGooglePlacesPros(top6);
-        top6.forEach((p: any) => {
+        top6.forEach((p: any, idx: number) => {
           const proIdStr = String(p.id);
-          // Only add default score if not already evaluated (or scored 0) by Gemini
-          if (!resultsDict[proIdStr]) {
+          // Ensure valid Google Places pros always have a positive score so they are never filtered out
+          if (!resultsDict[proIdStr] || resultsDict[proIdStr].score <= 0) {
             resultsDict[proIdStr] = {
-              score: 75,
-              reason: `Google Places • ${p.location || 'Valencia'}`
+              score: 75 - idx,
+              reason: p.distanceKm !== null
+                ? `Google Places • à ${p.distanceKm} km`
+                : `Google Places • ${p.location || 'Valence'}`
             };
           }
+          if (resultsDict[proIdStr].score > highestScore) {
+            highestScore = resultsDict[proIdStr].score;
+          }
         });
+        if (top6.length > 0) {
+          exactMatch = true;
+        }
       } else {
         setGooglePlacesPros([]);
       }
@@ -11180,11 +11189,14 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         
         let matchesDistance = true;
         if (maxDistance !== 'All' && userLocation) {
-          if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
-            const dist = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
-            matchesDistance = dist <= (maxDistance as number);
-          } else {
-            matchesDistance = false;
+          const isUserNearValencia = getDistance(userLocation.lat, userLocation.lng, 39.4699, -0.3763) <= 80;
+          if (isUserNearValencia) {
+            if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
+              const dist = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
+              matchesDistance = dist <= (maxDistance as number);
+            } else {
+              matchesDistance = false;
+            }
           }
         }
 

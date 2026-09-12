@@ -169,10 +169,15 @@ export function detectTargetZone(
   query: string,
   userLocation?: Coordinates | null
 ): { centerCoords: Coordinates; zoneName: string; isSpecificZone: boolean } {
+  const isNearbyValencia = userLocation && calculateDistanceKm(
+    userLocation.lat, userLocation.lng,
+    DEFAULT_VALENCIA_CENTER.lat, DEFAULT_VALENCIA_CENTER.lng
+  )! <= 80;
+
   if (!query || typeof query !== 'string') {
     return {
-      centerCoords: userLocation || DEFAULT_VALENCIA_CENTER,
-      zoneName: userLocation ? "Your location" : "Valencia",
+      centerCoords: (isNearbyValencia && userLocation) ? userLocation : DEFAULT_VALENCIA_CENTER,
+      zoneName: (isNearbyValencia && userLocation) ? "Your location" : "Valencia",
       isSpecificZone: false
     };
   }
@@ -193,10 +198,10 @@ export function detectTargetZone(
     }
   }
 
-  // Default to user location if available, otherwise central Valencia
+  // Default to user location if within Valencia area (<80km), otherwise central Valencia
   return {
-    centerCoords: userLocation || DEFAULT_VALENCIA_CENTER,
-    zoneName: userLocation ? "Your location" : "Valencia",
+    centerCoords: (isNearbyValencia && userLocation) ? userLocation : DEFAULT_VALENCIA_CENTER,
+    zoneName: (isNearbyValencia && userLocation) ? "Your location" : "Valencia",
     isSpecificZone: false
   };
 }
@@ -287,11 +292,27 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
   });
 
   // Strict limit of maximum 6 Google Places pros
-  const cappedTier2 = tier2.slice(0, 6);
+  let cappedTier2 = tier2.slice(0, 6);
+
+  // If no Google Places pros were within radiusKm, but some exist in tier3, promote up to 6 closest
+  if (cappedTier2.length === 0) {
+    const tier3Google = tier3.filter(p => !isCommunity(p));
+    if (tier3Google.length > 0) {
+      tier3Google.sort((a, b) => {
+        const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+        const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+        return distA - distB;
+      });
+      cappedTier2 = tier3Google.slice(0, 6);
+    }
+  }
 
   // Tier 3 sorting: Other pros (> 25km)
-  // Sub-sorted by Community first, then closest distance
-  tier3.sort((a, b) => {
+  // Sub-sorted by Community first, then closest distance (excluding pros already included in cappedTier2)
+  const cappedTier2Ids = new Set(cappedTier2.map(p => String(p.id)));
+  const remainingTier3 = tier3.filter(p => !cappedTier2Ids.has(String(p.id)));
+
+  remainingTier3.sort((a, b) => {
     const aComm = isCommunity(a) ? 1 : 0;
     const bComm = isCommunity(b) ? 1 : 0;
     if (aComm !== bComm) return bComm - aComm;
@@ -301,7 +322,7 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
     return distA - distB;
   });
 
-  return [...tier1, ...cappedTier2, ...tier3];
+  return [...tier1, ...cappedTier2, ...remainingTier3];
 }
 
 // Clean conversational and proximity phrases from user query for trade searches

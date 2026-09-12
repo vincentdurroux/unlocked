@@ -444,10 +444,47 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         summaryMessage = parsedData.summaryMessage || null;
       }
 
+      // Normalize scores if Gemini scaled down (e.g., 1-5 or 1-10)
+      results = results.map((r: any) => {
+        let sc = typeof r.score === 'number' ? r.score : 0;
+        if (sc > 0 && sc <= 10) sc = sc * 10;
+        return { ...r, score: sc };
+      });
+
+      // Guarantee that valid Google Places pros matching the trade are included with positive scores
+      const validGooglePros = googlePlacesPros.filter((p: any) => 
+        !isTradeMismatched(query, p.name, p.category)
+      );
+
+      validGooglePros.forEach((gp: any, idx: number) => {
+        const gpId = String(gp.id);
+        const existing = results.find((r: any) => 
+          String(r.id) === gpId ||
+          String(r.id) === `google_${gpId}` ||
+          gpId === `google_${String(r.id)}`
+        );
+        if (!existing || (existing.score || 0) < 40) {
+          if (existing) {
+            existing.score = 75 - idx;
+            if (!existing.reasonUrlExcerpt) {
+              existing.reasonUrlExcerpt = gp.bio || (gp.distanceKm !== null ? `Établissement situé à ${gp.distanceKm} km` : `Établissement situé à ${gp.location || 'Valence'}`);
+            }
+          } else {
+            results.push({
+              id: gpId,
+              score: 75 - idx,
+              reasonUrlExcerpt: gp.bio || (gp.distanceKm !== null ? `Établissement situé à ${gp.distanceKm} km` : `Établissement situé à ${gp.location || 'Valence'}`)
+            });
+          }
+        }
+      });
+
       // Verify if any pro has a match score (>= 40)
       const hasStrongMatch = results.some((r: any) => (r.score || 0) >= 40);
       if (!hasStrongMatch) {
         exactMatchFound = false;
+      } else {
+        exactMatchFound = true;
       }
 
       return res.json({
@@ -778,9 +815,47 @@ ${JSON.stringify(guidesBrief, null, 2)}`,
 
       const parsedData = JSON.parse(response.text || "{}");
       
-      const prosResults = Array.isArray(parsedData.pros) ? parsedData.pros.filter((p: any) => (p.score || 0) >= 40) : [];
-      const eventsResults = Array.isArray(parsedData.events) ? parsedData.events.filter((e: any) => (e.score || 0) >= 40) : [];
-      const guidesResults = Array.isArray(parsedData.guides) ? parsedData.guides.filter((g: any) => (g.score || 0) >= 40) : [];
+      const rawPros = Array.isArray(parsedData.pros) ? parsedData.pros : [];
+      const prosResults = rawPros.map((p: any) => {
+        let sc = typeof p.score === 'number' ? p.score : 0;
+        if (sc > 0 && sc <= 10) sc = sc * 10;
+        return { ...p, score: sc };
+      }).filter((p: any) => p.score >= 40);
+
+      const rawEvents = Array.isArray(parsedData.events) ? parsedData.events : [];
+      const eventsResults = rawEvents.map((e: any) => {
+        let sc = typeof e.score === 'number' ? e.score : 0;
+        if (sc > 0 && sc <= 10) sc = sc * 10;
+        return { ...e, score: sc };
+      }).filter((e: any) => e.score >= 40);
+
+      const rawGuides = Array.isArray(parsedData.guides) ? parsedData.guides : [];
+      const guidesResults = rawGuides.map((g: any) => {
+        let sc = typeof g.score === 'number' ? g.score : 0;
+        if (sc > 0 && sc <= 10) sc = sc * 10;
+        return { ...g, score: sc };
+      }).filter((g: any) => g.score >= 40);
+
+      // GUARANTEE: Ensure valid Google Places pros matching the trade query are present in prosResults
+      const validGooglePros = googlePlacesPros.filter((p: any) => 
+        !isTradeMismatched(placesSearchQuery || query, p.name, p.category)
+      );
+
+      validGooglePros.forEach((gp: any, idx: number) => {
+        const gpId = String(gp.id);
+        const existing = prosResults.find((pr: any) => 
+          String(pr.id) === gpId ||
+          String(pr.id) === `google_${gpId}` ||
+          gpId === `google_${String(pr.id)}`
+        );
+        if (!existing) {
+          prosResults.push({
+            id: gpId,
+            score: 75 - idx,
+            reason: gp.bio || (gp.distanceKm !== null ? `${gp.category || 'Professionnel'} situé à ${gp.distanceKm} km` : `${gp.category || 'Professionnel'} à Valence`)
+          });
+        }
+      });
 
       const effectiveTopics: string[] = [];
       if (prosResults.length > 0) effectiveTopics.push("pros");
