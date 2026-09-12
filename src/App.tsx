@@ -10432,49 +10432,62 @@ function ExploreView({
       let data = null;
       let serverFailed = false;
 
-      try {
-        const briefPros = allPros.map((p: any) => ({
-          id: String(p.id),
-          name: p.name,
-          company_name: p.company_name || "",
-          category: p.category || p.profession || "",
-          categories: p.categories || [],
-          bio: p.bio || p.description || "",
-          top_qualities: p.top_qualities || [],
-          languages: p.languages || [],
-          rating: p.rating || 0,
-          location: p.location || ""
-        }));
+      const isVercelHost = typeof window !== 'undefined' && (
+        window.location.hostname.includes("vercel.app") || 
+        window.location.hostname.includes("vercel") ||
+        (!window.location.hostname.includes("run.app") && 
+         !window.location.hostname.includes("aistudio") && 
+         window.location.hostname !== "localhost" && 
+         window.location.hostname !== "127.0.0.1")
+      );
 
-        const response = await fetch("/api/ai-search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: trimmed, professionals: briefPros, userLocation }),
-        });
-        
-        if (response.status === 404 || response.status === 405) {
-          serverFailed = true;
-        } else if (!response.ok) {
-          if (response.status === 429) {
-            throw new Error("Jane is not available at the moment. Please use manual search in the pages");
-          }
-          try {
-            const errJson = await response.json();
-            if (errJson && errJson.error) {
-              throw new Error(errJson.error);
-            }
-          } catch (e: any) {
-            if (e.message && (e.message.includes("Jane is") || e.message.includes("Jane est très sollicitée"))) {
-              throw e;
-            }
-          }
-          throw new Error("Sorry, an error occurred during AI search.");
-        } else {
-          data = await response.json();
-        }
-      } catch (fetchErr) {
-        console.warn("[Search] Server search failed or is unavailable, attempting client fallback:", fetchErr);
+      if (isVercelHost) {
         serverFailed = true;
+      } else {
+        try {
+          const briefPros = allPros.map((p: any) => ({
+            id: String(p.id),
+            name: p.name,
+            company_name: p.company_name || "",
+            category: p.category || p.profession || "",
+            categories: p.categories || [],
+            bio: p.bio || p.description || "",
+            top_qualities: p.top_qualities || [],
+            languages: p.languages || [],
+            rating: p.rating || 0,
+            location: p.location || ""
+          }));
+
+          const response = await fetch("/api/ai-search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: trimmed, professionals: briefPros, userLocation }),
+          });
+          
+          if (response.status === 404 || response.status === 405) {
+            serverFailed = true;
+          } else if (!response.ok) {
+            if (response.status === 429) {
+              throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+            }
+            try {
+              const errJson = await response.json();
+              if (errJson && errJson.error) {
+                throw new Error(errJson.error);
+              }
+            } catch (e: any) {
+              if (e.message && (e.message.includes("Jane is") || e.message.includes("Jane est très sollicitée"))) {
+                throw e;
+              }
+            }
+            throw new Error("Sorry, an error occurred during AI search.");
+          } else {
+            data = await response.json();
+          }
+        } catch (fetchErr) {
+          console.warn("[Search] Server search failed or is unavailable, attempting client fallback:", fetchErr);
+          serverFailed = true;
+        }
       }
 
       let clientGooglePlacesPros: any[] = [];
@@ -10581,6 +10594,26 @@ function ExploreView({
           location: p.location || ""
         }));
 
+        const googleProsBrief = clientGooglePlacesPros.map((p: any) => ({
+          id: String(p.id),
+          name: p.name,
+          company_name: p.company_name || "",
+          category: p.category || "Professional",
+          categories: [p.category || "Professional"],
+          bio: p.bio || "",
+          top_qualities: [],
+          languages: [],
+          rating: p.rating || 0,
+          location: p.location || "Valencia",
+          distanceKm: p.distanceKm || null,
+          website: p.website || "",
+          googleMapsUri: p.googleMapsUri || "",
+          is_community_recommended: false,
+          source: 'google_places'
+        }));
+
+        const allCandidatePros = [...proListBrief, ...googleProsBrief];
+
         const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals.
 Your purpose is to examine the user's natural language request and return the most relevant matching professionals.
 
@@ -10620,7 +10653,7 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
           contents: `User Query: "${trimmed}"
 
 Professionals:
-${JSON.stringify(proListBrief, null, 2)}`,
+${JSON.stringify(allCandidatePros, null, 2)}`,
           config: {
             systemInstruction: sysInstruction,
             responseMimeType: "application/json",
@@ -10652,6 +10685,22 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         });
 
         const parsedContent = JSON.parse(response.text || "{}");
+        
+        // Ensure Google Places pros are in the results array
+        if (!Array.isArray(parsedContent.results)) {
+          parsedContent.results = [];
+        }
+        clientGooglePlacesPros.forEach((gp: any) => {
+          const alreadyMatched = parsedContent.results.some((r: any) => String(r.id) === String(gp.id));
+          if (!alreadyMatched) {
+            parsedContent.results.push({
+              id: String(gp.id),
+              score: Math.round((gp.rating || 4.5) * 20),
+              reasonUrlExcerpt: `Discovered nearby: ${gp.name} is a highly-rated ${gp.category || 'professional'} with ${gp.reviews_count || 0} reviews.`
+            });
+          }
+        });
+
         parsedContent.google_places_pros = clientGooglePlacesPros;
         data = parsedContent;
       }
@@ -10689,6 +10738,15 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
       if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
         setGooglePlacesPros(data.google_places_pros);
+        data.google_places_pros.forEach((p: any) => {
+          const proIdStr = String(p.id);
+          if (!resultsDict[proIdStr]) {
+            resultsDict[proIdStr] = {
+              score: Math.round((p.rating || 4.5) * 20),
+              reason: `Recommandé par Google Places (${p.reviews_count || 0} avis) • ${p.category || 'Professionnel'}`
+            };
+          }
+        });
       } else {
         setGooglePlacesPros([]);
       }

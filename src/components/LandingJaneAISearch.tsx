@@ -265,28 +265,39 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
     let success = false;
     let data: AISearchResponse | null = null;
 
-    try {
-      const response = await fetch("/api/ai-multi-search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: q,
-          professionals: proListBrief,
-          events: eventsBrief,
-          guides: guidesBrief,
-          conversationHistory: [],
-          userLocation: userLocation || null
-        }),
-      });
+    const isVercelHost = typeof window !== 'undefined' && (
+      window.location.hostname.includes("vercel.app") || 
+      window.location.hostname.includes("vercel") ||
+      (!window.location.hostname.includes("run.app") && 
+       !window.location.hostname.includes("aistudio") && 
+       window.location.hostname !== "localhost" && 
+       window.location.hostname !== "127.0.0.1")
+    );
 
-      if (response.ok) {
-        data = await response.json();
-        success = true;
-      } else if (response.status === 429) {
-        throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+    if (!isVercelHost) {
+      try {
+        const response = await fetch("/api/ai-multi-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: q,
+            professionals: proListBrief,
+            events: eventsBrief,
+            guides: guidesBrief,
+            conversationHistory: [],
+            userLocation: userLocation || null
+          }),
+        });
+
+        if (response.ok) {
+          data = await response.json();
+          success = true;
+        } else if (response.status === 429) {
+          throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+        }
+      } catch (err: any) {
+        console.warn("Server AI multi-search failed, attempting client fallback:", err);
       }
-    } catch (err: any) {
-      console.warn("Server AI multi-search failed, attempting client fallback:", err);
     }
 
     // Client-side fallback if server fails
@@ -379,6 +390,26 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
           }
         }
 
+        const googleProsBrief = clientGooglePlacesPros.map((p: any) => ({
+          id: String(p.id),
+          name: p.name,
+          company_name: p.company_name || "",
+          category: p.category || "Professional",
+          categories: [p.category || "Professional"],
+          bio: p.bio || "",
+          top_qualities: [],
+          languages: [],
+          rating: p.rating || 0,
+          location: p.location || "Valencia",
+          distanceKm: p.distanceKm || null,
+          website: p.website || "",
+          googleMapsUri: p.googleMapsUri || "",
+          is_community_recommended: false,
+          source: 'google_places'
+        }));
+
+        const allCandidatePros = [...proListBrief, ...googleProsBrief];
+
         const ai = new GoogleGenAI({ apiKey });
         const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" in Valencia.
 Match items selectively across pros, events, and guides for the user query.
@@ -390,7 +421,7 @@ Rules:
 
         const response = await ai.models.generateContent({
           model: "gemini-3.1-flash-lite",
-          contents: `Query: "${q}"\nPros: ${JSON.stringify(proListBrief.slice(0, 30))}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
+          contents: `Query: "${q}"\nPros: ${JSON.stringify(allCandidatePros.slice(0, 45))}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
           config: {
             systemInstruction: sysInstruction,
             responseMimeType: "application/json",
@@ -444,6 +475,19 @@ Rules:
 
         const parsed = JSON.parse(response.text || "{}");
         const prosResults = (parsed.pros || []).filter((p: any) => (p.score || 0) >= 40);
+        
+        // Auto-add Google Places pros if not explicitly matched by Gemini
+        clientGooglePlacesPros.forEach((gp: any) => {
+          const alreadyMatched = prosResults.some((pr: any) => String(pr.id) === String(gp.id));
+          if (!alreadyMatched) {
+            prosResults.push({
+              id: String(gp.id),
+              score: Math.round((gp.rating || 4.5) * 20),
+              reason: `Discovered nearby: ${gp.name} is a highly-rated ${gp.category || 'professional'} with ${gp.reviews_count || 0} reviews.`
+            });
+          }
+        });
+
         const eventsResults = (parsed.events || []).filter((e: any) => (e.score || 0) >= 40);
         const guidesResults = (parsed.guides || []).filter((g: any) => (g.score || 0) >= 40);
 
@@ -523,29 +567,40 @@ Rules:
     let success = false;
     let data: AISearchResponse | null = null;
 
-    try {
-      const response = await fetch("/api/ai-multi-search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: text,
-          professionals: proListBrief,
-          googlePlacesPros: googlePlacesPros,
-          events: eventsBrief,
-          guides: guidesBrief,
-          conversationHistory: historyForApi,
-          userLocation: userLocation || null
-        }),
-      });
+    const isVercelHost = typeof window !== 'undefined' && (
+      window.location.hostname.includes("vercel.app") || 
+      window.location.hostname.includes("vercel") ||
+      (!window.location.hostname.includes("run.app") && 
+       !window.location.hostname.includes("aistudio") && 
+       window.location.hostname !== "localhost" && 
+       window.location.hostname !== "127.0.0.1")
+    );
 
-      if (response.ok) {
-        data = await response.json();
-        success = true;
-      } else if (response.status === 429) {
-        throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+    if (!isVercelHost) {
+      try {
+        const response = await fetch("/api/ai-multi-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: text,
+            professionals: proListBrief,
+            googlePlacesPros: googlePlacesPros,
+            events: eventsBrief,
+            guides: guidesBrief,
+            conversationHistory: historyForApi,
+            userLocation: userLocation || null
+          }),
+        });
+
+        if (response.ok) {
+          data = await response.json();
+          success = true;
+        } else if (response.status === 429) {
+          throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+        }
+      } catch (err: any) {
+        console.warn("Server AI follow-up search failed, fallback:", err);
       }
-    } catch (err: any) {
-      console.warn("Server AI follow-up search failed, fallback:", err);
     }
 
     if (!success) {
