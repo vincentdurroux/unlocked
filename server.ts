@@ -65,8 +65,12 @@ async function startServer() {
 
     if (!apiKey || !query.trim()) return { places: [], targetZone };
 
-    const centerLat = targetZone.centerCoords.lat;
-    const centerLng = targetZone.centerCoords.lng;
+    const centerCoords = targetZone.isSpecificZone
+      ? targetZone.centerCoords
+      : (userLocationCoords || DEFAULT_VALENCIA_CENTER);
+
+    const centerLat = centerCoords.lat;
+    const centerLng = centerCoords.lng;
 
     try {
       const normalizedQuery = query.toLowerCase();
@@ -94,19 +98,19 @@ async function startServer() {
         if (!cleanQuery) cleanQuery = query;
       }
 
-      const textQuery = (isProximity && userLocationCoords)
-        ? cleanQuery
-        : (targetZone.isSpecificZone
-            ? `${query} ${targetZone.zoneName} Valencia Spain`
-            : `${query} in Valencia Spain`);
+      // If user asked for a specific zone (e.g. Ruzafa, Paterna), search that zone.
+      // Otherwise, search clean query biased tightly to GPS position (never hardcode Valencia center).
+      const textQuery = targetZone.isSpecificZone
+        ? `${cleanQuery} ${targetZone.zoneName} Valencia Spain`
+        : (userLocationCoords ? cleanQuery : `${cleanQuery} in Valencia Spain`);
 
       const requestBody: any = {
         textQuery,
-        maxResultCount: maxResults,
+        maxResultCount: 20, // Request wider pool to pick the closest 6
         languageCode: "en"
       };
 
-      const biasRadius = (isProximity && userLocationCoords) ? 3000.0 : 25000.0;
+      const biasRadius = targetZone.isSpecificZone ? 5000.0 : (userLocationCoords ? 5000.0 : 25000.0);
 
       requestBody.locationBias = {
         circle: {
@@ -171,14 +175,15 @@ async function startServer() {
           };
         });
 
-        // Sort Google Places by highest rated first within 10 km
+        // Strictly sort by closest distance to user GPS (or specific requested zone)
+        // No priority for ratings or review counts, and never more than 6 pros!
         formatted.sort((a: any, b: any) => {
-          const ratingDiff = (b.rating || 0) - (a.rating || 0);
-          if (Math.abs(ratingDiff) > 0.05) return ratingDiff;
-          return (b.reviews_count || 0) - (a.reviews_count || 0);
+          const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+          const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+          return distA - distB;
         });
 
-        return { places: formatted.slice(0, maxResults), targetZone };
+        return { places: formatted.slice(0, Math.min(maxResults, 6)), targetZone };
       }
     } catch (err) {
       console.warn("[Google Places API] Direct search failed, attempting AI grounding fallback:", err);
@@ -245,9 +250,13 @@ Return real establishments with accurate names, addresses, and accurate latitude
         };
       });
 
-      // Sort by highest rating first
-      formatted.sort((a: any, b: any) => (b.rating || 0) - (a.rating || 0) || (b.reviews_count || 0) - (a.reviews_count || 0));
-      return { places: formatted.slice(0, maxResults), targetZone };
+      // Strictly sort by closest distance first, max 6
+      formatted.sort((a: any, b: any) => {
+        const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+        const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+        return distA - distB;
+      });
+      return { places: formatted.slice(0, Math.min(maxResults, 6)), targetZone };
     } catch (fallbackErr) {
       console.error("[Google Places Fallback] Error:", fallbackErr);
       return { places: [], targetZone };
@@ -387,7 +396,7 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
 
 2. 3-TIER RANKING PRIORITY SYSTEM (MANDATORY ORDERING):
    - TIER 1 (Highest Priority): Recommended App Professionals ('is_community_recommended: true' or community source) WITHIN 25 KM of the target area (${targetZone?.zoneName}). Give score 85-100.
-   - TIER 2: Google Places professionals ('source: google_places') WITHIN 25 KM of the target area (${targetZone?.zoneName}). Order by HIGHEST RATED FIRST (score 60-80).
+   - TIER 2: Google Places professionals ('source: google_places'): Up to 6 provided, sorted SOLELY by closest distance to user location (closest first). Do NOT sort or prioritize by rating or reviews (score 60-80).
    - TIER 3: Other matching professionals further than 25 km away (score 40-55).
 
 3. PRESENTATION TONE & REASONS:
@@ -511,15 +520,17 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
 
           const qExtract = await getAiClient().models.generateContent({
             model: "gemini-3.1-flash-lite",
-            contents: `Analyze this search conversation thread for local services in Valencia, Spain.
-Extract the CURRENT core trade/profession + location/neighborhood (2-6 words max in English or French) to search on Google Places.
+            contents: `Analyze this search conversation thread for local services.
+Extract the CURRENT core trade/profession + location/neighborhood (ONLY if explicitly specified by user) (2-6 words max in English or French) to search on Google Places.
+CRITICAL: Do NOT append any neighborhood or city name (like Valencia, Ruzafa, etc.) unless the user EXPLICITLY typed that specific location in their messages!
 
 Conversation History: "${fullUserIntent}"
 
 Examples:
-- History: "Je cherche un dentiste" | "avez vous des options à Ruzafa" -> "dentiste Ruzafa"
-- History: "besoin d'un plombier à Valence" | "qui parle anglais" -> "plombier anglais Valencia"
-- History: "recherche un pédiatre" | "vers Godella" -> "pédiatre Godella"
+- History: "Je cherche un dentiste" | "avez vous des options proches" -> "dentiste"
+- History: "besoin d'un plombier" | "qui parle anglais" -> "plombier anglais"
+- History: "recherche un pédiatre à Bétera" -> "pédiatre Bétera"
+- History: "un avocat fiscaliste" -> "avocat fiscaliste"
 
 Return ONLY the concise 2-6 word search query string.`,
             config: {
@@ -539,7 +550,7 @@ Return ONLY the concise 2-6 word search query string.`,
         }
       }
 
-      // 2. Fetch live Google Places results in target zone/Valencia (up to 6 max)
+      // 2. Fetch live Google Places results in target zone/user location (up to 6 max, closest first)
       let newlyFetchedPlaces: any[] = [];
       let targetZone: any = null;
 
@@ -551,6 +562,10 @@ Return ONLY the concise 2-6 word search query string.`,
         console.warn("[Google Places] Error during multi-search fetch:", gpErr);
         targetZone = detectTargetZone(placesSearchQuery, userLocation);
       }
+
+      const centerCoords = targetZone?.isSpecificZone
+        ? targetZone.centerCoords
+        : (userLocation || DEFAULT_VALENCIA_CENTER);
 
       // 3. Merge existing client Google Places pros with newly fetched ones
       const combinedPlacesMap = new Map<string, any>();
@@ -564,9 +579,24 @@ Return ONLY the concise 2-6 word search query string.`,
           if (p && p.id) combinedPlacesMap.set(String(p.id), p);
         });
       }
-      const googlePlacesPros = Array.from(combinedPlacesMap.values());
 
-      const centerCoords = targetZone ? targetZone.centerCoords : DEFAULT_VALENCIA_CENTER;
+      const rawGooglePlacesPros = Array.from(combinedPlacesMap.values()).map((p: any) => {
+        let lat = p.coordinates?.lat ?? p.lat;
+        let lng = p.coordinates?.lng ?? p.lng;
+        const dist = (typeof lat === 'number' && typeof lng === 'number')
+          ? calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng)
+          : (p.distanceKm ?? null);
+        return { ...p, distanceKm: dist };
+      });
+
+      // Strict user rule: "Supprime les ordres de priorité des pros de google places. La seule regle est les plus proches de ma position gps en premier sauf si une demande particuliere d'emplacement est demandée par l'utilisateur. Et pas plus de 6 pros de google places données"
+      rawGooglePlacesPros.sort((a, b) => {
+        const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+        const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+        return distA - distB;
+      });
+
+      const googlePlacesPros = rawGooglePlacesPros.slice(0, 6);
 
       // Format community pros with distance
       const proListBrief = professionals.slice(0, 50).map((p: any) => {
@@ -591,7 +621,7 @@ Return ONLY the concise 2-6 word search query string.`,
         };
       });
 
-      // Format Google Places brief items
+      // Format Google Places brief items (strictly max 6, ordered by closest distance)
       const googleProsBrief = googlePlacesPros.map((p: any) => {
         let lat = p.coordinates?.lat ?? p.lat;
         let lng = p.coordinates?.lng ?? p.lng;
@@ -618,20 +648,7 @@ Return ONLY the concise 2-6 word search query string.`,
 
       // Combine both lists for Gemini matching
       const allCandidatePros = [...proListBrief, ...googleProsBrief];
-
-      const normalizedQuery = query.toLowerCase();
-      const isProximity = normalizedQuery.includes('autour') || 
-                          normalizedQuery.includes('proche') || 
-                          normalizedQuery.includes('near') || 
-                          normalizedQuery.includes('around') || 
-                          normalizedQuery.includes('close to') || 
-                          normalizedQuery.includes('moi') || 
-                          normalizedQuery.includes('me') || 
-                          normalizedQuery.includes('ici');
-
-      const filteredCandidatePros = (isProximity && userLocation)
-        ? allCandidatePros.filter((p: any) => p.distanceKm !== null && p.distanceKm <= 4.5)
-        : allCandidatePros;
+      const filteredCandidatePros = allCandidatePros;
 
       const eventsBrief = events.slice(0, 30).map((e: any) => ({
         id: String(e.id),
@@ -663,12 +680,12 @@ Your mission is to evaluate the user's natural language request (and any ongoing
 3. "guides": Practical informational guides, administrative help (NIE, Padrón, Healthcare, Real Estate, Taxes), and neighborhood advice.
 
 TARGET CENTER / ZONE FOR GEOGRAPHIC LOCATION:
-- Active Target Zone: ${targetZone ? targetZone.zoneName : 'Valence'} (${centerCoords.lat}, ${centerCoords.lng})
+- Active Target Zone: ${targetZone ? targetZone.zoneName : 'Valencia'} (${centerCoords.lat}, ${centerCoords.lng})
 - Radius rule: Search prioritizes professionals within 25 km of ${targetZone ? targetZone.zoneName : 'this location'}.
 
 3-TIER RANKING PRIORITY FOR PROFESSIONALS:
 - TIER 1: Recommended App Pros ('is_community_recommended: true') WITHIN 25 KM of ${targetZone ? targetZone.zoneName : 'the target center'}. Must rank highest (scores 85-100).
-- TIER 2: Google Places pros ('source: google_places') WITHIN 25 KM of ${targetZone ? targetZone.zoneName : 'the target center'}, sorted by HIGHEST RATED FIRST (scores 60-80).
+- TIER 2: Google Places pros ('source: google_places'). Strictly max 6 provided, sorted SOLELY by closest distance to user location (or requested location). DO NOT sort or reorder by ratings or reviews; preserve closest distance first (scores 60-80).
 - TIER 3: Other pros further than 25 km away (scores 40-55).
 
 CRITICAL DISCRIMINATION & RELEVANCE RULES:

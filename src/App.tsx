@@ -10672,19 +10672,17 @@ function ExploreView({
               if (!cleanQuery) cleanQuery = trimmed;
             }
 
-            const textQuery = (isProximity && userLocation)
-              ? cleanQuery
-              : (targetZone.isSpecificZone
-                  ? `${trimmed} ${targetZone.zoneName} Valencia Spain`
-                  : `${trimmed} in Valencia Spain`);
+            const textQuery = targetZone.isSpecificZone
+              ? `${cleanQuery} ${targetZone.zoneName} Valencia Spain`
+              : (userLocation ? cleanQuery : `${cleanQuery} in Valencia Spain`);
 
             const requestBody: any = {
               textQuery,
-              maxResultCount: 6,
+              maxResultCount: 20,
               languageCode: "en"
             };
 
-            const biasRadius = (isProximity && userLocation) ? 3000.0 : 25000.0;
+            const biasRadius = targetZone.isSpecificZone ? 5000.0 : (userLocation ? 5000.0 : 25000.0);
 
             requestBody.locationBias = {
               circle: {
@@ -10706,7 +10704,7 @@ function ExploreView({
             if (gpResponse.ok) {
               const gpData = await gpResponse.json();
               const places = gpData.places || [];
-              clientGooglePlacesPros = places.map((place: any, idx: number) => {
+              const mappedPlaces = places.map((place: any, idx: number) => {
                 let photoUrl = "";
                 if (place.photos && place.photos.length > 0) {
                   photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${GOOGLE_MAPS_KEY}`;
@@ -10747,6 +10745,15 @@ function ExploreView({
                   is_community_recommended: false
                 };
               });
+
+              // Strictly sort Google Places by closest distance first, max 6
+              mappedPlaces.sort((a: any, b: any) => {
+                const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+                const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+                return distA - distB;
+              });
+
+              clientGooglePlacesPros = mappedPlaces.slice(0, 6);
             }
           } catch (gpErr) {
             console.warn("Client-side fallback Google Places fetch failed:", gpErr);
@@ -10911,13 +10918,14 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
       }
 
       if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
-        setGooglePlacesPros(data.google_places_pros);
-        data.google_places_pros.forEach((p: any) => {
+        const top6 = data.google_places_pros.slice(0, 6);
+        setGooglePlacesPros(top6);
+        top6.forEach((p: any) => {
           const proIdStr = String(p.id);
           if (!resultsDict[proIdStr]) {
             resultsDict[proIdStr] = {
-              score: Math.round((p.rating || 4.5) * 20),
-              reason: `Recommandé par Google Places (${p.reviews_count || 0} avis) • ${p.category || 'Professionnel'}`
+              score: 75,
+              reason: `Google Places • ${p.location || 'Valencia'}`
             };
           }
         });
@@ -11222,12 +11230,28 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         const bComm = isCommunityPro(b) ? 1 : 0;
         if (aComm !== bComm) return bComm - aComm; // Unlocked community pros first!
 
+        // If both are Google Places pros: ONLY rule is closest to GPS position first, no priority given to ratings or reviews
+        if (!aComm && !bComm) {
+          if (userLocation && a.coordinates && b.coordinates) {
+            const distA = getDistance(userLocation.lat, userLocation.lng, a.coordinates.lat, a.coordinates.lng);
+            const distB = getDistance(userLocation.lat, userLocation.lng, b.coordinates.lat, b.coordinates.lng);
+            return distA - distB;
+          }
+          return (a.distanceKm ?? 999999) - (b.distanceKm ?? 999999);
+        }
+
+        // If proximity search is active, sort strictly by distance first for community candidates
+        if (isProximityActive && userLocation && a.coordinates && b.coordinates) {
+          const distA = getDistance(userLocation.lat, userLocation.lng, a.coordinates.lat, a.coordinates.lng);
+          const distB = getDistance(userLocation.lat, userLocation.lng, b.coordinates.lat, b.coordinates.lng);
+          if (distA !== distB) {
+            return distA - distB;
+          }
+        }
+
         if (aiResults) {
           const scoreA = aiResults[String(a.id)]?.score || 0;
           const scoreB = aiResults[String(b.id)]?.score || 0;
-          if (!aComm && !bComm) {
-            return (b.rating || 0) - (a.rating || 0) || scoreB - scoreA;
-          }
           if (scoreA !== scoreB) return scoreB - scoreA;
         }
 

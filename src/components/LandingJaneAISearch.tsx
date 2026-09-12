@@ -341,19 +341,17 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
               if (!cleanQuery) cleanQuery = q;
             }
 
-            const textQuery = (isProximity && userLocation)
-              ? cleanQuery
-              : (targetZone.isSpecificZone
-                  ? `${q} ${targetZone.zoneName} Valencia Spain`
-                  : `${q} in Valencia Spain`);
+            const textQuery = targetZone.isSpecificZone
+              ? `${cleanQuery} ${targetZone.zoneName} Valencia Spain`
+              : (userLocation ? cleanQuery : `${cleanQuery} in Valencia Spain`);
 
             const requestBody: any = {
               textQuery,
-              maxResultCount: 6,
+              maxResultCount: 20,
               languageCode: "en"
             };
 
-            const biasRadius = (isProximity && userLocation) ? 3000.0 : 25000.0;
+            const biasRadius = targetZone.isSpecificZone ? 5000.0 : (userLocation ? 5000.0 : 25000.0);
 
             requestBody.locationBias = {
               circle: {
@@ -375,7 +373,7 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
             if (gpResponse.ok) {
               const gpData = await gpResponse.json();
               const places = gpData.places || [];
-              clientGooglePlacesPros = places.map((place: any, idx: number) => {
+              const mappedPlaces = places.map((place: any, idx: number) => {
                 let photoUrl = "";
                 if (place.photos && place.photos.length > 0) {
                   photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${googleMapsKey}`;
@@ -416,6 +414,15 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
                   is_community_recommended: false
                 };
               });
+
+              // Strictly sort Google Places by closest distance first, max 6
+              mappedPlaces.sort((a: any, b: any) => {
+                const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+                const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+                return distA - distB;
+              });
+
+              clientGooglePlacesPros = mappedPlaces.slice(0, 6);
             }
           } catch (gpErr) {
             console.warn("Client-side fallback Google Places fetch failed:", gpErr);
@@ -561,7 +568,7 @@ Rules:
     if (data) {
       setSearchResult(data);
       if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
-        setGooglePlacesPros(data.google_places_pros);
+        setGooglePlacesPros(data.google_places_pros.slice(0, 6));
       }
       setSelectedTopicTab('all');
       setHasSearched(true);
@@ -713,19 +720,17 @@ Return ONLY the concise 2-6 word search query string.`,
                 if (!cleanQuery) cleanQuery = placesSearchQuery;
               }
 
-              const textQuery = (isProximity && userLocation)
-                ? cleanQuery
-                : (targetZone.isSpecificZone
-                    ? `${placesSearchQuery} ${targetZone.zoneName} Valencia Spain`
-                    : `${placesSearchQuery} in Valencia Spain`);
+              const textQuery = targetZone.isSpecificZone
+                ? `${cleanQuery} ${targetZone.zoneName} Valencia Spain`
+                : (userLocation ? cleanQuery : `${cleanQuery} in Valencia Spain`);
 
               const requestBody: any = {
                 textQuery,
-                maxResultCount: 6,
+                maxResultCount: 20,
                 languageCode: "en"
               };
 
-              const biasRadius = (isProximity && userLocation) ? 3000.0 : 25000.0;
+              const biasRadius = targetZone.isSpecificZone ? 5000.0 : (userLocation ? 5000.0 : 25000.0);
 
               requestBody.locationBias = {
                 circle: {
@@ -789,11 +794,17 @@ Return ONLY the concise 2-6 word search query string.`,
                   };
                 });
 
-                // Merge without duplicates
+                // Merge and sort strictly by distance to center
                 const mergedMap = new Map<string, any>();
                 clientGooglePlacesPros.forEach(p => mergedMap.set(String(p.id), p));
                 newlyFetched.forEach(p => mergedMap.set(String(p.id), p));
-                clientGooglePlacesPros = Array.from(mergedMap.values());
+                const allPlaces = Array.from(mergedMap.values());
+                allPlaces.sort((a: any, b: any) => {
+                  const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+                  const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+                  return distA - distB;
+                });
+                clientGooglePlacesPros = allPlaces.slice(0, 6);
               }
             } catch (gpErr) {
               console.warn("Client-side follow-up Google Places fetch failed:", gpErr);
@@ -939,12 +950,7 @@ Match relevant pros, events (score >= 40 for community, expat, social, cultural,
     if (data) {
       setSearchResult(data);
       if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
-        setGooglePlacesPros(prev => {
-          const map = new Map<string, Professional>();
-          prev.forEach(p => map.set(String(p.id), p));
-          data?.google_places_pros?.forEach(p => map.set(String(p.id), p));
-          return Array.from(map.values());
-        });
+        setGooglePlacesPros(data.google_places_pros.slice(0, 6));
       }
       const janeMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),

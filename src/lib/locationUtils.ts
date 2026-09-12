@@ -276,36 +276,30 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
     return (b.rating || 0) - (a.rating || 0);
   });
 
-  // Tier 2 sorting: Google Places pros within 25 km
-  // Sub-sorted strictly by highest rating first, then review count, then distance
+  // Tier 2 sorting: Google Places pros
+  // User directive: "Supprime les ordres de priorité des pros de google places.
+  // La seule regle est les plus proches de ma position gps en premier sauf si une demande particuliere d'emplacement est demandée par l'utilisateur.
+  // Et pas plus de 6 pros de google places données"
   tier2.sort((a, b) => {
-    const ratingDiff = (b.rating || 0) - (a.rating || 0);
-    if (Math.abs(ratingDiff) > 0.05) {
-      return ratingDiff;
-    }
-    const countA = a.review_count || a.reviews_count || 0;
-    const countB = b.review_count || b.reviews_count || 0;
-    if (countB !== countA) {
-      return countB - countA;
-    }
-    if (a.distanceKm !== null && b.distanceKm !== null) {
-      return a.distanceKm - b.distanceKm;
-    }
-    return 0;
+    const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+    const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+    return distA - distB;
   });
 
+  // Strict limit of maximum 6 Google Places pros
+  const cappedTier2 = tier2.slice(0, 6);
+
   // Tier 3 sorting: Other pros (> 25km)
-  // Sub-sorted by Community first, then rating
+  // Sub-sorted by Community first, then closest distance
   tier3.sort((a, b) => {
     const aComm = isCommunity(a) ? 1 : 0;
     const bComm = isCommunity(b) ? 1 : 0;
     if (aComm !== bComm) return bComm - aComm;
 
-    if (a.distanceKm !== null && b.distanceKm !== null) {
-      return a.distanceKm - b.distanceKm;
-    }
-    return (b.rating || 0) - (a.rating || 0);
+    const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+    const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+    return distA - distB;
   });
 
-  return [...tier1, ...tier2, ...tier3];
+  return [...tier1, ...cappedTier2, ...tier3];
 }
