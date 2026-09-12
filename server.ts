@@ -619,6 +619,20 @@ Return ONLY the concise 2-6 word search query string.`,
       // Combine both lists for Gemini matching
       const allCandidatePros = [...proListBrief, ...googleProsBrief];
 
+      const normalizedQuery = query.toLowerCase();
+      const isProximity = normalizedQuery.includes('autour') || 
+                          normalizedQuery.includes('proche') || 
+                          normalizedQuery.includes('near') || 
+                          normalizedQuery.includes('around') || 
+                          normalizedQuery.includes('close to') || 
+                          normalizedQuery.includes('moi') || 
+                          normalizedQuery.includes('me') || 
+                          normalizedQuery.includes('ici');
+
+      const filteredCandidatePros = (isProximity && userLocation)
+        ? allCandidatePros.filter((p: any) => p.distanceKm !== null && p.distanceKm <= 4.5)
+        : allCandidatePros;
+
       const eventsBrief = events.slice(0, 30).map((e: any) => ({
         id: String(e.id),
         title: e.title,
@@ -690,7 +704,7 @@ CRITICAL DISCRIMINATION & RELEVANCE RULES:
 Target Zone: ${targetZone ? targetZone.zoneName : 'Valence'}
 
 Available Professionals (Unlocked Community & Google Places):
-${JSON.stringify(allCandidatePros, null, 2)}
+${JSON.stringify(filteredCandidatePros, null, 2)}
 
 Available Events:
 ${JSON.stringify(eventsBrief, null, 2)}

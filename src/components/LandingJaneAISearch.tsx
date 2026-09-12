@@ -645,6 +645,7 @@ Rules:
 
           // 1. Synthesize target search query from conversation history
           let placesSearchQuery = text;
+          let isProximityGlobal = false;
           if (Array.isArray(historyForApi) && historyForApi.length > 0) {
             try {
               const userMsgList = historyForApi
@@ -692,6 +693,10 @@ Return ONLY the concise 2-6 word search query string.`,
                                   normalizedQuery.includes('moi') || 
                                   normalizedQuery.includes('me') || 
                                   normalizedQuery.includes('ici');
+
+              if (isProximity) {
+                isProximityGlobal = true;
+              }
 
               let cleanQuery = placesSearchQuery;
               if (isProximity) {
@@ -814,6 +819,9 @@ Return ONLY the concise 2-6 word search query string.`,
           }));
 
           const allCandidatePros = [...proListBrief, ...googleProsBrief];
+          const filteredCandidatePros = (isProximityGlobal && userLocation)
+            ? allCandidatePros.filter(p => (p as any).distanceKm !== null && (p as any).distanceKm <= 4.5)
+            : allCandidatePros;
 
           const historyFormatted = historyForApi.map(m => `${m.role === 'user' ? 'User' : 'Jane'}: ${m.content}`).join('\n');
           const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" in Valencia.
@@ -822,7 +830,7 @@ Match relevant pros, events (score >= 40 for community, expat, social, cultural,
 
           const response = await ai.models.generateContent({
             model: "gemini-3.1-flash-lite",
-            contents: `User Follow-Up: "${text}"\n\nHistory:\n${historyFormatted}\n\nPros: ${JSON.stringify(allCandidatePros.slice(0, 45))}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
+            contents: `User Follow-Up: "${text}"\n\nHistory:\n${historyFormatted}\n\nPros: ${JSON.stringify(filteredCandidatePros.slice(0, 45))}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
             config: {
               systemInstruction: sysInstruction,
               responseMimeType: "application/json",
