@@ -353,21 +353,14 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
               languageCode: "en"
             };
 
-            if (isProximity && userLocation) {
-              requestBody.locationRestriction = {
-                circle: {
-                  center: { latitude: centerLat, longitude: centerLng },
-                  radius: 5000.0 // Strict 5 km limit around the user
-                }
-              };
-            } else {
-              requestBody.locationBias = {
-                circle: {
-                  center: { latitude: centerLat, longitude: centerLng },
-                  radius: 25000.0 // Soft 25 km bias
-                }
-              };
-            }
+            const biasRadius = (isProximity && userLocation) ? 3000.0 : 25000.0;
+
+            requestBody.locationBias = {
+              circle: {
+                center: { latitude: centerLat, longitude: centerLng },
+                radius: biasRadius
+              }
+            };
 
             const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
               method: "POST",
@@ -727,21 +720,14 @@ Return ONLY the concise 2-6 word search query string.`,
                 languageCode: "en"
               };
 
-              if (isProximity && userLocation) {
-                requestBody.locationRestriction = {
-                  circle: {
-                    center: { latitude: centerLat, longitude: centerLng },
-                    radius: 5000.0 // Strict 5 km radius limit
-                  }
-                };
-              } else {
-                requestBody.locationBias = {
-                  circle: {
-                    center: { latitude: centerLat, longitude: centerLng },
-                    radius: 25000.0 // Soft 25 km bias
-                  }
-                };
-              }
+              const biasRadius = (isProximity && userLocation) ? 3000.0 : 25000.0;
+
+              requestBody.locationBias = {
+                circle: {
+                  center: { latitude: centerLat, longitude: centerLng },
+                  radius: biasRadius
+                }
+              };
 
               const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
                 method: "POST",

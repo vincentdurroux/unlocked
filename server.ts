@@ -106,21 +106,14 @@ async function startServer() {
         languageCode: "en"
       };
 
-      if (isProximity && userLocationCoords) {
-        requestBody.locationRestriction = {
-          circle: {
-            center: { latitude: centerLat, longitude: centerLng },
-            radius: 5000.0 // Strict 5 km radius
-          }
-        };
-      } else {
-        requestBody.locationBias = {
-          circle: {
-            center: { latitude: centerLat, longitude: centerLng },
-            radius: 25000.0 // Soft 25 km bias
-          }
-        };
-      }
+      const biasRadius = (isProximity && userLocationCoords) ? 3000.0 : 25000.0;
+
+      requestBody.locationBias = {
+        circle: {
+          center: { latitude: centerLat, longitude: centerLng },
+          radius: biasRadius
+        }
+      };
 
       const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
         method: "POST",
