@@ -876,7 +876,29 @@ ${JSON.stringify(guidesBrief, null, 2)}`,
         return { ...g, score: sc };
       }).filter((g: any) => g.score >= 40);
 
-      // GUARANTEE: Ensure valid Google Places pros matching the trade query are present in prosResults
+      // GUARANTEE 1: Ensure valid community-recommended pros matching the trade query are present in prosResults
+      const validCommunityPros = proListBrief.filter((p: any) => 
+        p.is_community_recommended === true && 
+        !isTradeMismatched(placesSearchQuery || query, p.name, p.category)
+      );
+
+      validCommunityPros.forEach((cp: any, idx: number) => {
+        const cpId = String(cp.id);
+        const existing = prosResults.find((pr: any) => 
+          String(pr.id) === cpId ||
+          String(pr.id) === `google_${cpId}` ||
+          cpId === `google_${String(pr.id)}`
+        );
+        if (!existing) {
+          prosResults.push({
+            id: cpId,
+            score: 95 - idx,
+            reason: cp.bio || `Recommandé par la communauté Unlocked`
+          });
+        }
+      });
+
+      // GUARANTEE 2: Ensure valid Google Places pros matching the trade query are present in prosResults
       const validGooglePros = googlePlacesPros.filter((p: any) => 
         !isTradeMismatched(placesSearchQuery || query, p.name, p.category)
       );

@@ -1060,7 +1060,35 @@ CRITICAL TRADE COHERENCE:
     const list: (Professional & { matchReason: string; matchScore: number })[] = [];
     const addedIds = new Set<string>();
 
-    // 1. First include matching pros from searchResult.pros
+    // 1. Guarantee all valid community-recommended professionals from combinedPros are included if they match the query
+    combinedPros.forEach((pro) => {
+      const proId = String(pro.id);
+      if (isCommunityPro(pro) && !isTradeMismatched(currentEffectiveQuery, pro.name, pro.category)) {
+        // Find if Gemini already gave a specific reasoning or score in searchResult
+        const match = (searchResult?.pros || []).find(m => 
+          String(m.id) === proId || 
+          String(m.id) === `google_${proId}` || 
+          proId === `google_${String(m.id)}`
+        );
+
+        let sc = match && typeof match.score === 'number' ? match.score : 0;
+        if (sc > 0 && sc <= 10) sc = sc * 10;
+        
+        const score = sc >= 40 ? sc : 95; // Default score 95 for community recommendations to prioritize them
+        const reason = match?.reason || pro.bio || `Recommandé par la communauté Unlocked`;
+
+        if (!addedIds.has(proId)) {
+          addedIds.add(proId);
+          list.push({
+            ...pro,
+            matchReason: reason,
+            matchScore: score
+          });
+        }
+      }
+    });
+
+    // 2. Include any other matching pros from searchResult.pros that weren't added yet
     (searchResult?.pros || []).forEach(match => {
       let sc = typeof match.score === 'number' ? match.score : 0;
       if (sc > 0 && sc <= 10) sc = sc * 10;
