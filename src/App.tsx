@@ -910,22 +910,42 @@ export default function App() {
   });
   const [mapCenterTrigger, setMapCenterTrigger] = useState(0);
 
+  const [manualAddress, setManualAddress] = useState('');
+  const [geocodingLoading, setGeocodingLoading] = useState(false);
+  const [geocodingError, setGeocodingError] = useState('');
+  const [locationName, setLocationName] = useState(() => {
+    return localStorage.getItem('unlocked_location_name') || 'Valencia, Spain';
+  });
+
+  const fetchLocationName = async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=12`, {
+        headers: { 'Accept-Language': 'fr,en' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const name = data.address.city || data.address.town || data.address.village || data.address.suburb || data.display_name.split(',')[0];
+        if (name) {
+          setLocationName(name);
+          try {
+            localStorage.setItem('unlocked_location_name', name);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const requestGeolocation = (onSuccess?: (coords: { lat: number, lng: number }) => void) => {
     if (!hasRealLocation) {
       setShowLocationBanner(true);
     }
 
     const setCoordsWithValenciaGuard = (lat: number, lng: number) => {
-      const distToValencia = calculateDistanceKm(39.46975, -0.37739, lat, lng);
-      let finalLoc = { lat, lng };
-      let simulated = false;
-
-      // If they are more than 100km away from Valencia, Spain, we simulate their position in Ruzafa, Valencia so local search works!
-      if (distToValencia > 100.0) {
-        finalLoc = { lat: 39.4620, lng: -0.3725 }; // Ruzafa, Valencia
-        simulated = true;
-      }
-
+      const finalLoc = { lat, lng };
       setUserLocation(finalLoc);
       setHasRealLocation(true);
       setShowLocationBanner(false);
@@ -935,11 +955,12 @@ export default function App() {
         localStorage.setItem('unlocked_user_location', JSON.stringify(finalLoc));
         localStorage.setItem('unlocked_has_real_location', 'true');
         localStorage.setItem('unlocked_show_location_banner', 'false');
-        localStorage.setItem('unlocked_is_simulated_location', simulated ? 'true' : 'false');
+        localStorage.setItem('unlocked_is_simulated_location', 'false');
       } catch (e) {
         console.error(e);
       }
 
+      fetchLocationName(lat, lng);
       onSuccess?.(finalLoc);
     };
 
@@ -951,7 +972,7 @@ export default function App() {
         async (error) => {
           console.warn("Geolocation API failed or blocked in iframe. Code:", error.code, "Message:", error.message);
           
-          // Try IP fallback
+          // Try IP fallback 1: ipapi.co
           try {
             const res = await fetch("https://ipapi.co/json/");
             if (res.ok) {
@@ -965,14 +986,75 @@ export default function App() {
             console.error("IP fallback failed:", ipErr);
           }
 
-          // Absolute fallback: default to Ruzafa, Valencia
-          console.log("Using default simulated location in Ruzafa, Valencia...");
-          setCoordsWithValenciaGuard(39.4620, -0.3725);
+          // Try IP fallback 2: ipinfo.io
+          try {
+            const res = await fetch("https://ipinfo.io/json");
+            if (res.ok) {
+              const ipData = await res.json();
+              if (ipData.loc) {
+                const [latStr, lngStr] = ipData.loc.split(',');
+                const lat = parseFloat(latStr);
+                const lng = parseFloat(lngStr);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                  setCoordsWithValenciaGuard(lat, lng);
+                  return;
+                }
+              }
+            }
+          } catch (ipErr) {
+            console.error("IP fallback 2 failed:", ipErr);
+          }
+
+          // Absolute fallback: default to Valencia
+          console.log("Using default fallback to Valencia...");
+          setCoordsWithValenciaGuard(39.46975, -0.37739);
         },
         { timeout: 6000, enableHighAccuracy: false }
       );
     } else {
-      setCoordsWithValenciaGuard(39.4620, -0.3725);
+      setCoordsWithValenciaGuard(39.46975, -0.37739);
+    }
+  };
+
+  const handleSetManualLocation = async (address: string) => {
+    if (!address.trim()) return;
+    setGeocodingLoading(true);
+    setGeocodingError('');
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lng = parseFloat(data[0].lon);
+          const displayName = data[0].display_name.split(',')[0];
+          
+          const finalLoc = { lat, lng };
+          setUserLocation(finalLoc);
+          setHasRealLocation(true);
+          setShowLocationBanner(false);
+          setMapCenterTrigger(prev => prev + 1);
+          setLocationName(displayName);
+          
+          try {
+            localStorage.setItem('unlocked_user_location', JSON.stringify(finalLoc));
+            localStorage.setItem('unlocked_has_real_location', 'true');
+            localStorage.setItem('unlocked_show_location_banner', 'false');
+            localStorage.setItem('unlocked_location_name', displayName);
+          } catch (e) {
+            console.error(e);
+          }
+        } else {
+          setGeocodingError("Location not found. Try a city or postcode.");
+        }
+      } else {
+        setGeocodingError("Search service unavailable. Try again.");
+      }
+    } catch (e) {
+      console.error(e);
+      setGeocodingError("Error searching location.");
+    } finally {
+      setGeocodingLoading(false);
     }
   };
 
@@ -2541,6 +2623,15 @@ export default function App() {
                     mapCenterTrigger={mapCenterTrigger}
                     setMapCenterTrigger={setMapCenterTrigger}
                     requestGeolocation={requestGeolocation}
+                    manualAddress={manualAddress}
+                    setManualAddress={setManualAddress}
+                    geocodingLoading={geocodingLoading}
+                    setGeocodingLoading={setGeocodingLoading}
+                    geocodingError={geocodingError}
+                    setGeocodingError={setGeocodingError}
+                    locationName={locationName}
+                    setLocationName={setLocationName}
+                    handleSetManualLocation={handleSetManualLocation}
                   />
                 )}
               </motion.div>
@@ -10334,7 +10425,16 @@ function ExploreView({
   setShowLocationBanner,
   mapCenterTrigger,
   setMapCenterTrigger,
-  requestGeolocation
+  requestGeolocation,
+  manualAddress,
+  setManualAddress,
+  geocodingLoading,
+  setGeocodingLoading,
+  geocodingError,
+  setGeocodingError,
+  locationName,
+  setLocationName,
+  handleSetManualLocation
 }: { 
   allPros: Professional[], 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
@@ -10356,7 +10456,16 @@ function ExploreView({
   setShowLocationBanner: React.Dispatch<React.SetStateAction<boolean>>,
   mapCenterTrigger: number,
   setMapCenterTrigger: React.Dispatch<React.SetStateAction<number>>,
-  requestGeolocation: (onSuccess?: (coords: { lat: number, lng: number }) => void) => void
+  requestGeolocation: (onSuccess?: (coords: { lat: number, lng: number }) => void) => void,
+  manualAddress: string,
+  setManualAddress: React.Dispatch<React.SetStateAction<string>>,
+  geocodingLoading: boolean,
+  setGeocodingLoading: React.Dispatch<React.SetStateAction<boolean>>,
+  geocodingError: string,
+  setGeocodingError: React.Dispatch<React.SetStateAction<string>>,
+  locationName: string,
+  setLocationName: React.Dispatch<React.SetStateAction<string>>,
+  handleSetManualLocation: (address: string) => Promise<void>
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState(initialSearch || '');
@@ -11041,6 +11150,19 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
   // Check if we have strong exact matches from AI search
   const hasStrongAiMatches = aiResults !== null && aiExactMatch && (Object.values(aiResults) as any[]).some(r => r.score >= 30);
 
+  const isProximityActive = useMemo(() => {
+    if (maxDistance !== 'All') return true;
+    const searchLower = (deferredSearch || '').toLowerCase();
+    return searchLower.includes('autour') || 
+           searchLower.includes('proche') || 
+           searchLower.includes('near') || 
+           searchLower.includes('around') || 
+           searchLower.includes('close to') || 
+           searchLower.includes('moi') || 
+           searchLower.includes('me') || 
+           searchLower.includes('ici');
+  }, [deferredSearch, maxDistance]);
+
   const filteredPros = hasActiveFilter 
     ? (combinedPros || []).filter(pro => {
         if (!pro) return false;
@@ -11087,6 +11209,15 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         return matchesCategory && matchesLanguage && matchesSearch && matchesDistance && matchesRating;
       })
       .sort((a, b) => {
+        // If proximity search is active, sort strictly by distance first for all matching candidates
+        if (isProximityActive && userLocation && a.coordinates && b.coordinates) {
+          const distA = getDistance(userLocation.lat, userLocation.lng, a.coordinates.lat, a.coordinates.lng);
+          const distB = getDistance(userLocation.lat, userLocation.lng, b.coordinates.lat, b.coordinates.lng);
+          if (distA !== distB) {
+            return distA - distB;
+          }
+        }
+
         const aComm = isCommunityPro(a) ? 1 : 0;
         const bComm = isCommunityPro(b) ? 1 : 0;
         if (aComm !== bComm) return bComm - aComm; // Unlocked community pros first!
@@ -11103,10 +11234,7 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         if (userLocation && a.coordinates && b.coordinates) {
           const distA = getDistance(userLocation.lat, userLocation.lng, a.coordinates.lat, a.coordinates.lng);
           const distB = getDistance(userLocation.lat, userLocation.lng, b.coordinates.lat, b.coordinates.lng);
-          
-          if (maxDistance !== 'All') {
-             return distA - distB;
-          }
+          return distA - distB;
         }
 
         return (b.rating || 0) - (a.rating || 0);
@@ -11235,6 +11363,74 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
             <div className="space-y-4 pt-4 border-t border-slate-100">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Refine your search</p>
               
+              {/* Your Location Selector */}
+              <div className="bg-slate-50/50 hover:bg-slate-50 border border-slate-200/60 p-4 rounded-2xl flex flex-col gap-3 transition-all">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-rose-500 fill-rose-500/10" /> Reference Location
+                  </label>
+                  <span className="text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-100/70 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs self-start sm:self-auto">
+                    <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping"></span>
+                    {locationName}
+                  </span>
+                </div>
+
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={manualAddress}
+                      onChange={(e) => setManualAddress(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSetManualLocation(manualAddress);
+                        }
+                      }}
+                      placeholder="Type city or address (e.g. Paris, Russafa...)"
+                      className="w-full pl-3 pr-8 py-2 bg-white rounded-xl border border-slate-200/80 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/5 outline-none text-xs text-slate-700 font-bold placeholder-slate-400/80 shadow-xs"
+                    />
+                    {manualAddress && (
+                      <button
+                        onClick={() => setManualAddress('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleSetManualLocation(manualAddress)}
+                    disabled={geocodingLoading || !manualAddress.trim()}
+                    className="px-4 py-2 bg-brand-blue hover:bg-blue-600 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+                  >
+                    {geocodingLoading ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                      <Search className="w-3.5 h-3.5" />
+                    )}
+                    <span>Set</span>
+                  </button>
+                </div>
+
+                {geocodingError && (
+                  <p className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
+                    <span>⚠️</span> {geocodingError}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-100/50">
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    Search results will sort by distance from this location.
+                  </p>
+                  <button
+                    onClick={() => requestGeolocation()}
+                    className="text-[9px] font-bold text-brand-blue hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Navigation className="w-2.5 h-2.5" /> Use device GPS
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4 md:gap-x-6 md:gap-y-4">
                 {/* Category Dropdown */}
                 <div className="space-y-2">
@@ -11372,44 +11568,89 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
 
               {/* Geolocation Explanation Banner */}
               {!hasRealLocation && showLocationBanner && (
-                <div className="mt-4 p-4.5 pr-10 md:pr-14 rounded-[24px] border border-blue-100 bg-blue-50/50 flex flex-col md:flex-row items-center md:items-start gap-4 hover:border-blue-200/50 transition-all relative overflow-hidden shadow-xs animate-in fade-in duration-300">
-                  {/* Left Icon container */}
-                  <div className="w-11 h-11 bg-white border border-blue-100/50 text-blue-600 rounded-full flex items-center justify-center shrink-0 shadow-xs">
-                    <Navigation className="w-5 h-5 fill-blue-600" />
-                  </div>
-                  {/* Main content block */}
-                  <div className="flex-1 text-center md:text-left min-w-0 pr-0 md:pr-2 space-y-1">
-                    <h4 className="text-xs md:text-sm font-bold text-slate-800 leading-snug">
-                      Use location to find professionals near you.
-                    </h4>
-                    <p className="text-[10px] md:text-xs text-slate-500 leading-relaxed max-w-lg">
-                      We'll use your location only to show relevant results nearby.
-                    </p>
-                  </div>
-                  {/* Blue Action Button */}
-                  <div className="shrink-0 flex items-center w-full md:w-auto justify-center">
+                <div className="mt-4 p-5 rounded-[24px] border border-rose-100 bg-rose-50/20 flex flex-col gap-4 hover:border-rose-200/40 transition-all relative overflow-hidden shadow-xs animate-in fade-in duration-300">
+                  <div className="flex flex-col md:flex-row items-start gap-4">
+                    {/* Left Icon container */}
+                    <div className="w-11 h-11 bg-white border border-rose-100 text-rose-500 rounded-full flex items-center justify-center shrink-0 shadow-xs">
+                      <Navigation className="w-5 h-5 fill-rose-500" />
+                    </div>
+                    {/* Main content block */}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <h4 className="text-xs md:text-sm font-bold text-slate-800 leading-snug">
+                        Localiser les professionnels les plus proches
+                      </h4>
+                      <p className="text-[10px] md:text-xs text-slate-500 leading-relaxed max-w-lg">
+                        Saisissez votre ville ou adresse pour trier les pros de Google Places autour de vous, ou utilisez votre GPS.
+                      </p>
+                    </div>
+                    {/* Top Right Close Button */}
                     <button
-                      onClick={() => requestGeolocation()}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[10px] md:text-xs font-bold tracking-wide transition-all flex items-center gap-2 shadow-xs hover:shadow-md hover:brightness-105 active:scale-95 cursor-pointer w-full md:w-auto justify-center"
+                      onClick={() => {
+                        setShowLocationBanner(false);
+                        try {
+                          localStorage.setItem('unlocked_show_location_banner', 'false');
+                        } catch (e) {
+                          console.error(e);
+                        }
+                      }}
+                      className="absolute right-4 top-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-rose-100/30 transition-all cursor-pointer"
                     >
-                      <Navigation className="w-3.5 h-3.5 fill-white" />
-                      Use my location
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
-                  {/* Top Right Close Button */}
-                  <button
-                    onClick={() => {
-                      setShowLocationBanner(false);
-                      try {
-                        localStorage.setItem('unlocked_show_location_banner', 'false');
-                      } catch (e) {
-                        console.error(e);
-                      }
-                    }}
-                    className="absolute right-4 top-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-blue-100/30 transition-all cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+
+                  {/* Manual search bar within the banner for instant fallback */}
+                  <div className="flex flex-col sm:flex-row gap-2.5 bg-white p-2.5 rounded-xl border border-slate-100 shadow-2xs">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={manualAddress}
+                        onChange={(e) => setManualAddress(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleSetManualLocation(manualAddress);
+                          }
+                        }}
+                        placeholder="Ville, code postal ou adresse (ex: Paris, Marseille, Valencia...)"
+                        className="w-full pl-3 pr-8 py-2 bg-slate-50 rounded-lg border border-slate-200/60 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/5 outline-none text-xs text-slate-700 font-bold placeholder-slate-400"
+                      />
+                      {manualAddress && (
+                        <button
+                          onClick={() => setManualAddress('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => handleSetManualLocation(manualAddress)}
+                        disabled={geocodingLoading || !manualAddress.trim()}
+                        className="px-4 py-2 bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        {geocodingLoading ? (
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        ) : (
+                          <Search className="w-3.5 h-3.5" />
+                        )}
+                        <span>Valider</span>
+                      </button>
+                      <button
+                        onClick={() => requestGeolocation()}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <Navigation className="w-3.5 h-3.5 text-slate-500" />
+                        <span>GPS</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {geocodingError && (
+                    <p className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
+                      <span>⚠️</span> {geocodingError}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
