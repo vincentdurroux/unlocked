@@ -303,3 +303,123 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
 
   return [...tier1, ...cappedTier2, ...tier3];
 }
+
+// Clean conversational and proximity phrases from user query for trade searches
+export function cleanTradeSearchTerm(query: string): string {
+  if (!query) return "";
+  let q = query.trim();
+
+  // Strip conversational polite / search prefixes (French, English, Spanish)
+  q = q.replace(/^(bonjour|salut|hello|hola|hey|bonsoir)[,\s]+/i, '');
+  q = q.replace(/\b(je\s+cherche\s+(un|une|des|le|la|les)?|j'ai\s+besoin\s+d'(un|une|de)?|recherche\s+(un|une|d'un|d'une)?|trouver\s+(un|une)?|cherche\s+(un|une)?|donne[- ]moi\s+(un|une)?|avez[- ]vous\s+(un|une)?|est[- ]ce\s+qu'il\s+y\s+a\s+(un|une)?|pourriez[- ]vous\s+me\s+(donner|conseiller)\s+(un|une)?)\b/gi, '');
+  q = q.replace(/\b(i('m|\s+am)?\s+looking\s+for\s+(a|an)?|looking\s+for\s+(a|an)?|need\s+(a|an)?|find\s+(a|an)?|search\s+for\s+(a|an)?|can\s+you\s+recommend\s+(a|an)?)\b/gi, '');
+  q = q.replace(/\b(busco\s+(un|una)?|necesito\s+(un|una)?|encuentra\s+(un|una)?|recomiéndame\s+(un|una)?)\b/gi, '');
+
+  // Strip proximity tokens
+  q = q.replace(/\b(autour\s+de\s+moi|proche\s+de\s+moi|près\s+de\s+moi|près\s+d'ici|autour|proche|near\s+me|around\s+me|close\s+to\s+me|cerca\s+de\s+mí|cerca\s+de\s+mi|alrededor)\b/gi, '');
+  q = q.replace(/\s+/g, ' ').trim();
+
+  if (!q) q = query.trim();
+  return q;
+}
+
+// Build optimized Google Places search string targeting Valencia, Spain
+export function buildOptimizedPlacesQuery(rawQuery: string, isSpecificZone: boolean, zoneName?: string, hasGps?: boolean): string {
+  const clean = cleanTradeSearchTerm(rawQuery);
+  const lower = clean.toLowerCase();
+
+  // Map common trades to precise Spanish search terms for Google Places Spain
+  let spanishTerms = "";
+  if (/\b(ost[ée]opathe?|osteopath)\b/i.test(lower)) {
+    spanishTerms = "osteopata osteopatia";
+  } else if (/\b(kin[ée]sith[ée]rapeute?|kin[ée]|kine|physiotherapist|physio)\b/i.test(lower)) {
+    spanishTerms = "fisioterapeuta fisioterapia";
+  } else if (/\b(dentiste?|dentist|orthodontiste?)\b/i.test(lower)) {
+    spanishTerms = "dentista clinica dental";
+  } else if (/\b(m[ée]decin(\s+g[ée]n[ée]raliste)?|docteur|doctor|gp|m[ée]decine)\b/i.test(lower)) {
+    spanishTerms = "medico consulta medica";
+  } else if (/\b(p[ée]diatre?|pediatrician)\b/i.test(lower)) {
+    spanishTerms = "pediatra clinica pediatrica";
+  } else if (/\b(ophtalmologue?|ophtalmo|ophthalmologist)\b/i.test(lower)) {
+    spanishTerms = "oftalmologo clinica oftalmologica";
+  } else if (/\b(dermatologue?|dermato|dermatologist)\b/i.test(lower)) {
+    spanishTerms = "dermatologo dermatologia";
+  } else if (/\b(gyn[ée]cologue?|gyneco|gynecologist)\b/i.test(lower)) {
+    spanishTerms = "ginecologo ginecologia";
+  } else if (/\b(psychologue?|psyc?hologist)\b/i.test(lower)) {
+    spanishTerms = "psicologo psicologia";
+  } else if (/\b(v[ée]t[ée]rinaire?|vet|veterinarian)\b/i.test(lower)) {
+    spanishTerms = "veterinario clinica veterinaria";
+  } else if (/\b(plombier|plumber)\b/i.test(lower)) {
+    spanishTerms = "fontanero fontaneria";
+  } else if (/\b([ée]lectricien|electrician)\b/i.test(lower)) {
+    spanishTerms = "electricista";
+  } else if (/\b(serrurier|locksmith)\b/i.test(lower)) {
+    spanishTerms = "cerrajero cerrajeria";
+  } else if (/\b(coiffeur|coiffeuse|hairdresser|barbier|barber)\b/i.test(lower)) {
+    spanishTerms = "peluqueria peluquero";
+  } else if (/\b(avocat|lawyer|attorney)\b/i.test(lower)) {
+    spanishTerms = "abogado despacho abogados";
+  } else if (/\b(comptable|expert-comptable|accountant|fiscaliste)\b/i.test(lower)) {
+    spanishTerms = "gestoria asesor fiscal contable";
+  } else if (/\b(notaire|notary)\b/i.test(lower)) {
+    spanishTerms = "notaria notario";
+  } else if (/\b(m[ée]canicien|garagiste|mechanic)\b/i.test(lower)) {
+    spanishTerms = "taller mecanico";
+  } else if (/\b(peintre|painter)\b/i.test(lower)) {
+    spanishTerms = "pintor pintura";
+  }
+
+  const queryToUse = spanishTerms || clean;
+
+  if (isSpecificZone && zoneName) {
+    return `${queryToUse} ${zoneName} Valencia Spain`;
+  }
+  if (hasGps) {
+    return queryToUse;
+  }
+  return `${queryToUse} in Valencia Spain`;
+}
+
+// Check for cross-specialty pollution (e.g., user asks for osteopath but place is a dental clinic or animal clinic)
+export function isTradeMismatched(rawQuery: string, placeName: string, placeCategory: string): boolean {
+  const q = rawQuery.toLowerCase();
+  const text = `${placeName} ${placeCategory}`.toLowerCase();
+
+  // User specifically wants an osteopath: reject dentists, vets, animal, hotels, general doctors with no osteopathy
+  if (/\b(ost[ée]opathe?|osteopath|osteopata|osteopatia)\b/i.test(q)) {
+    if (/\b(dental|dentist|odontol|ortodonc|dientes|veterinar|animal|pet|hotel|restauran|bar|tapas)\b/i.test(text)) {
+      return true;
+    }
+  }
+
+  // User specifically wants a dentist: reject osteopaths, physios, lawyers, vets
+  if (/\b(dentiste?|dentist|dentista|odontol|orthodont)\b/i.test(q)) {
+    if (/\b(osteopat|fisioterap|veterinar|animal|abogad|peluquer|hotel|restauran)\b/i.test(text)) {
+      return true;
+    }
+  }
+
+  // User wants a plumber: reject electricians, locksmiths, painters, lawyers, health pros
+  if (/\b(plombier|plumber|fontaner)\b/i.test(q)) {
+    if (/\b(electric|cerrajer|pintor|abogad|dentist|medico|veterinar)\b/i.test(text)) {
+      return true;
+    }
+  }
+
+  // User wants a lawyer: reject real estate, accountants, doctors, dental
+  if (/\b(avocat|lawyer|abogad)\b/i.test(q)) {
+    if (/\b(inmobiliar|dentist|medico|veterinar|fontaner|electric)\b/i.test(text)) {
+      return true;
+    }
+  }
+
+  // User wants a hairdresser: reject medical, legal, home repairs
+  if (/\b(coiffeur|hairdresser|peluquer|barber)\b/i.test(q)) {
+    if (/\b(dentist|medico|abogad|fontaner|taller)\b/i.test(text)) {
+      return true;
+    }
+  }
+
+  return false;
+}

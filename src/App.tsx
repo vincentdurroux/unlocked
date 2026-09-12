@@ -109,7 +109,7 @@ import { eventService } from './services/eventService';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
-import { detectTargetZone, calculateDistanceKm, DEFAULT_VALENCIA_CENTER } from './lib/locationUtils';
+import { detectTargetZone, calculateDistanceKm, DEFAULT_VALENCIA_CENTER, buildOptimizedPlacesQuery, isTradeMismatched } from './lib/locationUtils';
 
 // Custom Tooth Icon matching screenshot
 const ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -10658,23 +10658,12 @@ function ExploreView({
                                 normalizedQuery.includes('me') || 
                                 normalizedQuery.includes('ici');
 
-            let cleanQuery = trimmed;
-            if (isProximity) {
-              cleanQuery = trimmed
-                .replace(/autour de moi/gi, '')
-                .replace(/proche de moi/gi, '')
-                .replace(/autour/gi, '')
-                .replace(/proche/gi, '')
-                .replace(/near me/gi, '')
-                .replace(/around me/gi, '')
-                .replace(/close to me/gi, '')
-                .trim();
-              if (!cleanQuery) cleanQuery = trimmed;
-            }
-
-            const textQuery = targetZone.isSpecificZone
-              ? `${cleanQuery} ${targetZone.zoneName} Valencia Spain`
-              : (userLocation ? cleanQuery : `${cleanQuery} in Valencia Spain`);
+            const textQuery = buildOptimizedPlacesQuery(
+              trimmed,
+              targetZone.isSpecificZone,
+              targetZone.zoneName,
+              !!userLocation
+            );
 
             const requestBody: any = {
               textQuery,
@@ -10704,47 +10693,49 @@ function ExploreView({
             if (gpResponse.ok) {
               const gpData = await gpResponse.json();
               const places = gpData.places || [];
-              const mappedPlaces = places.map((place: any, idx: number) => {
-                let photoUrl = "";
-                if (place.photos && place.photos.length > 0) {
-                  photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${GOOGLE_MAPS_KEY}`;
-                }
+              const mappedPlaces = places
+                .map((place: any, idx: number) => {
+                  let photoUrl = "";
+                  if (place.photos && place.photos.length > 0) {
+                    photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${GOOGLE_MAPS_KEY}`;
+                  }
 
-                const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
+                  const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
 
-                let coords = {
-                  lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
-                  lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
-                };
-
-                if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
-                  coords = {
-                    lat: place.location.latitude,
-                    lng: place.location.longitude
+                  let coords = {
+                    lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
+                    lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
                   };
-                }
 
-                const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+                  if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
+                    coords = {
+                      lat: place.location.latitude,
+                      lng: place.location.longitude
+                    };
+                  }
 
-                return {
-                  id: `google_${place.id}`,
-                  name: place.displayName?.text || "Professional",
-                  company_name: place.displayName?.text || "",
-                  category: place.primaryTypeDisplayName?.text || "Professional",
-                  bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
-                  location: cleanAddress,
-                  coordinates: coords,
-                  distanceKm: dist,
-                  rating: typeof place.rating === 'number' ? place.rating : 0,
-                  reviews_count: place.userRatingCount || 0,
-                  phone: place.nationalPhoneNumber || "",
-                  website: place.websiteUri || "",
-                  googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
-                  image: photoUrl,
-                  source: 'google_places',
-                  is_community_recommended: false
-                };
-              });
+                  const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+
+                  return {
+                    id: `google_${place.id}`,
+                    name: place.displayName?.text || "Professional",
+                    company_name: place.displayName?.text || "",
+                    category: place.primaryTypeDisplayName?.text || "Professional",
+                    bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
+                    location: cleanAddress,
+                    coordinates: coords,
+                    distanceKm: dist,
+                    rating: typeof place.rating === 'number' ? place.rating : 0,
+                    reviews_count: place.userRatingCount || 0,
+                    phone: place.nationalPhoneNumber || "",
+                    website: place.websiteUri || "",
+                    googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
+                    image: photoUrl,
+                    source: 'google_places',
+                    is_community_recommended: false
+                  };
+                })
+                .filter((place: any) => !isTradeMismatched(trimmed, place.name, place.category));
 
               // Strictly sort Google Places by closest distance first, max 6
               mappedPlaces.sort((a: any, b: any) => {
@@ -10793,41 +10784,35 @@ function ExploreView({
           source: 'google_places'
         }));
 
-        const allCandidatePros = [...proListBrief, ...googleProsBrief];
+        const allCandidatePros = [...proListBrief, ...googleProsBrief].filter((p: any) =>
+          !isTradeMismatched(trimmed, p.name, p.category)
+        );
 
         const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals.
 Your purpose is to examine the user's natural language request and return the most relevant matching professionals.
 
 Review the list of professionals provided and evaluate BOTH trade/service criteria AND location criteria:
 
-1. QUERY PARSING & SYNONYMS (CRITICAL):
+1. CRITICAL TRADE COHERENCE (STRICT RELEVANCE):
+   - Match ONLY professionals whose actual trade directly matches the requested trade.
+   - If the user searches for an osteopath, NEVER match dentists, doctors, pediatricians, or lawyers! Mismatched trades must receive a score of 0.
+   - If the user searches for a dentist, NEVER match osteopaths or general doctors.
    - Trade / Profession Synonyms & Translations:
      * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "hair salon", "barber" ALL match "Hairdresser", "Coiffeur", "Beauty & Wellness", or hair care services.
      * "doctor", "physician", "médecin", "gp" ALL match Doctor/Medical services.
      * "realtor", "real estate agent", "inmobiliaria" ALL match Real Estate / Property services.
      * "plumber", "plombier", "fontanero" ALL match Plumbing services.
-     * Treat language translations (English, French, Spanish) and word variations (e.g., "hair dresser" vs "hairdresser") as EXACT trade matches!
-   - Location Matching:
-     * "Valencia area", "in Valencia", "around Valencia", "Valencia city" matches professionals located in Valencia or Valencia metropolitan/province towns (e.g. Valencia, La Eliana, Torrent, Paterna, etc.).
+     * Treat language translations (English, French, Spanish) and word variations as EXACT trade matches.
 
 2. SCORING & MATCHING RULES:
-   - DIRECT MATCH (Score 70-100): The professional matches BOTH requested trade/service (including synonyms/translations) AND requested location/area (or if no location was specified).
-     * Example: "hair dresser in valencia area" + hairdresser in Valencia => DIRECT MATCH (Score 80-100).
-   - ADJACENT / ALTERNATIVE MATCH (Score 15-45): The professional offers a closely related trade (e.g. general beauty salon for a hairdresser request), OR matches the trade in a neighboring distant town.
-   - UNRELATED OR WRONG LOCATION (Score 0): The professional has a completely unrelated trade OR is in a totally different distant city/country when a specific city was requested.
+   - DIRECT MATCH (Score 70-100): The professional matches BOTH requested trade/service AND requested location/area.
+   - ADJACENT / ALTERNATIVE MATCH (Score 15-45): The professional offers a closely related trade in the area.
+   - UNRELATED OR WRONG TRADE (Score 0): The professional has an unrelated trade or is in a different city.
 
 3. "exactMatchFound" & "summaryMessage" RULES:
-   - CRITICAL: If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), you MUST set "exactMatchFound" to true, and set "summaryMessage" to null!
+   - If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), set "exactMatchFound" to true, and set "summaryMessage" to null.
    - Set "exactMatchFound" to false ONLY if NO professional in the directory directly matches both trade and location.
-   - If "exactMatchFound" is false:
-     * If there ARE alternative/adjacent professionals returned with score > 0:
-       - With specific trade and location (e.g. "plumber in La Eliana"): "We couldn't find a [trade] in [location] in our directory. Jane found some alternative options, but they may not meet all your criteria."
-       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory. Jane found some alternative options, but they may not meet all your criteria."
-     * If NO professionals match at all (all professionals have score 0):
-       - With specific trade and location: "We couldn't find a [trade] in [location] in our directory."
-       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory."
-
-4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).`;
+   - Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched.`;
 
         const response = await ai.models.generateContent({
           model: "gemini-3.1-flash-lite",
@@ -10866,22 +10851,6 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         });
 
         const parsedContent = JSON.parse(response.text || "{}");
-        
-        // Ensure Google Places pros are in the results array
-        if (!Array.isArray(parsedContent.results)) {
-          parsedContent.results = [];
-        }
-        clientGooglePlacesPros.forEach((gp: any) => {
-          const alreadyMatched = parsedContent.results.some((r: any) => String(r.id) === String(gp.id));
-          if (!alreadyMatched) {
-            parsedContent.results.push({
-              id: String(gp.id),
-              score: Math.round((gp.rating || 4.5) * 20),
-              reasonUrlExcerpt: `Discovered nearby: ${gp.name} is a highly-rated ${gp.category || 'professional'} with ${gp.reviews_count || 0} reviews.`
-            });
-          }
-        });
-
         parsedContent.google_places_pros = clientGooglePlacesPros;
         data = parsedContent;
       }
@@ -10918,10 +10887,15 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
       }
 
       if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
-        const top6 = data.google_places_pros.slice(0, 6);
+        // Filter google places to only keep those not mismatched
+        const validGooglePros = data.google_places_pros.filter(
+          (p: any) => !isTradeMismatched(trimmed, p.name, p.category)
+        );
+        const top6 = validGooglePros.slice(0, 6);
         setGooglePlacesPros(top6);
         top6.forEach((p: any) => {
           const proIdStr = String(p.id);
+          // Only add default score if not already evaluated (or scored 0) by Gemini
           if (!resultsDict[proIdStr]) {
             resultsDict[proIdStr] = {
               score: 75,

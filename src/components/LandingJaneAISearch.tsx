@@ -33,7 +33,9 @@ import {
   calculateDistanceKm,
   sortProfessionalsByProximityAndRating,
   DEFAULT_VALENCIA_CENTER,
-  Coordinates
+  Coordinates,
+  buildOptimizedPlacesQuery,
+  isTradeMismatched
 } from '../lib/locationUtils';
 
 interface Professional {
@@ -327,23 +329,12 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
                                 normalizedQuery.includes('me') || 
                                 normalizedQuery.includes('ici');
 
-            let cleanQuery = q;
-            if (isProximity) {
-              cleanQuery = q
-                .replace(/autour de moi/gi, '')
-                .replace(/proche de moi/gi, '')
-                .replace(/autour/gi, '')
-                .replace(/proche/gi, '')
-                .replace(/near me/gi, '')
-                .replace(/around me/gi, '')
-                .replace(/close to me/gi, '')
-                .trim();
-              if (!cleanQuery) cleanQuery = q;
-            }
-
-            const textQuery = targetZone.isSpecificZone
-              ? `${cleanQuery} ${targetZone.zoneName} Valencia Spain`
-              : (userLocation ? cleanQuery : `${cleanQuery} in Valencia Spain`);
+            const textQuery = buildOptimizedPlacesQuery(
+              q,
+              targetZone.isSpecificZone,
+              targetZone.zoneName,
+              !!userLocation
+            );
 
             const requestBody: any = {
               textQuery,
@@ -373,47 +364,49 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
             if (gpResponse.ok) {
               const gpData = await gpResponse.json();
               const places = gpData.places || [];
-              const mappedPlaces = places.map((place: any, idx: number) => {
-                let photoUrl = "";
-                if (place.photos && place.photos.length > 0) {
-                  photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${googleMapsKey}`;
-                }
+              const mappedPlaces = places
+                .map((place: any, idx: number) => {
+                  let photoUrl = "";
+                  if (place.photos && place.photos.length > 0) {
+                    photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${googleMapsKey}`;
+                  }
 
-                const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
+                  const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
 
-                let coords = {
-                  lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
-                  lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
-                };
-
-                if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
-                  coords = {
-                    lat: place.location.latitude,
-                    lng: place.location.longitude
+                  let coords = {
+                    lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
+                    lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
                   };
-                }
 
-                const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+                  if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
+                    coords = {
+                      lat: place.location.latitude,
+                      lng: place.location.longitude
+                    };
+                  }
 
-                return {
-                  id: `google_${place.id}`,
-                  name: place.displayName?.text || "Professional",
-                  company_name: place.displayName?.text || "",
-                  category: place.primaryTypeDisplayName?.text || "Professional",
-                  bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
-                  location: cleanAddress,
-                  coordinates: coords,
-                  distanceKm: dist,
-                  rating: typeof place.rating === 'number' ? place.rating : 0,
-                  reviews_count: place.userRatingCount || 0,
-                  phone: place.nationalPhoneNumber || "",
-                  website: place.websiteUri || "",
-                  googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
-                  image: photoUrl,
-                  source: 'google_places',
-                  is_community_recommended: false
-                };
-              });
+                  const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+
+                  return {
+                    id: `google_${place.id}`,
+                    name: place.displayName?.text || "Professional",
+                    company_name: place.displayName?.text || "",
+                    category: place.primaryTypeDisplayName?.text || "Professional",
+                    bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
+                    location: cleanAddress,
+                    coordinates: coords,
+                    distanceKm: dist,
+                    rating: typeof place.rating === 'number' ? place.rating : 0,
+                    reviews_count: place.userRatingCount || 0,
+                    phone: place.nationalPhoneNumber || "",
+                    website: place.websiteUri || "",
+                    googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
+                    image: photoUrl,
+                    source: 'google_places',
+                    is_community_recommended: false
+                  };
+                })
+                .filter((place: any) => !isTradeMismatched(q, place.name, place.category));
 
               // Strictly sort Google Places by closest distance first, max 6
               mappedPlaces.sort((a: any, b: any) => {
@@ -447,16 +440,19 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
           source: 'google_places'
         }));
 
-        const allCandidatePros = [...proListBrief, ...googleProsBrief];
+        const allCandidatePros = [...proListBrief, ...googleProsBrief].filter((p: any) =>
+          !isTradeMismatched(q, p.name, p.category)
+        );
 
         const ai = new GoogleGenAI({ apiKey });
         const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" in Valencia.
 Match items selectively across pros, events, and guides for the user query.
 Rules:
+- STRICT TRADE COHERENCE: Match ONLY professionals whose specialty directly corresponds to the requested service. (e.g. if searching for an osteopath, NEVER match dentists, doctors, or lawyers).
 - Include a category in "matched_topics" if there are relevant items.
 - Score 0-100, only return items with score >= 40.
 - Proactively match events that relate to community, expats, socializing, learning local culture (like tapas or wine), networking, beach, or local activities.
-- Return a warm, concise jane_message in the user's query language.`;
+- Return a warm, concise jane_message in the user's query language. If no community pros exist for this specific trade, be honest and present the closest verified pros found.`;
 
         const response = await ai.models.generateContent({
           model: "gemini-3.1-flash-lite",
@@ -514,18 +510,6 @@ Rules:
 
         const parsed = JSON.parse(response.text || "{}");
         const prosResults = (parsed.pros || []).filter((p: any) => (p.score || 0) >= 40);
-        
-        // Auto-add Google Places pros if not explicitly matched by Gemini
-        clientGooglePlacesPros.forEach((gp: any) => {
-          const alreadyMatched = prosResults.some((pr: any) => String(pr.id) === String(gp.id));
-          if (!alreadyMatched) {
-            prosResults.push({
-              id: String(gp.id),
-              score: Math.round((gp.rating || 4.5) * 20),
-              reason: `Discovered nearby: ${gp.name} is a highly-rated ${gp.category || 'professional'} with ${gp.reviews_count || 0} reviews.`
-            });
-          }
-        });
 
         const eventsResults = (parsed.events || []).filter((e: any) => (e.score || 0) >= 40);
         const guidesResults = (parsed.guides || []).filter((g: any) => (g.score || 0) >= 40);
@@ -752,53 +736,57 @@ Return ONLY the concise 2-6 word search query string.`,
               if (gpResponse.ok) {
                 const gpData = await gpResponse.json();
                 const places = gpData.places || [];
-                const newlyFetched = places.map((place: any, idx: number) => {
-                  let photoUrl = "";
-                  if (place.photos && place.photos.length > 0) {
-                    photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${googleMapsKey}`;
-                  }
+                const newlyFetched = places
+                  .map((place: any, idx: number) => {
+                    let photoUrl = "";
+                    if (place.photos && place.photos.length > 0) {
+                      photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${googleMapsKey}`;
+                    }
 
-                  const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
+                    const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
 
-                  let coords = {
-                    lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
-                    lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
-                  };
-
-                  if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
-                    coords = {
-                      lat: place.location.latitude,
-                      lng: place.location.longitude
+                    let coords = {
+                      lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
+                      lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
                     };
-                  }
 
-                  const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+                    if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
+                      coords = {
+                        lat: place.location.latitude,
+                        lng: place.location.longitude
+                      };
+                    }
 
-                  return {
-                    id: `google_${place.id}`,
-                    name: place.displayName?.text || "Professional",
-                    company_name: place.displayName?.text || "",
-                    category: place.primaryTypeDisplayName?.text || "Professional",
-                    bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
-                    location: cleanAddress,
-                    coordinates: coords,
-                    distanceKm: dist,
-                    rating: typeof place.rating === 'number' ? place.rating : 0,
-                    reviews_count: place.userRatingCount || 0,
-                    phone: place.nationalPhoneNumber || "",
-                    website: place.websiteUri || "",
-                    googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
-                    image: photoUrl,
-                    source: 'google_places',
-                    is_community_recommended: false
-                  };
-                });
+                    const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+
+                    return {
+                      id: `google_${place.id}`,
+                      name: place.displayName?.text || "Professional",
+                      company_name: place.displayName?.text || "",
+                      category: place.primaryTypeDisplayName?.text || "Professional",
+                      bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
+                      location: cleanAddress,
+                      coordinates: coords,
+                      distanceKm: dist,
+                      rating: typeof place.rating === 'number' ? place.rating : 0,
+                      reviews_count: place.userRatingCount || 0,
+                      phone: place.nationalPhoneNumber || "",
+                      website: place.websiteUri || "",
+                      googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
+                      image: photoUrl,
+                      source: 'google_places',
+                      is_community_recommended: false
+                    };
+                  })
+                  .filter((place: any) => !isTradeMismatched(text, place.name, place.category));
 
                 // Merge and sort strictly by distance to center
                 const mergedMap = new Map<string, any>();
                 clientGooglePlacesPros.forEach(p => mergedMap.set(String(p.id), p));
                 newlyFetched.forEach(p => mergedMap.set(String(p.id), p));
-                const allPlaces = Array.from(mergedMap.values());
+                const allPlaces = Array.from(mergedMap.values()).filter((p: any) =>
+                  !isTradeMismatched(text, p.name, p.category)
+                );
                 allPlaces.sort((a: any, b: any) => {
                   const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
                   const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
@@ -829,7 +817,9 @@ Return ONLY the concise 2-6 word search query string.`,
             source: 'google_places'
           }));
 
-          const allCandidatePros = [...proListBrief, ...googleProsBrief];
+          const allCandidatePros = [...proListBrief, ...googleProsBrief].filter((p: any) =>
+            !isTradeMismatched(text, p.name, p.category)
+          );
           const filteredCandidatePros = (isProximityGlobal && userLocation)
             ? allCandidatePros.filter(p => (p as any).distanceKm !== null && (p as any).distanceKm <= 4.5)
             : allCandidatePros;
@@ -837,7 +827,10 @@ Return ONLY the concise 2-6 word search query string.`,
           const historyFormatted = historyForApi.map(m => `${m.role === 'user' ? 'User' : 'Jane'}: ${m.content}`).join('\n');
           const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" in Valencia.
 Continue the conversation to refine search results according to the user's latest follow-up.
-Match relevant pros, events (score >= 40 for community, expat, social, cultural, networking, tapas, beach, workshops, or query-related events), and guides. Return a warm, helpful response answering their specific query and refining the list.`;
+STRICT TRADE COHERENCE:
+- Match ONLY professionals whose specialty directly corresponds to the requested service.
+- If searching for an osteopath, NEVER match dentists, doctors, or lawyers. Mismatched pros get score 0.
+- Match relevant pros, events (score >= 40 for community, expat, social, cultural, networking, tapas, beach, workshops, or query-related events), and guides. Return a warm, helpful response answering their specific query and refining the list.`;
 
           const response = await ai.models.generateContent({
             model: "gemini-3.1-flash-lite",
@@ -895,18 +888,6 @@ Match relevant pros, events (score >= 40 for community, expat, social, cultural,
 
           const parsed = JSON.parse(response.text || "{}");
           const prosResults = (parsed.pros || []).filter((p: any) => (p.score || 0) >= 40);
-
-          // Auto-add Google Places pros to follow-up results if they align with the latest text query
-          clientGooglePlacesPros.forEach((gp: any) => {
-            const alreadyMatched = prosResults.some((pr: any) => String(pr.id) === String(gp.id));
-            if (!alreadyMatched) {
-              prosResults.push({
-                id: String(gp.id),
-                score: Math.round((gp.rating || 4.5) * 20),
-                reason: `Discovered nearby: ${gp.name} is a highly-rated ${gp.category || 'professional'} with ${gp.reviews_count || 0} reviews.`
-              });
-            }
-          });
 
           const eventsResults = (parsed.events || []).filter((e: any) => (e.score || 0) >= 40);
           const guidesResults = (parsed.guides || []).filter((g: any) => (g.score || 0) >= 40);

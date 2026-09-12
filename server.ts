@@ -9,7 +9,9 @@ import {
   calculateDistanceKm,
   sortProfessionalsByProximityAndRating,
   DEFAULT_VALENCIA_CENTER,
-  Coordinates
+  Coordinates,
+  buildOptimizedPlacesQuery,
+  isTradeMismatched
 } from "./src/lib/locationUtils";
 
 dotenv.config();
@@ -73,40 +75,17 @@ async function startServer() {
     const centerLng = centerCoords.lng;
 
     try {
-      const normalizedQuery = query.toLowerCase();
-      const isProximity = normalizedQuery.includes('autour') || 
-                          normalizedQuery.includes('proche') || 
-                          normalizedQuery.includes('near') || 
-                          normalizedQuery.includes('around') || 
-                          normalizedQuery.includes('close to') || 
-                          normalizedQuery.includes('moi') || 
-                          normalizedQuery.includes('me') || 
-                          normalizedQuery.includes('ici');
-
-      let cleanQuery = query;
-      if (isProximity) {
-        cleanQuery = query
-          .replace(/autour de moi/gi, '')
-          .replace(/proche de moi/gi, '')
-          .replace(/autour/gi, '')
-          .replace(/proche/gi, '')
-          .replace(/near me/gi, '')
-          .replace(/around me/gi, '')
-          .replace(/close to me/gi, '')
-          .replace(/\bde\b/gi, '')
-          .trim();
-        if (!cleanQuery) cleanQuery = query;
-      }
-
-      // If user asked for a specific zone (e.g. Ruzafa, Paterna), search that zone.
-      // Otherwise, search clean query biased tightly to GPS position (never hardcode Valencia center).
-      const textQuery = targetZone.isSpecificZone
-        ? `${cleanQuery} ${targetZone.zoneName} Valencia Spain`
-        : (userLocationCoords ? cleanQuery : `${cleanQuery} in Valencia Spain`);
+      // Build optimized query targeted for Google Places Spain
+      const textQuery = buildOptimizedPlacesQuery(
+        query,
+        targetZone.isSpecificZone,
+        targetZone.zoneName,
+        !!userLocationCoords
+      );
 
       const requestBody: any = {
         textQuery,
-        maxResultCount: 20, // Request wider pool to pick the closest 6
+        maxResultCount: 20, // Request wider pool to pick the closest 6 genuine matches
         languageCode: "en"
       };
 
@@ -133,47 +112,50 @@ async function startServer() {
         const data = await response.json();
         const places = data.places || [];
 
-        const formatted = places.map((place: any, idx: number) => {
-          let photoUrl = "";
-          if (place.photos && place.photos.length > 0) {
-            photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${apiKey}`;
-          }
+        const formatted = places
+          .map((place: any, idx: number) => {
+            let photoUrl = "";
+            if (place.photos && place.photos.length > 0) {
+              photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${apiKey}`;
+            }
 
-          const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
+            const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
 
-          let coords: Coordinates = {
-            lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
-            lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
-          };
-
-          if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
-            coords = {
-              lat: place.location.latitude,
-              lng: place.location.longitude
+            let coords: Coordinates = {
+              lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
+              lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
             };
-          }
 
-          const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+            if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
+              coords = {
+                lat: place.location.latitude,
+                lng: place.location.longitude
+              };
+            }
 
-          return {
-            id: `google_${place.id}`,
-            name: place.displayName?.text || "Professional",
-            company_name: place.displayName?.text || "",
-            category: place.primaryTypeDisplayName?.text || "Professional",
-            bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
-            location: cleanAddress,
-            coordinates: coords,
-            distanceKm: dist,
-            rating: typeof place.rating === 'number' ? place.rating : 0,
-            reviews_count: place.userRatingCount || 0,
-            phone: place.nationalPhoneNumber || "",
-            website: place.websiteUri || "",
-            googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
-            image: photoUrl,
-            source: 'google_places',
-            is_community_recommended: false
-          };
-        });
+            const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+
+            return {
+              id: `google_${place.id}`,
+              name: place.displayName?.text || "Professional",
+              company_name: place.displayName?.text || "",
+              category: place.primaryTypeDisplayName?.text || "Professional",
+              bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
+              location: cleanAddress,
+              coordinates: coords,
+              distanceKm: dist,
+              rating: typeof place.rating === 'number' ? place.rating : 0,
+              reviews_count: place.userRatingCount || 0,
+              phone: place.nationalPhoneNumber || "",
+              website: place.websiteUri || "",
+              googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
+              image: photoUrl,
+              source: 'google_places',
+              is_community_recommended: false
+            };
+          })
+          // Strict trade filter: discard cross-specialty pollution (e.g. dental clinic when searching for osteopath)
+          .filter((p: any) => !isTradeMismatched(query, p.name, p.category));
 
         // Strictly sort by closest distance to user GPS (or specific requested zone)
         // No priority for ratings or review counts, and never more than 6 pros!
@@ -385,27 +367,29 @@ Current Target Center / Zone: ${targetZone ? targetZone.zoneName : 'Valence'} ($
 
 Review the list of professionals provided and evaluate BOTH trade/service criteria AND location/proximity criteria:
 
-1. QUERY PARSING & SYNONYMS (CRITICAL):
-   - Trade / Profession Synonyms & Translations:
-     * "dentist", "dentiste", "dentista" ALL match Dentistry / Medical / Dental care.
-     * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "hair salon", "barber" ALL match "Hairdresser", "Coiffeur", "Beauty & Wellness".
-     * "doctor", "physician", "médecin", "gp" ALL match Doctor/Medical services.
-     * "realtor", "real estate agent", "inmobiliaria" ALL match Real Estate / Property services.
-     * "plumber", "plombier", "fontanero" ALL match Plumbing services.
-     * Treat language translations (English, French, Spanish) and word variations as EXACT trade matches!
+1. STRICT TRADE COHERENCE & ZERO CROSS-SPECIALTY POLLUTION (CRITICAL):
+   - You MUST match ONLY professionals whose actual trade, profession, or service DIRECTLY matches what the user is looking for.
+   - ZERO CROSS-SPECIALTY POLLUTION:
+     * If user searches "ostéopathe" / "osteopath" / "osteopatía": ONLY match osteopaths (or dedicated osteopathy/physiotherapy practices). NEVER match dentists ("dentistes"), general doctors ("médecins"), pediatricians ("pédiatres"), dermatologists, psychologists, or lawyers! Any mismatched professional MUST receive a score of 0.
+     * If user searches "dentiste" / "dentist" / "dentista": ONLY match dentists, dental clinics, or orthodontists. NEVER match doctors, osteopaths, or physiotherapists!
+     * If user searches "médecin généraliste" / "general practitioner": ONLY match general practitioners / primary care doctors. NEVER match dentists, surgeons, or osteopaths!
+     * If user searches "plombier" / "plumber": ONLY match plumbers. NEVER match electricians or locksmiths unless requested!
+     * If user searches "avocat" / "lawyer": ONLY match lawyers / legal counsel. NEVER match accountants, gestors, or real estate agents!
+   - Broad categories like "Health & Wellness" or "Medical" MUST NEVER be used to justify returning an unrelated medical specialty. A dentist is NOT an osteopath.
+   - Any professional whose trade does not correspond to the requested service MUST receive score 0 and NOT be returned.
 
-2. 3-TIER RANKING PRIORITY SYSTEM (MANDATORY ORDERING):
-   - TIER 1 (Highest Priority): Recommended App Professionals ('is_community_recommended: true' or community source) WITHIN 25 KM of the target area (${targetZone?.zoneName}). Give score 85-100.
-   - TIER 2: Google Places professionals ('source: google_places'): Up to 6 provided, sorted SOLELY by closest distance to user location (closest first). Do NOT sort or prioritize by rating or reviews (score 60-80).
-   - TIER 3: Other matching professionals further than 25 km away (score 40-55).
+2. 3-TIER RANKING PRIORITY SYSTEM (APPLIES EXCLUSIVELY TO GENUINE TRADE MATCHES):
+   - TIER 1 (Highest Priority): Recommended App Professionals ('is_community_recommended: true') WITHIN 25 KM of the target area WHO PRACTICE THE REQUESTED TRADE. Give score 85-100. If no community pro practices this trade, return score 0 for all community pros. DO NOT force unrelated community pros!
+   - TIER 2: Google Places professionals ('source: google_places') WHO PRACTICE THE REQUESTED TRADE: Up to 6 provided, sorted SOLELY by closest distance to user location (closest first). Any mismatched Google Places entry MUST receive score 0. Score: 60-80.
+   - TIER 3: Other genuine matching professionals further than 25 km away (score 40-55).
 
 3. PRESENTATION TONE & REASONS:
    - Do NOT mention or emphasize Google ratings, star scores or review counts in reasonUrlExcerpt or summaryMessage (e.g. NEVER say 'bénéficie d'une note Google de 4.9' or 'très bien noté sur Google').
    - Clarify why they match simply and neutrally (mentioning their trade, specialty, or neighborhood/town in Valencia).
 
 4. "exactMatchFound" & "summaryMessage" RULES:
-   - If AT LEAST ONE professional is a match (score >= 40), set "exactMatchFound" to true, and "summaryMessage" to null.
-   - If NO professionals match at all, set "exactMatchFound" to false.
+   - If AT LEAST ONE professional is a genuine match (score >= 40), set "exactMatchFound" to true, and "summaryMessage" to null.
+   - If NO professionals match the requested trade at all, set "exactMatchFound" to false and provide a friendly explanation in summaryMessage.
 
 5. Under "reasonUrlExcerpt" for each matched professional, write a single concise sentence clarifying why they fit the user's need.`;
 
@@ -646,9 +630,11 @@ Return ONLY the concise 2-6 word search query string.`,
         };
       });
 
-      // Combine both lists for Gemini matching
+      // Combine both lists for Gemini matching, applying strict pre-filtering for mismatched trades
       const allCandidatePros = [...proListBrief, ...googleProsBrief];
-      const filteredCandidatePros = allCandidatePros;
+      const filteredCandidatePros = allCandidatePros.filter((p: any) => 
+        !isTradeMismatched(placesSearchQuery || query, p.name, p.category)
+      );
 
       const eventsBrief = events.slice(0, 30).map((e: any) => ({
         id: String(e.id),
@@ -684,34 +670,38 @@ TARGET CENTER / ZONE FOR GEOGRAPHIC LOCATION:
 - Radius rule: Search prioritizes professionals within 25 km of ${targetZone ? targetZone.zoneName : 'this location'}.
 
 3-TIER RANKING PRIORITY FOR PROFESSIONALS:
-- TIER 1: Recommended App Pros ('is_community_recommended: true') WITHIN 25 KM of ${targetZone ? targetZone.zoneName : 'the target center'}. Must rank highest (scores 85-100).
-- TIER 2: Google Places pros ('source: google_places'). Strictly max 6 provided, sorted SOLELY by closest distance to user location (or requested location). DO NOT sort or reorder by ratings or reviews; preserve closest distance first (scores 60-80).
-- TIER 3: Other pros further than 25 km away (scores 40-55).
+- TIER 1: Recommended App Pros ('is_community_recommended: true') WITHIN 25 KM of ${targetZone ? targetZone.zoneName : 'the target center'} WHO PRACTICE THE REQUESTED TRADE. Must rank highest (scores 85-100). If no community pro practices the requested trade, return score 0 for all community pros. DO NOT force unrelated community pros!
+- TIER 2: Google Places pros ('source: google_places') WHO PRACTICE THE REQUESTED TRADE: Strictly max 6 provided, sorted SOLELY by closest distance to user location (or requested location). DO NOT sort or reorder by ratings or reviews; preserve closest distance first (scores 60-80). Mismatched Google Places entries MUST receive score 0.
+- TIER 3: Other genuine trade matches further than 25 km away (scores 40-55).
 
-CRITICAL DISCRIMINATION & RELEVANCE RULES:
-1. SELECTIVE INCLUSION (STRICT):
-   - ONLY include a category in "matched_topics" if there are genuinely relevant items for that category.
-   - Do NOT force items into a category if there is no natural match.
-   - If the user asks a follow-up to refine (e.g. "Only those who speak French", "Which one is closest to Ruzafa?", "Are there weekend activities for toddlers?"), refine the matching items accordingly and explain in your message.
-   - If the user is specifically looking for a service/pro:
-     * Match relevant pros (Score 50-100).
-     * Only include a guide if directly related to that subject.
-     * Proactively match any events that relate to the user's query topic, community meetups, social gatherings, expat networking, or local workshops (score >= 40). If an event is entirely unrelated, set score to 0. But do not hesitate to recommend events when they fit the user's general interest or provide a social angle.
+CRITICAL TRADE COHERENCE & ZERO CROSS-SPECIALTY POLLUTION (MANDATORY):
+1. STRICT TRADE COHERENCE:
+   - Match ONLY professionals who genuinely practice or specialize in the requested trade.
+   - ZERO CROSS-SPECIALTY POLLUTION:
+     * If user searches "ostéopathe" / "osteopath" / "osteopatía": ONLY match osteopaths or dedicated osteopathy practices. NEVER match dentists ("dentistes", dental clinics), general doctors ("médecins généralistes"), pediatricians ("pédiatres"), dermatologists, psychologists, or lawyers! Any mismatched professional MUST receive score 0.
+     * If user searches "dentiste" / "dentist": ONLY match dentists, dental clinics, or orthodontists. NEVER match general doctors, osteopaths, or physiotherapists!
+     * If user searches "médecin généraliste": ONLY match general doctors / primary care physicians. NEVER match dentists, surgeons, or osteopaths!
+     * If user searches "plombier" / "plumber": ONLY match plumbers. NEVER match electricians or locksmiths!
+     * If user searches "avocat" / "lawyer": ONLY match legal counsel. NEVER match accountants or real estate agents!
+   - Broad categories like "Health & Wellness" or "Medical" MUST NEVER be used to justify returning an unrelated specialty. A dentist is NOT an osteopath.
+   - Any candidate professional whose actual trade does not match the requested service MUST receive score 0 and be omitted from "pros".
 
-2. SCORING & REASONS:
-   - Score: 0 to 100. Only return items with score >= 40.
-   - "reason": A single concise sentence explaining why this specific item fits the request.
-   - If no items in a category score >= 40, return an empty array [] for that category.
-
-3. "jane_message":
+2. HONEST & HELPFUL JANE MESSAGE:
+   - If there are no community recommended professionals in Unlocked for the specific trade, be completely honest and transparent with the user in "jane_message":
+     * For example: "Nous n'avons pas encore d'ostéopathe recommandé directement au sein de la communauté Unlocked, mais voici les professionnels les plus proches trouvés autour de vous :" (or equivalent in user's query language).
+     * NEVER claim an unrelated doctor or dentist is a match.
    - Write a warm, helpful, conversational response in the SAME language as the user's query (French, Spanish, English, etc.).
    - Directly address their question or refinement with precision and empathy.
    - If a specific neighborhood/zone was detected (${targetZone?.zoneName}), gently confirm in your message that results are centered on ${targetZone?.zoneName} within 10 km.
 
-4. "matched_topics":
-   - Include ONLY the topic names that actually have at least one matching item (e.g. ["pros", "guides"] or ["events"] or ["pros"]). If none match, return [].
+3. SELECTIVE INCLUSION & TOPICS:
+   - ONLY include a category in "matched_topics" if there are genuinely relevant items for that category.
+   - Do NOT force items into a category if there is no natural match.
+   - If the user asks a follow-up to refine (e.g. "Only those who speak French", "Which one is closest to Ruzafa?"), refine the matching items accordingly.
+   - If no items in a category score >= 40, return an empty array [] for that category.
+   - Include ONLY topic names that actually have at least one matching item (e.g. ["pros"] or ["pros", "guides"]). If none match, return [].
 
-5. PRESENTATION TONE FOR PROFESSIONALS:
+4. PRESENTATION TONE FOR PROFESSIONALS:
    - Do NOT mention or emphasize Google ratings, scores, or review counts in your message (jane_message) or in the reason field (e.g. NEVER say 'bénéficie d'une excellente note Google de 4.9' or 'très bien noté sur Google'). Simply present them neutrally and naturally by their profession, service, specialty, or location in Valencia.`;
 
       const response = await getAiClient().models.generateContent({
