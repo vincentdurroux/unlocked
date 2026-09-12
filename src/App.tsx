@@ -914,37 +914,65 @@ export default function App() {
     if (!hasRealLocation) {
       setShowLocationBanner(true);
     }
+
+    const setCoordsWithValenciaGuard = (lat: number, lng: number) => {
+      const distToValencia = calculateDistanceKm(39.46975, -0.37739, lat, lng);
+      let finalLoc = { lat, lng };
+      let simulated = false;
+
+      // If they are more than 100km away from Valencia, Spain, we simulate their position in Ruzafa, Valencia so local search works!
+      if (distToValencia > 100.0) {
+        finalLoc = { lat: 39.4620, lng: -0.3725 }; // Ruzafa, Valencia
+        simulated = true;
+      }
+
+      setUserLocation(finalLoc);
+      setHasRealLocation(true);
+      setShowLocationBanner(false);
+      setMapCenterTrigger((prev) => prev + 1);
+
+      try {
+        localStorage.setItem('unlocked_user_location', JSON.stringify(finalLoc));
+        localStorage.setItem('unlocked_has_real_location', 'true');
+        localStorage.setItem('unlocked_show_location_banner', 'false');
+        localStorage.setItem('unlocked_is_simulated_location', simulated ? 'true' : 'false');
+      } catch (e) {
+        console.error(e);
+      }
+
+      onSuccess?.(finalLoc);
+    };
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const loc = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          setUserLocation(loc);
-          setHasRealLocation(true);
-          setShowLocationBanner(false);
-          setMapCenterTrigger((prev) => prev + 1);
-          try {
-            localStorage.setItem('unlocked_user_location', JSON.stringify(loc));
-            localStorage.setItem('unlocked_has_real_location', 'true');
-            localStorage.setItem('unlocked_show_location_banner', 'false');
-          } catch (e) {
-            console.error(e);
-          }
-          onSuccess?.(loc);
+          setCoordsWithValenciaGuard(position.coords.latitude, position.coords.longitude);
         },
-        () => {
-          setHasRealLocation(false);
+        async (error) => {
+          console.warn("Geolocation API failed or blocked in iframe. Code:", error.code, "Message:", error.message);
+          
+          // Try IP fallback
           try {
-            localStorage.setItem('unlocked_has_real_location', 'false');
-          } catch (e) {
-            console.error(e);
+            const res = await fetch("https://ipapi.co/json/");
+            if (res.ok) {
+              const ipData = await res.json();
+              if (ipData.latitude && ipData.longitude) {
+                setCoordsWithValenciaGuard(ipData.latitude, ipData.longitude);
+                return;
+              }
+            }
+          } catch (ipErr) {
+            console.error("IP fallback failed:", ipErr);
           }
-        }
+
+          // Absolute fallback: default to Ruzafa, Valencia
+          console.log("Using default simulated location in Ruzafa, Valencia...");
+          setCoordsWithValenciaGuard(39.4620, -0.3725);
+        },
+        { timeout: 6000, enableHighAccuracy: false }
       );
     } else {
-      setHasRealLocation(false);
+      setCoordsWithValenciaGuard(39.4620, -0.3725);
     }
   };
 
@@ -1080,6 +1108,11 @@ export default function App() {
     return legacy ? [legacy] : [];
   });
 
+
+  // Trigger geolocation on mount to instantly locate the user in Valencia (real or simulated)
+  useEffect(() => {
+    requestGeolocation();
+  }, []);
 
   useEffect(() => {
     if (globalAlert) {
