@@ -292,12 +292,12 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
     // Client-side fallback if server fails
     if (!success) {
       try {
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || '';
         if (!apiKey) {
-          throw new Error("AI search is temporarily unavailable. You can browse the directory below.");
+          throw new Error("The server AI search service is busy or unavailable (Error 404). To use client-side AI search on static hosts (e.g., Vercel), please configure the VITE_GEMINI_API_KEY environment variable in your Vercel project settings.");
         }
 
-        const googleMapsKey = (typeof process !== 'undefined' && process.env?.GOOGLE_MAPS_PLATFORM_KEY) || '';
+        const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || (typeof process !== 'undefined' ? process.env.GOOGLE_MAPS_PLATFORM_KEY : '') || '';
         let clientGooglePlacesPros: any[] = [];
 
         if (googleMapsKey) {
@@ -550,7 +550,7 @@ Rules:
 
     if (!success) {
       try {
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || '';
         if (apiKey) {
           const ai = new GoogleGenAI({ apiKey });
           const historyFormatted = historyForApi.map(m => `${m.role === 'user' ? 'User' : 'Jane'}: ${m.content}`).join('\n');
@@ -1102,21 +1102,13 @@ Match relevant pros, events (score >= 40 for community, expat, social, cultural,
             {/* 1. MATCHED PROS */}
             {hasPros && (selectedTopicTab === 'all' || selectedTopicTab === 'pros') && (
               <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-brand-blue text-white flex items-center justify-center">
-                      <Briefcase className="w-3.5 h-3.5" />
-                    </div>
-                    <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
-                      Recommended Professionals ({matchedPros.length})
-                    </h4>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-brand-blue text-white flex items-center justify-center">
+                    <Briefcase className="w-3.5 h-3.5" />
                   </div>
-
-                  {/* Active Zone Status Pill */}
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200/80 text-brand-blue text-[11px] font-semibold shrink-0">
-                    <MapPin className="w-3.5 h-3.5 text-brand-blue shrink-0" />
-                    <span>Centered on: {activeTargetZone.zoneName} (within 25 km)</span>
-                  </div>
+                  <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
+                    Recommended Professionals ({matchedPros.length})
+                  </h4>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
