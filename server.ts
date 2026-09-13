@@ -536,6 +536,7 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
       // 1. Intelligent Topic & Follow-up Intent Analysis if conversation history exists
       let placesSearchQuery = query;
       let isNewTopic = false;
+      let isConversationalOnly = false;
       let topicTransitionReason = "";
 
       if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
@@ -549,29 +550,34 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
             contents: `You are an expert conversation flow and search intent analyzer for Unlocked (a local guide & directory in Valencia, Spain).
 
 Analyze the conversation thread and the latest message to determine whether the user is:
-1. CONTINUING & REFINING the existing discussion (e.g. asking for a French-speaking professional, asking about closer locations, asking about prices/hours/details of previously mentioned places, asking for alternative options within the same domain/trade).
-2. STARTING A NEW DISCUSSION / SWITCHING TOPIC (e.g. was discussing dentists, now asking for a plumber, a restaurant, cultural events, NIE administrative help, or asking a completely separate service or question).
+1. STARTING A NEW TOPIC OR SWITCHING TRADE/SERVICE: (e.g. was looking for an osteopath, now asks for a dentist, a physiotherapist, a plumber, an accountant, a restaurant, a yoga class, NIE help, or any different trade, profession, or activity).
+   -> is_new_topic = true
+   -> is_conversational_only = false
+   -> effective_search_query = ONLY the new trade/service/activity + any newly requested neighborhood/town (2-5 words max, e.g. "dentiste", "cours de salsa", "plombier Ruzafa"). NEVER keep keywords or trades from the old topic!
+
+2. REFINING OR FILTERING THE ONGOING SEARCH: (e.g. asking for a specific neighborhood/zone like "Et à Ruzafa ?", asking for a language like "qui parle anglais", asking for a sub-specialty or detail of the current trade, asking for closer options, or asking for alternative options within the same trade).
+   -> is_new_topic = false
+   -> is_conversational_only = false
+   -> effective_search_query = Synthesize the ONGOING trade with the new filter/location/requirement (e.g. "ostéopathe Ruzafa", "dentiste francophone", "kiné pédiatrique").
+
+3. PURELY CONVERSATIONAL / ASKING ABOUT PREVIOUSLY SHOWN RESULTS: (e.g. "Lequel est le plus proche ?", "Quels sont leurs tarifs ?", "Qu'en penses-tu ?", "Merci beaucoup").
+   -> is_new_topic = false
+   -> is_conversational_only = true
+   -> effective_search_query = the ongoing trade
 
 Conversation History:
 ${historyFormattedForClassification}
 
 Latest User Message:
-"${query}"
-
-Rules:
-- is_new_topic: true if user is asking for a different service, profession, activity, or unrelated request.
-- is_new_topic: false if user is refining, filtering, clarifying, or asking questions about the existing topic/service.
-- effective_search_query:
-  * If is_new_topic is true: Extract ONLY the new trade/service/activity + location (2-5 words max, e.g. "plombier", "restaurant paella", "concert jazz"). DO NOT keep keywords from the old topic!
-  * If is_new_topic is false: Synthesize the current trade with the new refinement/filter (e.g. "dentiste francophone", "ostéopathe Ruzafa").
-- DO NOT append city/neighborhood name (like Valencia, Ruzafa) unless the user explicitly mentioned it in their query.`,
+"${query}"`,
             config: {
               responseMimeType: "application/json",
               responseSchema: {
                 type: Type.OBJECT,
                 properties: {
-                  is_new_topic: { type: Type.BOOLEAN, description: "True if user switched to a new topic/service, false if continuing/refining the previous topic" },
-                  topic_transition_reason: { type: Type.STRING, description: "Brief reason explaining whether it is a new topic or follow-up" },
+                  is_new_topic: { type: Type.BOOLEAN, description: "True if user switched to a new trade/service/activity, false if continuing/refining the previous topic" },
+                  is_conversational_only: { type: Type.BOOLEAN, description: "True if user is only asking a conversational question about already displayed results without requesting new/filtered places" },
+                  topic_transition_reason: { type: Type.STRING, description: "Brief reason explaining whether it is a new topic, refinement, or conversation" },
                   effective_search_query: { type: Type.STRING, description: "Precise 2-5 word search query for Google Places and local search" }
                 },
                 required: ["is_new_topic", "effective_search_query"]
@@ -582,6 +588,7 @@ Rules:
 
           const parsedAnalysis = JSON.parse(topicAnalysis.text || "{}");
           isNewTopic = Boolean(parsedAnalysis.is_new_topic);
+          isConversationalOnly = Boolean(parsedAnalysis.is_conversational_only);
           topicTransitionReason = parsedAnalysis.topic_transition_reason || "";
           if (parsedAnalysis.effective_search_query && parsedAnalysis.effective_search_query.trim().length >= 2) {
             placesSearchQuery = parsedAnalysis.effective_search_query.trim();
@@ -591,9 +598,6 @@ Rules:
           placesSearchQuery = query;
         }
       }
-
-      // If user switched to a new topic, discard previous Google Places pros from the old topic!
-      const existingPlacesToConsider = isNewTopic ? [] : (Array.isArray(clientGooglePlacesPros) ? clientGooglePlacesPros : []);
 
       // 2. Fetch live Google Places results in target zone/user location (up to 6 max, closest first)
       let newlyFetchedPlaces: any[] = [];
@@ -612,16 +616,53 @@ Rules:
         ? targetZone.centerCoords
         : (userLocation || DEFAULT_VALENCIA_CENTER);
 
-      // 3. Merge existing (if same topic) and newly fetched Google Places pros
-      const combinedPlacesMap = new Map<string, any>();
-      existingPlacesToConsider.forEach((p: any) => {
-        if (p && p.id) combinedPlacesMap.set(String(p.id), p);
-      });
-      newlyFetchedPlaces.forEach((p: any) => {
-        if (p && p.id) combinedPlacesMap.set(String(p.id), p);
-      });
+      // 3. Determine coherent Google Places pros matching the current search intent
+      // Newly fetched places from Google Places matching the trade are the primary source of truth!
+      const validNewPlaces = (newlyFetchedPlaces || []).filter((p: any) =>
+        !isTradeMismatched(placesSearchQuery, p.name, p.category)
+      );
 
-      const rawGooglePlacesPros = Array.from(combinedPlacesMap.values()).map((p: any) => {
+      let finalPlaces: any[] = [];
+
+      if (isNewTopic) {
+        // Topic switch: completely replace with freshly fetched places for the new trade
+        finalPlaces = validNewPlaces;
+      } else if (isConversationalOnly && Array.isArray(clientGooglePlacesPros) && clientGooglePlacesPros.length > 0) {
+        // Purely conversational (e.g. "Which one do you recommend?"): keep currently shown places
+        finalPlaces = clientGooglePlacesPros.filter((p: any) =>
+          !isTradeMismatched(placesSearchQuery, p.name, p.category)
+        );
+      } else {
+        // Refinement of ongoing topic (e.g. "Et à Ruzafa ?", "Et qui parle français ?"):
+        // Prioritize newly fetched places matching the refined query and target zone
+        finalPlaces = [...validNewPlaces];
+
+        // If newly fetched places has fewer than 6, we may backfill from previous places ONLY IF:
+        // - They strictly match the requested trade (not a mismatched trade)
+        // - If a specific zone was requested (e.g. Ruzafa), they are reasonably close to that zone (<= 5 km)
+        if (finalPlaces.length < 6 && Array.isArray(clientGooglePlacesPros)) {
+          const currentIds = new Set(finalPlaces.map((p: any) => String(p.id)));
+          for (const prev of clientGooglePlacesPros) {
+            if (finalPlaces.length >= 6) break;
+            const prevId = String(prev.id);
+            if (!currentIds.has(prevId) && !isTradeMismatched(placesSearchQuery, prev.name, prev.category)) {
+              if (targetZone?.isSpecificZone) {
+                let lat = prev.coordinates?.lat ?? prev.lat;
+                let lng = prev.coordinates?.lng ?? prev.lng;
+                const distToZone = (typeof lat === 'number' && typeof lng === 'number')
+                  ? calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng)
+                  : 999;
+                if (distToZone > 5) continue;
+              }
+              currentIds.add(prevId);
+              finalPlaces.push(prev);
+            }
+          }
+        }
+      }
+
+      // Recompute distance to the active center (user GPS or specific neighborhood/zone)
+      const rawGooglePlacesPros = finalPlaces.map((p: any) => {
         let lat = p.coordinates?.lat ?? p.lat;
         let lng = p.coordinates?.lng ?? p.lng;
         const dist = (typeof lat === 'number' && typeof lng === 'number')
@@ -630,7 +671,7 @@ Rules:
         return { ...p, distanceKm: dist };
       });
 
-      // Strict user rule: "Supprime les ordres de priorité des pros de google places. La seule regle est les plus proches de ma position gps en premier sauf si une demande particuliere d'emplacement est demandée par l'utilisateur. Et pas plus de 6 pros de google places données"
+      // Strict user rule: sort by closest distance to center, maximum 6 Google Places pros
       rawGooglePlacesPros.sort((a, b) => {
         const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
         const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
@@ -812,6 +853,7 @@ ${JSON.stringify(guidesBrief, null, 2)}`,
             type: Type.OBJECT,
             properties: {
               jane_message: { type: Type.STRING, description: "Friendly summary message in user's language" },
+              detected_language: { type: Type.STRING, description: "User's query language code: 'fr', 'es', or 'en'" },
               matched_topics: { 
                 type: Type.ARRAY, 
                 items: { type: Type.STRING },
@@ -912,8 +954,18 @@ ${JSON.stringify(guidesBrief, null, 2)}`,
       if (eventsResults.length > 0) effectiveTopics.push("events");
       if (guidesResults.length > 0) effectiveTopics.push("guides");
 
+      let detectedLang: 'en' | 'fr' | 'es' = 'en';
+      if (parsedData.detected_language && ['fr', 'es', 'en'].includes(parsedData.detected_language.toLowerCase())) {
+        detectedLang = parsedData.detected_language.toLowerCase() as 'en' | 'fr' | 'es';
+      } else if (parsedData.jane_message && /bonjour|voici|trouvé|trouver|recherche|pour votre/i.test(parsedData.jane_message)) {
+        detectedLang = 'fr';
+      } else if (parsedData.jane_message && /hola|aquí|encontré|para tu|búsqueda/i.test(parsedData.jane_message)) {
+        detectedLang = 'es';
+      }
+
       return res.json({
         jane_message: parsedData.jane_message || "Here are the results I found for you:",
+        detected_language: detectedLang,
         matched_topics: effectiveTopics,
         pros: prosResults,
         events: eventsResults,

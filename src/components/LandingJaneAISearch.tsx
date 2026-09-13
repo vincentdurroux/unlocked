@@ -91,6 +91,7 @@ interface AISearchMatch {
 
 interface AISearchResponse {
   jane_message: string;
+  detected_language?: 'en' | 'fr' | 'es';
   matched_topics: string[];
   pros: AISearchMatch[];
   events: AISearchMatch[];
@@ -187,16 +188,41 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
   const detectLanguage = (text: string): 'en' | 'fr' | 'es' => {
     if (!text) return 'en';
     const lower = text.toLowerCase();
-    if (/\b(hola|por favor|busco|donde|está|gracias|plomero|dentista|osteopata|actividades|cosas|que hacer|barrio|español|españa)\b/.test(lower)) {
+    
+    // Spanish characters and vocabulary
+    if (
+      /[áíóúñ¿¡]/.test(lower) ||
+      /\b(hola|por favor|busco|buscamos|donde|dónde|está|están|gracias|plomero|fontanero|dentista|osteopata|actividades|cosas|que hacer|barrio|español|españa|médico|abogado|abogados|gestor|restaurante|precio|precios|para|con|los|las|una|unas|unos|del|ayuda|necesito|quiero|quisiera|fin de semana|salir|eventos|alquiler|casa|piso)\b/i.test(lower)
+    ) {
       return 'es';
     }
-    if (/\b(bonjour|cherche|trouve|où|est|merci|plombier|dentiste|ostéopathe|activités|choses|faire|quartier|cabinet|médecin|français|france)\b/.test(lower)) {
+
+    // French accented characters, elisions, and comprehensive vocabulary
+    if (
+      /[éèêëàâçùûôœ]/.test(lower) ||
+      /\b(d'|l'|j'|n'|s'|c'|qu')/.test(lower) ||
+      /\b(bonjour|bonsoir|salut|cherche|cherchons|trouve|trouver|où|est|sont|merci|plombier|dentiste|ostéopathe|osteopathe|activités|activites|choses|faire|quartier|cabinet|médecin|medecin|français|francais|francophone|france|avocat|avocats|comptable|fiscaliste|électricien|electricien|peintre|coiffeur|vétérinaire|veterinaire|déménagement|demenagement|cours|appartement|location|maison|pédiatre|pediatre|kiné|kine|massage|urgent|urgence|assurance|banque|resto|restaurant|soir|soirée|soiree|week-end|weekend|sortie|sorties|loisirs|je|tu|il|elle|nous|vous|ils|elles|le|la|les|un|une|des|du|de|au|aux|en|dans|pour|avec|sans|sur|sous|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|votre|leur|qui|que|quoi|dont|quand|comment|pourquoi|combien|suis|sommes|êtes|etes|été|ete|avoir|être|etre|voudrais|aimerais|recherche|recherchons|besoin|aide|svp|quel|quelle|quels|quelles)\b/i.test(lower)
+    ) {
       return 'fr';
     }
+
     return 'en';
   };
 
-  const activeLang = detectLanguage(activeQuery || query || (conversation[0]?.text ?? ''));
+  const activeLang: 'en' | 'fr' | 'es' = useMemo(() => {
+    if (searchResult?.detected_language && ['en', 'fr', 'es'].includes(searchResult.detected_language)) {
+      return searchResult.detected_language;
+    }
+    const combinedTexts = [
+      activeQuery,
+      query,
+      conversation[0]?.text,
+      conversation[conversation.length - 1]?.text,
+      searchResult?.jane_message
+    ].filter(Boolean).join(' ');
+    
+    return detectLanguage(combinedTexts);
+  }, [searchResult, activeQuery, query, conversation]);
 
   const t = {
     en: {
@@ -211,19 +237,55 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
       tabPros: "Pros",
       tabEvents: "Events",
       tabGuides: "Guides",
+      noMatchesTitle: "No exact matches found",
+      noMatchesDesc: "Try phrasing your question differently, or browse through the sections directly:",
+      browsePros: "Browse Pros",
+      exploreEvents: "Explore Events",
+      readGuides: "Read Guides",
+      matchingEvents: "Matching Events",
+      recommendedPros: "Recommended Professionals",
+      practicalGuides: "Practical Guides",
+      recommendedByCommunity: "Recommended by MyCityUnlocked community",
+      details: "Details →",
+      view: "View →",
+      read: "Read →",
+      showAllEvents: (count: number) => `Show all ${count} events`,
+      showFewerEvents: "Show fewer events",
+      showAllPros: (count: number) => `Show all ${count} pros`,
+      showFewerPros: "Show fewer pros",
+      showAllGuides: (count: number) => `Show all ${count} guides`,
+      showFewerGuides: "Show fewer guides",
     },
     fr: {
       janeChat: "Discussion avec Jane",
       matched: "Résultat",
-      resultsFound: "résultats trouvés à Valencia",
+      resultsFound: "résultats trouvés à Valence",
       newSearch: "Nouvelle recherche",
       refining: "Jane affine les résultats...",
       typePlaceholder: "Posez votre question...",
       askBtn: "Envoyer",
-      tabAll: "Tous",
+      tabAll: "Tous les résultats",
       tabPros: "Professionnels",
       tabEvents: "Événements",
       tabGuides: "Guides",
+      noMatchesTitle: "Aucun résultat exact trouvé",
+      noMatchesDesc: "Essayez de reformuler votre question ou explorez directement nos rubriques :",
+      browsePros: "Voir les professionnels",
+      exploreEvents: "Découvrir les événements",
+      readGuides: "Consulter les guides",
+      matchingEvents: "Événements correspondants",
+      recommendedPros: "Professionnels recommandés",
+      practicalGuides: "Guides pratiques",
+      recommendedByCommunity: "Recommandé par la communauté MyCityUnlocked",
+      details: "Détails →",
+      view: "Voir →",
+      read: "Lire →",
+      showAllEvents: (count: number) => `Afficher les ${count} événements`,
+      showFewerEvents: "Afficher moins d'événements",
+      showAllPros: (count: number) => `Afficher les ${count} professionnels`,
+      showFewerPros: "Afficher moins de professionnels",
+      showAllGuides: (count: number) => `Afficher les ${count} guides`,
+      showFewerGuides: "Afficher moins de guides",
     },
     es: {
       janeChat: "Chat de Jane",
@@ -233,10 +295,28 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
       refining: "Jane está refinando los resultados...",
       typePlaceholder: "Escribe aquí...",
       askBtn: "Preguntar",
-      tabAll: "Todos",
+      tabAll: "Todas las coincidencias",
       tabPros: "Profesionales",
       tabEvents: "Eventos",
       tabGuides: "Guías",
+      noMatchesTitle: "No se encontraron coincidencias exactas",
+      noMatchesDesc: "Intenta formular tu pregunta de otra forma o explora directamente las secciones:",
+      browsePros: "Ver profesionales",
+      exploreEvents: "Explorar eventos",
+      readGuides: "Leer guías",
+      matchingEvents: "Eventos correspondientes",
+      recommendedPros: "Profesionales recomendados",
+      practicalGuides: "Guías prácticas",
+      recommendedByCommunity: "Recomendado por la comunidad MyCityUnlocked",
+      details: "Detalles →",
+      view: "Ver →",
+      read: "Leer →",
+      showAllEvents: (count: number) => `Mostrar los ${count} eventos`,
+      showFewerEvents: "Mostrar menos eventos",
+      showAllPros: (count: number) => `Mostrar los ${count} profesionales`,
+      showFewerPros: "Mostrar menos profesionales",
+      showAllGuides: (count: number) => `Mostrar las ${count} guías`,
+      showFewerGuides: "Mostrar menos guías",
     }
   }[activeLang];
 
@@ -875,13 +955,29 @@ Rules:
                   })
                   .filter((place: any) => !isTradeMismatched(placesSearchQuery, place.name, place.category));
 
-                // Merge and sort strictly by distance to center
-                const mergedMap = new Map<string, any>();
-                clientGooglePlacesPros.forEach(p => mergedMap.set(String(p.id), p));
-                newlyFetched.forEach(p => mergedMap.set(String(p.id), p));
-                const allPlaces = Array.from(mergedMap.values()).filter((p: any) =>
-                  !isTradeMismatched(placesSearchQuery, p.name, p.category)
+                // Determine coherent Google Places for client fallback
+                const validNewPlaces = (newlyFetched || []).filter((place: any) =>
+                  !isTradeMismatched(placesSearchQuery, place.name, place.category)
                 );
+
+                let allPlaces: any[] = [];
+                if (isNewTopic) {
+                  allPlaces = validNewPlaces;
+                } else {
+                  allPlaces = [...validNewPlaces];
+                  if (allPlaces.length < 6 && clientGooglePlacesPros.length > 0) {
+                    const currentIds = new Set(allPlaces.map((p: any) => String(p.id)));
+                    for (const prev of clientGooglePlacesPros) {
+                      if (allPlaces.length >= 6) break;
+                      const prevId = String(prev.id);
+                      if (!currentIds.has(prevId) && !isTradeMismatched(placesSearchQuery, prev.name, prev.category)) {
+                        currentIds.add(prevId);
+                        allPlaces.push(prev);
+                      }
+                    }
+                  }
+                }
+
                 allPlaces.sort((a: any, b: any) => {
                   const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
                   const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
@@ -1057,10 +1153,10 @@ CRITICAL TRADE COHERENCE:
 
     if (data) {
       setSearchResult(data);
-      if (data.is_new_topic) {
-        setGooglePlacesPros(data.google_places_pros || []);
-      } else if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
+      if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
         setGooglePlacesPros(data.google_places_pros.slice(0, 6));
+      } else if (data.is_new_topic) {
+        setGooglePlacesPros([]);
       }
       if (data.effective_search_query) {
         setActiveQuery(data.effective_search_query);
@@ -1096,20 +1192,23 @@ CRITICAL TRADE COHERENCE:
   const combinedPros = useMemo(() => {
     const map = new Map<string, Professional>();
     allPros.forEach(p => map.set(String(p.id), p));
+    (searchResult?.google_places_pros || []).forEach((p: any) => {
+      if (p && p.id) map.set(String(p.id), p);
+    });
     googlePlacesPros.forEach(p => {
-      if (!map.has(String(p.id))) {
+      if (p && p.id && !map.has(String(p.id))) {
         map.set(String(p.id), p);
       }
     });
     return Array.from(map.values());
-  }, [allPros, googlePlacesPros]);
+  }, [allPros, searchResult?.google_places_pros, googlePlacesPros]);
 
   // Active target zone and center coordinates
   const activeTargetZone = useMemo(() => {
     if (searchResult?.target_zone) {
       return searchResult.target_zone;
     }
-    return detectTargetZone(activeQuery || query || '', userLocation);
+    return detectTargetZone(searchResult?.effective_search_query || activeQuery || query || '', userLocation);
   }, [searchResult, activeQuery, query, userLocation]);
 
   // Find full objects and sort via 3-Tier priority system:
@@ -1117,7 +1216,7 @@ CRITICAL TRADE COHERENCE:
   // 2. Google Places pros within 25 km (closest distance first, strictly max 6)
   // 3. Other pros (> 25 km)
   const rawMatchedPros = useMemo(() => {
-    const currentEffectiveQuery = activeQuery || query || '';
+    const currentEffectiveQuery = searchResult?.effective_search_query || activeQuery || query || '';
     const list: (Professional & { matchReason: string; matchScore: number })[] = [];
     const addedIds = new Set<string>();
 
@@ -1128,6 +1227,10 @@ CRITICAL TRADE COHERENCE:
       if (sc >= 40) {
         const matchIdStr = String(match.id);
         const pro = combinedPros.find(p => 
+          String(p.id) === matchIdStr ||
+          String(p.id) === `google_${matchIdStr}` ||
+          matchIdStr === `google_${String(p.id)}`
+        ) || (searchResult?.google_places_pros || []).find((p: any) =>
           String(p.id) === matchIdStr ||
           String(p.id) === `google_${matchIdStr}` ||
           matchIdStr === `google_${String(p.id)}`
@@ -1483,7 +1586,7 @@ CRITICAL TRADE COHERENCE:
                     }`}
                   >
                     <Briefcase className="w-3.5 h-3.5" />
-                    <span>Pros ({matchedPros.length})</span>
+                    <span>{t.tabPros} ({matchedPros.length})</span>
                   </button>
                 )}
 
@@ -1498,7 +1601,7 @@ CRITICAL TRADE COHERENCE:
                     }`}
                   >
                     <Calendar className="w-3.5 h-3.5" />
-                    <span>Events ({matchedEvents.length})</span>
+                    <span>{t.tabEvents} ({matchedEvents.length})</span>
                   </button>
                 )}
 
@@ -1513,7 +1616,7 @@ CRITICAL TRADE COHERENCE:
                     }`}
                   >
                     <BookOpen className="w-3.5 h-3.5" />
-                    <span>Guides ({matchedGuides.length})</span>
+                    <span>{t.tabGuides} ({matchedGuides.length})</span>
                   </button>
                 )}
               </div>
@@ -1526,9 +1629,9 @@ CRITICAL TRADE COHERENCE:
                   <Compass className="w-5 h-5 text-brand-blue" />
                 </div>
                 <div className="space-y-1 max-w-md mx-auto">
-                  <h4 className="text-sm sm:text-base font-semibold text-slate-800">No exact matches found</h4>
+                  <h4 className="text-sm sm:text-base font-semibold text-slate-800">{t.noMatchesTitle}</h4>
                   <p className="text-xs text-slate-500 leading-relaxed font-normal">
-                    Try phrasing your question differently, or browse through the sections directly:
+                    {t.noMatchesDesc}
                   </p>
                 </div>
                 <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
@@ -1536,19 +1639,19 @@ CRITICAL TRADE COHERENCE:
                     onClick={() => onNavigate('explore')}
                     className="px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-medium shadow-2xs hover:bg-blue-700 transition-colors"
                   >
-                    Browse Pros
+                    {t.browsePros}
                   </button>
                   <button
                     onClick={() => onNavigate('events')}
                     className="px-4 py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 rounded-xl text-xs font-medium transition-colors"
                   >
-                    Explore Events
+                    {t.exploreEvents}
                   </button>
                   <button
                     onClick={() => onNavigate('guides')}
                     className="px-4 py-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-medium transition-colors"
                   >
-                    Read Guides
+                    {t.readGuides}
                   </button>
                 </div>
               </div>
@@ -1565,7 +1668,7 @@ CRITICAL TRADE COHERENCE:
                         <Calendar className="w-3.5 h-3.5" />
                       </div>
                       <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
-                        Matching Events ({matchedEvents.length})
+                        {t.matchingEvents} ({matchedEvents.length})
                       </h4>
                     </div>
 
@@ -1627,7 +1730,7 @@ CRITICAL TRADE COHERENCE:
                                 "{ev.matchReason}"
                               </p>
                               <span className="text-xs font-medium text-amber-700 shrink-0 group-hover:translate-x-0.5 transition-transform">
-                                Details →
+                                {t.details}
                               </span>
                             </div>
                           )}
@@ -1642,7 +1745,7 @@ CRITICAL TRADE COHERENCE:
                         onClick={() => setShowAllEvents(!showAllEvents)}
                         className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-amber-50/70 border border-slate-200 text-amber-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
                       >
-                        <span>{showAllEvents ? 'Show fewer events' : `Show all ${matchedEvents.length} events`}</span>
+                        <span>{showAllEvents ? t.showFewerEvents : t.showAllEvents(matchedEvents.length)}</span>
                         <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllEvents ? 'rotate-180' : ''}`} />
                       </button>
                     )}
@@ -1657,7 +1760,7 @@ CRITICAL TRADE COHERENCE:
                         <Briefcase className="w-3.5 h-3.5" />
                       </div>
                       <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
-                        Recommended Professionals ({matchedPros.length})
+                        {t.recommendedPros} ({matchedPros.length})
                       </h4>
                     </div>
 
@@ -1690,7 +1793,7 @@ CRITICAL TRADE COHERENCE:
                                 {isCommunity ? (
                                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white font-bold text-[11px] tracking-tight shadow-xs shadow-emerald-500/20">
                                     <Award className="w-3.5 h-3.5 text-white shrink-0" />
-                                    <span>Recommended by MyCityUnlocked community</span>
+                                    <span>{t.recommendedByCommunity}</span>
                                   </span>
                                 ) : null}
 
@@ -1752,7 +1855,7 @@ CRITICAL TRADE COHERENCE:
                                   "{pro.matchReason}"
                                 </p>
                                 <span className="text-xs font-medium text-brand-blue shrink-0 group-hover:translate-x-0.5 transition-transform">
-                                  View →
+                                  {t.view}
                                 </span>
                               </div>
                             )}
@@ -1768,7 +1871,7 @@ CRITICAL TRADE COHERENCE:
                         onClick={() => setShowAllPros(!showAllPros)}
                         className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200 text-brand-blue text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
                       >
-                        <span>{showAllPros ? 'Show fewer pros' : `Show all ${matchedPros.length} pros`}</span>
+                        <span>{showAllPros ? t.showFewerPros : t.showAllPros(matchedPros.length)}</span>
                         <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllPros ? 'rotate-180' : ''}`} />
                       </button>
                     )}
@@ -1785,7 +1888,7 @@ CRITICAL TRADE COHERENCE:
                         <Briefcase className="w-3.5 h-3.5" />
                       </div>
                       <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
-                        Recommended Professionals ({matchedPros.length})
+                        {t.recommendedPros} ({matchedPros.length})
                       </h4>
                     </div>
 
@@ -1818,7 +1921,7 @@ CRITICAL TRADE COHERENCE:
                                 {isCommunity ? (
                                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white font-bold text-[11px] tracking-tight shadow-xs shadow-emerald-500/20">
                                     <Award className="w-3.5 h-3.5 text-white shrink-0" />
-                                    <span>Recommended by MyCityUnlocked community</span>
+                                    <span>{t.recommendedByCommunity}</span>
                                   </span>
                                 ) : null}
 
@@ -1880,7 +1983,7 @@ CRITICAL TRADE COHERENCE:
                                   "{pro.matchReason}"
                                 </p>
                                 <span className="text-xs font-medium text-brand-blue shrink-0 group-hover:translate-x-0.5 transition-transform">
-                                  View →
+                                  {t.view}
                                 </span>
                               </div>
                             )}
@@ -1896,7 +1999,7 @@ CRITICAL TRADE COHERENCE:
                         onClick={() => setShowAllPros(!showAllPros)}
                         className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200 text-brand-blue text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
                       >
-                        <span>{showAllPros ? 'Show fewer pros' : `Show all ${matchedPros.length} pros`}</span>
+                        <span>{showAllPros ? t.showFewerPros : t.showAllPros(matchedPros.length)}</span>
                         <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllPros ? 'rotate-180' : ''}`} />
                       </button>
                     )}
@@ -1911,7 +2014,7 @@ CRITICAL TRADE COHERENCE:
                         <Calendar className="w-3.5 h-3.5" />
                       </div>
                       <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
-                        Matching Events ({matchedEvents.length})
+                        {t.matchingEvents} ({matchedEvents.length})
                       </h4>
                     </div>
 
@@ -1973,7 +2076,7 @@ CRITICAL TRADE COHERENCE:
                                 "{ev.matchReason}"
                               </p>
                               <span className="text-xs font-medium text-amber-700 shrink-0 group-hover:translate-x-0.5 transition-transform">
-                                Details →
+                                {t.details}
                               </span>
                             </div>
                           )}
@@ -1988,7 +2091,7 @@ CRITICAL TRADE COHERENCE:
                         onClick={() => setShowAllEvents(!showAllEvents)}
                         className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-amber-50/70 border border-slate-200 text-amber-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
                       >
-                        <span>{showAllEvents ? 'Show fewer events' : `Show all ${matchedEvents.length} events`}</span>
+                        <span>{showAllEvents ? t.showFewerEvents : t.showAllEvents(matchedEvents.length)}</span>
                         <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllEvents ? 'rotate-180' : ''}`} />
                       </button>
                     )}
@@ -2005,7 +2108,7 @@ CRITICAL TRADE COHERENCE:
                     <BookOpen className="w-3.5 h-3.5" />
                   </div>
                   <h4 className="text-xs sm:text-sm font-bold text-brand-navy">
-                    Practical Guides ({matchedGuides.length})
+                    {t.practicalGuides} ({matchedGuides.length})
                   </h4>
                 </div>
 
@@ -2044,7 +2147,7 @@ CRITICAL TRADE COHERENCE:
                             "{guide.matchReason}"
                           </p>
                           <span className="text-xs font-medium text-emerald-700 shrink-0 group-hover:translate-x-0.5 transition-transform">
-                            Read →
+                            {t.read}
                           </span>
                         </div>
                       )}
@@ -2059,7 +2162,7 @@ CRITICAL TRADE COHERENCE:
                     onClick={() => setShowAllGuides(!showAllGuides)}
                     className="w-full py-2.5 px-4 rounded-xl bg-slate-50 hover:bg-emerald-50/70 border border-slate-200 text-emerald-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.99]"
                   >
-                    <span>{showAllGuides ? 'Show fewer guides' : `Show all ${matchedGuides.length} guides`}</span>
+                    <span>{showAllGuides ? t.showFewerGuides : t.showAllGuides(matchedGuides.length)}</span>
                     <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAllGuides ? 'rotate-180' : ''}`} />
                   </button>
                 )}
