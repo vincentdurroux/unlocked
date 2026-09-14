@@ -9308,6 +9308,11 @@ function HomeView({
         >
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="flex items-start md:items-center gap-4">
+              {/* Eye-catching UserPlus Avatar Badge */}
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-amber-100 via-amber-100 to-amber-200 border border-amber-300/80 flex items-center justify-center text-amber-600 shadow-sm ring-4 ring-amber-400/15 shrink-0 group-hover/rec-card:scale-110 group-hover/rec-card:rotate-6 transition-all duration-300">
+                <UserPlus className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
+              </div>
+
               <div className="space-y-1 text-left">
                 <h3 className="text-base md:text-lg font-bold text-brand-navy tracking-tight">Know someone great?</h3>
                 <p className="text-slate-600 text-[11px] md:text-[13px] font-medium leading-relaxed">
