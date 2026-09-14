@@ -68,15 +68,13 @@ async function startServer() {
 
     if (!apiKey || !query.trim()) return { places: [], targetZone };
 
-    const centerCoords = targetZone.isSpecificZone
-      ? targetZone.centerCoords
-      : (userLocationCoords || DEFAULT_VALENCIA_CENTER);
+    const centerCoords = targetZone.centerCoords;
 
     const centerLat = centerCoords.lat;
     const centerLng = centerCoords.lng;
 
     try {
-      // Build optimized query targeted for Google Places Spain
+      // Build optimized query targeted for Google Places Spain (always anchored to Valencia)
       const textQuery = buildOptimizedPlacesQuery(
         query,
         targetZone.isSpecificZone,
@@ -90,7 +88,7 @@ async function startServer() {
         languageCode: "en"
       };
 
-      const biasRadius = targetZone.isSpecificZone ? 5000.0 : (userLocationCoords ? 5000.0 : 25000.0);
+      const biasRadius = targetZone.isSpecificZone ? 5000.0 : 25000.0;
 
       requestBody.locationBias = {
         circle: {
@@ -156,7 +154,9 @@ async function startServer() {
             };
           })
           // Strict trade filter: discard cross-specialty pollution (e.g. dental clinic when searching for osteopath)
-          .filter((p: any) => !isTradeMismatched(query, p.name, p.category));
+          .filter((p: any) => !isTradeMismatched(query, p.name, p.category))
+          // Strict geographic distance ceiling: discard any place further than 25 km from Valencia target
+          .filter((p: any) => p.distanceKm !== null && p.distanceKm <= 25);
 
         // Strictly sort by closest distance to user GPS (or specific requested zone)
         // No priority for ratings or review counts, and never more than 6 pros!
@@ -233,13 +233,14 @@ Return real establishments with accurate names, addresses, and accurate latitude
         };
       });
 
-      // Strictly sort by closest distance first, max 6
-      formatted.sort((a: any, b: any) => {
+      // Strictly sort by closest distance first, max 6, cap at 25km
+      const validFormatted = formatted.filter((p: any) => p.distanceKm !== null && p.distanceKm <= 25);
+      validFormatted.sort((a: any, b: any) => {
         const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
         const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
         return distA - distB;
       });
-      return { places: formatted.slice(0, Math.min(maxResults, 6)), targetZone };
+      return { places: validFormatted.slice(0, Math.min(maxResults, 6)), targetZone };
     } catch (fallbackErr) {
       console.error("[Google Places Fallback] Error:", fallbackErr);
       return { places: [], targetZone };
@@ -320,44 +321,49 @@ Return real establishments with accurate names, addresses, and accurate latitude
       // Map community professionals list with coordinates and distance to target center
       const centerCoords = targetZone ? targetZone.centerCoords : DEFAULT_VALENCIA_CENTER;
 
-      const proListBrief = professionals.map((p: any) => {
-        let lat = p.coordinates?.lat ?? p.lat;
-        let lng = p.coordinates?.lng ?? p.lng;
-        const dist = calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng);
+      const proListBrief = professionals
+        .map((p: any) => {
+          let lat = p.coordinates?.lat ?? p.lat;
+          let lng = p.coordinates?.lng ?? p.lng;
+          const isNullIsland = (lat === 0 && lng === 0) || !lat || !lng;
+          const dist = isNullIsland ? null : calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng);
 
-        return {
+          return {
+            id: String(p.id),
+            name: p.name,
+            company_name: p.company_name || "",
+            category: p.category || p.profession || "",
+            categories: p.categories || [],
+            bio: (p.bio || p.description || "").slice(0, 180),
+            top_qualities: p.top_qualities || [],
+            languages: p.languages || [],
+            rating: p.rating || 0,
+            location: p.location || "Valence",
+            distanceKm: dist,
+            is_community_recommended: p.is_community_recommended !== false && p.source !== 'google' && p.source !== 'google_places',
+            source: p.source || 'community'
+          };
+        })
+        .filter((p: any) => p.distanceKm === null || p.distanceKm <= 25);
+
+      // Map Google Places pros strictly within 25 km
+      const googleProsBrief = googlePlacesPros
+        .filter((p: any) => p.distanceKm === null || p.distanceKm <= 25)
+        .map((p: any) => ({
           id: String(p.id),
           name: p.name,
           company_name: p.company_name || "",
-          category: p.category || p.profession || "",
-          categories: p.categories || [],
-          bio: (p.bio || p.description || "").slice(0, 180),
-          top_qualities: p.top_qualities || [],
-          languages: p.languages || [],
+          category: p.category || "Professional",
+          categories: [p.category || "Professional"],
+          bio: (p.bio || "").slice(0, 180),
+          top_qualities: [],
+          languages: [],
           rating: p.rating || 0,
-          location: p.location || "",
-          distanceKm: dist,
-          is_community_recommended: p.is_community_recommended !== false && p.source !== 'google' && p.source !== 'google_places',
-          source: p.source || 'community'
-        };
-      });
-
-      // Map Google Places pros
-      const googleProsBrief = googlePlacesPros.map((p: any) => ({
-        id: String(p.id),
-        name: p.name,
-        company_name: p.company_name || "",
-        category: p.category || "Professional",
-        categories: [p.category || "Professional"],
-        bio: (p.bio || "").slice(0, 180),
-        top_qualities: [],
-        languages: [],
-        rating: p.rating || 0,
-        location: p.location || targetZone?.zoneName || "Valencia",
-        distanceKm: p.distanceKm ?? null,
-        is_community_recommended: false,
-        source: 'google_places'
-      }));
+          location: p.location || targetZone?.zoneName || "Valencia",
+          distanceKm: p.distanceKm ?? null,
+          is_community_recommended: false,
+          source: 'google_places'
+        }));
 
       const allCandidatePros = [...proListBrief, ...googleProsBrief];
 
@@ -366,7 +372,7 @@ Your purpose is to examine the user's natural language request and return the mo
 
 Current Target Center / Zone: ${targetZone ? targetZone.zoneName : 'Valence'} (${centerCoords.lat}, ${centerCoords.lng})
 
-Review the list of professionals provided and evaluate BOTH trade/service criteria AND location/proximity criteria:
+Review the list of professionals provided and evaluate BOTH trade/service criteria AND location/proximity/language criteria:
 
 1. STRICT TRADE COHERENCE & ZERO CROSS-SPECIALTY POLLUTION (CRITICAL):
    - You MUST match ONLY professionals whose actual trade, profession, or service DIRECTLY matches what the user is looking for.
@@ -379,25 +385,30 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
    - Broad categories like "Health & Wellness" or "Medical" MUST NEVER be used to justify returning an unrelated medical specialty. A dentist is NOT an osteopath.
    - Any professional whose trade does not correspond to the requested service MUST receive score 0 and NOT be returned.
 
-2. STRICT GEOGRAPHIC PROXIMITY & SPOKEN LANGUAGES RULE:
-   - GEOGRAPHIC PROXIMITY IS KING: Distance and location are paramount. Professionals located far away (> 25 km from the target area) MUST NOT be selected, prioritized, or returned, regardless of what language they speak! Spoken language must NEVER override distance or pull distant professionals into the results.
-   - SPOKEN LANGUAGES AS LOCAL BONUS ONLY: Inspect the 'languages' array of each professional ONLY among local pros within 25 km. Simply asking a question in French (or another language) does NOT restrict or filter results by language. 
-   - EXPLICIT LANGUAGE FILTER REQUIREMENT: Language is a filter ONLY when explicitly requested in the query (e.g. "francophone", "parlant français", "en français", "french speaking", "anglophone", "English", "Spanish", "Español"). When explicitly requested, prioritize local pros within 25 km who speak that language.
+2. MANDATORY LOCAL PROXIMITY & ABSOLUTE 25 KM LIMIT:
+   - All recommended professionals MUST be located in Valencia and surrounding areas within 25 km.
+   - ZERO DISTANT PROS: Any pro located > 25 km away MUST receive score 0. NEVER propose professionals from distant cities or outside Valencia province.
+   - Spoken language MUST NEVER override distance or pull distant professionals into results.
 
-3. 3-TIER RANKING PRIORITY SYSTEM (APPLIES EXCLUSIVELY TO GENUINE TRADE MATCHES):
-   - TIER 1 (Highest Priority): Recommended App Professionals ('is_community_recommended: true') WITHIN 25 KM of the target area WHO PRACTICE THE REQUESTED TRADE. Give score 85-100. If no community pro practices this trade, return score 0 for all community pros. DO NOT force unrelated community pros!
-   - TIER 2: Google Places professionals ('source: google_places') WHO PRACTICE THE REQUESTED TRADE: Up to 6 provided, sorted SOLELY by closest distance to user location (closest first). Any mismatched Google Places entry MUST receive score 0. Score: 60-80.
-   - TIER 3: Other genuine matching professionals further than 25 km away (score 40-55).
+3. CONVERSATIONAL SPOKEN LANGUAGE INTELLIGENCE:
+   - Detect the user's query language (French, English, or Spanish).
+   - If a local professional (< 25 km) speaks the user's language (check the 'languages' array), give them TOP PRIORITY (scores 90-100) and highlight in reasonUrlExcerpt that they speak the user's language (e.g. "Praticien à Valence parlant français").
+   - If no local professional speaks the user's language, recommend the closest local trade-matching options in Valencia (scores 60-85).
 
-4. PRESENTATION TONE & REASONS:
+4. 2-TIER LOCAL RANKING PRIORITY:
+   - TIER 1 (Highest Priority): Recommended Community Professionals ('is_community_recommended: true') WITHIN 25 KM of the target area WHO PRACTICE THE REQUESTED TRADE. Score 85-100 (extra boost if speaking user's language).
+   - TIER 2: Google Places professionals ('source: google_places') WITHIN 25 KM WHO PRACTICE THE REQUESTED TRADE: Sorted SOLELY by closest distance (closest first). Score 60-80.
+   - STRICTLY NO TIER 3: Distance > 25 km is strictly forbidden.
+
+5. PRESENTATION TONE & REASONS:
    - Do NOT mention or emphasize Google ratings, star scores or review counts in reasonUrlExcerpt or summaryMessage (e.g. NEVER say 'bénéficie d'une note Google de 4.9' or 'très bien noté sur Google').
    - Clarify why they match simply and neutrally (mentioning their trade, specialty, language, or neighborhood/town in Valencia).
 
-5. "exactMatchFound" & "summaryMessage" RULES:
+6. "exactMatchFound" & "summaryMessage" RULES:
    - If AT LEAST ONE professional is a genuine match (score >= 40), set "exactMatchFound" to true, and "summaryMessage" to null.
    - If NO professionals match the requested trade at all, set "exactMatchFound" to false and provide a friendly explanation in summaryMessage.
 
-6. Under "reasonUrlExcerpt" for each matched professional, write a single concise sentence clarifying why they fit the user's need.`;
+7. Under "reasonUrlExcerpt" for each matched professional, write a single concise sentence clarifying why they fit the user's need.`;
 
       const response = await getAiClient().models.generateContent({
         model: "gemini-3.1-flash-lite",
@@ -520,7 +531,16 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
 
   // AI-powered Multi-Domain search endpoint (Pros, Events, Guides)
   app.post("/api/ai-multi-search", async (req, res) => {
-    const { query, professionals = [], googlePlacesPros: clientGooglePlacesPros = [], events = [], guides = [], conversationHistory = [], userLocation = null } = req.body;
+    const { 
+      query, 
+      professionals = [], 
+      googlePlacesPros: clientGooglePlacesPros = [], 
+      events = [], 
+      guides = [], 
+      conversationHistory = [], 
+      userLocation = null,
+      preferredLanguage = null 
+    } = req.body;
 
     if (!query || !query.trim()) {
       return res.json({ 
@@ -612,9 +632,7 @@ Latest User Message:
         targetZone = detectTargetZone(placesSearchQuery, userLocation);
       }
 
-      const centerCoords = targetZone?.isSpecificZone
-        ? targetZone.centerCoords
-        : (userLocation || DEFAULT_VALENCIA_CENTER);
+      const centerCoords = targetZone ? targetZone.centerCoords : DEFAULT_VALENCIA_CENTER;
 
       // 3. Determine coherent Google Places pros matching the current search intent
       // Newly fetched places from Google Places matching the trade are the primary source of truth!
@@ -662,14 +680,17 @@ Latest User Message:
       }
 
       // Recompute distance to the active center (user GPS or specific neighborhood/zone)
-      const rawGooglePlacesPros = finalPlaces.map((p: any) => {
-        let lat = p.coordinates?.lat ?? p.lat;
-        let lng = p.coordinates?.lng ?? p.lng;
-        const dist = (typeof lat === 'number' && typeof lng === 'number')
-          ? calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng)
-          : (p.distanceKm ?? null);
-        return { ...p, distanceKm: dist };
-      });
+      const rawGooglePlacesPros = finalPlaces
+        .map((p: any) => {
+          let lat = p.coordinates?.lat ?? p.lat;
+          let lng = p.coordinates?.lng ?? p.lng;
+          const isNullIsland = (lat === 0 && lng === 0) || !lat || !lng;
+          const dist = !isNullIsland && (typeof lat === 'number' && typeof lng === 'number')
+            ? calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng)
+            : (p.distanceKm ?? null);
+          return { ...p, distanceKm: dist };
+        })
+        .filter((p: any) => p.distanceKm === null || p.distanceKm <= 25);
 
       // Strict user rule: sort by closest distance to center, maximum 6 Google Places pros
       rawGooglePlacesPros.sort((a, b) => {
@@ -680,34 +701,38 @@ Latest User Message:
 
       const googlePlacesPros = rawGooglePlacesPros.slice(0, 6);
 
-      // Format community pros with distance - DO NOT slice to 50 items so all community pros are considered
-      const proListBrief = professionals.map((p: any) => {
-        let lat = p.coordinates?.lat ?? p.lat;
-        let lng = p.coordinates?.lng ?? p.lng;
-        const dist = calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng);
+      // Format community pros with distance, fixing Null Island (0,0) and filtering out distant pros > 25km
+      const proListBrief = professionals
+        .map((p: any) => {
+          let lat = p.coordinates?.lat ?? p.lat;
+          let lng = p.coordinates?.lng ?? p.lng;
+          const isNullIsland = (lat === 0 && lng === 0) || !lat || !lng;
+          const dist = isNullIsland ? null : calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng);
 
-        return {
-          id: String(p.id),
-          name: p.name,
-          company_name: p.company_name || "",
-          category: p.category || p.profession || "",
-          categories: p.categories || [],
-          bio: (p.bio || p.description || "").slice(0, 180),
-          top_qualities: p.top_qualities || [],
-          languages: p.languages || [],
-          rating: p.rating || 0,
-          location: p.location || "",
-          distanceKm: dist,
-          is_community_recommended: p.is_community_recommended !== false && p.source !== 'google' && p.source !== 'google_places',
-          source: p.source || 'community'
-        };
-      });
+          return {
+            id: String(p.id),
+            name: p.name,
+            company_name: p.company_name || "",
+            category: p.category || p.profession || "",
+            categories: p.categories || [],
+            bio: (p.bio || p.description || "").slice(0, 180),
+            top_qualities: p.top_qualities || [],
+            languages: p.languages || [],
+            rating: p.rating || 0,
+            location: p.location || "Valence",
+            distanceKm: dist,
+            is_community_recommended: p.is_community_recommended !== false && p.source !== 'google' && p.source !== 'google_places',
+            source: p.source || 'community'
+          };
+        })
+        .filter((p: any) => p.distanceKm === null || p.distanceKm <= 25);
 
       // Format Google Places brief items (strictly max 6, ordered by closest distance)
       const googleProsBrief = googlePlacesPros.map((p: any) => {
         let lat = p.coordinates?.lat ?? p.lat;
         let lng = p.coordinates?.lng ?? p.lng;
-        const dist = (lat && lng) ? calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng) : (p.distanceKm ?? null);
+        const isNullIsland = (lat === 0 && lng === 0) || !lat || !lng;
+        const dist = (!isNullIsland && lat && lng) ? calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng) : (p.distanceKm ?? null);
 
         return {
           id: String(p.id),
@@ -768,25 +793,45 @@ The user is continuing, refining, or asking follow-ups regarding the ongoing sea
 
       const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" — a premier community-curated directory and city guide for Valencia, Spain and surrounding areas.
 Your mission is to evaluate the user's natural language request (and any ongoing conversation history for refining search criteria) and match relevant items across THREE distinct categories:
-1. "pros": Verified local professionals, tradespeople, legal/medical/wellness experts, services.
-2. "events": Local community events, festivals, concerts, cultural activities, workshops.
-3. "guides": Practical informational guides, administrative help (NIE, Padrón, Healthcare, Real Estate, Taxes), and neighborhood advice.
+1. "pros": Verified local professionals, tradespeople, legal/medical/wellness experts, services in Valencia.
+2. "events": Local community events, festivals, concerts, cultural activities, workshops in Valencia.
+3. "guides": Practical informational guides, administrative help (NIE, Padrón, Healthcare, Real Estate, Taxes), and neighborhood advice in Valencia.
 
 ${conversationFlowDirective}
 
 TARGET CENTER / ZONE FOR GEOGRAPHIC LOCATION:
 - Active Target Zone: ${targetZone ? targetZone.zoneName : 'Valencia'} (${centerCoords.lat}, ${centerCoords.lng})
-- Radius rule: Search prioritizes professionals within 25 km of ${targetZone ? targetZone.zoneName : 'this location'}.
+- Radius rule: Strict 25 km boundary around Valencia / target zone.
 
-STRICT GEOGRAPHIC PROXIMITY & SPOKEN LANGUAGES RULE:
-- GEOGRAPHIC PROXIMITY IS KING: Distance and location are paramount. Professionals located far away (> 25 km from the target area) MUST NOT be selected, prioritized, or returned, regardless of what language they speak! Spoken language must NEVER override distance or pull distant professionals into the results.
-- SPOKEN LANGUAGES AS LOCAL BONUS ONLY: Inspect the 'languages' array of each professional ONLY among local pros within 25 km. Simply asking in French or another language does NOT restrict or filter results by language.
-- EXPLICIT LANGUAGE FILTER REQUIREMENT: Language is a filter ONLY when explicitly requested in the query (e.g. "francophone", "parlant français", "en français", "french speaking", "anglophone", "English", "Spanish", "Español"). When explicitly requested, prioritize local pros within 25 km who speak that language.
+STRICT GEOGRAPHIC PROXIMITY RULE (MANDATORY 25 KM LIMIT):
+- MANDATORY LOCAL VALENCIA ANCHOR: The Unlocked directory is strictly for Valencia, Spain and surrounding municipalities (within 25 km).
+- ABSOLUTELY ZERO DISTANT PROS: Any professional located more than 25 km away from the target area MUST receive a score of 0 and MUST NEVER be returned. Distant cities (Madrid, Barcelona, Paris, Alicante, etc.) or pros far outside Valencia province are strictly forbidden.
+- Spoken language must NEVER override distance or pull distant professionals into results.
 
-3-TIER RANKING PRIORITY FOR PROFESSIONALS:
-- TIER 1: Recommended App Pros ('is_community_recommended: true') WITHIN 25 KM of ${targetZone ? targetZone.zoneName : 'the target center'} WHO PRACTICE THE REQUESTED TRADE. Must rank highest (scores 85-100). If no community pro practices the requested trade, return score 0 for all community pros. DO NOT force unrelated community pros!
-- TIER 2: Google Places pros ('source: google_places') WHO PRACTICE THE REQUESTED TRADE: Strictly max 6 provided, sorted SOLELY by closest distance to user location (or requested location). DO NOT sort or reorder by ratings or reviews; preserve closest distance first (scores 60-80). Mismatched Google Places entries MUST receive score 0.
-- TIER 3: Other genuine trade matches further than 25 km away (scores 40-55).
+CONVERSATION LANGUAGE DETECTION & SPOKEN LANGUAGE MATCHING:
+${preferredLanguage ? `1. EXPLICIT LANGUAGE OVERRIDE:
+   - The user has explicitly selected or requested ${preferredLanguage === 'en' ? 'English' : preferredLanguage === 'fr' ? 'French' : 'Spanish'} ('${preferredLanguage}').
+   - You MUST set 'detected_language': '${preferredLanguage}'.
+   - You MUST write your ENTIRE 'jane_message' in ${preferredLanguage === 'en' ? 'English' : preferredLanguage === 'fr' ? 'French' : 'Spanish'}.
+   - The greeting, summary, and explanations in 'jane_message' MUST be strictly in ${preferredLanguage === 'en' ? 'English' : preferredLanguage === 'fr' ? 'French' : 'Spanish'}.` : `1. DETECT CONVERSATION LANGUAGE:
+   - Identify whether the user is chatting in French ('fr'), English ('en'), or Spanish ('es') from their query or conversation history.
+   - Note: Natural English phrasing like "Where can I find...", "What can I do this weekend?", "How do I get my NIE...", "I need a reliable plumber..." are strictly English ('en').
+   - Return this code in 'detected_language'.
+   - Always write your 'jane_message' in the user's conversation language.`}
+
+2. INTELLIGENT MATCHING OF SPOKEN LANGUAGES AMONG LOCAL VALENCIA PROS:
+   - When the user chats in French (or English), examine the 'languages' array of local pros (< 25 km).
+   - If a local professional in Valencia speaks the user's language (e.g. user chats in French and pro has 'French' in languages, or user chats in English and pro has 'English'):
+     * HIGHEST RECOMMENDATION PRIORITY: Give them a strong score boost (scores 90-100) because speaking the user's language is a primary asset for expats!
+     * Explicitly highlight this in 'jane_message' and in their 'reason' (e.g. "Praticien recommandé à Valence parlant français !").
+   - If NO local community professional speaks the user's language:
+     * Recommend the best trade-matching professionals in Valencia (from Google Places or community), and honestly inform the user in 'jane_message' that these local specialists primarily consult in Spanish.
+     * NEVER pull a pro located far away (> 25 km) just because they speak French or English! Local proximity in Valencia remains mandatory.
+
+2-TIER LOCAL RANKING PRIORITY FOR PROFESSIONALS:
+- TIER 1 (Highest Priority): Community Recommended Pros ('is_community_recommended: true') WITHIN 25 KM of ${targetZone ? targetZone.zoneName : 'Valencia'} WHO PRACTICE THE REQUESTED TRADE. Scores 85-100 (give 95-100 if they speak user's chat language). If no community pro practices the requested trade, return score 0 for all community pros. DO NOT force unrelated community pros!
+- TIER 2: Google Places pros ('source: google_places') WITHIN 25 KM WHO PRACTICE THE REQUESTED TRADE: Strictly max 6 provided, sorted SOLELY by closest distance to user location (or requested location). Scores 60-80. Mismatched Google Places entries MUST receive score 0.
+- STRICTLY NO TIER 3: Any pro further than 25 km away MUST receive score 0 and be omitted!
 
 CRITICAL TRADE COHERENCE & ZERO CROSS-SPECIALTY POLLUTION (MANDATORY):
 1. STRICT TRADE COHERENCE:

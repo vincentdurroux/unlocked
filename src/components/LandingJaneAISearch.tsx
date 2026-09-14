@@ -25,7 +25,8 @@ import {
   MessageSquare,
   Send,
   RotateCcw,
-  Award
+  Award,
+  Languages
 } from 'lucide-react';
 import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
 import {
@@ -126,32 +127,32 @@ interface LandingJaneAISearchProps {
 const QUICK_INSPIRATIONS = [
   {
     icon: Stethoscope,
-    label: "English doctor or pediatrician",
-    query: "English speaking doctor or pediatrician in Valencia",
+    label: "Where can I find an English doctor?",
+    query: "Where can I find an English-speaking doctor in Valencia?",
     color: "bg-blue-50 text-blue-700 border-blue-200/80 hover:bg-blue-100/70"
   },
   {
     icon: PartyPopper,
-    label: "Things to do this weekend",
-    query: "Fun family events, concerts and activities in Valencia this week",
+    label: "What can I do this weekend?",
+    query: "What events and activities can I do this weekend in Valencia?",
     color: "bg-amber-50 text-amber-800 border-amber-200/80 hover:bg-amber-100/70"
   },
   {
     icon: FileCheck2,
-    label: "NIE & Residency steps",
-    query: "How to get NIE number or legal residency in Valencia",
+    label: "How do I get my NIE number?",
+    query: "How do I get my NIE number in Valencia?",
     color: "bg-emerald-50 text-emerald-800 border-emerald-200/80 hover:bg-emerald-100/70"
   },
   {
     icon: Wrench,
-    label: "Handyman or Plumber",
-    query: "Emergency plumber or handyman in Valencia",
+    label: "I need a reliable plumber nearby",
+    query: "I need a reliable plumber or handyman in Valencia",
     color: "bg-purple-50 text-purple-800 border-purple-200/80 hover:bg-purple-100/70"
   },
   {
     icon: HomeIcon,
-    label: "Neighborhoods & Renting",
-    query: "Best neighborhood to live in Valencia and rent advice",
+    label: "Which neighborhood should I live in?",
+    query: "Which neighborhood is best to live in Valencia?",
     color: "bg-rose-50 text-rose-800 border-rose-200/80 hover:bg-rose-100/70"
   }
 ];
@@ -184,25 +185,45 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
   const [conversation, setConversation] = useState<ChatMessage[]>([]);
   const [followUpQuery, setFollowUpQuery] = useState('');
   const [isFollowUpLoading, setIsFollowUpLoading] = useState(false);
+  const [forcedLanguage, setForcedLanguage] = useState<'en' | 'fr' | 'es' | null>(null);
+
+  // Dynamic responsive placeholder so the writing always fits entirely on all devices
+  const [responsivePlaceholder, setResponsivePlaceholder] = useState('e.g. I have just arrived in Valencia');
+
+  useEffect(() => {
+    const updatePlaceholder = () => {
+      if (typeof window === 'undefined') return;
+      if (window.innerWidth < 350) {
+        setResponsivePlaceholder('e.g. Just arrived in Valencia');
+      } else {
+        setResponsivePlaceholder('e.g. I have just arrived in Valencia');
+      }
+    };
+    updatePlaceholder();
+    window.addEventListener('resize', updatePlaceholder);
+    return () => window.removeEventListener('resize', updatePlaceholder);
+  }, []);
 
   const detectLanguage = (text: string): 'en' | 'fr' | 'es' => {
     if (!text) return 'en';
     const lower = text.toLowerCase();
     
+    // Clear English vocabulary, pronouns, and sentence structures
+    const englishMatches = (lower.match(/\b(where|what|how|why|who|which|when|can|could|would|should|i|i'm|i've|my|you|your|we|our|they|their|the|this|that|these|those|is|are|was|were|do|does|did|have|has|had|need|find|get|looking|doctor|pediatrician|plumber|handyman|weekend|live|neighborhood|arrive|arrived|help|please|events|concerts|activities|best)\b/gi) || []).length;
+
     // Spanish characters and vocabulary
-    if (
-      /[áíóúñ¿¡]/.test(lower) ||
-      /\b(hola|por favor|busco|buscamos|donde|dónde|está|están|gracias|plomero|fontanero|dentista|osteopata|actividades|cosas|que hacer|barrio|español|españa|médico|abogado|abogados|gestor|restaurante|precio|precios|para|con|los|las|una|unas|unos|del|ayuda|necesito|quiero|quisiera|fin de semana|salir|eventos|alquiler|casa|piso)\b/i.test(lower)
-    ) {
+    const spanishMatches = (lower.match(/[áíóúñ¿¡]|\b(hola|por favor|busco|buscamos|donde|dónde|está|están|gracias|plomero|fontanero|dentista|osteopata|actividades|cosas|que hacer|barrio|español|españa|médico|abogado|abogados|gestor|restaurante|precio|precios|para|con|los|las|una|unas|unos|del|ayuda|necesito|quiero|quisiera|fin de semana|salir|eventos|alquiler|casa|piso|puedo|podemos|el|como|cómo|qué|cual|cuál)\b/gi) || []).length;
+
+    // French accented characters, elisions, and vocabulary
+    const frenchMatches = (lower.match(/[éèêëàâçùûôœ]|\b(d'|l'|j'|n'|s'|c'|qu')|\b(bonjour|bonsoir|salut|cherche|cherchons|trouve|trouver|où|est|sont|merci|plombier|dentiste|ostéopathe|osteopathe|activités|activites|choses|faire|quartier|cabinet|médecin|medecin|français|francais|francophone|france|avocat|avocats|comptable|fiscaliste|électricien|electricien|peintre|coiffeur|vétérinaire|veterinaire|déménagement|demenagement|cours|appartement|location|maison|pédiatre|pediatre|kiné|kine|massage|urgent|urgence|assurance|banque|resto|soirée|soiree|sortie|sorties|loisirs|je|tu|il|elle|nous|vous|ils|elles|le|la|les|un|une|des|du|de|au|aux|dans|pour|avec|sans|sur|sous|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|votre|leur|qui|que|quoi|dont|quand|comment|pourquoi|combien|suis|sommes|êtes|etes|été|ete|avoir|être|etre|voudrais|aimerais|recherche|recherchons|besoin|aide|svp|quel|quelle|quels|quelles)\b/gi) || []).length;
+
+    if (englishMatches > frenchMatches && englishMatches > spanishMatches) {
+      return 'en';
+    }
+    if (spanishMatches > frenchMatches && spanishMatches > 0) {
       return 'es';
     }
-
-    // French accented characters, elisions, and comprehensive vocabulary
-    if (
-      /[éèêëàâçùûôœ]/.test(lower) ||
-      /\b(d'|l'|j'|n'|s'|c'|qu')/.test(lower) ||
-      /\b(bonjour|bonsoir|salut|cherche|cherchons|trouve|trouver|où|est|sont|merci|plombier|dentiste|ostéopathe|osteopathe|activités|activites|choses|faire|quartier|cabinet|médecin|medecin|français|francais|francophone|france|avocat|avocats|comptable|fiscaliste|électricien|electricien|peintre|coiffeur|vétérinaire|veterinaire|déménagement|demenagement|cours|appartement|location|maison|pédiatre|pediatre|kiné|kine|massage|urgent|urgence|assurance|banque|resto|restaurant|soir|soirée|soiree|week-end|weekend|sortie|sorties|loisirs|je|tu|il|elle|nous|vous|ils|elles|le|la|les|un|une|des|du|de|au|aux|en|dans|pour|avec|sans|sur|sous|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|votre|leur|qui|que|quoi|dont|quand|comment|pourquoi|combien|suis|sommes|êtes|etes|été|ete|avoir|être|etre|voudrais|aimerais|recherche|recherchons|besoin|aide|svp|quel|quelle|quels|quelles)\b/i.test(lower)
-    ) {
+    if (frenchMatches > 0) {
       return 'fr';
     }
 
@@ -210,8 +231,9 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
   };
 
   const activeLang: 'en' | 'fr' | 'es' = useMemo(() => {
+    if (forcedLanguage) return forcedLanguage;
     if (searchResult?.detected_language && ['en', 'fr', 'es'].includes(searchResult.detected_language)) {
-      return searchResult.detected_language;
+      return searchResult.detected_language as 'en' | 'fr' | 'es';
     }
     const combinedTexts = [
       activeQuery,
@@ -222,7 +244,7 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
     ].filter(Boolean).join(' ');
     
     return detectLanguage(combinedTexts);
-  }, [searchResult, activeQuery, query, conversation]);
+  }, [forcedLanguage, searchResult, activeQuery, query, conversation]);
 
   const t = {
     en: {
@@ -387,9 +409,12 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
     return { proListBrief, eventsBrief, guidesBrief };
   };
 
-  const handleSearch = async (overrideQuery?: string) => {
+  const handleSearch = async (overrideQuery?: string, explicitLanguage?: 'en' | 'fr' | 'es') => {
     const q = (overrideQuery !== undefined ? overrideQuery : query).trim();
     if (!q) return;
+
+    const chosenLang = explicitLanguage || (overrideQuery ? detectLanguage(overrideQuery) : detectLanguage(q));
+    setForcedLanguage(chosenLang);
 
     if (overrideQuery !== undefined) {
       setQuery(overrideQuery);
@@ -427,7 +452,8 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
             events: eventsBrief,
             guides: guidesBrief,
             conversationHistory: [],
-            userLocation: userLocation || null
+            userLocation: userLocation || null,
+            preferredLanguage: chosenLang
           }),
         });
 
@@ -605,7 +631,7 @@ Rules:
 - Include a category in "matched_topics" if there are relevant items.
 - Score 0-100, only return items with score >= 40.
 - Proactively match events that relate to community, expats, socializing, learning local culture (like tapas or wine), networking, beach, or local activities.
-- Return a warm, concise jane_message in the user's query language. If no community pros exist for this specific trade, be honest and present the closest verified pros found.`;
+- LANGUAGE RULE: You MUST write your 'jane_message' in ${chosenLang === 'en' ? 'English' : chosenLang === 'fr' ? 'French' : 'Spanish'} and return detected_language: "${chosenLang}". If no community pros exist for this specific trade, be honest and present the closest verified pros found.`;
 
         const response = await ai.models.generateContent({
           model: "gemini-3.1-flash-lite",
@@ -617,6 +643,7 @@ Rules:
               type: Type.OBJECT,
               properties: {
                 jane_message: { type: Type.STRING },
+                detected_language: { type: Type.STRING },
                 matched_topics: { type: Type.ARRAY, items: { type: Type.STRING } },
                 pros: {
                   type: Type.ARRAY,
@@ -674,6 +701,7 @@ Rules:
 
         data = {
           jane_message: parsed.jane_message || "Here is what I found for you in Valencia:",
+          detected_language: parsed.detected_language || chosenLang,
           matched_topics: topics,
           pros: prosResults,
           events: eventsResults,
@@ -703,6 +731,9 @@ Rules:
     }
 
     if (data) {
+      if (!data.detected_language) {
+        data.detected_language = chosenLang;
+      }
       setSearchResult(data);
       if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
         setGooglePlacesPros(data.google_places_pros.slice(0, 6));
@@ -721,6 +752,12 @@ Rules:
   const handleFollowUp = async (customFollowUpText?: string) => {
     const text = (customFollowUpText !== undefined ? customFollowUpText : followUpQuery).trim();
     if (!text || isFollowUpLoading || isSearching) return;
+
+    const followUpLangDetected = detectLanguage(text);
+    const effectiveFollowUpLang = (followUpLangDetected !== 'en' && text.length > 4) 
+      ? followUpLangDetected 
+      : (forcedLanguage || activeLang || 'en');
+    setForcedLanguage(effectiveFollowUpLang);
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -765,7 +802,8 @@ Rules:
             events: eventsBrief,
             guides: guidesBrief,
             conversationHistory: historyForApi,
-            userLocation: userLocation || null
+            userLocation: userLocation || null,
+            preferredLanguage: effectiveFollowUpLang
           }),
         });
 
@@ -1186,6 +1224,7 @@ CRITICAL TRADE COHERENCE:
     setShowAllPros(false);
     setShowAllEvents(false);
     setShowAllGuides(false);
+    setForcedLanguage(null);
   };
 
   // Combine Unlocked directory pros and dynamically discovered Google Places pros
@@ -1301,7 +1340,7 @@ CRITICAL TRADE COHERENCE:
   return (
     <div id="jane-ai-search-section" className="relative z-10 -mt-3 md:mt-0 space-y-4">
       {/* Clean & Airy Container with subtle light blue border */}
-      <div className="relative overflow-hidden rounded-[28px] bg-white p-5 sm:p-7 md:p-8 border border-blue-200/90 shadow-sm shadow-blue-500/5 transition-all duration-300">
+      <div className="relative overflow-hidden rounded-[28px] bg-white p-4 sm:p-7 md:p-8 border border-blue-200/90 shadow-sm shadow-blue-500/5 transition-all duration-300">
 
         <div className="relative z-10 space-y-5">
           
@@ -1327,14 +1366,14 @@ CRITICAL TRADE COHERENCE:
                 className="relative"
               >
                 <div className="relative flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-1.5 sm:p-2 bg-white rounded-2xl border border-blue-200 focus-within:border-brand-blue focus-within:ring-3 focus-within:ring-brand-blue/10 shadow-xs transition-all duration-200">
-                  <div className="relative flex-1 flex items-center">
+                  <div className="relative flex-1 min-w-0 flex items-center">
                     <input
                       type="text"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Ask Jane e.g. English pediatrician, concerts this weekend, NIE help..."
+                      placeholder={responsivePlaceholder}
                       disabled={isSearching}
-                      className="w-full px-4 pr-8 py-2.5 bg-transparent text-slate-800 text-sm sm:text-base font-normal placeholder:text-slate-400 placeholder:font-normal outline-none"
+                      className={`w-full pl-3 sm:pl-4 ${query ? 'pr-8' : 'pr-3 sm:pr-4'} py-2.5 bg-transparent text-slate-800 text-xs sm:text-sm md:text-base font-normal placeholder:text-slate-400 placeholder:text-[12px] sm:placeholder:text-sm md:placeholder:text-base outline-none truncate`}
                     />
                     {query && !isSearching && (
                       <button
@@ -1380,7 +1419,7 @@ CRITICAL TRADE COHERENCE:
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => handleSearch(item.query)}
+                          onClick={() => handleSearch(item.query, 'en')}
                           className={`group inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${item.color}`}
                         >
                           <IconComp className="w-3.5 h-3.5 shrink-0 text-current" />
@@ -1539,7 +1578,7 @@ CRITICAL TRADE COHERENCE:
                     onChange={(e) => setFollowUpQuery(e.target.value)}
                     placeholder={t.typePlaceholder}
                     disabled={isFollowUpLoading}
-                    className="flex-1 min-w-0 w-full px-3 text-base md:text-sm text-slate-800 placeholder:text-slate-400 font-normal outline-none bg-transparent"
+                    className="flex-1 min-w-0 w-full px-2.5 sm:px-3 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 placeholder:text-xs sm:placeholder:text-sm font-normal outline-none bg-transparent"
                   />
                   <button
                     type="submit"
@@ -1843,6 +1882,15 @@ CRITICAL TRADE COHERENCE:
                                       <span>{pro.location}</span>
                                     </p>
                                   )}
+
+                                  {Array.isArray(pro.languages) && pro.languages.length > 0 && (
+                                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                      <Languages className="w-3 h-3 text-brand-blue shrink-0" />
+                                      <span className="text-[11px] text-slate-600 font-medium">
+                                        {pro.languages.join(', ')}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -1970,6 +2018,15 @@ CRITICAL TRADE COHERENCE:
                                       <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
                                       <span>{pro.location}</span>
                                     </p>
+                                  )}
+
+                                  {Array.isArray(pro.languages) && pro.languages.length > 0 && (
+                                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                      <Languages className="w-3 h-3 text-brand-blue shrink-0" />
+                                      <span className="text-[11px] text-slate-600 font-medium">
+                                        {pro.languages.join(', ')}
+                                      </span>
+                                    </div>
                                   )}
                                 </div>
                               </div>

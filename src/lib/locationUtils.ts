@@ -279,11 +279,19 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
   const prosWithDist = pros.map(pro => {
     let dist: number | null = null;
     
-    // Check if coordinates exist
+    // Check if coordinates exist and are not Null Island (0, 0)
+    let lat: number | null = null;
+    let lng: number | null = null;
     if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
-      dist = calculateDistanceKm(centerCoords.lat, centerCoords.lng, pro.coordinates.lat, pro.coordinates.lng);
+      lat = pro.coordinates.lat;
+      lng = pro.coordinates.lng;
     } else if (typeof pro.lat === 'number' && typeof pro.lng === 'number') {
-      dist = calculateDistanceKm(centerCoords.lat, centerCoords.lng, pro.lat, pro.lng);
+      lat = pro.lat;
+      lng = pro.lng;
+    }
+
+    if (lat !== null && lng !== null && (lat !== 0 || lng !== 0)) {
+      dist = calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng);
     }
 
     return {
@@ -296,22 +304,22 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
     return p.source !== 'google' && p.source !== 'google_places' && p.is_community_recommended !== false;
   };
 
-  // Group into 3 Tiers
-  const tier1: typeof prosWithDist = []; // Community recommended pros <= 25km
-  const tier2: typeof prosWithDist = []; // Google Places pros <= 25km
-  const tier3: typeof prosWithDist = []; // Other pros (> 25km or no dist)
+  // Group into Tiers:
+  // Tier 1: Community recommended pros <= 25km (or unlocalized community pros serving Valencia)
+  // Tier 2: Google Places pros <= 25km
+  const tier1: typeof prosWithDist = [];
+  const tier2: typeof prosWithDist = [];
 
   for (const pro of prosWithDist) {
     const isWithinRadius = pro.distanceKm !== null && pro.distanceKm <= radiusKm;
+    const isUnspecifiedCommunityPro = isCommunity(pro) && pro.distanceKm === null && (!pro.location || /valencia|valence|valència|ruzafa|cabañal|canyamelar|el carmen|benimaclet/i.test(pro.location));
 
-    if (isWithinRadius) {
+    if (isWithinRadius || isUnspecifiedCommunityPro) {
       if (isCommunity(pro)) {
         tier1.push(pro);
       } else {
         tier2.push(pro);
       }
-    } else {
-      tier3.push(pro);
     }
   }
 
@@ -327,9 +335,7 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
   });
 
   // Tier 2 sorting: Google Places pros
-  // User directive: "Supprime les ordres de priorité des pros de google places.
-  // La seule regle est les plus proches de ma position gps en premier sauf si une demande particuliere d'emplacement est demandée par l'utilisateur.
-  // Et pas plus de 6 pros de google places données"
+  // The only rule is closest distance first, max 6 pros, strictly within 25 km
   tier2.sort((a, b) => {
     const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
     const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
@@ -337,37 +343,10 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
   });
 
   // Strict limit of maximum 6 Google Places pros
-  let cappedTier2 = tier2.slice(0, 6);
+  const cappedTier2 = tier2.slice(0, 6);
 
-  // If no Google Places pros were within radiusKm, but some exist in tier3, promote up to 6 closest
-  if (cappedTier2.length === 0) {
-    const tier3Google = tier3.filter(p => !isCommunity(p));
-    if (tier3Google.length > 0) {
-      tier3Google.sort((a, b) => {
-        const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
-        const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
-        return distA - distB;
-      });
-      cappedTier2 = tier3Google.slice(0, 6);
-    }
-  }
-
-  // Tier 3 sorting: Other pros (> 25km)
-  // Sub-sorted by Community first, then closest distance (excluding pros already included in cappedTier2)
-  const cappedTier2Ids = new Set(cappedTier2.map(p => String(p.id)));
-  const remainingTier3 = tier3.filter(p => !cappedTier2Ids.has(String(p.id)));
-
-  remainingTier3.sort((a, b) => {
-    const aComm = isCommunity(a) ? 1 : 0;
-    const bComm = isCommunity(b) ? 1 : 0;
-    if (aComm !== bComm) return bComm - aComm;
-
-    const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
-    const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
-    return distA - distB;
-  });
-
-  return [...tier1, ...cappedTier2, ...remainingTier3];
+  // Strictly DO NOT append distant pros (> 25km) to the list
+  return [...tier1, ...cappedTier2];
 }
 
 // Clean conversational and proximity phrases from user query for trade searches
@@ -480,10 +459,7 @@ export function buildOptimizedPlacesQuery(rawQuery: string, isSpecificZone: bool
   if (isSpecificZone && zoneName) {
     return `${queryToUse} ${zoneName} Valencia Spain`;
   }
-  if (hasGps) {
-    return queryToUse;
-  }
-  return `${queryToUse} in Valencia Spain`;
+  return `${queryToUse} Valencia Spain`;
 }
 
 // Check for cross-specialty pollution (e.g., user asks for osteopath but place is a dental clinic or animal clinic)
