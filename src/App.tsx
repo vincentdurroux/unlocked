@@ -6650,7 +6650,10 @@ function AdminView({
                               : "border-slate-100 shadow-sm hover:shadow-md"
                           )}
                         >
-                          <div className="space-y-3">
+                          <div 
+                            onClick={() => setSelectedPro(pro)}
+                            className="space-y-3 cursor-pointer hover:opacity-85 transition-opacity"
+                          >
                             <div className="flex items-start gap-3.5 min-w-0">
                               {(isRecommended && (pro.image || pro.image_url)) ? (
                                 <img
@@ -9980,12 +9983,7 @@ function HomeView({
           allArticles={allArticles}
           userLocation={userLocation}
           onSelectPro={(pro) => {
-            if (pro.source === 'google_places' || pro.id?.toString().startsWith('google_') || !isCommunityPro(pro)) {
-              const googleUrl = (pro as any).googleMapsUri || (pro.website && pro.website.length > 5 ? pro.website : null) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((pro.company_name || pro.name) + ' ' + (pro.location || 'Valencia'))}`;
-              window.open(googleUrl, '_blank', 'noopener,noreferrer');
-            } else {
-              setSelectedPro(pro);
-            }
+            setSelectedPro(pro);
           }}
           onSelectEvent={(event) => setSelectedEvent(event)}
           onSelectArticle={(article) => setSelectedArticle(article)}
@@ -12546,12 +12544,7 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   onClick={() => {
-                    if (!isCommunityPro(pro)) {
-                      const googleUrl = (pro as any).googleMapsUri || (pro.website && pro.website.length > 5 ? pro.website : null) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((pro.company_name || pro.name) + ' ' + (pro.location || 'Valencia'))}`;
-                      window.open(googleUrl, '_blank', 'noopener,noreferrer');
-                    } else {
-                      setSelectedPro(pro);
-                    }
+                    setSelectedPro(pro);
                   }}
                   className={cn(
                     "group relative bg-white rounded-[32px] p-6 flex flex-col lg:flex-row gap-6 transition-all shadow-sm hover:shadow-xl cursor-pointer overflow-hidden",
@@ -13823,7 +13816,9 @@ function ProfessionalDetailView({
   usersWhoBlockedMe?: string[]
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  
+  const isRecommended = Boolean(pro.is_recommended || pro.is_recommanded || pro.is_community_recommended);
+  const isGooglePro = !isRecommended;
+
   // Swipe gesture support for testimonials carousel
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
@@ -14111,6 +14106,12 @@ function ProfessionalDetailView({
                   <Briefcase className="w-3.5 h-3.5" />
                   {pro.category}
                 </div>
+                {!isRecommended && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 rounded-xl font-bold border border-amber-200">
+                    <Globe className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Google Pro</span>
+                  </div>
+                )}
                 {isCommunityPro(pro) && (
                   <div className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-xl font-medium border border-slate-100 transition-all",
