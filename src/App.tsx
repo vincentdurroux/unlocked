@@ -6504,17 +6504,6 @@ function AdminView({
                       </span>
                     </button>
                   </div>
-
-                  {activeProFilterTab === 'google' && (
-                    <button
-                      onClick={() => setShowCsvImporterModal(true)}
-                      className="w-full sm:w-auto px-4 py-2.5 rounded-2xl text-xs font-bold text-brand-blue bg-blue-50 hover:bg-blue-100 border border-blue-200/80 transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95 cursor-pointer shrink-0"
-                      title="Import Google Pros from CSV file"
-                    >
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-brand-blue" />
-                      <span>Import Google Pros (CSV)</span>
-                    </button>
-                  )}
                 </div>
 
                 {/* Search & Sort Bar */}
@@ -10976,33 +10965,102 @@ function HighlightCarousel({ onNavigate, allPros, events }: { onNavigate: (view:
   );
 }
 
-function MapCenterController({ center, resetTrigger }: { center: { lat: number; lng: number }; resetTrigger?: number }) {
+function MapViewportController({ pros, center, resetTrigger }: { pros: Professional[]; center: { lat: number; lng: number }; resetTrigger?: number }) {
   const map = useMap();
-  const lastCenteredRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastResetRef = useRef<number>(0);
+  const lastCenterRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!map) return;
-    const hasCoordsChanged = !lastCenteredRef.current || 
-      Math.abs(lastCenteredRef.current.lat - center.lat) > 0.0001 || 
-      Math.abs(lastCenteredRef.current.lng - center.lng) > 0.0001;
-    
-    const hasTriggered = resetTrigger !== undefined && resetTrigger !== lastResetRef.current;
+    if (typeof google === 'undefined' || !google.maps) return;
 
-    if (hasCoordsChanged || hasTriggered) {
-      lastCenteredRef.current = center;
+    // 1. Explicit Reset Trigger (e.g. user clicked "Use my location" or "re-center")
+    const hasTriggered = resetTrigger !== undefined && resetTrigger !== lastResetRef.current;
+    if (hasTriggered) {
       if (resetTrigger !== undefined) {
         lastResetRef.current = resetTrigger;
       }
-      map.panTo(center);
+      lastCenterRef.current = center;
+      map.setCenter(center);
+      map.setZoom(13);
+      return;
     }
-  }, [map, center, resetTrigger]);
+
+    // 2. Adjust Viewport to fit Professionals (and userLocation / center if available)
+    const validPros = pros.filter(
+      (p) => p.coordinates && typeof p.coordinates.lat === 'number' && typeof p.coordinates.lng === 'number'
+    );
+
+    if (validPros.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      validPros.forEach((p) => {
+        bounds.extend(p.coordinates!);
+      });
+
+      // Also include the user's location (center) in the viewport bounds if it's not the default Valencia center fallback,
+      // so the user can see their relation to the professionals
+      if (center && typeof center.lat === 'number' && typeof center.lng === 'number' && (center.lat !== 39.4699 || center.lng !== -0.3763)) {
+        bounds.extend(center);
+      }
+
+      const ne = bounds.getNorthEast();
+      const sw = bounds.getSouthWest();
+      const latSpan = Math.abs(ne.lat() - sw.lat());
+      const lngSpan = Math.abs(ne.lng() - sw.lng());
+
+      if (latSpan < 0.005 && lngSpan < 0.005) {
+        map.setCenter(bounds.getCenter());
+        map.setZoom(14);
+      } else {
+        // Fit bounds with generous padding so markers aren't placed right at the edges
+        map.fitBounds(bounds, 75);
+      }
+    } else {
+      // 3. Fallback: Center on the specified location if it has changed
+      const hasCoordsChanged = !lastCenterRef.current || 
+        Math.abs(lastCenterRef.current.lat - center.lat) > 0.0001 || 
+        Math.abs(lastCenterRef.current.lng - center.lng) > 0.0001;
+
+      if (hasCoordsChanged) {
+        lastCenterRef.current = center;
+        map.panTo(center);
+        map.setZoom(13);
+      }
+    }
+  }, [map, pros, center, resetTrigger]);
 
   return null;
 }
 
 function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professional[], onSelectPro: (pro: Professional) => void, center: { lat: number, lng: number }, resetTrigger?: number }) {
   const hasValidKey = Boolean(GOOGLE_MAPS_KEY) && GOOGLE_MAPS_KEY.length > 10;
+
+  // Jitter identical/overlapping coordinates so markers are separately visible
+  const processedPros = useMemo(() => {
+    const coordsCount = new Map<string, number>();
+    return pros.map((pro) => {
+      if (!pro.coordinates) return pro;
+      // Precision of 5 decimals corresponds to ~1.1 meters. 
+      // If within ~1-2 meters, we treat them as overlapping.
+      const key = `${pro.coordinates.lat.toFixed(5)},${pro.coordinates.lng.toFixed(5)}`;
+      const count = coordsCount.get(key) || 0;
+      coordsCount.set(key, count + 1);
+
+      if (count > 0) {
+        // Distribute overlapping markers in a small circle/spiral
+        const angle = (count * 2 * Math.PI) / 8;
+        const radius = 0.00015 * Math.ceil(count / 8); // ~15-20 meters offset per tier
+        return {
+          ...pro,
+          coordinates: {
+            lat: pro.coordinates.lat + radius * Math.cos(angle),
+            lng: pro.coordinates.lng + radius * Math.sin(angle),
+          },
+        };
+      }
+      return pro;
+    });
+  }, [pros]);
 
   if (!hasValidKey) {
     return (
@@ -11042,8 +11100,19 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
           scrollwheel={true}
           internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
         >
-          <MapCenterController center={center} resetTrigger={resetTrigger} />
-          {pros.map((pro, index) => pro.coordinates && (
+          <MapViewportController pros={processedPros} center={center} resetTrigger={resetTrigger} />
+          
+          {/* Pulsing marker for user's location if available (not the default Valencia fallback) */}
+          {center && (center.lat !== 39.4699 || center.lng !== -0.3763) && (
+            <AdvancedMarker position={center} title="Your Location">
+              <div className="relative flex h-6 w-6 items-center justify-center">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-500 border-2 border-white shadow-md"></span>
+              </div>
+            </AdvancedMarker>
+          )}
+
+          {processedPros.map((pro, index) => pro.coordinates && (
             <AdvancedMarker
               key={pro.id}
               position={pro.coordinates}
@@ -11257,6 +11326,104 @@ function ExploreView({
     try {
       let data = null;
       let serverFailed = false;
+      let clientGooglePlacesPros: any[] = [];
+
+      // Try to fetch Google Places pros directly from the client side if GOOGLE_MAPS_KEY is available
+      if (GOOGLE_MAPS_KEY) {
+        try {
+          const targetZone = detectTargetZone(trimmed, userLocation);
+          const centerLat = targetZone.centerCoords.lat;
+          const centerLng = targetZone.centerCoords.lng;
+
+          const textQuery = buildOptimizedPlacesQuery(
+            trimmed,
+            targetZone.isSpecificZone,
+            targetZone.zoneName,
+            !!userLocation
+          );
+
+          const requestBody: any = {
+            textQuery,
+            maxResultCount: 20,
+            languageCode: "en"
+          };
+
+          const biasRadius = targetZone.isSpecificZone ? 5000.0 : (userLocation ? 5000.0 : 25000.0);
+
+          requestBody.locationBias = {
+            circle: {
+              center: { latitude: centerLat, longitude: centerLng },
+              radius: biasRadius
+            }
+          };
+
+          const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Goog-Api-Key": GOOGLE_MAPS_KEY,
+              "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.photos,places.location"
+            },
+            body: JSON.stringify(requestBody)
+          });
+
+          if (gpResponse.ok) {
+            const gpData = await gpResponse.json();
+            const places = gpData.places || [];
+            const mappedPlaces = places
+              .map((place: any, idx: number) => {
+                let photoUrl = "";
+                const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
+
+                let coords = {
+                  lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
+                  lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
+                };
+
+                if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
+                  coords = {
+                    lat: place.location.latitude,
+                    lng: place.location.longitude
+                  };
+                }
+
+                const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+
+                return {
+                  id: `google_${place.id}`,
+                  name: place.displayName?.text || "Professional",
+                  company_name: place.displayName?.text || "",
+                  category: place.primaryTypeDisplayName?.text || "Professional",
+                  bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
+                  location: cleanAddress,
+                  coordinates: coords,
+                  distanceKm: dist,
+                  rating: typeof place.rating === 'number' ? place.rating : 0,
+                  reviews_count: place.userRatingCount || 0,
+                  review_count: place.userRatingCount || 0,
+                  phone: place.nationalPhoneNumber || "",
+                  website: place.websiteUri || "",
+                  googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
+                  image: photoUrl,
+                  source: 'google_places',
+                  is_community_recommended: false
+                };
+              })
+              .filter((place: any) => !isTradeMismatched(trimmed, place.name, place.category));
+
+            // Strictly sort Google Places by closest distance first, max 6
+            mappedPlaces.sort((a: any, b: any) => {
+              const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+              const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+              return distA - distB;
+            });
+
+            clientGooglePlacesPros = mappedPlaces.slice(0, 6);
+          }
+        } catch (gpErr) {
+          console.warn("Client-side Google Places fetch failed:", gpErr);
+        }
+      }
 
       const isVercelHost = typeof window !== 'undefined' && (
         window.location.hostname.includes("vercel.app") || 
@@ -11271,7 +11438,7 @@ function ExploreView({
         serverFailed = true;
       } else {
         try {
-          const briefPros = allPros.map((p: any) => ({
+          const proListBrief = allPros.map((p: any) => ({
             id: String(p.id),
             name: p.name,
             company_name: p.company_name || "",
@@ -11282,10 +11449,38 @@ function ExploreView({
             languages: p.languages || [],
             rating: p.rating || 0,
             location: p.location || "",
+            coordinates: p.coordinates || null,
+            lat: p.coordinates?.lat ?? p.lat,
+            lng: p.coordinates?.lng ?? p.lng,
             is_community_recommended: Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended || p.source === 'community'),
             is_recommended: Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended || p.source === 'community'),
             source: p.source || (Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended) ? 'community' : 'google_places')
           }));
+
+          const googleProsBrief = clientGooglePlacesPros.map((p: any) => ({
+            id: String(p.id),
+            name: p.name,
+            company_name: p.company_name || "",
+            category: p.category || "Professional",
+            categories: [p.category || "Professional"],
+            bio: p.bio || "",
+            top_qualities: [],
+            languages: [],
+            rating: p.rating || 0,
+            location: p.location || "Valencia",
+            distanceKm: p.distanceKm || null,
+            coordinates: p.coordinates || null,
+            lat: p.coordinates?.lat ?? p.lat,
+            lng: p.coordinates?.lng ?? p.lng,
+            website: p.website || "",
+            googleMapsUri: p.googleMapsUri || "",
+            is_community_recommended: false,
+            source: 'google_places'
+          }));
+
+          const briefPros = [...proListBrief, ...googleProsBrief].filter((p: any) =>
+            !isTradeMismatched(trimmed, p.name, p.category)
+          );
 
           const response = await fetch("/api/ai-search", {
             method: "POST",
@@ -11319,122 +11514,11 @@ function ExploreView({
         }
       }
 
-      let clientGooglePlacesPros: any[] = [];
-
       if (serverFailed) {
         // Fallback to client-side search using the client-side API key
         const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
         if (!apiKey) {
           throw new Error("The server AI search service is busy or unavailable (Error 404). To use client-side AI search (e.g., on Vercel), please configure the VITE_GEMINI_API_KEY environment variable in your Vercel project settings.");
-        }
-
-        // Try to fetch Google Places pros directly from the client side if GOOGLE_MAPS_KEY is available
-        if (GOOGLE_MAPS_KEY) {
-          try {
-            const targetZone = detectTargetZone(trimmed, userLocation);
-            const centerLat = targetZone.centerCoords.lat;
-            const centerLng = targetZone.centerCoords.lng;
-
-            const normalizedQuery = trimmed.toLowerCase();
-            const isProximity = normalizedQuery.includes('autour') || 
-                                normalizedQuery.includes('proche') || 
-                                normalizedQuery.includes('near') || 
-                                normalizedQuery.includes('around') || 
-                                normalizedQuery.includes('close to') || 
-                                normalizedQuery.includes('moi') || 
-                                normalizedQuery.includes('me') || 
-                                normalizedQuery.includes('ici');
-
-            const textQuery = buildOptimizedPlacesQuery(
-              trimmed,
-              targetZone.isSpecificZone,
-              targetZone.zoneName,
-              !!userLocation
-            );
-
-            const requestBody: any = {
-              textQuery,
-              maxResultCount: 20,
-              languageCode: "en"
-            };
-
-            const biasRadius = targetZone.isSpecificZone ? 5000.0 : (userLocation ? 5000.0 : 25000.0);
-
-            requestBody.locationBias = {
-              circle: {
-                center: { latitude: centerLat, longitude: centerLng },
-                radius: biasRadius
-              }
-            };
-
-            const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-Goog-Api-Key": GOOGLE_MAPS_KEY,
-                "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.photos,places.location"
-              },
-              body: JSON.stringify(requestBody)
-            });
-
-            if (gpResponse.ok) {
-              const gpData = await gpResponse.json();
-              const places = gpData.places || [];
-              const mappedPlaces = places
-                .map((place: any, idx: number) => {
-                  let photoUrl = "";
-                  // Do not fetch or set profile photo for Google Pros
-
-                  const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
-
-                  let coords = {
-                    lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
-                    lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
-                  };
-
-                  if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
-                    coords = {
-                      lat: place.location.latitude,
-                      lng: place.location.longitude
-                    };
-                  }
-
-                  const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
-
-                  return {
-                    id: `google_${place.id}`,
-                    name: place.displayName?.text || "Professional",
-                    company_name: place.displayName?.text || "",
-                    category: place.primaryTypeDisplayName?.text || "Professional",
-                    bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
-                    location: cleanAddress,
-                    coordinates: coords,
-                    distanceKm: dist,
-                    rating: 0,
-                    reviews_count: 0,
-                    review_count: 0,
-                    phone: place.nationalPhoneNumber || "",
-                    website: place.websiteUri || "",
-                    googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
-                    image: photoUrl,
-                    source: 'google_places',
-                    is_community_recommended: false
-                  };
-                })
-                .filter((place: any) => !isTradeMismatched(trimmed, place.name, place.category));
-
-              // Strictly sort Google Places by closest distance first, max 6
-              mappedPlaces.sort((a: any, b: any) => {
-                const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
-                const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
-                return distA - distB;
-              });
-
-              clientGooglePlacesPros = mappedPlaces.slice(0, 6);
-            }
-          } catch (gpErr) {
-            console.warn("Client-side fallback Google Places fetch failed:", gpErr);
-          }
         }
 
         const ai = new GoogleGenAI({ apiKey });
@@ -11574,9 +11658,13 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         exactMatch = false;
       }
 
-      if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
+      const googlePlacesToSet = (data.google_places_pros && Array.isArray(data.google_places_pros) && data.google_places_pros.length > 0)
+        ? data.google_places_pros
+        : clientGooglePlacesPros;
+
+      if (googlePlacesToSet && googlePlacesToSet.length > 0) {
         // Filter google places to only keep those not mismatched
-        const validGooglePros = data.google_places_pros.filter(
+        const validGooglePros = googlePlacesToSet.filter(
           (p: any) => !isTradeMismatched(trimmed, p.name, p.category)
         );
         const top6 = validGooglePros.slice(0, 6);
@@ -11893,7 +11981,14 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         if (searchStr !== '') {
           if (aiResults !== null) {
             const proIdStr = String(pro.id);
-            const matchInfo = aiResults[proIdStr];
+            let matchInfo = aiResults[proIdStr];
+            if (!matchInfo) {
+              if (proIdStr.startsWith('google_')) {
+                matchInfo = aiResults[proIdStr.replace('google_', '')];
+              } else {
+                matchInfo = aiResults[`google_${proIdStr}`];
+              }
+            }
             // Only keep professionals that have a positive score (> 0).
             // Any professional with score <= 0 or missing from aiResults has nothing to do with the search and is hidden.
             matchesSearch = !!matchInfo && typeof matchInfo.score === 'number' && matchInfo.score > 0;

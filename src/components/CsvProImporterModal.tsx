@@ -54,6 +54,7 @@ interface ParsedProRow {
   google_maps_url: string;
   lat?: number;
   lng?: number;
+  hasRealCoordinates?: boolean;
   languages: string[];
   description: string;
   source: 'google_places' | 'community';
@@ -230,8 +231,10 @@ Plumbing Express Valencia,Plumber,Avinguda del Port 45 46021 Valencia,4.7,52,+34
         let lat = latStr ? parseFloat(latStr.replace(',', '.')) : undefined;
         let lng = lngStr ? parseFloat(lngStr.replace(',', '.')) : undefined;
 
+        const hasRealCoordinates = (lat !== undefined && !isNaN(lat) && lat !== 0) && (lng !== undefined && !isNaN(lng) && lng !== 0);
+
         // Auto fallback coordinates from default Valencia center if missing
-        if ((lat === undefined || isNaN(lat) || lat === 0) || (lng === undefined || isNaN(lng) || lng === 0)) {
+        if (!hasRealCoordinates) {
           const locLower = location.toLowerCase();
           const matchedZone = VALENCIA_ZONES.find(z => z.keywords.some(kw => locLower.includes(kw)));
           if (matchedZone) {
@@ -277,6 +280,7 @@ Plumbing Express Valencia,Plumber,Avinguda del Port 45 46021 Valencia,4.7,52,+34
           google_maps_url,
           lat,
           lng,
+          hasRealCoordinates,
           languages,
           description,
           source: importSource,
@@ -484,11 +488,51 @@ Plumbing Express Valencia,Plumber,Avinguda del Port 45 46021 Valencia,4.7,52,+34
 
     setIsImporting(true);
     try {
-      const formattedPros = validRows.map((row, index) => {
-        const id = `imported_google_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 6)}`;
-        // Use row.category directly to preserve manual associations
+      const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || (typeof process !== 'undefined' ? process.env.GOOGLE_MAPS_PLATFORM_KEY : '') || '';
+      const formattedPros = [];
+
+      for (let i = 0; i < validRows.length; i++) {
+        const row = validRows[i];
+        let lat = row.lat;
+        let lng = row.lng;
+
+        // If coordinates are missing or falling back to a default center/zone, try to geocode via Google Places API
+        const isFallback = !row.hasRealCoordinates;
+        
+        if (isFallback && googleMapsKey) {
+          try {
+            const queryText = `${row.name} ${row.location || ''} Valencia`;
+            const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": googleMapsKey,
+                "X-Goog-FieldMask": "places.location"
+              },
+              body: JSON.stringify({
+                textQuery: queryText,
+                languageCode: "fr"
+              })
+            });
+
+            if (gpResponse.ok) {
+              const gpData = await gpResponse.json();
+              const place = gpData.places?.[0];
+              if (place && place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
+                lat = place.location.latitude;
+                lng = place.location.longitude;
+                console.log(`[Import Geocoder] Geocoded "${row.name}" successfully to:`, lat, lng);
+              }
+            }
+          } catch (err) {
+            console.warn(`[Import Geocoder] Failed to geocode "${row.name}":`, err);
+          }
+        }
+
+        const id = `imported_google_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 6)}`;
         const finalCat = (row.category || 'Other').trim();
-        return {
+
+        formattedPros.push({
           id,
           name: row.name,
           company_name: row.name,
@@ -503,9 +547,9 @@ Plumbing Express Valencia,Plumber,Avinguda del Port 45 46021 Valencia,4.7,52,+34
           website: row.website || '',
           google_maps_url: row.google_maps_url || '',
           googleMapsUri: row.google_maps_url || '',
-          lat: row.lat,
-          lng: row.lng,
-          coordinates: (row.lat && row.lng) ? { lat: row.lat, lng: row.lng } : null,
+          lat: lat,
+          lng: lng,
+          coordinates: (lat && lng) ? { lat, lng } : null,
           languages: row.languages && row.languages.length > 0 ? row.languages : ['Espagnol'],
           description: row.description || '',
           bio: row.description || '',
@@ -516,8 +560,8 @@ Plumbing Express Valencia,Plumber,Avinguda del Port 45 46021 Valencia,4.7,52,+34
           is_recommended: importSource === 'community',
           is_recommanded: importSource === 'community',
           created_at: new Date().toISOString()
-        };
-      });
+        });
+      }
 
       const count = await proService.bulkImportProfessionals(formattedPros);
       setImportedCount(count);

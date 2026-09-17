@@ -337,8 +337,8 @@ export function toTitleCase(str: string): string {
 }
 
 /**
- * Resolves a simplified trade string to its strict synonym group if an exact full-term match exists.
- * Supports composite category strings separated by &, /, +, ' and ', ' et ', ' y '.
+ * Resolves a simplified trade string to its strict synonym group.
+ * Checks for full-string matches, word-boundary matches, and compound parts.
  */
 export function getCategoryGroup(simplifiedName: string): SynonymGroup | null {
   if (!simplifiedName) return null;
@@ -350,7 +350,21 @@ export function getCategoryGroup(simplifiedName: string): SynonymGroup | null {
     }
   }
 
-  // 2. Compound parts match (e.g. "Plumbing & Heating", "Air Conditioning / HVAC")
+  // 2. Whole word/phrase match of any synonym group term inside simplifiedName
+  // Sorted descending by term length to prioritize specific matches (e.g. "dental clinic" before "dental")
+  for (const group of SYNONYM_GROUPS) {
+    const sortedTerms = [...group.terms].sort((a, b) => b.length - a.length);
+    for (const term of sortedTerms) {
+      if (term.length < 3) continue; // Skip too short terms to prevent noisy matching
+      const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`\\b${escapedTerm}\\b`, 'i');
+      if (regex.test(simplifiedName)) {
+        return group;
+      }
+    }
+  }
+
+  // 3. Compound parts match (e.g. "Plumbing & Heating", "Air Conditioning / HVAC")
   const parts = simplifiedName
     .split(/\s*(?:&|\/|\+|\bet\b|\by\b|\band\b)\s*/)
     .map(p => p.trim())
@@ -372,12 +386,8 @@ export function getCategoryGroup(simplifiedName: string): SynonymGroup | null {
 /**
  * Intelligently and conservatively matches a raw category string against existing categories in the app.
  * If an existing category in the app represents the EXACT SAME profession (e.g. "plumbing" -> "Plumber",
- * "dentiste" -> "Dentist"), returns the exact existing name.
- * If the raw category is distinct (e.g. "Interior Design" vs "Architect", "Automatic Doors" vs "Mechanic"),
- * it is NEVER coerced into the wrong trade and is preserved cleanly in Title Case.
- * 
- * @param rawCategory The raw input category (e.g. from CSV, Places, or Google Pro)
- * @param existingCategories List of all category names currently present in the app / database
+ * "dentiste" -> "Dentist", "cabinet d'avocats" -> "Lawyer"), returns the exact existing name to prevent duplicates.
+ * If the raw category is distinct, it is preserved cleanly in Title Case.
  */
 export function normalizeCategoryName(rawCategory: string, existingCategories: string[] = []): string {
   if (!rawCategory || typeof rawCategory !== 'string') return '';
@@ -402,7 +412,6 @@ export function normalizeCategoryName(rawCategory: string, existingCategories: s
   }
 
   // --- Step 2: Simple singular / plural grammatical matching (EN/FR/ES: -s, -es) ---
-  // E.g. "electricians" -> "Electrician", "dentists" -> "Dentist", "plumbers" -> "Plumber"
   for (const existing of validExisting) {
     const sExisting = simplifyString(existing);
     if (
@@ -415,7 +424,7 @@ export function normalizeCategoryName(rawCategory: string, existingCategories: s
     }
   }
 
-  // --- Step 3: Exact Synonym Group Match with Existing Categories ---
+  // --- Step 3: Exact or Smart Synonym Group Match with Existing Categories ---
   const rawGroup = getCategoryGroup(simplifiedRaw);
   if (rawGroup) {
     // Check if ANY existing category in the app matches this exact same group
@@ -424,6 +433,16 @@ export function normalizeCategoryName(rawCategory: string, existingCategories: s
       const existingGroup = getCategoryGroup(sExisting);
       if (existingGroup && existingGroup.id === rawGroup.id) {
         return existing; // Strict reuse of the existing app category!
+      }
+
+      // Check if sExisting contains any of rawGroup's terms as a whole word
+      for (const term of rawGroup.terms) {
+        if (term.length < 3) continue;
+        const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`\\b${escapedTerm}\\b`, 'i');
+        if (regex.test(sExisting)) {
+          return existing; // Map to the existing, longer/shorter synonym category
+        }
       }
     }
 
@@ -434,8 +453,29 @@ export function normalizeCategoryName(rawCategory: string, existingCategories: s
     }
   }
 
+  // --- Step 3.5: Fallback Word-based Match for custom or non-grouped categories ---
+  // If no group match was found, look if any existing category shares a significant word (>=4 chars) with raw category
+  for (const existing of validExisting) {
+    const sExisting = simplifyString(existing);
+    const existingWords = sExisting.split(' ').filter(w => w.length >= 4);
+    const rawWords = simplifiedRaw.split(' ').filter(w => w.length >= 4);
+
+    const hasCommonSignificantWord = rawWords.some(rw => existingWords.includes(rw));
+    if (hasCommonSignificantWord) {
+      // Prevent false-positive merges for critical opposing trades (e.g., architect vs interior)
+      const isArchitectCross =
+        (sExisting.includes('architect') && sExisting.includes('interieur')) ||
+        (simplifiedRaw.includes('architect') && simplifiedRaw.includes('interieur')) ||
+        (sExisting.includes('doors') && sExisting.includes('repair')) ||
+        (simplifiedRaw.includes('doors') && simplifiedRaw.includes('repair'));
+
+      if (!isArchitectCross) {
+        return existing; // Reuse the existing category due to common significant term!
+      }
+    }
+  }
+
   // --- Step 4: Category does not exist in app -> Add as clean Title Case ---
-  // "Si une categorie ne semble pas exister, elle peut par contre etre ajoutée"
   return toTitleCase(trimmed);
 }
 

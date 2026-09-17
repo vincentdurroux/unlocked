@@ -308,6 +308,14 @@ export const proService = {
                       : (lpSource !== 'google' && lpSource !== 'google_places' && !String(lp.id).startsWith('google_'))
                     )
                   );
+                let lat = typeof lp.lat === 'string' ? parseFloat(lp.lat) : lp.lat;
+                let lng = typeof lp.lng === 'string' ? parseFloat(lp.lng) : lp.lng;
+                
+                let coords = lp.coordinates || null;
+                if (!coords && typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng) && (Math.abs(lat) > 0.0001 || Math.abs(lng) > 0.0001)) {
+                  coords = { lat, lng };
+                }
+
                 mappedData.push({
                   ...lp,
                   bio: cleanLpBio,
@@ -315,7 +323,8 @@ export const proService = {
                   source: lpSource,
                   is_community_recommended: lpIsCommunity,
                   is_recommended: lpIsCommunity,
-                  is_recommanded: lpIsCommunity
+                  is_recommanded: lpIsCommunity,
+                  coordinates: coords
                 });
               }
             });
@@ -903,13 +912,19 @@ export const proService = {
     console.log('[proService] deleteProfessional requested for ID:', id);
 
     const strId = String(id);
+    let resolvedName: string | null = null;
+    let localItemToDelete: any = null;
 
-    // 1. Immediately clean up local storage & record deleted ID to prevent re-appearance
+    // 1. Immediately look for the item in localStorage to check its name or delete it
     try {
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('unlocked_imported_pros');
         if (stored) {
           const list = JSON.parse(stored);
+          localItemToDelete = list.find((p: any) => String(p.id) === strId);
+          if (localItemToDelete && localItemToDelete.name) {
+            resolvedName = localItemToDelete.name;
+          }
           const filtered = list.filter((p: any) => String(p.id) !== strId);
           localStorage.setItem('unlocked_imported_pros', JSON.stringify(filtered));
         }
@@ -929,7 +944,7 @@ export const proService = {
       return { success: true };
     }
 
-    let finalId = id;
+    let finalId: any = id;
     const isUuid = typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     const isNumeric = typeof id === 'number' || (typeof id === 'string' && /^\d+$/.test(id));
     
@@ -948,12 +963,114 @@ export const proService = {
           .eq('id', finalId)
           .maybeSingle();
         proToArchive = data;
+        if (proToArchive && proToArchive.name) {
+          resolvedName = proToArchive.name;
+        }
       } catch (e: any) {
         console.warn('[proService] DB query exception during archive lookup for ID:', finalId, e);
       }
     }
 
-    if (proToArchive) {
+    // Symmetrical cleanup by name:
+    // If we have a resolvedName (either from DB or localStorage), find and clean up the corresponding entity in the other storage
+    if (resolvedName) {
+      const nameNorm = resolvedName.toLowerCase().trim();
+
+      // If we deleted from DB, also remove from localStorage's imported list any matching pro by name
+      try {
+        if (typeof window !== 'undefined') {
+          const stored = localStorage.getItem('unlocked_imported_pros');
+          if (stored) {
+            const list = JSON.parse(stored);
+            const matches = list.filter((p: any) => (p.name || '').toLowerCase().trim() === nameNorm);
+            if (matches.length > 0) {
+              const remaining = list.filter((p: any) => (p.name || '').toLowerCase().trim() !== nameNorm);
+              localStorage.setItem('unlocked_imported_pros', JSON.stringify(remaining));
+              
+              // Add their local IDs to deleted_pro_ids
+              const deletedRaw = localStorage.getItem('deleted_pro_ids');
+              const deletedList: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+              matches.forEach((m: any) => {
+                const mIdStr = String(m.id);
+                if (!deletedList.includes(mIdStr)) {
+                  deletedList.push(mIdStr);
+                }
+              });
+              localStorage.setItem('deleted_pro_ids', JSON.stringify(deletedList));
+              console.log('[proService] Automatically removed matching local storage pros by name:', resolvedName);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[proService] localStorage cleanup by name warning:', err);
+      }
+
+      // If we deleted from localStorage (original ID is string/custom), also find and delete from DB any matching pro by name
+      if (!(isNumeric || isUuid)) {
+        try {
+          const { data: dbMatches, error: matchError } = await supabase
+            .from('professionals')
+            .select('*')
+            .eq('name', resolvedName);
+          
+          if (!matchError && dbMatches && dbMatches.length > 0) {
+            console.log('[proService] Symmetrically deleting matching database entries by name:', resolvedName);
+            for (const dbPro of dbMatches) {
+              // Archive it first
+              proToArchive = dbPro;
+              const archiveData: any = {
+                name: dbPro.name,
+                company_name: dbPro.company_name,
+                profession: dbPro.profession || dbPro.category,
+                rating: dbPro.rating,
+                review_count: dbPro.review_count ?? dbPro.reviews_count,
+                languages: dbPro.languages,
+                image_url: dbPro.image_url || dbPro.image,
+                description: dbPro.description || dbPro.bio,
+                phone: dbPro.phone,
+                email: dbPro.email,
+                website: dbPro.website,
+                instagram: dbPro.instagram,
+                facebook: dbPro.facebook,
+                location: dbPro.location,
+                lat: dbPro.lat,
+                lng: dbPro.lng,
+                created_at: dbPro.created_at,
+                original_id: String(dbPro.id),
+                deleted_at: new Date().toISOString()
+              };
+
+              Object.keys(archiveData).forEach(key => {
+                if (archiveData[key] === undefined) delete archiveData[key];
+              });
+
+              try {
+                await supabase.from('deleted_professionals').insert([archiveData]);
+              } catch (e) {
+                console.warn('[proService] Archiving matched pro warning:', e);
+              }
+
+              // Delete from DB
+              await supabase.from('professionals').delete().eq('id', dbPro.id);
+
+              // Add its DB ID to deleted_pro_ids
+              if (typeof window !== 'undefined') {
+                const deletedRaw = localStorage.getItem('deleted_pro_ids');
+                const deletedList: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+                if (!deletedList.includes(String(dbPro.id))) {
+                  deletedList.push(String(dbPro.id));
+                  localStorage.setItem('deleted_pro_ids', JSON.stringify(deletedList));
+                }
+              }
+            }
+          }
+        } catch (err: any) {
+          console.warn('[proService] DB match deletion exception:', err.message);
+        }
+      }
+    }
+
+    if (proToArchive && (isNumeric || isUuid)) {
       console.log('[proService] Archiving pro data...');
       const archiveData: any = {
         name: proToArchive.name,
