@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Logo } from './components/Logo';
 import { LandingJaneAISearch, isCommunityPro } from './components/LandingJaneAISearch';
+import { AdminAgenticProSearch } from './components/AdminAgenticProSearch';
 import { 
   Home, 
   Search, 
@@ -94,7 +95,8 @@ import {
   Database,
   Wrench,
   UserCheck,
-  ThumbsUp
+  ThumbsUp,
+  FileSpreadsheet
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
@@ -109,6 +111,8 @@ import { eventService } from './services/eventService';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
+import { CsvProImporterModal } from './components/CsvProImporterModal';
+import { findDuplicateRecommendedPro } from './utils/duplicateDetector';
 import { detectTargetZone, calculateDistanceKm, DEFAULT_VALENCIA_CENTER, buildOptimizedPlacesQuery, isTradeMismatched } from './lib/locationUtils';
 
 // Custom Tooth Icon matching screenshot
@@ -670,6 +674,7 @@ interface Professional {
   id: string;
   name: string;
   company_name?: string;
+  profession?: string;
   category: string;
   rating: number;
   review_count?: number;
@@ -690,6 +695,8 @@ interface Professional {
   categories?: string[];
   source?: string;
   is_community_recommended?: boolean;
+  is_recommended?: boolean;
+  is_recommanded?: boolean;
 }
 
 interface Event {
@@ -4134,8 +4141,8 @@ function AdminView({
 }) {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dashboardCategory, setDashboardCategory] = useState<'pros' | 'events' | 'testimonies' | 'reported_users' | 'highlights' | 'guides' | 'announcements'>('pros');
-  const [activeTab, setActiveTab ] = useState<'recommendations' | 'add_pro' | 'edit_pro' | 'add_event' | 'edit_event' | 'all_events' | 'completed' | 'refused'>('recommendations');
+  const [dashboardCategory, setDashboardCategory] = useState<'pros' | 'events' | 'testimonies' | 'reported_users' | 'highlights' | 'guides' | 'announcements' | 'agent_search'>('pros');
+  const [activeTab, setActiveTab ] = useState<'recommendations' | 'add_pro' | 'edit_pro' | 'add_event' | 'edit_event' | 'all_events' | 'completed' | 'refused' | 'agent_search'>('recommendations');
   const [activeRecId, setActiveRecId] = useState<string | null>(null);
   const [editingProId, setEditingProId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -4462,9 +4469,85 @@ function AdminView({
   };
 
   const [proSearch, setProSearch] = useState('');
+  const [activeProFilterTab, setActiveProFilterTab] = useState<'recommended' | 'google' | 'duplicates'>('recommended');
   const [eventSearch, setEventSearch] = useState('');
   const [testimonySearch, setTestimonySearch] = useState('');
   const [articleSearch, setArticleSearch] = useState('');
+
+  const [recommendingPro, setRecommendingPro] = useState<{ id: string | number; name: string; targetStatus: boolean; pro?: Professional } | null>(null);
+  const [isUpdatingRecommendation, setIsUpdatingRecommendation] = useState(false);
+  const [showCsvImporterModal, setShowCsvImporterModal] = useState(false);
+
+  const handleToggleRecommendation = async (id: string | number, targetStatus: boolean, proToEdit?: Professional) => {
+    setIsUpdatingRecommendation(true);
+    try {
+      // Optimistic UI update
+      setCompletedPros(prev => prev.map(p => {
+        if (String(p.id) === String(id)) {
+          return {
+            ...p,
+            is_recommended: targetStatus,
+            is_community_recommended: targetStatus,
+            is_recommanded: targetStatus
+          };
+        }
+        return p;
+      }));
+
+      const result = await proService.setProfessionalRecommendation(id, targetStatus);
+      if (result && result.success === false) {
+        setMsg({ type: 'error', text: result.message || 'Failed to update recommendation status.' });
+        await fetchCompletedPros();
+      } else {
+        setMsg({ 
+          type: 'success', 
+          text: targetStatus 
+            ? `"${recommendingPro?.name || 'Professional'}" has been marked as Recommended! Redirecting to complete profile...` 
+            : `"${recommendingPro?.name || 'Professional'}" was removed from recommended.` 
+        });
+        if (onRefetchPros) await onRefetchPros();
+        await fetchCompletedPros();
+
+        if (targetStatus && proToEdit) {
+          handleStartEditing({
+            ...proToEdit,
+            is_recommended: true
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error('Error toggling recommendation:', err);
+      setMsg({ type: 'error', text: 'Error: ' + (err.message || String(err)) });
+      await fetchCompletedPros();
+    } finally {
+      setIsUpdatingRecommendation(false);
+      setRecommendingPro(null);
+    }
+  };
+
+  const [deletingProFromCard, setDeletingProFromCard] = useState<{ id: string | number; name: string; company_name?: string } | null>(null);
+  const [isDeletingProFromCard, setIsDeletingProFromCard] = useState(false);
+
+  const handleConfirmDeleteFromCard = async () => {
+    if (!deletingProFromCard) return;
+    const targetId = deletingProFromCard.id;
+    const targetName = deletingProFromCard.name;
+    setIsDeletingProFromCard(true);
+    try {
+      setCompletedPros(prev => prev.filter(p => String(p.id) !== String(targetId)));
+      await proService.deleteProfessional(targetId);
+      setMsg({ type: 'success', text: `Professional "${targetName}" deleted successfully.` });
+      if (onRefetchPros) await onRefetchPros();
+      await fetchCompletedPros();
+    } catch (err: any) {
+      console.error('Error deleting professional:', err);
+      setMsg({ type: 'error', text: 'Error deleting professional: ' + (err.message || String(err)) });
+      await fetchCompletedPros();
+    } finally {
+      setIsDeletingProFromCard(false);
+      setDeletingProFromCard(null);
+    }
+  };
 
   const [reports, setReports] = useState<any[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
@@ -4817,7 +4900,8 @@ function AdminView({
     lat: 0,
     lng: 0,
     top_qualities: [] as string[],
-    has_filled_form: false
+    has_filled_form: false,
+    is_recommended: true
   });
 
   const [newEvent, setNewEvent] = useState({
@@ -4884,7 +4968,8 @@ function AdminView({
       image: rec.pro_image_url || '',
       languages: rec.pro_languages || [],
       top_qualities: rec.top_qualities || [],
-      has_filled_form: false
+      has_filled_form: false,
+      is_recommended: true
     });
     if (rec.pro_image_url) {
       setPreviewUrl(rec.pro_image_url);
@@ -4906,6 +4991,7 @@ function AdminView({
     const categoriesValue = pro.categories || (pro.category ? pro.category.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
     const latValue = pro.coordinates?.lat ?? 0;
     const lngValue = pro.coordinates?.lng ?? 0;
+    const isRec = pro.is_recommended ?? pro.is_recommanded ?? pro.is_community_recommended ?? (pro.source === 'community');
 
     setNewPro({
       name: pro.name || '',
@@ -4927,7 +5013,8 @@ function AdminView({
       lat: Number(latValue),
       lng: Number(lngValue),
       top_qualities: pro.top_qualities || [],
-      has_filled_form: pro.has_filled_form || false
+      has_filled_form: pro.has_filled_form || false,
+      is_recommended: Boolean(isRec)
     });
     setPreviewUrl(imageValue || null);
     setActiveTab('edit_pro');
@@ -5115,7 +5202,11 @@ function AdminView({
         lat: finalLat,
         lng: finalLng,
         top_qualities: newPro.top_qualities || [],
-        has_filled_form: newPro.has_filled_form || false
+        has_filled_form: newPro.has_filled_form || false,
+        is_recommended: newPro.is_recommended ?? true,
+        is_recommanded: newPro.is_recommended ?? true,
+        is_community_recommended: newPro.is_recommended ?? true,
+        source: newPro.is_recommended ? 'community' : 'google_places'
       };
 
       console.log('[handleAddPro] Final payload to service:', {
@@ -5187,19 +5278,24 @@ function AdminView({
         name: '',
         company_name: '',
         category: '',
+        categories: [],
         rating: 0,
         review_count: 0,
         languages: [],
         image: '',
         bio: '',
         phone: '',
+        whatsapp: '',
         email: '',
         website: '',
         instagram: '',
         facebook: '',
         location: '',
         lat: 0,
-        lng: 0
+        lng: 0,
+        top_qualities: [],
+        has_filled_form: false,
+        is_recommended: true
       });
       setSelectedFile(null);
       setPreviewUrl(null);
@@ -5298,6 +5394,7 @@ function AdminView({
            </h2>
            <h3 className="text-sm md:text-base text-slate-500 font-medium tracking-tight">
              {dashboardCategory === 'pros' ? 'Review recommendations and manage professionals.' : 
+              dashboardCategory === 'agent_search' ? 'Search, verify, and import real local professionals on Google using real-time Web Search Agent.' :
               dashboardCategory === 'events' ? 'Manage community events and meetups.' :
               dashboardCategory === 'reported_users' ? 'Moderate reported users, content, and harassment reports.' :
               dashboardCategory === 'highlights' ? 'Select which pro, event, article, and testimonial are highlighted on the Landing Page.' :
@@ -5307,7 +5404,7 @@ function AdminView({
            </h3>
         </div>
 
-        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-7 bg-slate-100/80 p-1.5 rounded-[22px] w-full border border-slate-200/50 gap-1.5">
+        <div className="grid grid-cols-2 xs:grid-cols-4 sm:grid-cols-4 md:grid-cols-8 bg-slate-100/80 p-1.5 rounded-[22px] w-full border border-slate-200/50 gap-1.5">
           <button 
             onClick={() => {
               setDashboardCategory('pros');
@@ -5437,19 +5534,24 @@ function AdminView({
                     name: '',
                     company_name: '',
                     category: '',
+                    categories: [],
                     rating: 0,
                     review_count: 0,
                     languages: [],
                     image: '',
                     bio: '',
                     phone: '',
+                    whatsapp: '',
                     email: '',
                     website: '',
                     instagram: '',
                     facebook: '',
                     location: '',
                     lat: 0,
-                    lng: 0
+                    lng: 0,
+                    top_qualities: [],
+                    has_filled_form: false,
+                    is_recommended: true
                   });
                   setPreviewUrl(null);
                 }}
@@ -5627,6 +5729,7 @@ function AdminView({
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-bold text-slate-900 font-display">
               {activeTab === 'completed' ? 'Active Professionals' :
+               activeTab === 'agent_search' ? 'Google Real-Time Pro Search' :
                activeTab === 'add_pro' ? 'Add New Professional' :
                activeTab === 'edit_pro' ? 'Edit Professional' :
                activeTab === 'refused' ? 'Refused Recommendations' :
@@ -5635,6 +5738,15 @@ function AdminView({
           </div>
 
           <div className="space-y-4">
+          {activeTab === 'agent_search' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <AdminAgenticProSearch 
+                onRefetchPros={fetchCompletedPros} 
+                setGlobalAlert={(alert) => setMsg(alert)} 
+              />
+            </div>
+          )}
+
           {activeTab === 'recommendations' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {loading ? (
@@ -5853,6 +5965,22 @@ function AdminView({
                         type="checkbox" 
                         checked={newPro.has_filled_form} 
                         onChange={e => setNewPro({...newPro, has_filled_form: e.target.checked})}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                  </div>
+
+                  <div className="md:col-span-2 p-5 bg-amber-500/5 rounded-2xl border border-amber-500/10 flex items-center justify-between gap-4 font-display text-sm">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wide">Recommended Pro (Community)</label>
+                      <p className="text-[11px] text-slate-500 font-medium">Check this box to mark this professional as recommended by the community.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={newPro.is_recommended} 
+                        onChange={e => setNewPro({...newPro, is_recommended: e.target.checked})}
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
@@ -6133,6 +6261,22 @@ function AdminView({
                       <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                     </label>
                   </div>
+
+                  <div className="md:col-span-2 p-5 bg-brand-blue/5 rounded-2xl border border-brand-blue/10 flex items-center justify-between gap-4 font-display text-sm">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wide">Recommended Pro (Community)</label>
+                      <p className="text-[11px] text-slate-500 font-medium">Check this box to mark this professional as recommended by the community (checked by default).</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={newPro.is_recommended} 
+                        onChange={e => setNewPro({...newPro, is_recommended: e.target.checked})}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -6229,7 +6373,18 @@ function AdminView({
           )}
 
           {activeTab === 'completed' && (() => {
-            const sortedCompletedPros = [...completedPros].sort((a, b) => {
+            const filteredPros = completedPros.filter((pro) => {
+              if (!proSearch.trim()) return true;
+              const q = proSearch.toLowerCase().trim();
+              return (
+                (pro.name || '').toLowerCase().includes(q) ||
+                (pro.company_name || '').toLowerCase().includes(q) ||
+                (pro.category || '').toLowerCase().includes(q) ||
+                (pro.location || '').toLowerCase().includes(q)
+              );
+            });
+
+            const sortedCompletedPros = [...filteredPros].sort((a, b) => {
               if (activeProSort === 'alphabet') {
                 return (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
               } else {
@@ -6239,70 +6394,587 @@ function AdminView({
               }
             });
 
+            const recommendedList = sortedCompletedPros.filter(
+              (p) => Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended)
+            );
+            const nonRecommendedList = sortedCompletedPros.filter(
+              (p) => !Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended)
+            );
+
+            const duplicatesList = nonRecommendedList.filter(
+              (p) => findDuplicateRecommendedPro(p, recommendedList, nonRecommendedList) !== null
+            );
+
+            const googleProsDuplicatesCount = duplicatesList.length;
+
+            const displayedList = 
+              activeProFilterTab === 'recommended' 
+                ? recommendedList 
+                : activeProFilterTab === 'duplicates'
+                ? duplicatesList
+                : nonRecommendedList;
+
+            const allExistingCategories = (completedPros || []).reduce((acc: string[], p: any) => {
+              const raw = p.profession || p.category;
+              if (typeof raw === 'string') {
+                raw.split(',').forEach(c => {
+                  const t = c.trim();
+                  if (t && !acc.includes(t) && t.toLowerCase() !== 'undefined' && t.toLowerCase() !== 'null') {
+                    acc.push(t);
+                  }
+                });
+              }
+              return acc;
+            }, []);
+
             return (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 -mt-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] bg-brand-blue/10 text-brand-blue px-2.5 py-1 rounded-full font-bold uppercase tracking-widest">
-                      {completedPros.length} Active
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label htmlFor="active-pro-sort" className="text-xs text-slate-500 font-medium">Sort by:</label>
-                    <select
-                      id="active-pro-sort"
-                      value={activeProSort}
-                      onChange={(e) => setActiveProSort(e.target.value as 'alphabet' | 'created_at')}
-                      className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-medium text-slate-700 outline-none focus:border-brand-blue transition-colors cursor-pointer shadow-sm"
+                {/* Sub-tabs: Recommended Pros vs Google Pros vs Potential Duplicates */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-3xl border border-slate-100 shadow-sm">
+                  <div className="grid grid-cols-3 sm:flex items-center gap-1.5 bg-slate-100/80 p-1.5 rounded-2xl w-full sm:w-auto overflow-x-auto">
+                    <button
+                      onClick={() => setActiveProFilterTab('recommended')}
+                      className={cn(
+                        "w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer select-none min-w-0",
+                        activeProFilterTab === 'recommended'
+                          ? "bg-white text-emerald-800 shadow-sm"
+                          : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
+                      )}
                     >
-                      <option value="created_at">Creation Date (Newest)</option>
-                      <option value="alphabet">Alphabetical (A-Z)</option>
-                    </select>
+                      <Sparkles className={cn(
+                        "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors",
+                        activeProFilterTab === 'recommended' ? "fill-emerald-500 text-emerald-600" : "text-slate-400"
+                      )} />
+                      <span className="truncate">Recommended Pros</span>
+                      <span className={cn(
+                        "text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-extrabold tracking-wider transition-colors shrink-0",
+                        activeProFilterTab === 'recommended'
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-slate-200 text-slate-600"
+                      )}>
+                        {recommendedList.length}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveProFilterTab('google')}
+                      className={cn(
+                        "w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer select-none min-w-0 relative",
+                        activeProFilterTab === 'google'
+                          ? "bg-white text-brand-blue shadow-sm"
+                          : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
+                      )}
+                    >
+                      <Globe className={cn(
+                        "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors",
+                        activeProFilterTab === 'google' ? "text-brand-blue" : "text-slate-400"
+                      )} />
+                      <span className="truncate">Google Pros</span>
+                      <span className={cn(
+                        "text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-extrabold tracking-wider transition-colors shrink-0",
+                        activeProFilterTab === 'google'
+                          ? "bg-brand-blue/10 text-brand-blue"
+                          : "bg-slate-200 text-slate-600"
+                      )}>
+                        {nonRecommendedList.length}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveProFilterTab('duplicates')}
+                      className={cn(
+                        "w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer select-none min-w-0 relative",
+                        activeProFilterTab === 'duplicates'
+                          ? "bg-white text-amber-900 shadow-sm"
+                          : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
+                      )}
+                    >
+                      <AlertTriangle className={cn(
+                        "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors",
+                        activeProFilterTab === 'duplicates' ? "text-amber-600" : "text-slate-400"
+                      )} />
+                      <span className="truncate">Potential Duplicates</span>
+                      <span className={cn(
+                        "text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-extrabold tracking-wider transition-colors shrink-0",
+                        activeProFilterTab === 'duplicates'
+                          ? "bg-amber-100 text-amber-900 border border-amber-300/80"
+                          : duplicatesList.length > 0 ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-slate-200 text-slate-600"
+                      )}>
+                        {duplicatesList.length}
+                      </span>
+                    </button>
+                  </div>
+
+                  {activeProFilterTab === 'google' && (
+                    <button
+                      onClick={() => setShowCsvImporterModal(true)}
+                      className="w-full sm:w-auto px-4 py-2.5 rounded-2xl text-xs font-bold text-brand-blue bg-blue-50 hover:bg-blue-100 border border-blue-200/80 transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95 cursor-pointer shrink-0"
+                      title="Import Google Pros from CSV file"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-brand-blue" />
+                      <span>Import Google Pros (CSV)</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Search & Sort Bar */}
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder={activeProFilterTab === 'recommended' 
+                        ? "Filter recommended pros (name, profession, city)..." 
+                        : activeProFilterTab === 'duplicates'
+                        ? "Filter potential duplicates (name, profession, city)..."
+                        : "Filter Google pros (name, profession, city)..."}
+                      value={proSearch}
+                      onChange={(e) => setProSearch(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all"
+                    />
+                    {proSearch && (
+                      <button
+                        onClick={() => setProSearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200/70">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tab Total:</span>
+                      <span className="text-xs font-extrabold text-slate-800">{displayedList.length}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="active-pro-sort" className="text-xs text-slate-500 font-medium">Sort:</label>
+                      <select
+                        id="active-pro-sort"
+                        value={activeProSort}
+                        onChange={(e) => setActiveProSort(e.target.value as 'alphabet' | 'created_at')}
+                        className="text-xs bg-slate-50 border border-slate-200/80 rounded-2xl px-3 py-2 font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all cursor-pointer"
+                      >
+                        <option value="created_at">Newest First</option>
+                        <option value="alphabet">Alphabetical (A-Z)</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
-                <div className="grid gap-4">
-                  {sortedCompletedPros.length > 0 ? (
-                    sortedCompletedPros.map((pro) => (
-                      <div key={pro.id} className="bg-white p-4 md:p-6 rounded-3xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <img src={pro.image} alt="" className="w-12 h-12 rounded-full object-cover shadow-sm border border-slate-100" referrerPolicy="no-referrer" />
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h4 className="font-bold text-slate-900 truncate">{pro.name}</h4>
-                              {pro.has_filled_form ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 shrink-0 select-none">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-500 fill-emerald-50/50" />
-                                  Form Filled
-                                </span>
+
+                {/* Tab Header Banner */}
+                {activeProFilterTab === 'recommended' ? (
+                  <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-100 rounded-3xl p-4 md:p-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
+                        <Sparkles className="w-5 h-5 fill-white" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold font-display text-slate-900 text-sm md:text-base">
+                          Recommended Professionals ({recommendedList.length})
+                        </h4>
+                        <p className="text-xs text-slate-500 font-medium">
+                          These professionals are prioritized and featured across the community.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : activeProFilterTab === 'duplicates' ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50/70 border border-amber-200/80 rounded-3xl p-4 md:p-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
+                        <AlertTriangle className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold font-display text-slate-900 text-sm md:text-base">
+                          Potential Duplicates ({duplicatesList.length})
+                        </h4>
+                        <p className="text-xs text-amber-900/80 font-medium">
+                          These Google Pros share contact details, websites, or names with existing registered or recommended professionals.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-blue-50/60 border border-blue-100 rounded-3xl p-4 md:p-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-brand-blue text-white flex items-center justify-center shadow-md shadow-brand-blue/20 shrink-0">
+                        <Globe className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold font-display text-slate-900 text-sm md:text-base">
+                          Google Professionals ({nonRecommendedList.length})
+                        </h4>
+                        <p className="text-xs text-slate-500 font-medium">
+                          Professionals listed via Google or unrecommended. Click "Recommend" to feature them.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowCsvImporterModal(true)}
+                      className="px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-brand-blue hover:bg-brand-blue/90 transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-blue/20 active:scale-95 cursor-pointer shrink-0 self-start sm:self-auto"
+                    >
+                      <FileSpreadsheet className="w-4 h-4" />
+                      <span>Import CSV</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Pros Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {displayedList.length > 0 ? (
+                    displayedList.map((pro) => {
+                      const isRecommended = Boolean(pro.is_recommended || pro.is_recommanded || pro.is_community_recommended);
+                      const duplicateMatch = !isRecommended 
+                        ? findDuplicateRecommendedPro(pro, recommendedList, nonRecommendedList) 
+                        : null;
+
+                      return (
+                        <div
+                          key={pro.id}
+                          className={cn(
+                            "bg-white p-4 md:p-5 rounded-3xl border transition-all flex flex-col justify-between gap-4 group relative",
+                            duplicateMatch 
+                              ? "border-amber-200/90 shadow-sm hover:shadow-md bg-gradient-to-b from-amber-50/30 to-white" 
+                              : "border-slate-100 shadow-sm hover:shadow-md"
+                          )}
+                        >
+                          <div className="space-y-3">
+                            <div className="flex items-start gap-3.5 min-w-0">
+                              {(isRecommended && (pro.image || pro.image_url)) ? (
+                                <img
+                                  src={pro.image || pro.image_url}
+                                  alt={pro.name}
+                                  className="w-14 h-14 rounded-2xl object-cover shadow-sm border border-slate-100 shrink-0"
+                                  referrerPolicy="no-referrer"
+                                />
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 shrink-0 select-none">
-                                  <AlertCircle className="w-3 h-3 text-slate-400" />
-                                  Form Pending
+                                <div className="w-14 h-14 rounded-2xl bg-slate-100/80 flex items-center justify-center text-slate-400 shrink-0 border border-slate-100">
+                                  <User className="w-6 h-6" />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                  <h5 className="font-bold text-slate-900 text-sm md:text-base truncate">{pro.name}</h5>
+                                  {isRecommended ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0 select-none">
+                                      <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                      Recommended
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 shrink-0 select-none">
+                                      <Globe className="w-2.5 h-2.5 text-slate-400" />
+                                      Google Pro
+                                    </span>
+                                  )}
+                                  {duplicateMatch && (
+                                    <span 
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shrink-0 select-none"
+                                      title={`Potential duplicate of "${duplicateMatch.matchedPro.name}" (${duplicateMatch.reasons.join(', ')})`}
+                                    >
+                                      <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                                      Potential Duplicate
+                                    </span>
+                                  )}
+                                </div>
+                                {pro.company_name && (
+                                  <p className="text-xs font-semibold text-slate-700 truncate">{pro.company_name}</p>
+                                )}
+                                <p className="text-xs text-slate-500 truncate mt-0.5">{pro.category || pro.profession}</p>
+                                {pro.location && (
+                                  <p className="text-[11px] text-slate-400 truncate flex items-center gap-1 mt-1">
+                                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                    {pro.location}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Duplicate alert block if match found */}
+                            {duplicateMatch && (
+                              <div className="p-3 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-950 text-xs space-y-1.5 animate-in fade-in duration-300">
+                                <div className="flex items-center justify-between gap-1">
+                                  <div className="flex items-center gap-1.5 font-bold text-amber-950 text-xs">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                                    <span>
+                                      {duplicateMatch.isRecommendedTarget 
+                                        ? 'Potential duplicate of recommended pro' 
+                                        : 'Potential duplicate of registered pro'}
+                                    </span>
+                                  </div>
+                                  <span className={cn(
+                                    "text-[9px] px-1.5 py-0.5 rounded-full font-extrabold uppercase tracking-wider shrink-0",
+                                    duplicateMatch.confidence === 'high' ? "bg-amber-200/90 text-amber-900 border border-amber-300/80" : "bg-amber-100 text-amber-800 border border-amber-200"
+                                  )}>
+                                    {duplicateMatch.confidence === 'high' ? 'Probable Match' : 'Similarity'}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-amber-800 leading-relaxed">
+                                  This Google profile matches {duplicateMatch.isRecommendedTarget ? 'recommended' : 'registered'} professional <strong className="text-amber-950 font-bold">{duplicateMatch.matchedPro.name}</strong>
+                                  {duplicateMatch.matchedPro.company_name ? ` (${duplicateMatch.matchedPro.company_name})` : ''}.
+                                </p>
+                                <div className="flex items-center gap-1 flex-wrap text-[10px] text-amber-700/90 font-medium pt-0.5">
+                                  <span className="font-semibold text-amber-900">Reason(s):</span>
+                                  {duplicateMatch.reasons.map((reason, idx) => (
+                                    <span key={idx} className="bg-white/90 px-1.5 py-0.5 rounded-md border border-amber-200 text-amber-900 font-medium text-[9px] shadow-2xs">
+                                      {reason}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2">
+                            <div className="flex items-center gap-2">
+                              {pro.rating > 0 && (
+                                <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg">
+                                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                  {pro.rating}
+                                </span>
+                              )}
+                              {pro.review_count > 0 && (
+                                <span className="text-[11px] text-slate-400 font-medium">
+                                  ({pro.review_count} reviews)
                                 </span>
                               )}
                             </div>
-                            {pro.company_name && (
-                              <p className="text-xs font-semibold text-slate-600 truncate">{pro.company_name}</p>
-                            )}
-                            <p className="text-xs text-slate-500 truncate">{pro.category}</p>
+
+                            <div className="flex items-center gap-2">
+                              {/* Toggle Recommendation button */}
+                              {isRecommended ? (
+                                <button
+                                  onClick={() => setRecommendingPro({ id: pro.id, name: pro.name, targetStatus: false, pro })}
+                                  title="Remove from recommended"
+                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
+                                >
+                                  <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+                                  <span>Remove</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => setRecommendingPro({ id: pro.id, name: pro.name, targetStatus: true, pro })}
+                                  title="Mark as recommended"
+                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5 fill-emerald-500/20 text-emerald-600" />
+                                  <span>Recommend</span>
+                                </button>
+                              )}
+
+                              {/* Edit Profile button */}
+                              <button
+                                onClick={() => handleStartEditing(pro)}
+                                title="Edit profile"
+                                className="p-2 bg-slate-50 text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 rounded-xl transition-all cursor-pointer"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Delete Pro (Trash) button */}
+                              <button
+                                onClick={() => setDeletingProFromCard({ id: pro.id, name: pro.name, company_name: pro.company_name })}
+                                title="Supprimer ce professionnel"
+                                className="p-2 bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 sm:gap-3 bg-slate-50 sm:bg-transparent p-2 sm:p-0 rounded-2xl sm:rounded-none">
-                           <button 
-                             onClick={() => handleStartEditing(pro)}
-                             className="p-2.5 bg-white sm:bg-slate-50 text-slate-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-xl transition-all shadow-sm sm:shadow-none"
-                           >
-                             <Edit2 className="w-4 h-4" />
-                           </button>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
-                    <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200">
-                      <p className="text-slate-400 text-sm font-medium">No professionals added yet.</p>
+                    <div className="col-span-full text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200 p-8 space-y-2">
+                      {activeProFilterTab === 'recommended' ? (
+                        <>
+                          <Sparkles className="w-8 h-8 text-emerald-400 mx-auto opacity-50" />
+                          <h5 className="text-slate-700 font-bold text-sm">No recommended professionals found</h5>
+                          <p className="text-slate-400 text-xs max-w-sm mx-auto">
+                            Switch to the "Google Pros" tab and click "Recommend" to add professionals here.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <Globe className="w-8 h-8 text-blue-400 mx-auto opacity-50" />
+                          <h5 className="text-slate-700 font-bold text-sm">No Google professionals found</h5>
+                          <p className="text-slate-400 text-xs max-w-sm mx-auto">
+                            All professionals are currently recommended, no results match your filter, or none have been imported yet.
+                          </p>
+                          <button
+                            onClick={() => setShowCsvImporterModal(true)}
+                            className="mt-3 px-4 py-2 rounded-xl text-xs font-bold text-brand-blue bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs"
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" />
+                            <span>Import Google Pros (CSV)</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
+
+                {/* CSV Pro Importer Modal */}
+                <CsvProImporterModal
+                  isOpen={showCsvImporterModal}
+                  onClose={() => setShowCsvImporterModal(false)}
+                  defaultSource="google_places"
+                  existingCategories={allExistingCategories}
+                  onSuccess={async () => {
+                    if (onRefetchPros) await onRefetchPros();
+                    await fetchCompletedPros();
+                  }}
+                  setGlobalAlert={(alert) => setMsg({ type: alert.type, text: alert.text })}
+                />
+
+                {/* Single Pro Recommendation Confirmation Modal */}
+                {recommendingPro && (() => {
+                  const modalDuplicateMatch = recommendingPro.pro && recommendingPro.targetStatus
+                    ? findDuplicateRecommendedPro(recommendingPro.pro, recommendedList)
+                    : null;
+
+                  return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                      <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200 space-y-5">
+                        <div className="flex items-start gap-4">
+                          <div className={cn(
+                            "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg",
+                            recommendingPro.targetStatus
+                              ? "bg-emerald-500 text-white shadow-emerald-500/20"
+                              : "bg-amber-500 text-white shadow-amber-500/20"
+                          )}>
+                            {recommendingPro.targetStatus ? (
+                              <Sparkles className="w-6 h-6 fill-white" />
+                            ) : (
+                              <AlertCircle className="w-6 h-6" />
+                            )}
+                          </div>
+                          <div className="space-y-1 flex-1">
+                            <h4 className="text-base font-bold font-display text-slate-900">
+                              {recommendingPro.targetStatus 
+                                ? 'Mark as Recommended & Edit?' 
+                                : 'Remove from Recommended?'}
+                            </h4>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              {recommendingPro.targetStatus ? (
+                                <>
+                                  Do you want to mark <strong className="text-slate-900">"{recommendingPro.name}"</strong> as a recommended professional?
+                                  <br />
+                                  You will be redirected to the professional editor pre-filled with all their existing information to complete or adjust their profile.
+                                </>
+                              ) : (
+                                <>
+                                  Do you want to remove <strong className="text-slate-900">"{recommendingPro.name}"</strong> from recommended professionals?
+                                  <br />
+                                  They will be moved back to the <strong>Google Pros</strong> tab.
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {modalDuplicateMatch && (
+                          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs space-y-1.5 animate-in fade-in">
+                            <div className="flex items-center gap-1.5 font-bold text-amber-950 text-xs">
+                              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                              <span>Warning: Potential duplicate detected!</span>
+                            </div>
+                            <p className="text-[11px] text-amber-800 leading-relaxed">
+                              This Google profile matches recommended pro <strong>"{modalDuplicateMatch.matchedPro.name}"</strong> ({modalDuplicateMatch.reasons.join(', ')}).
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-3 pt-2">
+                        <button
+                          type="button"
+                          disabled={isUpdatingRecommendation}
+                          onClick={() => setRecommendingPro(null)}
+                          className="h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-200 transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isUpdatingRecommendation}
+                          onClick={() => handleToggleRecommendation(recommendingPro.id, recommendingPro.targetStatus, recommendingPro.pro)}
+                          className={cn(
+                            "h-11 rounded-xl text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer",
+                            recommendingPro.targetStatus
+                              ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20"
+                              : "bg-amber-600 hover:bg-amber-700 shadow-amber-600/20"
+                          )}
+                        >
+                          {isUpdatingRecommendation ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : recommendingPro.targetStatus ? (
+                            <>
+                              <Check className="w-4 h-4 stroke-[3]" />
+                              Confirm & Edit
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4 stroke-[3]" />
+                              Remove
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+                {/* Single Pro Deletion Confirmation Modal */}
+                {deletingProFromCard && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200 space-y-5">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-rose-500/20">
+                          <Trash2 className="w-6 h-6" />
+                        </div>
+                        <div className="space-y-1 flex-1">
+                          <h4 className="text-base font-bold font-display text-slate-900">
+                            Delete this professional?
+                          </h4>
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            Are you sure you want to permanently delete <strong className="text-slate-900">"{deletingProFromCard.name}"</strong>
+                            {deletingProFromCard.company_name ? ` (${deletingProFromCard.company_name})` : ''}?
+                            <br />
+                            This action is irreversible and will remove this profile from the platform.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-2">
+                        <button
+                          type="button"
+                          disabled={isDeletingProFromCard}
+                          onClick={() => setDeletingProFromCard(null)}
+                          className="h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-200 transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isDeletingProFromCard}
+                          onClick={handleConfirmDeleteFromCard}
+                          className="h-11 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          {isDeletingProFromCard ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -8141,6 +8813,13 @@ function AdminView({
               )}
             </div>
           )}
+        </div>
+      ) : dashboardCategory === 'agent_search' ? (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <AdminAgenticProSearch 
+            onRefetchPros={fetchCompletedPros} 
+            setGlobalAlert={(alert) => setMsg(alert)} 
+          />
         </div>
       ) : null}
 
@@ -10602,7 +11281,10 @@ function ExploreView({
             top_qualities: p.top_qualities || [],
             languages: p.languages || [],
             rating: p.rating || 0,
-            location: p.location || ""
+            location: p.location || "",
+            is_community_recommended: Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended || p.source === 'community'),
+            is_recommended: Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended || p.source === 'community'),
+            source: p.source || (Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended) ? 'community' : 'google_places')
           }));
 
           const response = await fetch("/api/ai-search", {
@@ -10701,9 +11383,7 @@ function ExploreView({
               const mappedPlaces = places
                 .map((place: any, idx: number) => {
                   let photoUrl = "";
-                  if (place.photos && place.photos.length > 0) {
-                    photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${GOOGLE_MAPS_KEY}`;
-                  }
+                  // Do not fetch or set profile photo for Google Pros
 
                   const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
 
@@ -10730,8 +11410,9 @@ function ExploreView({
                     location: cleanAddress,
                     coordinates: coords,
                     distanceKm: dist,
-                    rating: typeof place.rating === 'number' ? place.rating : 0,
-                    reviews_count: place.userRatingCount || 0,
+                    rating: 0,
+                    reviews_count: 0,
+                    review_count: 0,
                     phone: place.nationalPhoneNumber || "",
                     website: place.websiteUri || "",
                     googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
@@ -10821,7 +11502,7 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
    - Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched.`;
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.1-flash-lite",
+          model: "gemini-3.5-flash",
           contents: `User Query: "${trimmed}"
 
 Professionals:
@@ -11018,19 +11699,61 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
     }
   }, [allPros]);
 
+  const proMatchesSelectedCategory = (pro: any, targetCat: string): boolean => {
+    if (!targetCat || targetCat === 'All') return true;
+    const catLower = targetCat.trim().toLowerCase();
+
+    const rawProfession = (typeof pro.profession === 'string' && pro.profession.trim())
+      ? pro.profession.trim()
+      : ((typeof pro.category === 'string' && pro.category.trim()) ? pro.category.trim() : '');
+
+    if (rawProfession) {
+      if (rawProfession.toLowerCase() === catLower) return true;
+      const parts = rawProfession.split(',').map((s: string) => s.trim().toLowerCase());
+      if (parts.includes(catLower)) return true;
+    }
+
+    if (Array.isArray(pro.categories)) {
+      if (pro.categories.some((c: any) => typeof c === 'string' && c.trim().toLowerCase() === catLower)) {
+        return true;
+      }
+    }
+
+    if (typeof pro.category === 'string' && pro.category.trim().toLowerCase() === catLower) {
+      return true;
+    }
+
+    return false;
+  };
+
   const allProfessions = useMemo(() => {
     const list = new Set<string>();
     (allPros || []).forEach(p => {
       if (!p) return;
-      if (p.categories && Array.isArray(p.categories)) {
-        p.categories.forEach(c => {
-          if (c && typeof c === 'string') list.add(c);
+      // Strictly extract categories present in the Supabase database 'profession' column of the professionals table
+      const rawProfession = (typeof p.profession === 'string' && p.profession.trim())
+        ? p.profession.trim()
+        : ((typeof p.category === 'string' && p.category.trim()) ? p.category.trim() : '');
+
+      if (rawProfession) {
+        rawProfession.split(',').forEach(c => {
+          const trimmed = c.trim();
+          if (trimmed && trimmed.toLowerCase() !== 'undefined' && trimmed.toLowerCase() !== 'null' && trimmed !== 'n/a') {
+            list.add(trimmed);
+          }
         });
-      } else if (p.category && typeof p.category === 'string') {
-        list.add(p.category);
+      } else if (Array.isArray(p.categories)) {
+        p.categories.forEach(c => {
+          if (typeof c === 'string') {
+            const trimmed = c.trim();
+            if (trimmed && trimmed.toLowerCase() !== 'undefined' && trimmed.toLowerCase() !== 'null' && trimmed !== 'n/a') {
+              list.add(trimmed);
+            }
+          }
+        });
       }
     });
-    return Array.from(list).sort();
+    return Array.from(list).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   }, [allPros]);
 
   const matchingCategories = useMemo(() => {
@@ -11109,9 +11832,7 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
     const searchLower = text.toLowerCase().trim();
     return (allPros || []).some(pro => {
       if (!pro) return false;
-      const matchesCategory = selectedCategory === 'All' || 
-                              (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
-                              pro.category === selectedCategory;
+      const matchesCategory = proMatchesSelectedCategory(pro, selectedCategory);
       const matchesLanguage = selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
       const matchesRating = (pro.rating || 0) >= minRating;
       
@@ -11163,9 +11884,7 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
   const filteredPros = hasActiveFilter 
     ? (combinedPros || []).filter(pro => {
         if (!pro) return false;
-        const matchesCategory = selectedCategory === 'All' || 
-                                (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
-                                pro.category === selectedCategory;
+        const matchesCategory = proMatchesSelectedCategory(pro, selectedCategory);
         const matchesLanguage = selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
         const matchesRating = (pro.rating || 0) >= minRating;
         
@@ -11209,48 +11928,25 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         return matchesCategory && matchesLanguage && matchesSearch && matchesDistance && matchesRating;
       })
       .sort((a, b) => {
-        // If proximity search is active, sort strictly by distance first for all matching candidates
-        if (isProximityActive && userLocation && a.coordinates && b.coordinates) {
-          const distA = getDistance(userLocation.lat, userLocation.lng, a.coordinates.lat, a.coordinates.lng);
-          const distB = getDistance(userLocation.lat, userLocation.lng, b.coordinates.lat, b.coordinates.lng);
-          if (distA !== distB) {
-            return distA - distB;
-          }
-        }
-
+        // 1. Recommended (Community) Pros ALWAYS come first!
         const aComm = isCommunityPro(a) ? 1 : 0;
         const bComm = isCommunityPro(b) ? 1 : 0;
-        if (aComm !== bComm) return bComm - aComm; // Unlocked community pros first!
+        if (aComm !== bComm) return bComm - aComm;
 
-        // If both are Google Places pros: ONLY rule is closest to GPS position first, no priority given to ratings or reviews
-        if (!aComm && !bComm) {
-          if (userLocation && a.coordinates && b.coordinates) {
-            const distA = getDistance(userLocation.lat, userLocation.lng, a.coordinates.lat, a.coordinates.lng);
-            const distB = getDistance(userLocation.lat, userLocation.lng, b.coordinates.lat, b.coordinates.lng);
-            return distA - distB;
-          }
-          return (a.distanceKm ?? 999999) - (b.distanceKm ?? 999999);
-        }
-
-        // If proximity search is active, sort strictly by distance first for community candidates
-        if (isProximityActive && userLocation && a.coordinates && b.coordinates) {
-          const distA = getDistance(userLocation.lat, userLocation.lng, a.coordinates.lat, a.coordinates.lng);
-          const distB = getDistance(userLocation.lat, userLocation.lng, b.coordinates.lat, b.coordinates.lng);
-          if (distA !== distB) {
-            return distA - distB;
-          }
-        }
-
+        // 2. AI Search Results score if active
         if (aiResults) {
           const scoreA = aiResults[String(a.id)]?.score || 0;
           const scoreB = aiResults[String(b.id)]?.score || 0;
           if (scoreA !== scoreB) return scoreB - scoreA;
         }
 
+        // 3. Distance / Proximity
         if (userLocation && a.coordinates && b.coordinates) {
           const distA = getDistance(userLocation.lat, userLocation.lng, a.coordinates.lat, a.coordinates.lng);
           const distB = getDistance(userLocation.lat, userLocation.lng, b.coordinates.lat, b.coordinates.lng);
-          return distA - distB;
+          if (distA !== distB) {
+            return distA - distB;
+          }
         }
 
         return (b.rating || 0) - (a.rating || 0);
@@ -11772,7 +12468,7 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
                         <div className="mb-1">
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white font-bold text-[10px] tracking-tight shadow-xs shadow-emerald-500/30">
                             <Award className="w-3.5 h-3.5 text-white shrink-0" />
-                            <span>Recommended by MyCityUnlocked community</span>
+                            <span>recommended by MyCityUnlocked</span>
                           </span>
                         </div>
                       )}

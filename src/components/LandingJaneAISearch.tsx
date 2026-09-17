@@ -37,13 +37,15 @@ import {
   Coordinates,
   buildOptimizedPlacesQuery,
   isTradeMismatched,
-  isActivityQuery
+  isActivityQuery,
+  cleanTradeSearchTerm
 } from '../lib/locationUtils';
 
 interface Professional {
   id: string;
   name: string;
   company_name?: string;
+  profession?: string;
   category: string;
   rating: number;
   review_count?: number;
@@ -64,6 +66,8 @@ interface Professional {
   categories?: string[];
   source?: string;
   is_community_recommended?: boolean;
+  is_recommended?: boolean;
+  is_recommanded?: boolean;
   distanceKm?: number | null;
 }
 
@@ -157,9 +161,17 @@ const QUICK_INSPIRATIONS = [
   }
 ];
 
-export const isCommunityPro = (p: any) => {
+export const isCommunityPro = (p: any): boolean => {
   if (!p) return false;
-  return p.source !== 'google' && p.source !== 'google_places' && p.is_community_recommended !== false;
+  const src = ((p.source || '') as string).toLowerCase();
+  const idStr = String(p.id || '');
+  if (src === 'google' || src === 'google_places' || idStr.startsWith('google_')) {
+    return false;
+  }
+  if (p.is_community_recommended !== undefined && p.is_community_recommended !== null) return Boolean(p.is_community_recommended);
+  if (p.is_recommended !== undefined && p.is_recommended !== null) return Boolean(p.is_recommended);
+  if (p.is_recommanded !== undefined && p.is_recommanded !== null) return Boolean(p.is_recommanded);
+  return true;
 };
 
 export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
@@ -267,7 +279,7 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
       matchingEvents: "Matching Events",
       recommendedPros: "Recommended Professionals",
       practicalGuides: "Practical Guides",
-      recommendedByCommunity: "Recommended by MyCityUnlocked community",
+      recommendedByCommunity: "recommended by MyCityUnlocked",
       details: "Details →",
       view: "View →",
       read: "Read →",
@@ -298,7 +310,7 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
       matchingEvents: "Événements correspondants",
       recommendedPros: "Professionnels recommandés",
       practicalGuides: "Guides pratiques",
-      recommendedByCommunity: "Recommandé par la communauté MyCityUnlocked",
+      recommendedByCommunity: "recommandé par MyCityUnlocked",
       details: "Détails →",
       view: "Voir →",
       read: "Lire →",
@@ -329,7 +341,7 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
       matchingEvents: "Eventos correspondientes",
       recommendedPros: "Profesionales recomendados",
       practicalGuides: "Guías prácticas",
-      recommendedByCommunity: "Recomendado por la comunidad MyCityUnlocked",
+      recommendedByCommunity: "recomendado por MyCityUnlocked",
       details: "Detalles →",
       view: "Ver →",
       read: "Leer →",
@@ -371,21 +383,25 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
     combined.forEach((p: any) => map.set(String(p.id), p));
     const uniquePros = Array.from(map.values());
 
-    const proListBrief = uniquePros.map((p: any) => ({
-      id: String(p.id),
-      name: p.name,
-      company_name: p.company_name || "",
-      category: p.category || p.profession || "",
-      categories: p.categories || [],
-      bio: (p.bio || p.description || "").slice(0, 180),
-      top_qualities: p.top_qualities || [],
-      languages: p.languages || [],
-      rating: p.rating || 0,
-      location: p.location || "",
-      coordinates: p.coordinates || null,
-      is_community_recommended: isCommunityPro(p),
-      source: p.source || 'community'
-    }));
+    const proListBrief = uniquePros.map((p: any) => {
+      const isComm = isCommunityPro(p);
+      return {
+        id: String(p.id),
+        name: p.name,
+        company_name: p.company_name || "",
+        category: p.category || p.profession || "",
+        profession: p.profession || p.category || "",
+        categories: p.categories || [p.category || p.profession || ""],
+        bio: (p.bio || p.description || "").slice(0, 500),
+        top_qualities: p.top_qualities || [],
+        languages: p.languages || [],
+        rating: p.rating || 0,
+        location: p.location || "",
+        coordinates: p.coordinates || null,
+        is_community_recommended: isComm,
+        source: p.source || (isComm ? 'community' : 'google_places')
+      };
+    });
 
     const eventsBrief = events.map((e: any) => ({
       id: String(e.id),
@@ -533,9 +549,7 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
               const mappedPlaces = places
                 .map((place: any, idx: number) => {
                   let photoUrl = "";
-                  if (place.photos && place.photos.length > 0) {
-                    photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${googleMapsKey}`;
-                  }
+                  // Do not fetch or set profile photo for Google Pros
 
                   const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
 
@@ -610,10 +624,21 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
           !isTradeMismatched(q, p.name, p.category)
         );
 
+        allCandidatePros.sort((a: any, b: any) => {
+          if (a.is_community_recommended && !b.is_community_recommended) return -1;
+          if (!a.is_community_recommended && b.is_community_recommended) return 1;
+          const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
+          const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
+          return distA - distB;
+        });
+
         const ai = new GoogleGenAI({ apiKey });
         const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" in Valencia.
 Match items selectively across pros, events, and guides for the user query.
 Rules:
+- 2-TIER LOCAL RANKING PRIORITY FOR PROFESSIONALS (MANDATORY):
+  * TIER 1 (ABSOLUTE HIGHEST PRIORITY): App Community Recommended Professionals ('is_community_recommended: true') WITHIN 25 KM of the target area WHO PRACTICE THE REQUESTED TRADE. Scores 85-100 (give 95-100 if they speak user's chat language). Community recommended professionals MUST ALWAYS be prioritized and returned ahead of any Google Places pros for matching trades!
+  * TIER 2 (SECONDARY/FALLBACK): Google Places pros ('source: google_places' or 'is_community_recommended: false') WITHIN 25 KM WHO PRACTICE THE REQUESTED TRADE. Scores 60-80. Mismatched Google Places entries MUST receive score 0.
 - STRICT TRADE COHERENCE: Match ONLY professionals whose specialty directly corresponds to the requested service. (e.g. if searching for an osteopath, NEVER match dentists, doctors, or lawyers).
 - GEOGRAPHIC PROXIMITY IS KING & SPOKEN LANGUAGES: Distance and location are paramount. Professionals located far away (> 25 km from the target area) MUST NOT be selected, prioritized, or returned, regardless of what language they speak! Spoken language must NEVER override distance or pull distant professionals into results. Simply asking in French or another language does NOT restrict or filter results by language. ONLY when the user explicitly specifies a language requirement (e.g. "francophone", "parlant français", "en français", "french speaking", "anglophone", "English", "Spanish", "Español"), prioritize local pros within 25 km who speak that language.
 - ACTIVITÉS & CHOSES À FAIRE (THINGS TO DO, LEISURE, SPORTS, ENTERTAINMENT):
@@ -634,7 +659,7 @@ Rules:
 - LANGUAGE RULE: You MUST write your 'jane_message' in ${chosenLang === 'en' ? 'English' : chosenLang === 'fr' ? 'French' : 'Spanish'} and return detected_language: "${chosenLang}". If no community pros exist for this specific trade, be honest and present the closest verified pros found.`;
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.1-flash-lite",
+          model: "gemini-3.5-flash",
           contents: `Query: "${q}"\nPros: ${JSON.stringify(allCandidatePros)}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
           config: {
             systemInstruction: sysInstruction,
@@ -835,7 +860,7 @@ Rules:
                 .join('\n');
 
               const topicAnalysis = await ai.models.generateContent({
-                model: "gemini-3.1-flash-lite",
+                model: "gemini-3.5-flash",
                 contents: `Analyze this search conversation thread for local services in Valencia, Spain.
 Determine whether the user is:
 1. CONTINUING & REFINING the existing discussion (is_new_topic: false)
@@ -952,9 +977,7 @@ Rules:
                 const newlyFetched = places
                   .map((place: any, idx: number) => {
                     let photoUrl = "";
-                    if (place.photos && place.photos.length > 0) {
-                      photoUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&maxWidthPx=600&key=${googleMapsKey}`;
-                    }
+                    // Do not fetch or set profile photo for Google Pros
 
                     const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
 
@@ -1046,12 +1069,14 @@ Rules:
             source: 'google_places'
           }));
 
-          // Sort candidate pros prioritizing proximity
+          // Sort candidate pros prioritizing community recommended pros first, then proximity
           const allCandidatePros = [...proListBrief, ...googleProsBrief].filter((p: any) =>
             !isTradeMismatched(placesSearchQuery, p.name, p.category)
           );
 
           allCandidatePros.sort((a: any, b: any) => {
+            if (a.is_community_recommended && !b.is_community_recommended) return -1;
+            if (!a.is_community_recommended && b.is_community_recommended) return 1;
             const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
             const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
             return distA - distB;
@@ -1065,10 +1090,9 @@ Rules:
           const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" in Valencia.
 ${isNewTopic ? `The user has switched to a NEW SEARCH TOPIC for: "${placesSearchQuery}". Completely reset search context, evaluate new matches and smoothly acknowledge the new search.` : `Continue the ongoing discussion and refine search results for "${placesSearchQuery}".`}
 
-3-TIER RANKING PRIORITY FOR PROFESSIONALS:
-1. TIER 1 (Unlocked Community Pros): Prioritize relevant professionals registered in the Unlocked app within the target zone / 25km.
-2. TIER 2 (Google Places Pros): When community pros do not cover the requested trade, include Google Places professionals sorted strictly by proximity to the user's GPS location (or requested location). Limit Google Places pros to a maximum of 6.
-3. TIER 3 (Distant Pros): Professionals beyond 25km should only be suggested as backup with lower relevance.
+2-TIER LOCAL RANKING PRIORITY FOR PROFESSIONALS (MANDATORY):
+1. TIER 1 (ABSOLUTE HIGHEST PRIORITY): Community Recommended Pros ('is_community_recommended: true') registered in the Unlocked app within the target zone / 25km. Scores 85-100. Community recommended professionals MUST ALWAYS be prioritized and returned ahead of any Google Places pros!
+2. TIER 2 (SECONDARY/FALLBACK): Google Places pros ('source: google_places' or 'is_community_recommended: false') within 25km: Include when relevant, sorted strictly by proximity. Strictly limit Google Places pros to max 6. Scores 60-80.
 
 GEOGRAPHIC PROXIMITY IS KING & SPOKEN LANGUAGES:
 - Distance and location are paramount. Professionals located far away (> 25 km from the target area) MUST NOT be selected or returned, regardless of what language they speak! Spoken language must NEVER override distance. Simply asking in French or another language does NOT restrict or filter results by language.
@@ -1092,7 +1116,7 @@ CRITICAL TRADE COHERENCE:
 - Match relevant pros, events, and guides. Return a warm, helpful response answering their specific query.`;
 
           const response = await ai.models.generateContent({
-            model: "gemini-3.1-flash-lite",
+            model: "gemini-3.5-flash",
             contents: `User Follow-Up: "${text}"\n\nHistory:\n${historyFormatted}\n\nPros: ${JSON.stringify(filteredCandidatePros.slice(0, 45))}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
             config: {
               systemInstruction: sysInstruction,
@@ -1277,6 +1301,66 @@ CRITICAL TRADE COHERENCE:
         if (pro && !addedIds.has(String(pro.id))) {
           addedIds.add(String(pro.id));
           list.push({ ...pro, matchReason: match.reason, matchScore: sc });
+        }
+      }
+    });
+
+    // 1.5. Guarantee all valid Community Recommended pros from combinedPros matching the trade are included if not trade-mismatched
+    const queryLower = currentEffectiveQuery.toLowerCase();
+    const cleanQ = cleanTradeSearchTerm(queryLower).toLowerCase();
+
+    const isACQuery = /\b(air\s+conditioning|air\s+conditioner|climatisation|clim|climatiseur|aire\s+acondicionado|climatizaci[oó]n|hvac|pompe\s+[aà]\s+chaleur|aerotermia|a[ée]rothermie|refrigeraci[oó]n|froid|chauffage)\b/i.test(queryLower);
+    const isPlumberQuery = /\b(plombier|plumber|fontanero|plomberie|fontaneria|chauffe-eau|fuite)\b/i.test(queryLower);
+    const isElectricianQuery = /\b(electricien|[ée]lectricien|electrician|electricista|[ée]lectricit[ée]|electricidad)\b/i.test(queryLower);
+    const isLocksmithQuery = /\b(serrurier|locksmith|cerrajero|serrurerie|cerrajeria)\b/i.test(queryLower);
+    const isOsteoQuery = /\b(ost[ée]opathe?|osteopath|osteopata|osteopatia)\b/i.test(queryLower);
+    const isDentistQuery = /\b(dentiste?|dentist|dentista|ortodoncista|orthodontiste?)\b/i.test(queryLower);
+    const isDoctorQuery = /\b(m[ée]decin|doctor|docteur|gp|general\s+practitioner|consulta\s+medica)\b/i.test(queryLower);
+    const isLawyerQuery = /\b(avocat|lawyer|abogado|attorney|juriste)\b/i.test(queryLower);
+    const isAccountantQuery = /\b(comptable|accountant|gestor|asesor\s+fiscal|expert-comptable|fiscaliste)\b/i.test(queryLower);
+    const isMechanicQuery = /\b(m[ée]canicien|garagiste|mechanic|taller\s+mecanico)\b/i.test(queryLower);
+    const isHandymanQuery = /\b(bricoleur|handyman|manitas|reformas|r[ée]novation|renovation)\b/i.test(queryLower);
+
+    combinedPros.forEach((pro) => {
+      const proId = String(pro.id);
+      const isComm = isCommunityPro(pro);
+      if (isComm && !addedIds.has(proId) && !addedIds.has(`google_${proId}`)) {
+        const textToMatch = `${pro.name} ${pro.company_name || ''} ${pro.category || ''} ${pro.profession || ''} ${(pro.categories || []).join(' ')} ${pro.bio || ''}`.toLowerCase();
+        
+        let isDirectMatch = false;
+        if (isACQuery && /\b(air\s+conditioning|air\s+conditioner|climatisation|clim|climatiseur|aire\s+acondicionado|climatizaci[oó]n|hvac|pompe\s+[aà]\s+chaleur|aerotermia|a[ée]rothermie|refrigeraci[oó]n|froid|chauffage)\b/i.test(textToMatch)) {
+          isDirectMatch = true;
+        } else if (isPlumberQuery && /\b(plombier|plumber|fontanero|plomberie|fontaneria|chauffe-eau|sanitarios)\b/i.test(textToMatch)) {
+          isDirectMatch = true;
+        } else if (isElectricianQuery && /\b(electricien|[ée]lectricien|electrician|electricista|[ée]lectricit[ée]|electricidad)\b/i.test(textToMatch)) {
+          isDirectMatch = true;
+        } else if (isLocksmithQuery && /\b(serrurier|locksmith|cerrajero|serrurerie|cerrajeria)\b/i.test(textToMatch)) {
+          isDirectMatch = true;
+        } else if (isOsteoQuery && /\b(ost[ée]opathe?|osteopath|osteopata|osteopatia)\b/i.test(textToMatch)) {
+          isDirectMatch = true;
+        } else if (isDentistQuery && /\b(dentiste?|dentist|dentista|ortodoncista|orthodontiste?)\b/i.test(textToMatch)) {
+          isDirectMatch = true;
+        } else if (isDoctorQuery && /\b(m[ée]decin|doctor|docteur|gp|m[ée]decine)\b/i.test(textToMatch)) {
+          isDirectMatch = true;
+        } else if (isLawyerQuery && /\b(avocat|lawyer|abogado|attorney|juriste)\b/i.test(textToMatch)) {
+          isDirectMatch = true;
+        } else if (isAccountantQuery && /\b(comptable|accountant|gestor|asesor\s+fiscal|expert-comptable|fiscaliste)\b/i.test(textToMatch)) {
+          isDirectMatch = true;
+        } else if (isMechanicQuery && /\b(m[ée]canicien|garagiste|mechanic|taller\s+mecanico)\b/i.test(textToMatch)) {
+          isDirectMatch = true;
+        } else if (isHandymanQuery && /\b(bricoleur|handyman|manitas|reformas|r[ée]novation|renovation)\b/i.test(textToMatch)) {
+          isDirectMatch = true;
+        } else if (cleanQ.length >= 3 && textToMatch.includes(cleanQ)) {
+          isDirectMatch = true;
+        }
+
+        if (isDirectMatch && !isTradeMismatched(currentEffectiveQuery, pro.name, pro.category)) {
+          addedIds.add(proId);
+          list.push({
+            ...pro,
+            matchReason: pro.bio || `Professionnel recommandé par la communauté Unlocked`,
+            matchScore: 95
+          });
         }
       }
     });

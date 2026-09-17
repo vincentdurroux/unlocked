@@ -256,6 +256,8 @@ export interface ProWithDistance {
   coordinates?: Coordinates | null;
   distanceKm?: number | null;
   is_community_recommended?: boolean;
+  is_recommended?: boolean;
+  is_recommanded?: boolean;
   source?: string;
   rating?: number;
   review_count?: number;
@@ -292,6 +294,8 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
 
     if (lat !== null && lng !== null && (lat !== 0 || lng !== 0)) {
       dist = calculateDistanceKm(centerCoords.lat, centerCoords.lng, lat, lng);
+    } else if (typeof pro.distanceKm === 'number') {
+      dist = pro.distanceKm;
     }
 
     return {
@@ -301,31 +305,42 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
   });
 
   const isCommunity = (p: ProWithDistance) => {
-    return p.source !== 'google' && p.source !== 'google_places' && p.is_community_recommended !== false;
+    const src = ((p as any).source || '').toLowerCase();
+    const idStr = String(p.id || '');
+    if (src === 'google' || src === 'google_places' || idStr.startsWith('google_')) {
+      return false;
+    }
+    if (p.is_community_recommended !== undefined && p.is_community_recommended !== null) return Boolean(p.is_community_recommended);
+    if (p.is_recommended !== undefined && p.is_recommended !== null) return Boolean(p.is_recommended);
+    if (p.is_recommanded !== undefined && p.is_recommanded !== null) return Boolean(p.is_recommanded);
+    return true;
   };
 
   // Group into Tiers:
-  // Tier 1: Community recommended pros <= 25km (or unlocalized community pros serving Valencia)
-  // Tier 2: Google Places pros <= 25km
+  // Tier 1 (Absolute Priority): ALL App Community Recommended Pros
+  // Tier 2: Google Places pros (strictly after community pros, max 6 within radius)
   const tier1: typeof prosWithDist = [];
   const tier2: typeof prosWithDist = [];
 
   for (const pro of prosWithDist) {
-    const isWithinRadius = pro.distanceKm !== null && pro.distanceKm <= radiusKm;
-    const isUnspecifiedCommunityPro = isCommunity(pro) && pro.distanceKm === null && (!pro.location || /valencia|valence|valència|ruzafa|cabañal|canyamelar|el carmen|benimaclet/i.test(pro.location));
-
-    if (isWithinRadius || isUnspecifiedCommunityPro) {
-      if (isCommunity(pro)) {
-        tier1.push(pro);
-      } else {
+    if (isCommunity(pro)) {
+      tier1.push(pro);
+    } else {
+      const isWithinRadius = pro.distanceKm === null || pro.distanceKm <= radiusKm;
+      if (isWithinRadius) {
         tier2.push(pro);
       }
     }
   }
 
-  // Tier 1 sorting: Community pros within 25 km
-  // Sub-sorted by closest distance first, then higher rating
+  // Tier 1 sorting: Community recommended pros always come FIRST
+  // Sub-sorted by matchScore if available (highest first), then closest distance, then rating
   tier1.sort((a, b) => {
+    const scoreA = (a as any).matchScore ?? 0;
+    const scoreB = (b as any).matchScore ?? 0;
+    if (scoreA !== scoreB) {
+      return scoreB - scoreA;
+    }
     if (a.distanceKm !== null && b.distanceKm !== null) {
       if (Math.abs(a.distanceKm - b.distanceKm) > 0.1) {
         return a.distanceKm - b.distanceKm;
@@ -334,8 +349,7 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
     return (b.rating || 0) - (a.rating || 0);
   });
 
-  // Tier 2 sorting: Google Places pros
-  // The only rule is closest distance first, max 6 pros, strictly within 25 km
+  // Tier 2 sorting: Google Places pros strictly after community pros
   tier2.sort((a, b) => {
     const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
     const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
@@ -345,7 +359,7 @@ export function sortProfessionalsByProximityAndRating<T extends ProWithDistance>
   // Strict limit of maximum 6 Google Places pros
   const cappedTier2 = tier2.slice(0, 6);
 
-  // Strictly DO NOT append distant pros (> 25km) to the list
+  // Return Tier 1 (Community Recommended Pros ALWAYS FIRST) followed by Tier 2 (Google Places pros)
   return [...tier1, ...cappedTier2];
 }
 
@@ -357,6 +371,7 @@ export function cleanTradeSearchTerm(query: string): string {
   // Strip conversational polite / search prefixes (French, English, Spanish)
   q = q.replace(/^(bonjour|salut|hello|hola|hey|bonsoir)[,\s]+/i, '');
   q = q.replace(/\b(je\s+cherche\s+(un|une|des|le|la|les)?|j'ai\s+besoin\s+d'(un|une|de)?|recherche\s+(un|une|d'un|d'une)?|trouver\s+(un|une)?|cherche\s+(un|une)?|donne[- ]moi\s+(un|une)?|avez[- ]vous\s+(un|une)?|est[- ]ce\s+qu'il\s+y\s+a\s+(un|une)?|pourriez[- ]vous\s+me\s+(donner|conseiller)\s+(un|une)?)\b/gi, '');
+  q = q.replace(/\b(qqn\s+pour(\s+(le|la|les|l'|un|une))?|quelqu'un\s+pour(\s+(le|la|les|l'|un|une))?|someone\s+for(\s+(the|a|an))?|alguien\s+para(\s+(el|la|los|las|un|una))?)\b/gi, '');
   q = q.replace(/\b(i('m|\s+am)?\s+looking\s+for\s+(a|an)?|looking\s+for\s+(a|an)?|need\s+(a|an)?|find\s+(a|an)?|search\s+for\s+(a|an)?|can\s+you\s+recommend\s+(a|an)?)\b/gi, '');
   q = q.replace(/\b(busco\s+(un|una)?|necesito\s+(un|una)?|encuentra\s+(un|una)?|recomiéndame\s+(un|una)?)\b/gi, '');
 
@@ -414,6 +429,8 @@ export function buildOptimizedPlacesQuery(rawQuery: string, isSpecificZone: bool
     } else {
       spanishTerms = "actividades ocio tours experiencias talleres deportes";
     }
+  } else if (/\b(air\s+conditioning|air\s+conditioner|climatisation|clim|climatiseur|aire\s+acondicionado|climatizaci[oó]n|hvac|pompe\s+[aà]\s+chaleur|aerotermia|a[ée]rothermie)\b/i.test(lower)) {
+    spanishTerms = "aire acondicionado climatizacion instalacion mantenimiento";
   } else if (/\b(ost[ée]opathe?|osteopath|mal\s+au\s+dos|mal\s+de\s+dos|dos\s+coinc[eé]|lumbago|sciatique|mal\s+aux\s+muscles|mal\s+aux\s+articulations|douleur\s+dos|back\s+pain)\b/i.test(lower)) {
     spanishTerms = "osteopata fisioterapeuta osteopatia";
   } else if (/\b(kin[ée]sith[ée]rapeute?|kin[ée]|kine|physiotherapist|physio|reeducation|r[eé]éducation)\b/i.test(lower)) {
@@ -452,6 +469,10 @@ export function buildOptimizedPlacesQuery(rawQuery: string, isSpecificZone: bool
     spanishTerms = "taller mecanico";
   } else if (/\b(peintre|painter)\b/i.test(lower)) {
     spanishTerms = "pintor pintura";
+  } else if (/\b(bricoleur|homme\s+[aà]\s+tout\s+faire|handyman|manitas)\b/i.test(lower)) {
+    spanishTerms = "manitas reparaciones del hogar handyman";
+  } else if (/\b(m[ée]nage|nettoyage|cleaning|cleaner|limpieza)\b/i.test(lower)) {
+    spanishTerms = "empresa de limpieza servicios del hogar";
   }
 
   const queryToUse = spanishTerms || clean;
