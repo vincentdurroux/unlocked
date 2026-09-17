@@ -4149,6 +4149,27 @@ function AdminView({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [completedPros, setCompletedPros] = useState<Professional[]>([]);
   const [activeProSort, setActiveProSort] = useState<'alphabet' | 'created_at'>('created_at');
+  const [ignoredDuplicateIds, setIgnoredDuplicateIds] = useState<string[]>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('ignored_duplicate_ids');
+        return stored ? JSON.parse(stored) : [];
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const handleIgnoreDuplicate = (id: string | number) => {
+    const strId = String(id);
+    setIgnoredDuplicateIds(prev => {
+      const updated = [...prev, strId];
+      try {
+        localStorage.setItem('ignored_duplicate_ids', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
   const [allTestimonies, setAllTestimonies] = useState<any[]>([]);
   const [testimoniesFilter, setTestimoniesFilter] = useState<'pending' | 'processed'>('pending');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -6402,7 +6423,7 @@ function AdminView({
             );
 
             const duplicatesList = nonRecommendedList.filter(
-              (p) => findDuplicateRecommendedPro(p, recommendedList, nonRecommendedList) !== null
+              (p) => !ignoredDuplicateIds.includes(String(p.id)) && findDuplicateRecommendedPro(p, recommendedList, nonRecommendedList) !== null
             );
 
             const googleProsDuplicatesCount = duplicatesList.length;
@@ -6615,7 +6636,7 @@ function AdminView({
                   {displayedList.length > 0 ? (
                     displayedList.map((pro) => {
                       const isRecommended = Boolean(pro.is_recommended || pro.is_recommanded || pro.is_community_recommended);
-                      const duplicateMatch = !isRecommended 
+                      const duplicateMatch = (!isRecommended && !ignoredDuplicateIds.includes(String(pro.id))) 
                         ? findDuplicateRecommendedPro(pro, recommendedList, nonRecommendedList) 
                         : null;
 
@@ -6762,13 +6783,23 @@ function AdminView({
                               </button>
 
                               {/* Delete Pro (Trash) button */}
-                              <button
-                                onClick={() => setDeletingProFromCard({ id: pro.id, name: pro.name, company_name: pro.company_name })}
-                                title="Supprimer ce professionnel"
-                                className="p-2 bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {activeProFilterTab === 'duplicates' ? (
+                                <button
+                                  onClick={() => handleIgnoreDuplicate(pro.id)}
+                                  title="Enlever de l'onglet doublons (conserver dans Google Pros)"
+                                  className="p-2 bg-amber-50 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded-xl transition-all cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => setDeletingProFromCard({ id: pro.id, name: pro.name, company_name: pro.company_name })}
+                                  title="Supprimer ce professionnel"
+                                  className="p-2 bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
