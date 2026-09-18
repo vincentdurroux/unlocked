@@ -9461,10 +9461,10 @@ function HomeView({
           <div className="text-left space-y-1">
             <h3 className="text-base md:text-xl font-bold text-brand-navy tracking-tight flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-brand-blue" />
-              Looking for a trusted local pro?
+              What are you looking for?
             </h3>
             <p className="text-slate-500 text-xs md:text-sm leading-relaxed">
-              Search member recommendations or let <strong className="text-brand-blue font-semibold">Jane, your AI assistant</strong>, match you instantly.
+              Jane, your AI assistant, is here to help you find the right pro.
             </p>
           </div>
 
@@ -9523,7 +9523,7 @@ function HomeView({
               className="w-full py-3.5 md:py-4 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-[20px] font-bold text-xs md:text-sm shadow-md shadow-blue-500/15 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               <Sparkles className="w-4 h-4 fill-white/10" />
-              Find professionals with Jane
+              Find professionals
             </button>
 
             {/* Privacy Safeguard Note */}
