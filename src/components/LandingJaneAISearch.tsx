@@ -659,7 +659,7 @@ Rules:
 - LANGUAGE RULE: You MUST write your 'jane_message' in ${chosenLang === 'en' ? 'English' : chosenLang === 'fr' ? 'French' : 'Spanish'} and return detected_language: "${chosenLang}". If no community pros exist for this specific trade, be honest and present the closest verified pros found.`;
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
+          model: "gemini-3.5-flash-lite",
           contents: `Query: "${q}"\nPros: ${JSON.stringify(allCandidatePros)}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
           config: {
             systemInstruction: sysInstruction,
@@ -743,12 +743,14 @@ Rules:
           errLower.includes("limit") ||
           errLower.includes("exhausted") ||
           errLower.includes("429") ||
+          errLower.includes("503") ||
+          errLower.includes("unavailable") ||
           errLower.includes("too many requests") ||
           errLower.includes("busy") ||
           errLower.includes("rate limit") ||
           errLower.includes("sollicitée")
         ) {
-          setErrorMessage("Jane is not available at the moment. Please use manual search in the pages");
+          setErrorMessage("Jane is temporarily overloaded. Please try again in a few seconds.");
         } else {
           setErrorMessage(clientErr.message || "An error occurred during search. Please try again.");
         }
@@ -860,7 +862,7 @@ Rules:
                 .join('\n');
 
               const topicAnalysis = await ai.models.generateContent({
-                model: "gemini-3.5-flash",
+                model: "gemini-3.5-flash-lite",
                 contents: `Analyze this search conversation thread for local services in Valencia, Spain.
 Determine whether the user is:
 1. CONTINUING & REFINING the existing discussion (is_new_topic: false)
@@ -1116,7 +1118,7 @@ CRITICAL TRADE COHERENCE:
 - Match relevant pros, events, and guides. Return a warm, helpful response answering their specific query.`;
 
           const response = await ai.models.generateContent({
-            model: "gemini-3.5-flash",
+            model: "gemini-3.5-flash-lite",
             contents: `User Follow-Up: "${text}"\n\nHistory:\n${historyFormatted}\n\nPros: ${JSON.stringify(filteredCandidatePros.slice(0, 45))}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
             config: {
               systemInstruction: sysInstruction,
@@ -1201,12 +1203,14 @@ CRITICAL TRADE COHERENCE:
           errLower.includes("limit") ||
           errLower.includes("exhausted") ||
           errLower.includes("429") ||
+          errLower.includes("503") ||
+          errLower.includes("unavailable") ||
           errLower.includes("too many requests") ||
           errLower.includes("busy") ||
           errLower.includes("rate limit") ||
           errLower.includes("sollicitée")
         ) {
-          setErrorMessage("Jane is not available at the moment. Please use manual search in the pages");
+          setErrorMessage("Jane is temporarily overloaded. Please try again in a few seconds.");
         } else {
           setErrorMessage(clientErr.message || "Could not process follow-up. Please try again.");
         }
