@@ -11935,7 +11935,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                   </div>
 
                   {/* AI Match Score Badge */}
-                  {aiResults && aiResults[String(pro.id)] && (
+                  {aiResults && aiResults[String(pro.id)] && pro.is_recommended !== false && (
                     <div className="absolute top-6 right-16 px-2.5 py-1 bg-blue-50 text-brand-blue rounded-full flex items-center gap-1 text-[10px] font-bold border border-blue-100/50 z-10">
                       <Sparkles className="w-3 h-3 text-brand-blue fill-blue-200" />
                       <span>{aiResults[String(pro.id)].score}% Jane match</span>
