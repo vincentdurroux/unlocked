@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Logo } from './components/Logo';
-import { LandingJaneAISearch, isCommunityPro } from './components/LandingJaneAISearch';
-import { AdminAgenticProSearch } from './components/AdminAgenticProSearch';
 import { 
   Home, 
   Search, 
@@ -95,8 +93,7 @@ import {
   Database,
   Wrench,
   UserCheck,
-  ThumbsUp,
-  FileSpreadsheet
+  ThumbsUp
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
@@ -104,16 +101,13 @@ import { compressImage } from './services/imageService';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { APIProvider, Map as GoogleMap, AdvancedMarker, Pin, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, Pin, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
 import { useProfessionals } from './hooks/useProfessionals';
 import { proService } from './services/proService';
 import { eventService } from './services/eventService';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
-import { CsvProImporterModal } from './components/CsvProImporterModal';
-import { findDuplicateRecommendedPro } from './utils/duplicateDetector';
-import { detectTargetZone, calculateDistanceKm, DEFAULT_VALENCIA_CENTER, buildOptimizedPlacesQuery, isTradeMismatched } from './lib/locationUtils';
 
 // Custom Tooth Icon matching screenshot
 const ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -465,7 +459,7 @@ const parseAnnouncement = (ann: any) => {
   };
 };
 
-const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
+const GOOGLE_MAPS_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 
 const LANGUAGES_LIST = ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Russian', 'Chinese', 'Japanese', 'Arabic'];
 
@@ -674,7 +668,6 @@ interface Professional {
   id: string;
   name: string;
   company_name?: string;
-  profession?: string;
   category: string;
   rating: number;
   review_count?: number;
@@ -693,10 +686,6 @@ interface Professional {
   top_qualities?: string[];
   has_filled_form?: boolean;
   categories?: string[];
-  source?: string;
-  is_community_recommended?: boolean;
-  is_recommended?: boolean;
-  is_recommanded?: boolean;
 }
 
 interface Event {
@@ -901,170 +890,6 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
 
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(() => {
-    try {
-      const saved = localStorage.getItem('unlocked_user_location');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [hasRealLocation, setHasRealLocation] = useState(() => {
-    return localStorage.getItem('unlocked_has_real_location') === 'true';
-  });
-  const [showLocationBanner, setShowLocationBanner] = useState(() => {
-    return localStorage.getItem('unlocked_show_location_banner') !== 'false';
-  });
-  const [mapCenterTrigger, setMapCenterTrigger] = useState(0);
-
-  const [manualAddress, setManualAddress] = useState('');
-  const [geocodingLoading, setGeocodingLoading] = useState(false);
-  const [geocodingError, setGeocodingError] = useState('');
-  const [locationName, setLocationName] = useState(() => {
-    return localStorage.getItem('unlocked_location_name') || 'Valencia, Spain';
-  });
-
-  const fetchLocationName = async (lat: number, lng: number) => {
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=12`, {
-        headers: { 'Accept-Language': 'fr,en' }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const name = data.address.city || data.address.town || data.address.village || data.address.suburb || data.display_name.split(',')[0];
-        if (name) {
-          setLocationName(name);
-          try {
-            localStorage.setItem('unlocked_location_name', name);
-          } catch (e) {
-            console.error(e);
-          }
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const requestGeolocation = (onSuccess?: (coords: { lat: number, lng: number }) => void) => {
-    if (!hasRealLocation) {
-      setShowLocationBanner(true);
-    }
-
-    const setCoordsWithValenciaGuard = (lat: number, lng: number) => {
-      const finalLoc = { lat, lng };
-      setUserLocation(finalLoc);
-      setHasRealLocation(true);
-      setShowLocationBanner(false);
-      setMapCenterTrigger((prev) => prev + 1);
-
-      try {
-        localStorage.setItem('unlocked_user_location', JSON.stringify(finalLoc));
-        localStorage.setItem('unlocked_has_real_location', 'true');
-        localStorage.setItem('unlocked_show_location_banner', 'false');
-        localStorage.setItem('unlocked_is_simulated_location', 'false');
-      } catch (e) {
-        console.error(e);
-      }
-
-      fetchLocationName(lat, lng);
-      onSuccess?.(finalLoc);
-    };
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setCoordsWithValenciaGuard(position.coords.latitude, position.coords.longitude);
-        },
-        async (error) => {
-          console.warn("Geolocation API failed or blocked in iframe. Code:", error.code, "Message:", error.message);
-          
-          // Try IP fallback 1: ipapi.co
-          try {
-            const res = await fetch("https://ipapi.co/json/");
-            if (res.ok) {
-              const ipData = await res.json();
-              if (ipData.latitude && ipData.longitude) {
-                setCoordsWithValenciaGuard(ipData.latitude, ipData.longitude);
-                return;
-              }
-            }
-          } catch (ipErr) {
-            console.error("IP fallback failed:", ipErr);
-          }
-
-          // Try IP fallback 2: ipinfo.io
-          try {
-            const res = await fetch("https://ipinfo.io/json");
-            if (res.ok) {
-              const ipData = await res.json();
-              if (ipData.loc) {
-                const [latStr, lngStr] = ipData.loc.split(',');
-                const lat = parseFloat(latStr);
-                const lng = parseFloat(lngStr);
-                if (!isNaN(lat) && !isNaN(lng)) {
-                  setCoordsWithValenciaGuard(lat, lng);
-                  return;
-                }
-              }
-            }
-          } catch (ipErr) {
-            console.error("IP fallback 2 failed:", ipErr);
-          }
-
-          // Absolute fallback: default to Valencia
-          console.log("Using default fallback to Valencia...");
-          setCoordsWithValenciaGuard(39.46975, -0.37739);
-        },
-        { timeout: 6000, enableHighAccuracy: false }
-      );
-    } else {
-      setCoordsWithValenciaGuard(39.46975, -0.37739);
-    }
-  };
-
-  const handleSetManualLocation = async (address: string) => {
-    if (!address.trim()) return;
-    setGeocodingLoading(true);
-    setGeocodingError('');
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.length > 0) {
-          const lat = parseFloat(data[0].lat);
-          const lng = parseFloat(data[0].lon);
-          const displayName = data[0].display_name.split(',')[0];
-          
-          const finalLoc = { lat, lng };
-          setUserLocation(finalLoc);
-          setHasRealLocation(true);
-          setShowLocationBanner(false);
-          setMapCenterTrigger(prev => prev + 1);
-          setLocationName(displayName);
-          
-          try {
-            localStorage.setItem('unlocked_user_location', JSON.stringify(finalLoc));
-            localStorage.setItem('unlocked_has_real_location', 'true');
-            localStorage.setItem('unlocked_show_location_banner', 'false');
-            localStorage.setItem('unlocked_location_name', displayName);
-          } catch (e) {
-            console.error(e);
-          }
-        } else {
-          setGeocodingError("Location not found. Try a city or postcode.");
-        }
-      } else {
-        setGeocodingError("Search service unavailable. Try again.");
-      }
-    } catch (e) {
-      console.error(e);
-      setGeocodingError("Error searching location.");
-    } finally {
-      setGeocodingLoading(false);
-    }
-  };
-
   useEffect(() => {
     const lockOrientation = async () => {
       try {
@@ -1197,11 +1022,6 @@ export default function App() {
     return legacy ? [legacy] : [];
   });
 
-
-  // Trigger geolocation on mount to instantly locate the user in Valencia (real or simulated)
-  useEffect(() => {
-    requestGeolocation();
-  }, []);
 
   useEffect(() => {
     if (globalAlert) {
@@ -1741,7 +1561,7 @@ export default function App() {
       }
 
       // If server failed (e.g. Vercel 404), attempt client-side fallback if an API key is available
-      const localKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+      const localKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
       if (localKey) {
         try {
           const ai = new GoogleGenAI({ apiKey: localKey });
@@ -2573,7 +2393,6 @@ export default function App() {
                 <HomeView 
                   allPros={allPros}
                   events={events}
-                  userLocation={userLocation}
                   onNavigate={handleNavigate}
                   userProfile={userProfile}
                   currentUser={currentUser}
@@ -2621,24 +2440,6 @@ export default function App() {
                     currentUser={currentUser}
                     userProfile={userProfile}
                     isActive={activeView === 'explore'}
-                    userLocation={userLocation}
-                    setUserLocation={setUserLocation}
-                    hasRealLocation={hasRealLocation}
-                    setHasRealLocation={setHasRealLocation}
-                    showLocationBanner={showLocationBanner}
-                    setShowLocationBanner={setShowLocationBanner}
-                    mapCenterTrigger={mapCenterTrigger}
-                    setMapCenterTrigger={setMapCenterTrigger}
-                    requestGeolocation={requestGeolocation}
-                    manualAddress={manualAddress}
-                    setManualAddress={setManualAddress}
-                    geocodingLoading={geocodingLoading}
-                    setGeocodingLoading={setGeocodingLoading}
-                    geocodingError={geocodingError}
-                    setGeocodingError={setGeocodingError}
-                    locationName={locationName}
-                    setLocationName={setLocationName}
-                    handleSetManualLocation={handleSetManualLocation}
                   />
                 )}
               </motion.div>
@@ -4141,35 +3942,14 @@ function AdminView({
 }) {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dashboardCategory, setDashboardCategory] = useState<'pros' | 'events' | 'testimonies' | 'reported_users' | 'highlights' | 'guides' | 'announcements' | 'agent_search'>('pros');
-  const [activeTab, setActiveTab ] = useState<'recommendations' | 'add_pro' | 'edit_pro' | 'add_event' | 'edit_event' | 'all_events' | 'completed' | 'refused' | 'agent_search'>('recommendations');
+  const [dashboardCategory, setDashboardCategory] = useState<'pros' | 'events' | 'testimonies' | 'reported_users' | 'highlights' | 'guides' | 'announcements'>('pros');
+  const [activeTab, setActiveTab ] = useState<'recommendations' | 'add_pro' | 'edit_pro' | 'add_event' | 'edit_event' | 'all_events' | 'completed' | 'refused'>('recommendations');
   const [activeRecId, setActiveRecId] = useState<string | null>(null);
   const [editingProId, setEditingProId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [completedPros, setCompletedPros] = useState<Professional[]>([]);
   const [activeProSort, setActiveProSort] = useState<'alphabet' | 'created_at'>('created_at');
-  const [ignoredDuplicateIds, setIgnoredDuplicateIds] = useState<string[]>(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('ignored_duplicate_ids');
-        return stored ? JSON.parse(stored) : [];
-      }
-    } catch (e) {}
-    return [];
-  });
-
-  const handleIgnoreDuplicate = (id: string | number) => {
-    const strId = String(id);
-    setIgnoredDuplicateIds(prev => {
-      const updated = [...prev, strId];
-      try {
-        localStorage.setItem('ignored_duplicate_ids', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
-  };
-
   const [allTestimonies, setAllTestimonies] = useState<any[]>([]);
   const [testimoniesFilter, setTestimoniesFilter] = useState<'pending' | 'processed'>('pending');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -4490,85 +4270,9 @@ function AdminView({
   };
 
   const [proSearch, setProSearch] = useState('');
-  const [activeProFilterTab, setActiveProFilterTab] = useState<'recommended' | 'google' | 'duplicates'>('recommended');
   const [eventSearch, setEventSearch] = useState('');
   const [testimonySearch, setTestimonySearch] = useState('');
   const [articleSearch, setArticleSearch] = useState('');
-
-  const [recommendingPro, setRecommendingPro] = useState<{ id: string | number; name: string; targetStatus: boolean; pro?: Professional } | null>(null);
-  const [isUpdatingRecommendation, setIsUpdatingRecommendation] = useState(false);
-  const [showCsvImporterModal, setShowCsvImporterModal] = useState(false);
-
-  const handleToggleRecommendation = async (id: string | number, targetStatus: boolean, proToEdit?: Professional) => {
-    setIsUpdatingRecommendation(true);
-    try {
-      // Optimistic UI update
-      setCompletedPros(prev => prev.map(p => {
-        if (String(p.id) === String(id)) {
-          return {
-            ...p,
-            is_recommended: targetStatus,
-            is_community_recommended: targetStatus,
-            is_recommanded: targetStatus
-          };
-        }
-        return p;
-      }));
-
-      const result = await proService.setProfessionalRecommendation(id, targetStatus);
-      if (result && result.success === false) {
-        setMsg({ type: 'error', text: result.message || 'Failed to update recommendation status.' });
-        await fetchCompletedPros();
-      } else {
-        setMsg({ 
-          type: 'success', 
-          text: targetStatus 
-            ? `"${recommendingPro?.name || 'Professional'}" has been marked as Recommended! Redirecting to complete profile...` 
-            : `"${recommendingPro?.name || 'Professional'}" was removed from recommended.` 
-        });
-        if (onRefetchPros) await onRefetchPros();
-        await fetchCompletedPros();
-
-        if (targetStatus && proToEdit) {
-          handleStartEditing({
-            ...proToEdit,
-            is_recommended: true
-          });
-        }
-      }
-    } catch (err: any) {
-      console.error('Error toggling recommendation:', err);
-      setMsg({ type: 'error', text: 'Error: ' + (err.message || String(err)) });
-      await fetchCompletedPros();
-    } finally {
-      setIsUpdatingRecommendation(false);
-      setRecommendingPro(null);
-    }
-  };
-
-  const [deletingProFromCard, setDeletingProFromCard] = useState<{ id: string | number; name: string; company_name?: string } | null>(null);
-  const [isDeletingProFromCard, setIsDeletingProFromCard] = useState(false);
-
-  const handleConfirmDeleteFromCard = async () => {
-    if (!deletingProFromCard) return;
-    const targetId = deletingProFromCard.id;
-    const targetName = deletingProFromCard.name;
-    setIsDeletingProFromCard(true);
-    try {
-      setCompletedPros(prev => prev.filter(p => String(p.id) !== String(targetId)));
-      await proService.deleteProfessional(targetId);
-      setMsg({ type: 'success', text: `Professional "${targetName}" deleted successfully.` });
-      if (onRefetchPros) await onRefetchPros();
-      await fetchCompletedPros();
-    } catch (err: any) {
-      console.error('Error deleting professional:', err);
-      setMsg({ type: 'error', text: 'Error deleting professional: ' + (err.message || String(err)) });
-      await fetchCompletedPros();
-    } finally {
-      setIsDeletingProFromCard(false);
-      setDeletingProFromCard(null);
-    }
-  };
 
   const [reports, setReports] = useState<any[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
@@ -4921,8 +4625,7 @@ function AdminView({
     lat: 0,
     lng: 0,
     top_qualities: [] as string[],
-    has_filled_form: false,
-    is_recommended: true
+    has_filled_form: false
   });
 
   const [newEvent, setNewEvent] = useState({
@@ -4989,8 +4692,7 @@ function AdminView({
       image: rec.pro_image_url || '',
       languages: rec.pro_languages || [],
       top_qualities: rec.top_qualities || [],
-      has_filled_form: false,
-      is_recommended: true
+      has_filled_form: false
     });
     if (rec.pro_image_url) {
       setPreviewUrl(rec.pro_image_url);
@@ -5012,7 +4714,6 @@ function AdminView({
     const categoriesValue = pro.categories || (pro.category ? pro.category.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
     const latValue = pro.coordinates?.lat ?? 0;
     const lngValue = pro.coordinates?.lng ?? 0;
-    const isRec = pro.is_recommended ?? pro.is_recommanded ?? pro.is_community_recommended ?? (pro.source === 'community');
 
     setNewPro({
       name: pro.name || '',
@@ -5034,8 +4735,7 @@ function AdminView({
       lat: Number(latValue),
       lng: Number(lngValue),
       top_qualities: pro.top_qualities || [],
-      has_filled_form: pro.has_filled_form || false,
-      is_recommended: Boolean(isRec)
+      has_filled_form: pro.has_filled_form || false
     });
     setPreviewUrl(imageValue || null);
     setActiveTab('edit_pro');
@@ -5223,11 +4923,7 @@ function AdminView({
         lat: finalLat,
         lng: finalLng,
         top_qualities: newPro.top_qualities || [],
-        has_filled_form: newPro.has_filled_form || false,
-        is_recommended: newPro.is_recommended ?? true,
-        is_recommanded: newPro.is_recommended ?? true,
-        is_community_recommended: newPro.is_recommended ?? true,
-        source: newPro.is_recommended ? 'community' : 'google_places'
+        has_filled_form: newPro.has_filled_form || false
       };
 
       console.log('[handleAddPro] Final payload to service:', {
@@ -5299,24 +4995,19 @@ function AdminView({
         name: '',
         company_name: '',
         category: '',
-        categories: [],
         rating: 0,
         review_count: 0,
         languages: [],
         image: '',
         bio: '',
         phone: '',
-        whatsapp: '',
         email: '',
         website: '',
         instagram: '',
         facebook: '',
         location: '',
         lat: 0,
-        lng: 0,
-        top_qualities: [],
-        has_filled_form: false,
-        is_recommended: true
+        lng: 0
       });
       setSelectedFile(null);
       setPreviewUrl(null);
@@ -5415,7 +5106,6 @@ function AdminView({
            </h2>
            <h3 className="text-sm md:text-base text-slate-500 font-medium tracking-tight">
              {dashboardCategory === 'pros' ? 'Review recommendations and manage professionals.' : 
-              dashboardCategory === 'agent_search' ? 'Search, verify, and import real local professionals on Google using real-time Web Search Agent.' :
               dashboardCategory === 'events' ? 'Manage community events and meetups.' :
               dashboardCategory === 'reported_users' ? 'Moderate reported users, content, and harassment reports.' :
               dashboardCategory === 'highlights' ? 'Select which pro, event, article, and testimonial are highlighted on the Landing Page.' :
@@ -5425,7 +5115,7 @@ function AdminView({
            </h3>
         </div>
 
-        <div className="grid grid-cols-2 xs:grid-cols-4 sm:grid-cols-4 md:grid-cols-8 bg-slate-100/80 p-1.5 rounded-[22px] w-full border border-slate-200/50 gap-1.5">
+        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-7 bg-slate-100/80 p-1.5 rounded-[22px] w-full border border-slate-200/50 gap-1.5">
           <button 
             onClick={() => {
               setDashboardCategory('pros');
@@ -5555,24 +5245,19 @@ function AdminView({
                     name: '',
                     company_name: '',
                     category: '',
-                    categories: [],
                     rating: 0,
                     review_count: 0,
                     languages: [],
                     image: '',
                     bio: '',
                     phone: '',
-                    whatsapp: '',
                     email: '',
                     website: '',
                     instagram: '',
                     facebook: '',
                     location: '',
                     lat: 0,
-                    lng: 0,
-                    top_qualities: [],
-                    has_filled_form: false,
-                    is_recommended: true
+                    lng: 0
                   });
                   setPreviewUrl(null);
                 }}
@@ -5750,7 +5435,6 @@ function AdminView({
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-bold text-slate-900 font-display">
               {activeTab === 'completed' ? 'Active Professionals' :
-               activeTab === 'agent_search' ? 'Google Real-Time Pro Search' :
                activeTab === 'add_pro' ? 'Add New Professional' :
                activeTab === 'edit_pro' ? 'Edit Professional' :
                activeTab === 'refused' ? 'Refused Recommendations' :
@@ -5759,15 +5443,6 @@ function AdminView({
           </div>
 
           <div className="space-y-4">
-          {activeTab === 'agent_search' && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <AdminAgenticProSearch 
-                onRefetchPros={fetchCompletedPros} 
-                setGlobalAlert={(alert) => setMsg(alert)} 
-              />
-            </div>
-          )}
-
           {activeTab === 'recommendations' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {loading ? (
@@ -5986,22 +5661,6 @@ function AdminView({
                         type="checkbox" 
                         checked={newPro.has_filled_form} 
                         onChange={e => setNewPro({...newPro, has_filled_form: e.target.checked})}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
-                    </label>
-                  </div>
-
-                  <div className="md:col-span-2 p-5 bg-amber-500/5 rounded-2xl border border-amber-500/10 flex items-center justify-between gap-4 font-display text-sm">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wide">Recommended Pro (Community)</label>
-                      <p className="text-[11px] text-slate-500 font-medium">Check this box to mark this professional as recommended by the community.</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        checked={newPro.is_recommended} 
-                        onChange={e => setNewPro({...newPro, is_recommended: e.target.checked})}
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
@@ -6282,22 +5941,6 @@ function AdminView({
                       <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                     </label>
                   </div>
-
-                  <div className="md:col-span-2 p-5 bg-brand-blue/5 rounded-2xl border border-brand-blue/10 flex items-center justify-between gap-4 font-display text-sm">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wide">Recommended Pro (Community)</label>
-                      <p className="text-[11px] text-slate-500 font-medium">Check this box to mark this professional as recommended by the community (checked by default).</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        checked={newPro.is_recommended} 
-                        onChange={e => setNewPro({...newPro, is_recommended: e.target.checked})}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
-                    </label>
-                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -6394,18 +6037,7 @@ function AdminView({
           )}
 
           {activeTab === 'completed' && (() => {
-            const filteredPros = completedPros.filter((pro) => {
-              if (!proSearch.trim()) return true;
-              const q = proSearch.toLowerCase().trim();
-              return (
-                (pro.name || '').toLowerCase().includes(q) ||
-                (pro.company_name || '').toLowerCase().includes(q) ||
-                (pro.category || '').toLowerCase().includes(q) ||
-                (pro.location || '').toLowerCase().includes(q)
-              );
-            });
-
-            const sortedCompletedPros = [...filteredPros].sort((a, b) => {
+            const sortedCompletedPros = [...completedPros].sort((a, b) => {
               if (activeProSort === 'alphabet') {
                 return (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
               } else {
@@ -6415,589 +6047,70 @@ function AdminView({
               }
             });
 
-            const recommendedList = sortedCompletedPros.filter(
-              (p) => Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended)
-            );
-            const nonRecommendedList = sortedCompletedPros.filter(
-              (p) => !Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended)
-            );
-
-            const duplicatesList = nonRecommendedList.filter(
-              (p) => !ignoredDuplicateIds.includes(String(p.id)) && findDuplicateRecommendedPro(p, recommendedList, nonRecommendedList) !== null
-            );
-
-            const googleProsDuplicatesCount = duplicatesList.length;
-
-            const displayedList = 
-              activeProFilterTab === 'recommended' 
-                ? recommendedList 
-                : activeProFilterTab === 'duplicates'
-                ? duplicatesList
-                : nonRecommendedList;
-
-            const allExistingCategories = (completedPros || []).reduce((acc: string[], p: any) => {
-              const raw = p.profession || p.category;
-              if (typeof raw === 'string') {
-                raw.split(',').forEach(c => {
-                  const t = c.trim();
-                  if (t && !acc.includes(t) && t.toLowerCase() !== 'undefined' && t.toLowerCase() !== 'null') {
-                    acc.push(t);
-                  }
-                });
-              }
-              return acc;
-            }, []);
-
             return (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Sub-tabs: Recommended Pros vs Google Pros vs Potential Duplicates */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-3xl border border-slate-100 shadow-sm">
-                  <div className="grid grid-cols-3 sm:flex items-center gap-1.5 bg-slate-100/80 p-1.5 rounded-2xl w-full sm:w-auto overflow-x-auto">
-                    <button
-                      onClick={() => setActiveProFilterTab('recommended')}
-                      className={cn(
-                        "w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer select-none min-w-0",
-                        activeProFilterTab === 'recommended'
-                          ? "bg-white text-emerald-800 shadow-sm"
-                          : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
-                      )}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 -mt-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] bg-brand-blue/10 text-brand-blue px-2.5 py-1 rounded-full font-bold uppercase tracking-widest">
+                      {completedPros.length} Active
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="active-pro-sort" className="text-xs text-slate-500 font-medium">Sort by:</label>
+                    <select
+                      id="active-pro-sort"
+                      value={activeProSort}
+                      onChange={(e) => setActiveProSort(e.target.value as 'alphabet' | 'created_at')}
+                      className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-medium text-slate-700 outline-none focus:border-brand-blue transition-colors cursor-pointer shadow-sm"
                     >
-                      <Sparkles className={cn(
-                        "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors",
-                        activeProFilterTab === 'recommended' ? "fill-emerald-500 text-emerald-600" : "text-slate-400"
-                      )} />
-                      <span className="truncate">Recommended Pros</span>
-                      <span className={cn(
-                        "text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-extrabold tracking-wider transition-colors shrink-0",
-                        activeProFilterTab === 'recommended'
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-slate-200 text-slate-600"
-                      )}>
-                        {recommendedList.length}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveProFilterTab('google')}
-                      className={cn(
-                        "w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer select-none min-w-0 relative",
-                        activeProFilterTab === 'google'
-                          ? "bg-white text-brand-blue shadow-sm"
-                          : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
-                      )}
-                    >
-                      <Globe className={cn(
-                        "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors",
-                        activeProFilterTab === 'google' ? "text-brand-blue" : "text-slate-400"
-                      )} />
-                      <span className="truncate">Google Pros</span>
-                      <span className={cn(
-                        "text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-extrabold tracking-wider transition-colors shrink-0",
-                        activeProFilterTab === 'google'
-                          ? "bg-brand-blue/10 text-brand-blue"
-                          : "bg-slate-200 text-slate-600"
-                      )}>
-                        {nonRecommendedList.length}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveProFilterTab('duplicates')}
-                      className={cn(
-                        "w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer select-none min-w-0 relative",
-                        activeProFilterTab === 'duplicates'
-                          ? "bg-white text-amber-900 shadow-sm"
-                          : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
-                      )}
-                    >
-                      <AlertTriangle className={cn(
-                        "w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-colors",
-                        activeProFilterTab === 'duplicates' ? "text-amber-600" : "text-slate-400"
-                      )} />
-                      <span className="truncate">Potential Duplicates</span>
-                      <span className={cn(
-                        "text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-extrabold tracking-wider transition-colors shrink-0",
-                        activeProFilterTab === 'duplicates'
-                          ? "bg-amber-100 text-amber-900 border border-amber-300/80"
-                          : duplicatesList.length > 0 ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-slate-200 text-slate-600"
-                      )}>
-                        {duplicatesList.length}
-                      </span>
-                    </button>
+                      <option value="created_at">Creation Date (Newest)</option>
+                      <option value="alphabet">Alphabetical (A-Z)</option>
+                    </select>
                   </div>
                 </div>
-
-                {/* Search & Sort Bar */}
-                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-                  <div className="relative flex-1">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder={activeProFilterTab === 'recommended' 
-                        ? "Filter recommended pros (name, profession, city)..." 
-                        : activeProFilterTab === 'duplicates'
-                        ? "Filter potential duplicates (name, profession, city)..."
-                        : "Filter Google pros (name, profession, city)..."}
-                      value={proSearch}
-                      onChange={(e) => setProSearch(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all"
-                    />
-                    {proSearch && (
-                      <button
-                        onClick={() => setProSearch('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200/70">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tab Total:</span>
-                      <span className="text-xs font-extrabold text-slate-800">{displayedList.length}</span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <label htmlFor="active-pro-sort" className="text-xs text-slate-500 font-medium">Sort:</label>
-                      <select
-                        id="active-pro-sort"
-                        value={activeProSort}
-                        onChange={(e) => setActiveProSort(e.target.value as 'alphabet' | 'created_at')}
-                        className="text-xs bg-slate-50 border border-slate-200/80 rounded-2xl px-3 py-2 font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all cursor-pointer"
-                      >
-                        <option value="created_at">Newest First</option>
-                        <option value="alphabet">Alphabetical (A-Z)</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tab Header Banner */}
-                {activeProFilterTab === 'recommended' ? (
-                  <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-100 rounded-3xl p-4 md:p-5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
-                        <Sparkles className="w-5 h-5 fill-white" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold font-display text-slate-900 text-sm md:text-base">
-                          Recommended Professionals ({recommendedList.length})
-                        </h4>
-                        <p className="text-xs text-slate-500 font-medium">
-                          These professionals are prioritized and featured across the community.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : activeProFilterTab === 'duplicates' ? (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50/70 border border-amber-200/80 rounded-3xl p-4 md:p-5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
-                        <AlertTriangle className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold font-display text-slate-900 text-sm md:text-base">
-                          Potential Duplicates ({duplicatesList.length})
-                        </h4>
-                        <p className="text-xs text-amber-900/80 font-medium">
-                          These Google Pros share contact details, websites, or names with existing registered or recommended professionals.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-blue-50/60 border border-blue-100 rounded-3xl p-4 md:p-5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-brand-blue text-white flex items-center justify-center shadow-md shadow-brand-blue/20 shrink-0">
-                        <Globe className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold font-display text-slate-900 text-sm md:text-base">
-                          Google Professionals ({nonRecommendedList.length})
-                        </h4>
-                        <p className="text-xs text-slate-500 font-medium">
-                          Professionals listed via Google or unrecommended. Click "Recommend" to feature them.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setShowCsvImporterModal(true)}
-                      className="px-4 py-2.5 rounded-2xl text-xs font-bold text-white bg-brand-blue hover:bg-brand-blue/90 transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-blue/20 active:scale-95 cursor-pointer shrink-0 self-start sm:self-auto"
-                    >
-                      <FileSpreadsheet className="w-4 h-4" />
-                      <span>Import CSV</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* Pros Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {displayedList.length > 0 ? (
-                    displayedList.map((pro) => {
-                      const isRecommended = Boolean(pro.is_recommended || pro.is_recommanded || pro.is_community_recommended);
-                      const duplicateMatch = (!isRecommended && !ignoredDuplicateIds.includes(String(pro.id))) 
-                        ? findDuplicateRecommendedPro(pro, recommendedList, nonRecommendedList) 
-                        : null;
-
-                      return (
-                        <div
-                          key={pro.id}
-                          className={cn(
-                            "bg-white p-4 md:p-5 rounded-3xl border transition-all flex flex-col justify-between gap-4 group relative",
-                            duplicateMatch 
-                              ? "border-amber-200/90 shadow-sm hover:shadow-md bg-gradient-to-b from-amber-50/30 to-white" 
-                              : "border-slate-100 shadow-sm hover:shadow-md"
-                          )}
-                        >
-                          <div 
-                            onClick={() => { handleStartEditing(pro); setActiveTab('edit_pro'); }}
-                            className="space-y-3 cursor-pointer hover:opacity-85 transition-opacity"
-                          >
-                            <div className="flex items-start gap-3.5 min-w-0">
-                              {(isRecommended && (pro.image || pro.image_url)) ? (
-                                <img
-                                  src={pro.image || pro.image_url}
-                                  alt={pro.name}
-                                  className="w-14 h-14 rounded-2xl object-cover shadow-sm border border-slate-100 shrink-0"
-                                  referrerPolicy="no-referrer"
-                                />
+                <div className="grid gap-4">
+                  {sortedCompletedPros.length > 0 ? (
+                    sortedCompletedPros.map((pro) => (
+                      <div key={pro.id} className="bg-white p-4 md:p-6 rounded-3xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <img src={pro.image} alt="" className="w-12 h-12 rounded-full object-cover shadow-sm border border-slate-100" referrerPolicy="no-referrer" />
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="font-bold text-slate-900 truncate">{pro.name}</h4>
+                              {pro.has_filled_form ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 shrink-0 select-none">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-500 fill-emerald-50/50" />
+                                  Form Filled
+                                </span>
                               ) : (
-                                <div className="w-14 h-14 rounded-2xl bg-slate-100/80 flex items-center justify-center text-slate-400 shrink-0 border border-slate-100">
-                                  <User className="w-6 h-6" />
-                                </div>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 shrink-0 select-none">
+                                  <AlertCircle className="w-3 h-3 text-slate-400" />
+                                  Form Pending
+                                </span>
                               )}
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                                  <h5 className="font-bold text-slate-900 text-sm md:text-base truncate">{pro.name}</h5>
-                                  {isRecommended ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0 select-none">
-                                      <Check className="w-2.5 h-2.5 stroke-[3]" />
-                                      Recommended
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 shrink-0 select-none">
-                                      <Globe className="w-2.5 h-2.5 text-slate-400" />
-                                      Google Pro
-                                    </span>
-                                  )}
-                                  {duplicateMatch && (
-                                    <span 
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shrink-0 select-none"
-                                      title={`Potential duplicate of "${duplicateMatch.matchedPro.name}" (${duplicateMatch.reasons.join(', ')})`}
-                                    >
-                                      <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0" />
-                                      Potential Duplicate
-                                    </span>
-                                  )}
-                                </div>
-                                {pro.company_name && (
-                                  <p className="text-xs font-semibold text-slate-700 truncate">{pro.company_name}</p>
-                                )}
-                                <p className="text-xs text-slate-500 truncate mt-0.5">{pro.category || pro.profession}</p>
-                                {pro.location && (
-                                  <p className="text-[11px] text-slate-400 truncate flex items-center gap-1 mt-1">
-                                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                                    {pro.location}
-                                  </p>
-                                )}
-                              </div>
                             </div>
-
-                            {/* Duplicate alert block if match found */}
-                            {duplicateMatch && (
-                              <div className="p-3 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-950 text-xs space-y-1.5 animate-in fade-in duration-300">
-                                <div className="flex items-center justify-between gap-1">
-                                  <div className="flex items-center gap-1.5 font-bold text-amber-950 text-xs">
-                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                                    <span>
-                                      {duplicateMatch.isRecommendedTarget 
-                                        ? 'Potential duplicate of recommended pro' 
-                                        : 'Potential duplicate of registered pro'}
-                                    </span>
-                                  </div>
-                                  <span className={cn(
-                                    "text-[9px] px-1.5 py-0.5 rounded-full font-extrabold uppercase tracking-wider shrink-0",
-                                    duplicateMatch.confidence === 'high' ? "bg-amber-200/90 text-amber-900 border border-amber-300/80" : "bg-amber-100 text-amber-800 border border-amber-200"
-                                  )}>
-                                    {duplicateMatch.confidence === 'high' ? 'Probable Match' : 'Similarity'}
-                                  </span>
-                                </div>
-                                <p className="text-[11px] text-amber-800 leading-relaxed">
-                                  This Google profile matches {duplicateMatch.isRecommendedTarget ? 'recommended' : 'registered'} professional <strong className="text-amber-950 font-bold">{duplicateMatch.matchedPro.name}</strong>
-                                  {duplicateMatch.matchedPro.company_name ? ` (${duplicateMatch.matchedPro.company_name})` : ''}.
-                                </p>
-                                <div className="flex items-center gap-1 flex-wrap text-[10px] text-amber-700/90 font-medium pt-0.5">
-                                  <span className="font-semibold text-amber-900">Reason(s):</span>
-                                  {duplicateMatch.reasons.map((reason, idx) => (
-                                    <span key={idx} className="bg-white/90 px-1.5 py-0.5 rounded-md border border-amber-200 text-amber-900 font-medium text-[9px] shadow-2xs">
-                                      {reason}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
+                            {pro.company_name && (
+                              <p className="text-xs font-semibold text-slate-600 truncate">{pro.company_name}</p>
                             )}
-                          </div>
-
-                          <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2">
-                            <div className="flex items-center gap-2">
-                              {pro.rating > 0 && (
-                                <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg">
-                                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                  {pro.rating}
-                                </span>
-                              )}
-                              {pro.review_count > 0 && (
-                                <span className="text-[11px] text-slate-400 font-medium">
-                                  ({pro.review_count} reviews)
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              {/* Toggle Recommendation button */}
-                              {isRecommended ? (
-                                <button
-                                  onClick={() => setRecommendingPro({ id: pro.id, name: pro.name, targetStatus: false, pro })}
-                                  title="Remove from recommended"
-                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
-                                >
-                                  <ArrowRight className="w-3.5 h-3.5 rotate-180" />
-                                  <span>Remove</span>
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => setRecommendingPro({ id: pro.id, name: pro.name, targetStatus: true, pro })}
-                                  title="Mark as recommended"
-                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
-                                >
-                                  <Sparkles className="w-3.5 h-3.5 fill-emerald-500/20 text-emerald-600" />
-                                  <span>Recommend</span>
-                                </button>
-                              )}
-
-                              {/* Edit Profile button */}
-                              <button
-                                onClick={() => handleStartEditing(pro)}
-                                title="Edit profile"
-                                className="p-2 bg-slate-50 text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 rounded-xl transition-all cursor-pointer"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Delete Pro (Trash) button */}
-                              {activeProFilterTab === 'duplicates' ? (
-                                <button
-                                  onClick={() => handleIgnoreDuplicate(pro.id)}
-                                  title="Enlever de l'onglet doublons (conserver dans Google Pros)"
-                                  className="p-2 bg-amber-50 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded-xl transition-all cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => setDeletingProFromCard({ id: pro.id, name: pro.name, company_name: pro.company_name })}
-                                  title="Supprimer ce professionnel"
-                                  className="p-2 bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
+                            <p className="text-xs text-slate-500 truncate">{pro.category}</p>
                           </div>
                         </div>
-                      );
-                    })
+                        <div className="flex items-center gap-2 sm:gap-3 bg-slate-50 sm:bg-transparent p-2 sm:p-0 rounded-2xl sm:rounded-none">
+                           <button 
+                             onClick={() => handleStartEditing(pro)}
+                             className="p-2.5 bg-white sm:bg-slate-50 text-slate-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded-xl transition-all shadow-sm sm:shadow-none"
+                           >
+                             <Edit2 className="w-4 h-4" />
+                           </button>
+                        </div>
+                      </div>
+                    ))
                   ) : (
-                    <div className="col-span-full text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200 p-8 space-y-2">
-                      {activeProFilterTab === 'recommended' ? (
-                        <>
-                          <Sparkles className="w-8 h-8 text-emerald-400 mx-auto opacity-50" />
-                          <h5 className="text-slate-700 font-bold text-sm">No recommended professionals found</h5>
-                          <p className="text-slate-400 text-xs max-w-sm mx-auto">
-                            Switch to the "Google Pros" tab and click "Recommend" to add professionals here.
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <Globe className="w-8 h-8 text-blue-400 mx-auto opacity-50" />
-                          <h5 className="text-slate-700 font-bold text-sm">No Google professionals found</h5>
-                          <p className="text-slate-400 text-xs max-w-sm mx-auto">
-                            All professionals are currently recommended, no results match your filter, or none have been imported yet.
-                          </p>
-                          <button
-                            onClick={() => setShowCsvImporterModal(true)}
-                            className="mt-3 px-4 py-2 rounded-xl text-xs font-bold text-brand-blue bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs"
-                          >
-                            <FileSpreadsheet className="w-3.5 h-3.5" />
-                            <span>Import Google Pros (CSV)</span>
-                          </button>
-                        </>
-                      )}
+                    <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200">
+                      <p className="text-slate-400 text-sm font-medium">No professionals added yet.</p>
                     </div>
                   )}
                 </div>
-
-                {/* CSV Pro Importer Modal */}
-                <CsvProImporterModal
-                  isOpen={showCsvImporterModal}
-                  onClose={() => setShowCsvImporterModal(false)}
-                  defaultSource="google_places"
-                  existingCategories={allExistingCategories}
-                  onSuccess={async () => {
-                    if (onRefetchPros) await onRefetchPros();
-                    await fetchCompletedPros();
-                  }}
-                  setGlobalAlert={(alert) => setMsg({ type: alert.type, text: alert.text })}
-                />
-
-                {/* Single Pro Recommendation Confirmation Modal */}
-                {recommendingPro && (() => {
-                  const modalDuplicateMatch = recommendingPro.pro && recommendingPro.targetStatus
-                    ? findDuplicateRecommendedPro(recommendingPro.pro, recommendedList)
-                    : null;
-
-                  return (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-                      <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200 space-y-5">
-                        <div className="flex items-start gap-4">
-                          <div className={cn(
-                            "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg",
-                            recommendingPro.targetStatus
-                              ? "bg-emerald-500 text-white shadow-emerald-500/20"
-                              : "bg-amber-500 text-white shadow-amber-500/20"
-                          )}>
-                            {recommendingPro.targetStatus ? (
-                              <Sparkles className="w-6 h-6 fill-white" />
-                            ) : (
-                              <AlertCircle className="w-6 h-6" />
-                            )}
-                          </div>
-                          <div className="space-y-1 flex-1">
-                            <h4 className="text-base font-bold font-display text-slate-900">
-                              {recommendingPro.targetStatus 
-                                ? 'Mark as Recommended & Edit?' 
-                                : 'Remove from Recommended?'}
-                            </h4>
-                            <p className="text-xs text-slate-600 leading-relaxed">
-                              {recommendingPro.targetStatus ? (
-                                <>
-                                  Do you want to mark <strong className="text-slate-900">"{recommendingPro.name}"</strong> as a recommended professional?
-                                  <br />
-                                  You will be redirected to the professional editor pre-filled with all their existing information to complete or adjust their profile.
-                                </>
-                              ) : (
-                                <>
-                                  Do you want to remove <strong className="text-slate-900">"{recommendingPro.name}"</strong> from recommended professionals?
-                                  <br />
-                                  They will be moved back to the <strong>Google Pros</strong> tab.
-                                </>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-
-                        {modalDuplicateMatch && (
-                          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs space-y-1.5 animate-in fade-in">
-                            <div className="flex items-center gap-1.5 font-bold text-amber-950 text-xs">
-                              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                              <span>Warning: Potential duplicate detected!</span>
-                            </div>
-                            <p className="text-[11px] text-amber-800 leading-relaxed">
-                              This Google profile matches recommended pro <strong>"{modalDuplicateMatch.matchedPro.name}"</strong> ({modalDuplicateMatch.reasons.join(', ')}).
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="grid grid-cols-2 gap-3 pt-2">
-                        <button
-                          type="button"
-                          disabled={isUpdatingRecommendation}
-                          onClick={() => setRecommendingPro(null)}
-                          className="h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-200 transition-all disabled:opacity-50 cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isUpdatingRecommendation}
-                          onClick={() => handleToggleRecommendation(recommendingPro.id, recommendingPro.targetStatus, recommendingPro.pro)}
-                          className={cn(
-                            "h-11 rounded-xl text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer",
-                            recommendingPro.targetStatus
-                              ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20"
-                              : "bg-amber-600 hover:bg-amber-700 shadow-amber-600/20"
-                          )}
-                        >
-                          {isUpdatingRecommendation ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : recommendingPro.targetStatus ? (
-                            <>
-                              <Check className="w-4 h-4 stroke-[3]" />
-                              Confirm & Edit
-                            </>
-                          ) : (
-                            <>
-                              <Check className="w-4 h-4 stroke-[3]" />
-                              Remove
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-                {/* Single Pro Deletion Confirmation Modal */}
-                {deletingProFromCard && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200 space-y-5">
-                      <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-rose-500/20">
-                          <Trash2 className="w-6 h-6" />
-                        </div>
-                        <div className="space-y-1 flex-1">
-                          <h4 className="text-base font-bold font-display text-slate-900">
-                            Delete this professional?
-                          </h4>
-                          <p className="text-xs text-slate-600 leading-relaxed">
-                            Are you sure you want to permanently delete <strong className="text-slate-900">"{deletingProFromCard.name}"</strong>
-                            {deletingProFromCard.company_name ? ` (${deletingProFromCard.company_name})` : ''}?
-                            <br />
-                            This action is irreversible and will remove this profile from the platform.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 pt-2">
-                        <button
-                          type="button"
-                          disabled={isDeletingProFromCard}
-                          onClick={() => setDeletingProFromCard(null)}
-                          className="h-11 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-200 transition-all disabled:opacity-50 cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isDeletingProFromCard}
-                          onClick={handleConfirmDeleteFromCard}
-                          className="h-11 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          {isDeletingProFromCard ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Trash2 className="w-4 h-4" />
-                              Delete
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })()}
@@ -8837,13 +7950,6 @@ function AdminView({
             </div>
           )}
         </div>
-      ) : dashboardCategory === 'agent_search' ? (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <AdminAgenticProSearch 
-            onRefetchPros={fetchCompletedPros} 
-            setGlobalAlert={(alert) => setMsg(alert)} 
-          />
-        </div>
       ) : null}
 
       {/* Delete Confirmation Modal */}
@@ -9866,8 +8972,7 @@ function HomeView({
   highlightedTestimoniesIds = [],
   allArticles = [],
   announcement,
-  onContactAdmin,
-  userLocation
+  onContactAdmin
 }: { 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   allPros: Professional[], 
@@ -9894,8 +8999,7 @@ function HomeView({
     cta_text?: string;
     cta_type?: string;
   },
-  onContactAdmin?: () => void,
-  userLocation?: { lat: number; lng: number } | null
+  onContactAdmin?: () => void
 }) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [localSearch, setLocalSearch] = useState('');
@@ -9976,19 +9080,37 @@ function HomeView({
           </div>
         </div>
 
-        {/* Hero AI Multi-Search with Jane */}
-        <LandingJaneAISearch
-          allPros={allPros}
-          events={events}
-          allArticles={allArticles}
-          userLocation={userLocation}
-          onSelectPro={(pro) => {
-            setSelectedPro(pro);
+        {/* Hero Search Card */}
+        <div 
+          onClick={() => onNavigate('explore')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onNavigate('explore');
+            }
           }}
-          onSelectEvent={(event) => setSelectedEvent(event)}
-          onSelectArticle={(article) => setSelectedArticle(article)}
-          onNavigate={onNavigate}
-        />
+          className="relative z-10 -mt-3 md:mt-0 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#f8fafc] p-5 md:p-8 border border-blue-200/60 hover:border-blue-300/80 transition-all duration-300 hover:scale-[1.015] active:scale-[0.99] group/card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
+        >
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <div className="flex items-start md:items-center gap-4">
+              <div className="space-y-1 text-left">
+                <h3 className="text-base md:text-lg font-bold text-brand-navy tracking-tight">Looking for a trusted local pro?</h3>
+                <p className="text-slate-500 text-[11px] md:text-[13px] font-medium leading-relaxed">
+                  Search member recommendations or let <strong className="text-brand-blue font-semibold">Jane, your AI assistant</strong>, match you instantly.
+                </p>
+              </div>
+            </div>
+
+            <div 
+              className="w-fit self-center sm:self-auto shrink-0 inline-flex items-center justify-center gap-2 px-6 py-2.5 md:px-8 md:py-3 bg-brand-blue group-hover/card:bg-[#0958d9] text-white rounded-xl font-bold text-xs md:text-sm shadow-sm transition-all"
+            >
+              <Search className="w-3.5 h-3.5 md:w-4 h-4 text-white shrink-0" />
+              <span>Start searching</span>
+            </div>
+          </div>
+        </div>
 
         {/* Hero Recommend Pro Card */}
         <div 
@@ -10005,11 +9127,6 @@ function HomeView({
         >
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="flex items-start md:items-center gap-4">
-              {/* Eye-catching UserPlus Avatar Badge */}
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-amber-100 via-amber-100 to-amber-200 border border-amber-300/80 flex items-center justify-center text-amber-600 shadow-sm ring-4 ring-amber-400/15 shrink-0 group-hover/rec-card:scale-110 group-hover/rec-card:rotate-6 transition-all duration-300">
-                <UserPlus className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
-              </div>
-
               <div className="space-y-1 text-left">
                 <h3 className="text-base md:text-lg font-bold text-brand-navy tracking-tight">Know someone great?</h3>
                 <p className="text-slate-600 text-[11px] md:text-[13px] font-medium leading-relaxed">
@@ -10994,102 +10111,33 @@ function HighlightCarousel({ onNavigate, allPros, events }: { onNavigate: (view:
   );
 }
 
-function MapViewportController({ pros, center, resetTrigger }: { pros: Professional[]; center: { lat: number; lng: number }; resetTrigger?: number }) {
+function MapCenterController({ center, resetTrigger }: { center: { lat: number; lng: number }; resetTrigger?: number }) {
   const map = useMap();
+  const lastCenteredRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastResetRef = useRef<number>(0);
-  const lastCenterRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!map) return;
-    if (typeof google === 'undefined' || !google.maps) return;
-
-    // 1. Explicit Reset Trigger (e.g. user clicked "Use my location" or "re-center")
+    const hasCoordsChanged = !lastCenteredRef.current || 
+      Math.abs(lastCenteredRef.current.lat - center.lat) > 0.0001 || 
+      Math.abs(lastCenteredRef.current.lng - center.lng) > 0.0001;
+    
     const hasTriggered = resetTrigger !== undefined && resetTrigger !== lastResetRef.current;
-    if (hasTriggered) {
+
+    if (hasCoordsChanged || hasTriggered) {
+      lastCenteredRef.current = center;
       if (resetTrigger !== undefined) {
         lastResetRef.current = resetTrigger;
       }
-      lastCenterRef.current = center;
-      map.setCenter(center);
-      map.setZoom(13);
-      return;
+      map.panTo(center);
     }
-
-    // 2. Adjust Viewport to fit Professionals (and userLocation / center if available)
-    const validPros = pros.filter(
-      (p) => p.coordinates && typeof p.coordinates.lat === 'number' && typeof p.coordinates.lng === 'number'
-    );
-
-    if (validPros.length > 0) {
-      const bounds = new google.maps.LatLngBounds();
-      validPros.forEach((p) => {
-        bounds.extend(p.coordinates!);
-      });
-
-      // Also include the user's location (center) in the viewport bounds if it's not the default Valencia center fallback,
-      // so the user can see their relation to the professionals
-      if (center && typeof center.lat === 'number' && typeof center.lng === 'number' && (center.lat !== 39.4699 || center.lng !== -0.3763)) {
-        bounds.extend(center);
-      }
-
-      const ne = bounds.getNorthEast();
-      const sw = bounds.getSouthWest();
-      const latSpan = Math.abs(ne.lat() - sw.lat());
-      const lngSpan = Math.abs(ne.lng() - sw.lng());
-
-      if (latSpan < 0.005 && lngSpan < 0.005) {
-        map.setCenter(bounds.getCenter());
-        map.setZoom(14);
-      } else {
-        // Fit bounds with generous padding so markers aren't placed right at the edges
-        map.fitBounds(bounds, 75);
-      }
-    } else {
-      // 3. Fallback: Center on the specified location if it has changed
-      const hasCoordsChanged = !lastCenterRef.current || 
-        Math.abs(lastCenterRef.current.lat - center.lat) > 0.0001 || 
-        Math.abs(lastCenterRef.current.lng - center.lng) > 0.0001;
-
-      if (hasCoordsChanged) {
-        lastCenterRef.current = center;
-        map.panTo(center);
-        map.setZoom(13);
-      }
-    }
-  }, [map, pros, center, resetTrigger]);
+  }, [map, center, resetTrigger]);
 
   return null;
 }
 
 function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professional[], onSelectPro: (pro: Professional) => void, center: { lat: number, lng: number }, resetTrigger?: number }) {
   const hasValidKey = Boolean(GOOGLE_MAPS_KEY) && GOOGLE_MAPS_KEY.length > 10;
-
-  // Jitter identical/overlapping coordinates so markers are separately visible
-  const processedPros = useMemo(() => {
-    const coordsCount = new Map<string, number>();
-    return pros.map((pro) => {
-      if (!pro.coordinates) return pro;
-      // Precision of 5 decimals corresponds to ~1.1 meters. 
-      // If within ~1-2 meters, we treat them as overlapping.
-      const key = `${pro.coordinates.lat.toFixed(5)},${pro.coordinates.lng.toFixed(5)}`;
-      const count = coordsCount.get(key) || 0;
-      coordsCount.set(key, count + 1);
-
-      if (count > 0) {
-        // Distribute overlapping markers in a small circle/spiral
-        const angle = (count * 2 * Math.PI) / 8;
-        const radius = 0.00015 * Math.ceil(count / 8); // ~15-20 meters offset per tier
-        return {
-          ...pro,
-          coordinates: {
-            lat: pro.coordinates.lat + radius * Math.cos(angle),
-            lng: pro.coordinates.lng + radius * Math.sin(angle),
-          },
-        };
-      }
-      return pro;
-    });
-  }, [pros]);
 
   if (!hasValidKey) {
     return (
@@ -11119,7 +10167,7 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
   return (
     <div className="w-full h-full">
       <APIProvider apiKey={GOOGLE_MAPS_KEY}>
-        <GoogleMap
+        <Map
           defaultCenter={center}
           defaultZoom={13}
           mapId="e8677c77d4677732"
@@ -11129,19 +10177,8 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
           scrollwheel={true}
           internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
         >
-          <MapViewportController pros={processedPros} center={center} resetTrigger={resetTrigger} />
-          
-          {/* Pulsing marker for user's location if available (not the default Valencia fallback) */}
-          {center && (center.lat !== 39.4699 || center.lng !== -0.3763) && (
-            <AdvancedMarker position={center} title="Your Location">
-              <div className="relative flex h-6 w-6 items-center justify-center">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-500 border-2 border-white shadow-md"></span>
-              </div>
-            </AdvancedMarker>
-          )}
-
-          {processedPros.map((pro, index) => pro.coordinates && (
+          <MapCenterController center={center} resetTrigger={resetTrigger} />
+          {pros.map((pro, index) => pro.coordinates && (
             <AdvancedMarker
               key={pro.id}
               position={pro.coordinates}
@@ -11160,64 +10197,28 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
                 }}
               >
                 <Pin 
-                  background={pro.source === 'google_places' || pro.source === 'google' ? '#64748B' : '#0038FF'} 
+                  background={'#0038FF'} 
                   borderColor={'#fff'} 
                   glyphColor={'#fff'}
                   glyph={(index + 1).toString()}
                 />
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-white rounded-xl shadow-xl border border-slate-100 whitespace-nowrap opacity-0 group-hover/pin:opacity-100 transition-opacity pointer-events-none z-50 flex flex-col items-center">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    {pro.source === 'google_places' || pro.source === 'google' ? null : (
-                      <span className="text-[8px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded">Unlocked Community</span>
-                    )}
-                  </div>
-                  <p className="text-[11px] font-bold text-slate-900">{pro.name}</p>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-white rounded-lg shadow-xl border border-slate-100 whitespace-nowrap opacity-0 group-hover/pin:opacity-100 transition-opacity pointer-events-none z-50">
+                  <p className="text-[10px] font-bold text-brand-navy">{pro.name}</p>
                   {pro.company_name && (
-                    <p className="text-[9px] text-slate-500 font-medium italic">{pro.company_name}</p>
+                    <p className="text-[9px] text-slate-600 font-medium italic">{pro.company_name}</p>
                   )}
                   <p className="text-[8px] text-slate-400 font-medium whitespace-nowrap mt-0.5">Touch to see details</p>
                 </div>
               </div>
             </AdvancedMarker>
           ))}
-        </GoogleMap>
+        </Map>
       </APIProvider>
     </div>
   );
 }
 
-function ExploreView({ 
-  allPros, 
-  onNavigate, 
-  initialProId, 
-  initialSearch, 
-  onModalClose, 
-  scrollToTop, 
-  onProUpdate, 
-  currentUser, 
-  userProfile, 
-  blockedUsers = [], 
-  usersWhoBlockedMe = [], 
-  isActive = false,
-  userLocation,
-  setUserLocation,
-  hasRealLocation,
-  setHasRealLocation,
-  showLocationBanner,
-  setShowLocationBanner,
-  mapCenterTrigger,
-  setMapCenterTrigger,
-  requestGeolocation,
-  manualAddress,
-  setManualAddress,
-  geocodingLoading,
-  setGeocodingLoading,
-  geocodingError,
-  setGeocodingError,
-  locationName,
-  setLocationName,
-  handleSetManualLocation
-}: { 
+function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModalClose, scrollToTop, onProUpdate, currentUser, userProfile, blockedUsers = [], usersWhoBlockedMe = [], isActive = false }: { 
   allPros: Professional[], 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   initialProId?: string | null, 
@@ -11229,25 +10230,7 @@ function ExploreView({
   userProfile?: any,
   blockedUsers?: string[],
   usersWhoBlockedMe?: string[],
-  isActive?: boolean,
-  userLocation: { lat: number; lng: number } | null,
-  setUserLocation: React.Dispatch<React.SetStateAction<{ lat: number; lng: number } | null>>,
-  hasRealLocation: boolean,
-  setHasRealLocation: React.Dispatch<React.SetStateAction<boolean>>,
-  showLocationBanner: boolean,
-  setShowLocationBanner: React.Dispatch<React.SetStateAction<boolean>>,
-  mapCenterTrigger: number,
-  setMapCenterTrigger: React.Dispatch<React.SetStateAction<number>>,
-  requestGeolocation: (onSuccess?: (coords: { lat: number, lng: number }) => void) => void,
-  manualAddress: string,
-  setManualAddress: React.Dispatch<React.SetStateAction<string>>,
-  geocodingLoading: boolean,
-  setGeocodingLoading: React.Dispatch<React.SetStateAction<boolean>>,
-  geocodingError: string,
-  setGeocodingError: React.Dispatch<React.SetStateAction<string>>,
-  locationName: string,
-  setLocationName: React.Dispatch<React.SetStateAction<string>>,
-  handleSetManualLocation: (address: string) => Promise<void>
+  isActive?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState(initialSearch || '');
@@ -11287,7 +10270,6 @@ function ExploreView({
 
   // AI-powered Search states
   const [aiResults, setAiResults] = useState<{ [key: string]: { score: number; reason: string } } | null>(null);
-  const [googlePlacesPros, setGooglePlacesPros] = useState<Professional[]>([]);
   const [aiExactMatch, setAiExactMatch] = useState<boolean>(true);
   const [aiSummaryMessage, setAiSummaryMessage] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -11295,23 +10277,11 @@ function ExploreView({
   const [aiQuery, setAiQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'standard' | 'ai'>('ai');
 
-  const combinedPros = useMemo(() => {
-    const map = new Map<string, Professional>();
-    (allPros || []).forEach(p => map.set(String(p.id), p));
-    (googlePlacesPros || []).forEach(p => {
-      if (!map.has(String(p.id))) {
-        map.set(String(p.id), p);
-      }
-    });
-    return Array.from(map.values());
-  }, [allPros, googlePlacesPros]);
-
   useEffect(() => {
     // If the input gets cleared, instantly reset all AI search filters
     if (search.trim() === '') {
       setDeferredSearch('');
       setAiResults(null);
-      setGooglePlacesPros([]);
       setAiExactMatch(true);
       setAiSummaryMessage(null);
       setAiError(null);
@@ -11355,197 +10325,42 @@ function ExploreView({
     try {
       let data = null;
       let serverFailed = false;
-      let clientGooglePlacesPros: any[] = [];
 
-      // Try to fetch Google Places pros directly from the client side if GOOGLE_MAPS_KEY is available
-      if (false && GOOGLE_MAPS_KEY) {
-        try {
-          const targetZone = detectTargetZone(trimmed, userLocation);
-          const centerLat = targetZone.centerCoords.lat;
-          const centerLng = targetZone.centerCoords.lng;
-
-          const textQuery = buildOptimizedPlacesQuery(
-            trimmed,
-            targetZone.isSpecificZone,
-            targetZone.zoneName,
-            !!userLocation
-          );
-
-          const requestBody: any = {
-            textQuery,
-            maxResultCount: 20,
-            languageCode: "en"
-          };
-
-          const biasRadius = targetZone.isSpecificZone ? 5000.0 : (userLocation ? 5000.0 : 25000.0);
-
-          requestBody.locationBias = {
-            circle: {
-              center: { latitude: centerLat, longitude: centerLng },
-              radius: biasRadius
-            }
-          };
-
-          const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Goog-Api-Key": GOOGLE_MAPS_KEY,
-              "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.photos,places.location"
-            },
-            body: JSON.stringify(requestBody)
-          });
-
-          if (gpResponse.ok) {
-            const gpData = await gpResponse.json();
-            const places = gpData.places || [];
-            const mappedPlaces = places
-              .map((place: any, idx: number) => {
-                let photoUrl = "";
-                const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
-
-                let coords = {
-                  lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
-                  lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
-                };
-
-                if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
-                  coords = {
-                    lat: place.location.latitude,
-                    lng: place.location.longitude
-                  };
-                }
-
-                const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
-
-                return {
-                  id: `google_${place.id}`,
-                  name: place.displayName?.text || "Professional",
-                  company_name: place.displayName?.text || "",
-                  category: place.primaryTypeDisplayName?.text || "Professional",
-                  bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
-                  location: cleanAddress,
-                  coordinates: coords,
-                  distanceKm: dist,
-                  rating: typeof place.rating === 'number' ? place.rating : 0,
-                  reviews_count: place.userRatingCount || 0,
-                  review_count: place.userRatingCount || 0,
-                  phone: place.nationalPhoneNumber || "",
-                  website: place.websiteUri || "",
-                  googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
-                  image: photoUrl,
-                  source: 'google_places',
-                  is_community_recommended: false
-                };
-              })
-              .filter((place: any) => !isTradeMismatched(trimmed, place.name, place.category));
-
-            // Strictly sort Google Places by closest distance first, max 6
-            mappedPlaces.sort((a: any, b: any) => {
-              const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
-              const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
-              return distA - distB;
-            });
-
-            clientGooglePlacesPros = mappedPlaces.slice(0, 6);
-          }
-        } catch (gpErr) {
-          console.warn("Client-side Google Places fetch failed:", gpErr);
-        }
-      }
-
-      const isVercelHost = typeof window !== 'undefined' && (
-        window.location.hostname.includes("vercel.app") || 
-        window.location.hostname.includes("vercel") ||
-        (!window.location.hostname.includes("run.app") && 
-         !window.location.hostname.includes("aistudio") && 
-         window.location.hostname !== "localhost" && 
-         window.location.hostname !== "127.0.0.1")
-      );
-
-      if (isVercelHost) {
-        serverFailed = true;
-      } else {
-        try {
-          const proListBrief = allPros.map((p: any) => ({
-            id: String(p.id),
-            name: p.name,
-            company_name: p.company_name || "",
-            category: p.category || p.profession || "",
-            categories: p.categories || [],
-            bio: p.bio || p.description || "",
-            top_qualities: p.top_qualities || [],
-            languages: p.languages || [],
-            rating: p.rating || 0,
-            location: p.location || "",
-            coordinates: p.coordinates || null,
-            lat: p.coordinates?.lat ?? p.lat,
-            lng: p.coordinates?.lng ?? p.lng,
-            is_community_recommended: Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended || p.source === 'community'),
-            is_recommended: Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended || p.source === 'community'),
-            source: p.source || (Boolean(p.is_recommended || p.is_recommanded || p.is_community_recommended) ? 'community' : 'google_places')
-          }));
-
-          const googleProsBrief = clientGooglePlacesPros.map((p: any) => ({
-            id: String(p.id),
-            name: p.name,
-            company_name: p.company_name || "",
-            category: p.category || "Professional",
-            categories: [p.category || "Professional"],
-            bio: p.bio || "",
-            top_qualities: [],
-            languages: [],
-            rating: p.rating || 0,
-            location: p.location || "Valencia",
-            distanceKm: p.distanceKm || null,
-            coordinates: p.coordinates || null,
-            lat: p.coordinates?.lat ?? p.lat,
-            lng: p.coordinates?.lng ?? p.lng,
-            website: p.website || "",
-            googleMapsUri: p.googleMapsUri || "",
-            is_community_recommended: false,
-            source: 'google_places'
-          }));
-
-          const briefPros = proListBrief.filter((p: any) =>
-            !isTradeMismatched(trimmed, p.name, p.category)
-          );
-
-          const response = await fetch("/api/ai-search", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: trimmed, professionals: briefPros, userLocation }),
-          });
-          
-          if (response.status === 404 || response.status === 405) {
-            serverFailed = true;
-          } else if (!response.ok) {
-            if (response.status === 429) {
-              throw new Error("Jane is not available at the moment. Please use manual search in the pages");
-            }
-            try {
-              const errJson = await response.json();
-              if (errJson && errJson.error) {
-                throw new Error(errJson.error);
-              }
-            } catch (e: any) {
-              if (e.message && (e.message.includes("Jane is") || e.message.includes("Jane est très sollicitée"))) {
-                throw e;
-              }
-            }
-            throw new Error("Sorry, an error occurred during AI search.");
-          } else {
-            data = await response.json();
-          }
-        } catch (fetchErr) {
-          console.warn("[Search] Server search failed or is unavailable, attempting client fallback:", fetchErr);
+      try {
+        const response = await fetch("/api/ai-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: trimmed, professionals: allPros }),
+        });
+        
+        if (response.status === 404 || response.status === 405) {
           serverFailed = true;
+        } else if (!response.ok) {
+          if (response.status === 429) {
+            throw new Error("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
+          }
+          try {
+            const errJson = await response.json();
+            if (errJson && errJson.error) {
+              throw new Error(errJson.error);
+            }
+          } catch (e: any) {
+            if (e.message && (e.message.includes("Jane is very busy") || e.message.includes("Jane est très sollicitée"))) {
+              throw e;
+            }
+          }
+          throw new Error("Sorry, an error occurred during AI search.");
+        } else {
+          data = await response.json();
         }
+      } catch (fetchErr) {
+        console.warn("[Search] Server search failed or is unavailable, attempting client fallback:", fetchErr);
+        serverFailed = true;
       }
 
       if (serverFailed) {
         // Fallback to client-side search using the client-side API key
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
         if (!apiKey) {
           throw new Error("The server AI search service is busy or unavailable (Error 404). To use client-side AI search (e.g., on Vercel), please configure the VITE_GEMINI_API_KEY environment variable in your Vercel project settings.");
         }
@@ -11565,134 +10380,77 @@ function ExploreView({
           location: p.location || ""
         }));
 
-        const googleProsBrief = clientGooglePlacesPros.map((p: any) => ({
-          id: String(p.id),
-          name: p.name,
-          company_name: p.company_name || "",
-          category: p.category || "Professional",
-          categories: [p.category || "Professional"],
-          bio: p.bio || "",
-          top_qualities: [],
-          languages: [],
-          rating: p.rating || 0,
-          location: p.location || "Valencia",
-          distanceKm: p.distanceKm || null,
-          website: p.website || "",
-          googleMapsUri: p.googleMapsUri || "",
-          is_community_recommended: false,
-          source: 'google_places'
-        }));
-
-        const allCandidatePros = proListBrief.filter((p: any) =>
-          !isTradeMismatched(trimmed, p.name, p.category)
-        );
-
-        const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals in Valencia, Spain.
+        const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals.
 Your purpose is to examine the user's natural language request and return the most relevant matching professionals.
 
 Review the list of professionals provided and evaluate BOTH trade/service criteria AND location criteria:
 
-1. STRICT DIRECTORY CONSTRAINT (MANDATORY):
-   - You MUST ONLY recommend professionals that are present in the provided JSON list (which represents our Supabase 'professionals' table).
-   - NEVER search, invent, or hallucinate any other professional or business outside this list. If no matching professional is present in the list, you must set "exactMatchFound" to false.
-
-2. CRITICAL TRADE COHERENCE & SPOKEN LANGUAGES (STRICT RELEVANCE):
-   - Match ONLY professionals whose actual trade directly matches the requested trade.
-   - If the user searches for an osteopath, NEVER match dentists, doctors, pediatricians, or lawyers! Mismatched trades must receive a score of 0.
-   - If the user searches for a dentist, NEVER match osteopaths or general doctors.
-   - Geographic Proximity & Spoken Languages: Distance and location are paramount. Professionals located far away (> 25 km from target) MUST NOT be selected or returned, regardless of language. Simply asking in French or another language does NOT restrict or filter results by language. ONLY when the user explicitly specifies a language requirement (e.g. "francophone", "parlant français", "en français", "french", "English", "Spanish", "Español"), prioritize local pros within 25 km who speak that language.
+1. QUERY PARSING & SYNONYMS (CRITICAL):
    - Trade / Profession Synonyms & Translations:
      * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "hair salon", "barber" ALL match "Hairdresser", "Coiffeur", "Beauty & Wellness", or hair care services.
      * "doctor", "physician", "médecin", "gp" ALL match Doctor/Medical services.
      * "realtor", "real estate agent", "inmobiliaria" ALL match Real Estate / Property services.
      * "plumber", "plombier", "fontanero" ALL match Plumbing services.
-     * Treat language translations (English, French, Spanish) and word variations as EXACT trade matches.
+     * Treat language translations (English, French, Spanish) and word variations (e.g., "hair dresser" vs "hairdresser") as EXACT trade matches!
+   - Location Matching:
+     * "Valencia area", "in Valencia", "around Valencia", "Valencia city" matches professionals located in Valencia or Valencia metropolitan/province towns (e.g. Valencia, La Eliana, Torrent, Paterna, etc.).
 
-3. SCORING & MATCHING RULES:
-   - DIRECT MATCH (Score 70-100): The professional matches BOTH requested trade/service AND requested location/area.
-   - ADJACENT / ALTERNATIVE MATCH (Score 15-45): The professional offers a closely related trade in the area.
-   - UNRELATED OR WRONG TRADE (Score 0): The professional has an unrelated trade or is in a different city.
+2. SCORING & MATCHING RULES:
+   - DIRECT MATCH (Score 70-100): The professional matches BOTH requested trade/service (including synonyms/translations) AND requested location/area (or if no location was specified).
+     * Example: "hair dresser in valencia area" + hairdresser in Valencia => DIRECT MATCH (Score 80-100).
+   - ADJACENT / ALTERNATIVE MATCH (Score 15-45): The professional offers a closely related trade (e.g. general beauty salon for a hairdresser request), OR matches the trade in a neighboring distant town.
+   - UNRELATED OR WRONG LOCATION (Score 0): The professional has a completely unrelated trade OR is in a totally different distant city/country when a specific city was requested.
 
-4. "exactMatchFound" & "summaryMessage" RULES:
-   - If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), set "exactMatchFound" to true, and set "summaryMessage" to null.
+3. "exactMatchFound" & "summaryMessage" RULES:
+   - CRITICAL: If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), you MUST set "exactMatchFound" to true, and set "summaryMessage" to null!
    - Set "exactMatchFound" to false ONLY if NO professional in the directory directly matches both trade and location.
-   - Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched.`;
+   - If "exactMatchFound" is false:
+     * If there ARE alternative/adjacent professionals returned with score > 0:
+       - With specific trade and location (e.g. "plumber in La Eliana"): "We couldn't find a [trade] in [location] in our directory. Jane found some alternative options, but they may not meet all your criteria."
+       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory. Jane found some alternative options, but they may not meet all your criteria."
+     * If NO professionals match at all (all professionals have score 0):
+       - With specific trade and location: "We couldn't find a [trade] in [location] in our directory."
+       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory."
 
-        const candidateModels = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.1-flash-lite"];
-        let parsedContent: any = null;
+4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).`;
 
-        for (const model of candidateModels) {
-          try {
-            const response = await ai.models.generateContent({
-              model,
-              contents: `User Query: "${trimmed}"
+        const response = await ai.models.generateContent({
+          model: "gemini-3.1-flash-lite",
+          contents: `User Query: "${trimmed}"
 
 Professionals:
-${JSON.stringify(allCandidatePros, null, 2)}`,
-              config: {
-                systemInstruction: sysInstruction,
-                responseMimeType: "application/json",
-                responseSchema: {
-                  type: Type.OBJECT,
-                  properties: {
-                    exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
-                    summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
-                    results: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          id: { type: Type.STRING, description: "The professional's ID as a string" },
-                          score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                          reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
-                        },
-                        required: ["id", "score", "reasonUrlExcerpt"]
-                      }
-                    }
-                  },
-                  required: ["exactMatchFound", "results"]
-                },
-                thinkingConfig: {
-                  thinkingLevel: ThinkingLevel.MINIMAL
-                },
-                temperature: 0.1
-              }
-            });
-            parsedContent = JSON.parse(response.text || "{}");
-            if (parsedContent) break;
-          } catch (modelErr) {
-            console.warn(`[Client Search] Model ${model} failed, trying next candidate:`, modelErr);
+${JSON.stringify(proListBrief, null, 2)}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
+                summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
+                results: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING, description: "The professional's ID as a string" },
+                      score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
+                      reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                    },
+                    required: ["id", "score", "reasonUrlExcerpt"]
+                  }
+                }
+              },
+              required: ["exactMatchFound", "results"]
+            },
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.MINIMAL
+            },
+            temperature: 0.1
           }
-        }
+        });
 
-        if (!parsedContent) {
-          // Local semantic fallback
-          const qToks = trimmed.toLowerCase().split(/[\s,.'"-]+/).filter(t => t.length >= 3);
-          const fallbackResults = allCandidatePros.map(p => {
-            let sc = 0;
-            const cat = (p.category || '').toLowerCase();
-            const bio = (p.bio || '').toLowerCase();
-            const name = (p.name || '').toLowerCase();
-            for (const t of qToks) {
-              if (cat.includes(t)) sc += 35;
-              if (name.includes(t)) sc += 25;
-              if (bio.includes(t)) sc += 15;
-            }
-            return {
-              id: String(p.id),
-              score: Math.min(sc, 95),
-              reasonUrlExcerpt: `${p.category || 'Spécialiste'} à ${p.location || 'Valence'}`
-            };
-          }).filter(p => p.score >= 30).sort((a, b) => b.score - a.score);
-
-          parsedContent = {
-            exactMatchFound: fallbackResults.length > 0,
-            summaryMessage: fallbackResults.length > 0 ? null : "Aucun professionnel trouvé pour cette recherche.",
-            results: fallbackResults.slice(0, 10)
-          };
-        }
-
-        parsedContent.google_places_pros = clientGooglePlacesPros;
+        const parsedContent = JSON.parse(response.text || "{}");
         data = parsedContent;
       }
 
@@ -11715,8 +10473,7 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
       let highestScore = 0;
 
       rawResults.forEach((item: any) => {
-        let sc = typeof item.score === 'number' ? item.score : 0;
-        if (sc > 0 && sc <= 10) sc = sc * 10;
+        const sc = typeof item.score === 'number' ? item.score : 0;
         if (sc > highestScore) highestScore = sc;
         resultsDict[String(item.id)] = {
           score: sc,
@@ -11726,39 +10483,6 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
 
       if (rawResults.length === 0 || highestScore < 30) {
         exactMatch = false;
-      }
-
-      const googlePlacesToSet = (data.google_places_pros && Array.isArray(data.google_places_pros) && data.google_places_pros.length > 0)
-        ? data.google_places_pros
-        : clientGooglePlacesPros;
-
-      if (googlePlacesToSet && googlePlacesToSet.length > 0) {
-        // Filter google places to only keep those not mismatched
-        const validGooglePros = googlePlacesToSet.filter(
-          (p: any) => !isTradeMismatched(trimmed, p.name, p.category)
-        );
-        const top6 = validGooglePros.slice(0, 6);
-        setGooglePlacesPros(top6);
-        top6.forEach((p: any, idx: number) => {
-          const proIdStr = String(p.id);
-          // Ensure valid Google Places pros always have a positive score so they are never filtered out
-          if (!resultsDict[proIdStr] || resultsDict[proIdStr].score <= 0) {
-            resultsDict[proIdStr] = {
-              score: 75 - idx,
-              reason: p.distanceKm !== null
-                ? `Google Places • à ${p.distanceKm} km`
-                : `Google Places • ${p.location || 'Valence'}`
-            };
-          }
-          if (resultsDict[proIdStr].score > highestScore) {
-            highestScore = resultsDict[proIdStr].score;
-          }
-        });
-        if (top6.length > 0) {
-          exactMatch = true;
-        }
-      } else {
-        setGooglePlacesPros([]);
       }
 
       setAiResults(resultsDict);
@@ -11778,13 +10502,12 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         errorLower.includes("busy") ||
         errorLower.includes("rate limit")
       ) {
-        setAiError("Jane is not available at the moment. Please use manual search in the pages");
+        setAiError("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
       } else {
         setAiError(err.message || "Connection error with the AI service.");
       }
       // Fallback: clear AI results
       setAiResults(null);
-      setGooglePlacesPros([]);
       setAiExactMatch(true);
       setAiSummaryMessage(null);
     } finally {
@@ -11857,61 +10580,19 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
     }
   }, [allPros]);
 
-  const proMatchesSelectedCategory = (pro: any, targetCat: string): boolean => {
-    if (!targetCat || targetCat === 'All') return true;
-    const catLower = targetCat.trim().toLowerCase();
-
-    const rawProfession = (typeof pro.profession === 'string' && pro.profession.trim())
-      ? pro.profession.trim()
-      : ((typeof pro.category === 'string' && pro.category.trim()) ? pro.category.trim() : '');
-
-    if (rawProfession) {
-      if (rawProfession.toLowerCase() === catLower) return true;
-      const parts = rawProfession.split(',').map((s: string) => s.trim().toLowerCase());
-      if (parts.includes(catLower)) return true;
-    }
-
-    if (Array.isArray(pro.categories)) {
-      if (pro.categories.some((c: any) => typeof c === 'string' && c.trim().toLowerCase() === catLower)) {
-        return true;
-      }
-    }
-
-    if (typeof pro.category === 'string' && pro.category.trim().toLowerCase() === catLower) {
-      return true;
-    }
-
-    return false;
-  };
-
   const allProfessions = useMemo(() => {
     const list = new Set<string>();
     (allPros || []).forEach(p => {
       if (!p) return;
-      // Strictly extract categories present in the Supabase database 'profession' column of the professionals table
-      const rawProfession = (typeof p.profession === 'string' && p.profession.trim())
-        ? p.profession.trim()
-        : ((typeof p.category === 'string' && p.category.trim()) ? p.category.trim() : '');
-
-      if (rawProfession) {
-        rawProfession.split(',').forEach(c => {
-          const trimmed = c.trim();
-          if (trimmed && trimmed.toLowerCase() !== 'undefined' && trimmed.toLowerCase() !== 'null' && trimmed !== 'n/a') {
-            list.add(trimmed);
-          }
-        });
-      } else if (Array.isArray(p.categories)) {
+      if (p.categories && Array.isArray(p.categories)) {
         p.categories.forEach(c => {
-          if (typeof c === 'string') {
-            const trimmed = c.trim();
-            if (trimmed && trimmed.toLowerCase() !== 'undefined' && trimmed.toLowerCase() !== 'null' && trimmed !== 'n/a') {
-              list.add(trimmed);
-            }
-          }
+          if (c && typeof c === 'string') list.add(c);
         });
+      } else if (p.category && typeof p.category === 'string') {
+        list.add(p.category);
       }
     });
-    return Array.from(list).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    return Array.from(list).sort();
   }, [allPros]);
 
   const matchingCategories = useMemo(() => {
@@ -11951,6 +10632,21 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
       }
     }
   }, [initialProId, allPros, selectedPro]);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(() => {
+    try {
+      const saved = localStorage.getItem('unlocked_user_location');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [mapCenterTrigger, setMapCenterTrigger] = useState(0);
+  const [hasRealLocation, setHasRealLocation] = useState(() => {
+    return localStorage.getItem('unlocked_has_real_location') === 'true';
+  });
+  const [showLocationBanner, setShowLocationBanner] = useState(() => {
+    return localStorage.getItem('unlocked_show_location_banner') !== 'false';
+  });
   const [maxDistance, setMaxDistance] = useState<number | 'All'>(() => {
     const saved = localStorage.getItem('unlocked_max_distance');
     if (saved === 'All' || !saved) return 'All';
@@ -11965,6 +10661,47 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
       setMaxDistance('All');
     }
   }, [hasRealLocation]);
+
+  const requestGeolocation = (onSuccess?: (coords: { lat: number, lng: number }) => void) => {
+    if (!hasRealLocation) {
+        setShowLocationBanner(true);
+    }
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const loc = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setUserLocation(loc);
+          setHasRealLocation(true);
+          setShowLocationBanner(false);
+          setMapCenterTrigger((prev) => prev + 1);
+          try {
+            localStorage.setItem('unlocked_user_location', JSON.stringify(loc));
+            localStorage.setItem('unlocked_has_real_location', 'true');
+            localStorage.setItem('unlocked_show_location_banner', 'false');
+          } catch (e) {
+            console.error(e);
+          }
+          onSuccess?.(loc);
+        },
+        () => {
+          // Do not set fallback location, just mark that we do not have real location
+          setHasRealLocation(false);
+          // Do not hide the banner if denied, so users can try again
+          try {
+            localStorage.setItem('unlocked_has_real_location', 'false');
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      );
+    } else {
+      // If navigator.geolocation is not available, just set hasRealLocation to false
+      setHasRealLocation(false);
+    }
+  };
 
   // Selected pro details view open
   useEffect(() => {
@@ -11990,7 +10727,9 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
     const searchLower = text.toLowerCase().trim();
     return (allPros || []).some(pro => {
       if (!pro) return false;
-      const matchesCategory = proMatchesSelectedCategory(pro, selectedCategory);
+      const matchesCategory = selectedCategory === 'All' || 
+                              (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
+                              pro.category === selectedCategory;
       const matchesLanguage = selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
       const matchesRating = (pro.rating || 0) >= minRating;
       
@@ -12026,23 +10765,12 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
   // Check if we have strong exact matches from AI search
   const hasStrongAiMatches = aiResults !== null && aiExactMatch && (Object.values(aiResults) as any[]).some(r => r.score >= 30);
 
-  const isProximityActive = useMemo(() => {
-    if (maxDistance !== 'All') return true;
-    const searchLower = (deferredSearch || '').toLowerCase();
-    return searchLower.includes('autour') || 
-           searchLower.includes('proche') || 
-           searchLower.includes('near') || 
-           searchLower.includes('around') || 
-           searchLower.includes('close to') || 
-           searchLower.includes('moi') || 
-           searchLower.includes('me') || 
-           searchLower.includes('ici');
-  }, [deferredSearch, maxDistance]);
-
   const filteredPros = hasActiveFilter 
-    ? (combinedPros || []).filter(pro => {
+    ? (allPros || []).filter(pro => {
         if (!pro) return false;
-        const matchesCategory = proMatchesSelectedCategory(pro, selectedCategory);
+        const matchesCategory = selectedCategory === 'All' || 
+                                (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
+                                pro.category === selectedCategory;
         const matchesLanguage = selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
         const matchesRating = (pro.rating || 0) >= minRating;
         
@@ -12051,14 +10779,7 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         if (searchStr !== '') {
           if (aiResults !== null) {
             const proIdStr = String(pro.id);
-            let matchInfo = aiResults[proIdStr];
-            if (!matchInfo) {
-              if (proIdStr.startsWith('google_')) {
-                matchInfo = aiResults[proIdStr.replace('google_', '')];
-              } else {
-                matchInfo = aiResults[`google_${proIdStr}`];
-              }
-            }
+            const matchInfo = aiResults[proIdStr];
             // Only keep professionals that have a positive score (> 0).
             // Any professional with score <= 0 or missing from aiResults has nothing to do with the search and is hidden.
             matchesSearch = !!matchInfo && typeof matchInfo.score === 'number' && matchInfo.score > 0;
@@ -12079,38 +10800,29 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
         
         let matchesDistance = true;
         if (maxDistance !== 'All' && userLocation) {
-          const isUserNearValencia = getDistance(userLocation.lat, userLocation.lng, 39.4699, -0.3763) <= 80;
-          if (isUserNearValencia) {
-            if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
-              const dist = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
-              matchesDistance = dist <= (maxDistance as number);
-            } else {
-              matchesDistance = false;
-            }
+          if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
+            const dist = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
+            matchesDistance = dist <= (maxDistance as number);
+          } else {
+            matchesDistance = false;
           }
         }
 
         return matchesCategory && matchesLanguage && matchesSearch && matchesDistance && matchesRating;
       })
       .sort((a, b) => {
-        // 1. Recommended (Community) Pros ALWAYS come first!
-        const aComm = isCommunityPro(a) ? 1 : 0;
-        const bComm = isCommunityPro(b) ? 1 : 0;
-        if (aComm !== bComm) return bComm - aComm;
-
-        // 2. AI Search Results score if active
         if (aiResults) {
           const scoreA = aiResults[String(a.id)]?.score || 0;
           const scoreB = aiResults[String(b.id)]?.score || 0;
           if (scoreA !== scoreB) return scoreB - scoreA;
         }
 
-        // 3. Distance / Proximity
         if (userLocation && a.coordinates && b.coordinates) {
           const distA = getDistance(userLocation.lat, userLocation.lng, a.coordinates.lat, a.coordinates.lng);
           const distB = getDistance(userLocation.lat, userLocation.lng, b.coordinates.lat, b.coordinates.lng);
-          if (distA !== distB) {
-            return distA - distB;
+          
+          if (maxDistance !== 'All') {
+             return distA - distB;
           }
         }
 
@@ -12240,7 +10952,6 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
             <div className="space-y-4 pt-4 border-t border-slate-100">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Refine your search</p>
               
-
               <div className="grid grid-cols-2 gap-4 md:gap-x-6 md:gap-y-4">
                 {/* Category Dropdown */}
                 <div className="space-y-2">
@@ -12378,89 +11089,44 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
 
               {/* Geolocation Explanation Banner */}
               {!hasRealLocation && showLocationBanner && (
-                <div className="mt-4 p-5 rounded-[24px] border border-rose-100 bg-rose-50/20 flex flex-col gap-4 hover:border-rose-200/40 transition-all relative overflow-hidden shadow-xs animate-in fade-in duration-300">
-                  <div className="flex flex-col md:flex-row items-start gap-4">
-                    {/* Left Icon container */}
-                    <div className="w-11 h-11 bg-white border border-rose-100 text-rose-500 rounded-full flex items-center justify-center shrink-0 shadow-xs">
-                      <Navigation className="w-5 h-5 fill-rose-500" />
-                    </div>
-                    {/* Main content block */}
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <h4 className="text-xs md:text-sm font-bold text-slate-800 leading-snug">
-                        Localiser les professionnels les plus proches
-                      </h4>
-                      <p className="text-[10px] md:text-xs text-slate-500 leading-relaxed max-w-lg">
-                        Saisissez votre ville ou adresse pour trier les pros de Google Places autour de vous, ou utilisez votre GPS.
-                      </p>
-                    </div>
-                    {/* Top Right Close Button */}
+                <div className="mt-4 p-4.5 pr-10 md:pr-14 rounded-[24px] border border-blue-100 bg-blue-50/50 flex flex-col md:flex-row items-center md:items-start gap-4 hover:border-blue-200/50 transition-all relative overflow-hidden shadow-xs animate-in fade-in duration-300">
+                  {/* Left Icon container */}
+                  <div className="w-11 h-11 bg-white border border-blue-100/50 text-blue-600 rounded-full flex items-center justify-center shrink-0 shadow-xs">
+                    <Navigation className="w-5 h-5 fill-blue-600" />
+                  </div>
+                  {/* Main content block */}
+                  <div className="flex-1 text-center md:text-left min-w-0 pr-0 md:pr-2 space-y-1">
+                    <h4 className="text-xs md:text-sm font-bold text-slate-800 leading-snug">
+                      Use location to find professionals near you.
+                    </h4>
+                    <p className="text-[10px] md:text-xs text-slate-500 leading-relaxed max-w-lg">
+                      We'll use your location only to show relevant results nearby.
+                    </p>
+                  </div>
+                  {/* Blue Action Button */}
+                  <div className="shrink-0 flex items-center w-full md:w-auto justify-center">
                     <button
-                      onClick={() => {
-                        setShowLocationBanner(false);
-                        try {
-                          localStorage.setItem('unlocked_show_location_banner', 'false');
-                        } catch (e) {
-                          console.error(e);
-                        }
-                      }}
-                      className="absolute right-4 top-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-rose-100/30 transition-all cursor-pointer"
+                      onClick={() => requestGeolocation()}
+                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-[10px] md:text-xs font-bold tracking-wide transition-all flex items-center gap-2 shadow-xs hover:shadow-md hover:brightness-105 active:scale-95 cursor-pointer w-full md:w-auto justify-center"
                     >
-                      <X className="w-4 h-4" />
+                      <Navigation className="w-3.5 h-3.5 fill-white" />
+                      Use my location
                     </button>
                   </div>
-
-                  {/* Manual search bar within the banner for instant fallback */}
-                  <div className="flex flex-col sm:flex-row gap-2.5 bg-white p-2.5 rounded-xl border border-slate-100 shadow-2xs">
-                    <div className="relative flex-1">
-                      <input
-                        type="text"
-                        value={manualAddress}
-                        onChange={(e) => setManualAddress(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleSetManualLocation(manualAddress);
-                          }
-                        }}
-                        placeholder="Ville, code postal ou adresse (ex: Paris, Marseille, Valencia...)"
-                        className="w-full pl-3 pr-8 py-2 bg-slate-50 rounded-lg border border-slate-200/60 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/5 outline-none text-xs text-slate-700 font-bold placeholder-slate-400"
-                      />
-                      {manualAddress && (
-                        <button
-                          onClick={() => setManualAddress('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        onClick={() => handleSetManualLocation(manualAddress)}
-                        disabled={geocodingLoading || !manualAddress.trim()}
-                        className="px-4 py-2 bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                      >
-                        {geocodingLoading ? (
-                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        ) : (
-                          <Search className="w-3.5 h-3.5" />
-                        )}
-                        <span>Valider</span>
-                      </button>
-                      <button
-                        onClick={() => requestGeolocation()}
-                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                      >
-                        <Navigation className="w-3.5 h-3.5 text-slate-500" />
-                        <span>GPS</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {geocodingError && (
-                    <p className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
-                      <span>⚠️</span> {geocodingError}
-                    </p>
-                  )}
+                  {/* Top Right Close Button */}
+                  <button
+                    onClick={() => {
+                      setShowLocationBanner(false);
+                      try {
+                        localStorage.setItem('unlocked_show_location_banner', 'false');
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
+                    className="absolute right-4 top-4 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-blue-100/30 transition-all cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               )}
             </div>
@@ -12584,23 +11250,11 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  onClick={() => {
-                    setSelectedPro(pro);
-                  }}
-                  className={cn(
-                    "group relative bg-white rounded-[32px] p-6 flex flex-col lg:flex-row gap-6 transition-all shadow-sm hover:shadow-xl cursor-pointer overflow-hidden",
-                    isCommunityPro(pro)
-                      ? "border-2 border-emerald-500/80 hover:border-emerald-600 shadow-emerald-500/10"
-                      : "border border-slate-200/80 hover:border-slate-300 bg-slate-50/20"
-                  )}
+                  onClick={() => setSelectedPro(pro)}
+                  className="group relative bg-white rounded-[32px] p-6 flex flex-col lg:flex-row gap-6 border border-slate-100 transition-all shadow-sm hover:shadow-xl hover:shadow-slate-200/50 hover:border-brand-blue/10 cursor-pointer overflow-hidden"
                 >
                   {/* Number Badge to match map pins */}
-                  <div className={cn(
-                    "absolute top-6 right-6 w-8 h-8 text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-lg z-10 transition-transform group-hover:scale-110",
-                    isCommunityPro(pro)
-                      ? "bg-emerald-600 shadow-emerald-600/30"
-                      : "bg-slate-600 shadow-slate-600/30"
-                  )}>
+                  <div className="absolute top-6 right-6 w-8 h-8 bg-brand-blue text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-lg shadow-brand-blue/20 z-10 transition-transform group-hover:scale-110">
                     {index + 1}
                   </div>
 
@@ -12624,14 +11278,6 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
   
                   <div className="relative flex-1 flex flex-col justify-between min-w-0 py-1">
                     <div className="space-y-2">
-                      {isCommunityPro(pro) && (
-                        <div className="mb-1">
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-white font-bold text-[10px] tracking-tight shadow-xs shadow-emerald-500/30">
-                            <Award className="w-3.5 h-3.5 text-white shrink-0" />
-                            <span>recommended by MyCityUnlocked</span>
-                          </span>
-                        </div>
-                      )}
                       <div className="space-y-0.5">
                         <h4 className="font-bold text-slate-900 text-xl truncate group-hover:text-brand-blue transition-colors tracking-tight pr-8">{pro.name}</h4>
                         {pro.company_name && (
@@ -12639,26 +11285,20 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
                         )}
                         <div className="flex items-center gap-2">
                            <span className="text-[11px] font-medium text-brand-blue uppercase tracking-widest">{pro.category}</span>
-                           {isCommunityPro(pro) && (
-                             <>
-                               <span className="text-slate-200">•</span>
-                               <div className={cn(
-                                 "flex items-center gap-1 transition-all",
-                                 !currentUser && "filter blur-[4px] select-none pointer-events-none"
-                               )}>
-                                 <Star className="w-3 h-3 text-brand-yellow fill-brand-yellow" />
-                                 <span className="text-xs font-normal text-slate-700">
-                                   {pro.review_count && pro.review_count > 0 ? (
-                                     <span className="flex items-center gap-1">
-                                       {pro.rating} <span className="text-slate-400 font-medium font-sans">({pro.review_count})</span>
-                                     </span>
-                                   ) : (
-                                     'Recommended by the community. Reviews coming soon'
-                                   )}
+                           <span className="text-slate-200">•</span>
+                           <div className={cn(
+                             "flex items-center gap-1 transition-all",
+                             !currentUser && "filter blur-[4px] select-none pointer-events-none"
+                           )}>
+                             <Star className="w-3 h-3 text-brand-yellow fill-brand-yellow" />
+                             <span className="text-xs font-normal text-slate-700">
+                               {pro.review_count && pro.review_count > 0 ? (
+                                 <span className="flex items-center gap-1">
+                                   {pro.rating} <span className="text-slate-400 font-medium font-sans">({pro.review_count})</span>
                                  </span>
-                               </div>
-                             </>
-                           )}
+                               ) : 'Recommended by the community. Reviews coming soon'}
+                             </span>
+                           </div>
                         </div>
                       </div>
                       {pro.top_qualities && pro.top_qualities.length > 0 && (
@@ -13857,9 +12497,7 @@ function ProfessionalDetailView({
   usersWhoBlockedMe?: string[]
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const isRecommended = Boolean(pro.is_recommended || pro.is_recommanded || pro.is_community_recommended);
-  const isGooglePro = !isRecommended;
-
+  
   // Swipe gesture support for testimonials carousel
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
@@ -14147,21 +12785,13 @@ function ProfessionalDetailView({
                   <Briefcase className="w-3.5 h-3.5" />
                   {pro.category}
                 </div>
-                {!isRecommended && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 rounded-xl font-bold border border-amber-200">
-                    <Globe className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Google Pro</span>
-                  </div>
-                )}
-                {isCommunityPro(pro) && (
-                  <div className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-xl font-medium border border-slate-100 transition-all",
-                    !currentUser && "filter blur-[4px] select-none pointer-events-none"
-                  )}>
-                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                    <span>{displayReviewCount > 0 ? `${displayRating} (${displayReviewCount})` : 'Recommended by the community. Reviews coming soon'}</span>
-                  </div>
-                )}
+                <div className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-xl font-medium border border-slate-100 transition-all",
+                  !currentUser && "filter blur-[4px] select-none pointer-events-none"
+                )}>
+                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>{displayReviewCount > 0 ? `${displayRating} (${displayReviewCount})` : 'Recommended by the community. Reviews coming soon'}</span>
+                </div>
               </div>
 
               {pro.top_qualities && pro.top_qualities.length > 0 && (
@@ -14283,7 +12913,7 @@ function ProfessionalDetailView({
                         {/* Mini Map */}
                         {pro.coordinates && (
                           <div className="w-full h-32 rounded-2xl overflow-hidden border border-slate-100 shadow-sm relative group/map">
-                            <GoogleMap
+                            <Map
                               defaultCenter={pro.coordinates}
                               defaultZoom={15}
                               gestureHandling={'none'}
@@ -14294,7 +12924,7 @@ function ProfessionalDetailView({
                               <AdvancedMarker position={pro.coordinates}>
                                 <Pin background="#E11D48" glyphColor="#fff" borderColor="#BE123D" />
                               </AdvancedMarker>
-                            </GoogleMap>
+                            </Map>
                             <div className="absolute inset-0 bg-transparent cursor-pointer" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pro.location!)}`, '_blank')} />
                           </div>
                         )}
@@ -14820,19 +13450,15 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                 <span className="text-[10px] font-bold bg-brand-blue/5 text-brand-blue px-2 py-1 rounded-full">{event.category}</span>
               </div>
               <div className="flex items-center gap-4 text-xs text-slate-500">
-                {(event.start_time || event.time) && (event.start_time || event.time).trim() !== "" && (
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {event.start_time || event.time}
-                    {event.end_time && ` - ${event.end_time}`}
-                  </div>
-                )}
-                {event.location && (
-                  <div className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    {event.location}
-                  </div>
-                )}
+                <div className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {event.start_time || event.time}
+                  {event.end_time && ` - ${event.end_time}`}
+                </div>
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {event.location}
+                </div>
               </div>
               <div className="flex justify-end pt-2">
                 <span className="text-brand-blue font-bold text-xs flex items-center gap-1 group-hover:gap-2 transition-all">
@@ -14954,13 +13580,11 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
                 {event.start_date || event.date}
                 {event.end_date && ` to ${event.end_date}`}
               </div>
-              {(event.start_time || event.time) && (event.start_time || event.time).trim() !== "" && (
-                <div className="flex items-center gap-1.5 font-medium">
-                  <Clock className="w-4 h-4 text-brand-blue" />
-                  {event.start_time || event.time}
-                  {event.end_time && ` - ${event.end_time}`}
-                </div>
-              )}
+              <div className="flex items-center gap-1.5 font-medium">
+                <Clock className="w-4 h-4 text-brand-blue" />
+                {event.start_time || event.time}
+                {event.end_time && ` - ${event.end_time}`}
+              </div>
               <div className="flex items-center gap-1.5 font-medium">
                 <MapPin className="w-4 h-4 text-brand-blue" />
                 {event.location}
@@ -14978,7 +13602,7 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
             <div className="space-y-4">
               <h3 className="font-bold text-slate-900">Location</h3>
               <div className="h-48 w-full rounded-2xl overflow-hidden border border-slate-100 shadow-inner group">
-                <GoogleMap
+                <Map
                   defaultCenter={event.coordinates}
                   defaultZoom={15}
                   gestureHandling="none"
@@ -14988,7 +13612,7 @@ function EventDetailModal({ event, onClose }: { event: Event, onClose: () => voi
                   <AdvancedMarker position={event.coordinates}>
                     <Pin background={'#0870B8'} glyphColor={'#FFFFFF'} borderColor={'#0870B8'} />
                   </AdvancedMarker>
-                </GoogleMap>
+                </Map>
               </div>
               <p className="text-[10px] text-slate-400 flex items-center gap-1">
                 <Info className="w-3 h-3" />
