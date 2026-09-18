@@ -1093,7 +1093,7 @@ Rules:
 ${isNewTopic ? `The user has switched to a NEW SEARCH TOPIC for: "${placesSearchQuery}". Completely reset search context, evaluate new matches and smoothly acknowledge the new search.` : `Continue the ongoing discussion and refine search results for "${placesSearchQuery}".`}
 
 2-TIER LOCAL RANKING PRIORITY FOR PROFESSIONALS (MANDATORY):
-1. TIER 1 (ABSOLUTE HIGHEST PRIORITY): Community Recommended Pros ('is_community_recommended: true') registered in the Unlocked app within the target zone / 25km. Scores 85-100. Community recommended professionals MUST ALWAYS be prioritized and returned ahead of any Google Places pros!
+1. TIER 1 (ABSOLUTE HIGHEST PRIORITY): Community Recommended Pros ('is_community_recommended: true') registered in the Unlocked app within the target zone / 25km. If a community pro matches the user's request, they MUST be returned with a score of 90-100 and prioritized above ALL other results! Community recommended professionals MUST ALWAYS be prioritized and returned ahead of any Google Places pros!
 2. TIER 2 (SECONDARY/FALLBACK): Google Places pros ('source: google_places' or 'is_community_recommended: false') within 25km: Include when relevant, sorted strictly by proximity. Strictly limit Google Places pros to max 6. Scores 60-80.
 
 GEOGRAPHIC PROXIMITY IS KING & SPOKEN LANGUAGES:
