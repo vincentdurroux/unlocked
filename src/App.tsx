@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Papa from 'papaparse';
+import { parseProfessionalCSV, rowToPro, detectColumnMappings } from './utils/csvParser';
 import { Logo } from './components/Logo';
 import { 
   Home, 
@@ -4016,7 +4017,41 @@ function AdminView({
   const [editingAnnId, setEditingAnnId] = useState<string | null>(null);
   const [pendingImportPros, setPendingImportPros] = useState<any[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [importingSingleIndex, setImportingSingleIndex] = useState<number | null>(null);
   const [editingImportIndex, setEditingImportIndex] = useState<number | null>(null);
+  const [csvRawColumns, setCsvRawColumns] = useState<string[]>([]);
+  const [csvRawRows, setCsvRawRows] = useState<Record<string, any>[]>([]);
+  const [csvColumnMapping, setCsvColumnMapping] = useState<Record<string, string>>({});
+  const [showColumnMapper, setShowColumnMapper] = useState(false);
+
+  const handleImportSinglePro = async (proToImport: any, indexToRemove: number) => {
+    setImportingSingleIndex(indexToRemove);
+    try {
+      await proService.createProfessional(proToImport);
+      setPendingImportPros(prev => prev.filter((_, i) => i !== indexToRemove));
+      setMsg({ 
+        type: 'success', 
+        text: `"${proToImport.name || proToImport.company_name || 'Professional'}" added to directory successfully!` 
+      });
+      if (onRefetchPros) await onRefetchPros();
+    } catch (err: any) {
+      console.error('Failed to import individual professional:', err);
+      setMsg({ type: 'error', text: 'Failed to add professional: ' + (err.message || 'Unknown error') });
+    } finally {
+      setImportingSingleIndex(null);
+    }
+  };
+
+  const handleUpdateColumnMapping = (field: string, newCol: string) => {
+    const updated = { ...csvColumnMapping, [field]: newCol };
+    setCsvColumnMapping(updated);
+    if (csvRawRows.length > 0) {
+      const remapped = csvRawRows
+        .map(row => rowToPro(row, updated, csvRawColumns))
+        .filter(pro => pro.name || pro.company_name || pro.phone || pro.email || pro.category);
+      setPendingImportPros(remapped);
+    }
+  };
 
   const fetchAdminAnnouncements = async () => {
     if (!isSupabaseConfigured) return;
@@ -5460,34 +5495,44 @@ function AdminView({
                activeTab === 'add_pro' ? 'Add New Professional' :
                activeTab === 'edit_pro' ? 'Edit Professional' :
                activeTab === 'refused' ? 'Refused Recommendations' :
-               activeTab === 'import_csv' && pendingImportPros.length > 0 ? 'Review CSV Import' :
+               activeTab === 'import_csv' ? (pendingImportPros.length > 0 ? 'Review CSV Import' : 'Import via CSV') :
                'Review Recommendations'}
             </h3>
           </div>
 
           <div className="space-y-4">
           {activeTab === 'import_csv' && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full max-w-full overflow-hidden">
               {pendingImportPros.length === 0 ? (
-                <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-xl space-y-8">
-                  <div className="flex flex-col items-center justify-center p-12 bg-indigo-50/30 rounded-[32px] border-2 border-dashed border-indigo-100 gap-6 text-center">
-                    <div className="w-20 h-20 rounded-full bg-white border-4 border-white shadow-xl flex items-center justify-center text-indigo-500">
-                      <FileText className="w-10 h-10" />
+                <div className="bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[36px] border border-slate-100 shadow-xl space-y-6 sm:space-y-8 w-full max-w-full overflow-hidden">
+                  <div className="flex flex-col items-center justify-center p-5 sm:p-10 md:p-12 bg-indigo-50/30 rounded-2xl sm:rounded-[32px] border-2 border-dashed border-indigo-100 gap-4 sm:gap-6 text-center w-full">
+                    <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl sm:rounded-full bg-white border-2 sm:border-4 border-white shadow-md sm:shadow-xl flex items-center justify-center text-indigo-500">
+                      <FileText className="w-7 h-7 sm:w-10 sm:h-10" />
                     </div>
-                    <div className="max-w-md">
-                      <h4 className="text-xl font-bold font-display text-slate-900 mb-2">Import Professionals via CSV</h4>
-                      <p className="text-slate-500 text-sm">
-                        Upload a CSV file containing professionals scraped from Google. 
-                        You will be able to review and edit them before saving.
+                    <div className="max-w-md space-y-1.5">
+                      <h4 className="text-lg sm:text-xl font-bold font-display text-slate-900">Import Professionals via CSV</h4>
+                      <p className="text-slate-500 text-xs sm:text-sm leading-relaxed">
+                        Drag & drop or select your CSV file (Google Maps export, Outscraper, Apify, Excel, etc.). 
+                        Delimiters and column headers are automatically detected.
                       </p>
                     </div>
                     
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 text-left w-full max-w-sm">
-                      <h5 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Expected Columns</h5>
-                      <div className="flex flex-wrap gap-2">
-                        {['name', 'company_name', 'category', 'phone', 'email', 'website', 'location', 'description'].map(col => (
-                          <span key={col} className="px-2 py-1 bg-slate-100 rounded-lg text-[10px] font-mono text-slate-600 border border-slate-200">
-                            {col}
+                    <div className="bg-white p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 text-left w-full max-w-lg space-y-2">
+                      <h5 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Automatically Detected Fields</h5>
+                      <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                        {[
+                          { label: 'Name / Contact', tip: 'name, fullname, nom...' },
+                          { label: 'Company Name', tip: 'title, company, business...' },
+                          { label: 'Category / Activity', tip: 'category, profession...' },
+                          { label: 'Phone', tip: 'phone, tel, mobile...' },
+                          { label: 'Email', tip: 'email, contact, mail...' },
+                          { label: 'Address / City', tip: 'location, address, formatted_address...' },
+                          { label: 'Website', tip: 'website, url, domain...' },
+                          { label: 'Rating / Score', tip: 'rating, score, total_score...' },
+                          { label: 'Description', tip: 'description, bio, summary...' }
+                        ].map(col => (
+                          <span key={col.label} title={col.tip} className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-slate-50 rounded-lg text-[11px] sm:text-xs font-medium text-slate-600 border border-slate-200">
+                            {col.label}
                           </span>
                         ))}
                       </div>
@@ -5495,193 +5540,349 @@ function AdminView({
 
                     <input 
                       type="file"
-                      accept=".csv"
+                      accept=".csv,text/csv,text/plain,application/vnd.ms-excel"
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
 
-                        Papa.parse(file, {
-                          header: true,
-                          skipEmptyLines: true,
-                          transformHeader: (header) => header.trim().toLowerCase().replace(/[\s_]/g, ''),
-                          complete: async (results) => {
-                            const data = results.data;
-                            if (!data || data.length === 0) {
-                              setMsg({ type: 'error', text: 'CSV file is empty or invalid.' });
-                              return;
-                            }
-
-                            try {
-                              const prosToImport = data.map((row: any) => {
-                                // Robust column mapping using transformed headers
-                                const name = row.name || row.fullname || row.nom || '';
-                                const company = row.companyname || row.company || row.nomentreprise || '';
-                                const category = row.category || row.profession || row.type || row.categorie || '';
-                                const phone = row.phone || row.telephone || row.tel || '';
-                                const email = row.email || row.mail || row.courriel || '';
-                                const website = row.website || row.site || row.siteweb || '';
-                                const location = row.location || row.address || row.adresse || '';
-                                const description = row.description || row.bio || row.resume || '';
-                                const rating = parseFloat(row.rating || row.note) || 0;
-
-                                return {
-                                  name: String(name).trim(),
-                                  company_name: String(company).trim(),
-                                  category: String(category).trim(),
-                                  phone: String(phone).trim(),
-                                  email: String(email).trim(),
-                                  website: String(website).trim(),
-                                  location: String(location).trim(),
-                                  description: String(description).trim(),
-                                  rating: rating,
-                                  is_recommended: false,
-                                  languages: row.languages ? String(row.languages).split(',').map((s: string) => s.trim()) : []
-                                };
-                              });
-                              setPendingImportPros(prosToImport);
-                              setMsg({ type: 'success', text: `Loaded ${prosToImport.length} professionals. Please review them below.` });
-                            } catch (err: any) {
-                              console.error('Failed to parse CSV:', err);
-                              setMsg({ type: 'error', text: 'Parse failed: ' + err.message });
-                            }
-                          },
-                          error: (error) => {
-                            console.error('Papa Parse error:', error);
-                            setMsg({ type: 'error', text: 'CSV parsing error: ' + error.message });
+                        setIsImporting(true);
+                        try {
+                          const result = await parseProfessionalCSV(file);
+                          if (!result.rawRows || result.rawRows.length === 0) {
+                            setMsg({ type: 'error', text: 'The CSV file is empty or unreadable.' });
+                            return;
                           }
-                        });
+
+                          setCsvRawColumns(result.rawColumns);
+                          setCsvRawRows(result.rawRows);
+                          setCsvColumnMapping(result.detectedMapping);
+                          setPendingImportPros(result.pros);
+
+                          if (result.pros.length === 0) {
+                            setMsg({ type: 'error', text: 'No professionals detected. Please check columns or adjust mappings.' });
+                          } else {
+                            setMsg({ 
+                              type: 'success', 
+                              text: `${result.pros.length} professionals detected (delimiter: "${result.delimiter}"). Review details below.` 
+                            });
+                          }
+                        } catch (err: any) {
+                          console.error('Failed to parse CSV:', err);
+                          setMsg({ type: 'error', text: 'Error reading CSV: ' + err.message });
+                        } finally {
+                          setIsImporting(false);
+                          if (e.target) e.target.value = '';
+                        }
                       }}
                       className="hidden"
                       id="csv-upload"
                     />
                     <label 
                       htmlFor="csv-upload"
-                      className="px-8 h-14 bg-indigo-600 text-white rounded-2xl font-bold uppercase tracking-widest shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                      className="w-full sm:w-auto px-6 sm:px-8 h-12 sm:h-14 bg-indigo-600 text-white rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm uppercase tracking-wider sm:tracking-widest shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                     >
-                      <Upload className="w-5 h-5" />
+                      {isImporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
                       Select CSV File
                     </label>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500">
-                        <Database className="w-6 h-6" />
+                <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
+                  {/* Top Bar */}
+                  <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4 w-full max-w-full overflow-hidden">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500 shrink-0">
+                        <Database className="w-5 h-5 sm:w-6 sm:h-6" />
                       </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900">{pendingImportPros.length} Professionals Pending</h4>
-                        <p className="text-xs text-slate-500 font-medium">Verify the data before importing to the directory.</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-slate-900 text-base sm:text-lg">
+                            {pendingImportPros.length} Professionals Ready
+                          </h4>
+                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] sm:text-xs font-bold rounded-full border border-emerald-200">
+                            CSV Loaded
+                          </span>
+                        </div>
+                        <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">
+                          Add one-by-one with "Add", or import all at once. Edit any details before saving.
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <button 
-                        onClick={() => setPendingImportPros([])}
-                        className="px-6 h-12 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all"
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto shrink-0">
+                      <button
+                        onClick={() => setShowColumnMapper(!showColumnMapper)}
+                        className={`h-10 sm:h-11 px-3.5 sm:px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 border ${
+                          showColumnMapper
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                        }`}
                       >
-                        Cancel
+                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                        <span>{showColumnMapper ? 'Hide Mapping' : 'Adjust Columns'}</span>
                       </button>
-                      <button 
-                        onClick={async () => {
-                          setIsImporting(true);
-                          try {
-                            await proService.bulkCreateProfessionals(pendingImportPros);
-                            setMsg({ type: 'success', text: `Successfully imported ${pendingImportPros.length} professionals!` });
+                      <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+                        <button 
+                          onClick={() => {
                             setPendingImportPros([]);
-                            if (onRefetchPros) await onRefetchPros();
-                            setActiveTab('completed');
-                          } catch (err: any) {
-                            setMsg({ type: 'error', text: 'Import failed: ' + err.message });
-                          } finally {
-                            setIsImporting(false);
-                          }
-                        }}
-                        disabled={isImporting}
-                        className="px-8 h-12 bg-indigo-600 text-white rounded-xl font-bold uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2"
-                      >
-                        {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                        Import All
-                      </button>
+                            setCsvRawColumns([]);
+                            setCsvRawRows([]);
+                            setCsvColumnMapping({});
+                            setShowColumnMapper(false);
+                          }}
+                          className="h-10 sm:h-11 px-3 sm:px-4 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all flex items-center justify-center border border-slate-200 sm:border-transparent"
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            setIsImporting(true);
+                            try {
+                              await proService.bulkCreateProfessionals(pendingImportPros);
+                              setMsg({ type: 'success', text: `Successfully imported ${pendingImportPros.length} professionals!` });
+                              setPendingImportPros([]);
+                              setCsvRawColumns([]);
+                              setCsvRawRows([]);
+                              setCsvColumnMapping({});
+                              if (onRefetchPros) await onRefetchPros();
+                              setActiveTab('completed');
+                            } catch (err: any) {
+                              setMsg({ type: 'error', text: 'Import failed: ' + err.message });
+                            } finally {
+                              setIsImporting(false);
+                            }
+                          }}
+                          disabled={isImporting || pendingImportPros.length === 0}
+                          className="h-10 sm:h-11 px-4 sm:px-6 bg-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
+                        >
+                          {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                          <span>Import All ({pendingImportPros.length})</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="grid gap-4">
-                    {pendingImportPros.map((pro, idx) => (
-                      <div key={idx} className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm flex items-center justify-between gap-6 group hover:border-indigo-200 transition-all">
-                        <div className="flex items-center gap-4 min-w-0">
-                          <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-indigo-50 group-hover:text-indigo-400 transition-colors">
-                            <User className="w-6 h-6" />
-                          </div>
-                          <div className="min-w-0">
-                            <h5 className="font-bold text-slate-900 truncate">{pro.name || 'No Name'}</h5>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                              <span className="text-indigo-500">{pro.category || 'No Category'}</span>
-                              <span>•</span>
-                              <span>{pro.location || 'No Location'}</span>
+                  {/* Column Mapper Panel */}
+                  {showColumnMapper && (
+                    <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[32px] border border-indigo-100 shadow-lg animate-in fade-in slide-in-from-top-2 duration-300 space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-4 pb-3 sm:pb-4 border-b border-slate-100">
+                        <div>
+                          <h5 className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
+                            <SlidersHorizontal className="w-4 h-4 text-indigo-600" />
+                            CSV Column Mapping
+                          </h5>
+                          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+                            Match each field with the corresponding column from your CSV file. Data updates immediately.
+                          </p>
+                        </div>
+                        <span className="text-[10px] sm:text-xs font-medium text-slate-400 shrink-0">
+                          {csvRawColumns.length} columns found in CSV
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
+                        {[
+                          { field: 'name', label: 'Full Name / Contact' },
+                          { field: 'company_name', label: 'Company / Business Name' },
+                          { field: 'category', label: 'Category / Profession' },
+                          { field: 'phone', label: 'Phone' },
+                          { field: 'email', label: 'Email' },
+                          { field: 'location', label: 'Address / City' },
+                          { field: 'website', label: 'Website' },
+                          { field: 'description', label: 'Description / Bio' },
+                          { field: 'rating', label: 'Rating / Score' },
+                          { field: 'languages', label: 'Languages' }
+                        ].map(({ field, label }) => {
+                          const currentVal = csvColumnMapping[field] || '';
+                          return (
+                            <div key={field} className="bg-slate-50/70 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-100 space-y-1 sm:space-y-1.5 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <label className="text-[10px] sm:text-[11px] font-bold text-slate-700 tracking-wide truncate">{label}</label>
+                                {currentVal && (
+                                  <span className="text-[9px] sm:text-[10px] text-emerald-600 font-semibold flex items-center gap-1 shrink-0">
+                                    <CheckCircle2 className="w-3 h-3" /> Mapped
+                                  </span>
+                                )}
+                              </div>
+                              <select
+                                value={currentVal}
+                                onChange={(e) => handleUpdateColumnMapping(field, e.target.value)}
+                                className="w-full h-9 sm:h-10 bg-white border border-slate-200 rounded-lg sm:rounded-xl px-2.5 sm:px-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 truncate"
+                              >
+                                <option value="">-- Ignore / Unmapped --</option>
+                                {csvRawColumns.map((col) => (
+                                  <option key={col} value={col}>
+                                    {col}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cards List */}
+                  <div className="grid gap-3 sm:gap-4 w-full max-w-full">
+                    {pendingImportPros.map((pro, idx) => (
+                      <div 
+                        key={idx} 
+                        className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-[28px] border border-slate-100 shadow-sm hover:border-indigo-200 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 w-full max-w-full overflow-hidden"
+                      >
+                        <div className="flex items-start gap-3 sm:gap-4 min-w-0 w-full overflow-hidden">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-50/70 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 mt-0.5">
+                            {pro.company_name ? <Building2 className="w-5 h-5 sm:w-6 sm:h-6" /> : <User className="w-5 h-5 sm:w-6 sm:h-6" />}
+                          </div>
+                          <div className="min-w-0 space-y-1.5 flex-1 w-full overflow-hidden">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                <h5 className="font-bold text-slate-900 text-sm sm:text-base leading-snug break-words">
+                                  {pro.name || pro.company_name || 'Unnamed Professional'}
+                                </h5>
+                                {pro.company_name && pro.name && pro.company_name !== pro.name && (
+                                  <span className="text-[11px] sm:text-xs text-slate-500 font-medium break-words">
+                                    ({pro.company_name})
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                                {pro.category && (
+                                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] sm:text-[11px] font-bold rounded-lg border border-indigo-100 whitespace-nowrap">
+                                    {pro.category}
+                                  </span>
+                                )}
+                                {pro.rating > 0 && (
+                                  <span className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-lg border border-amber-200 whitespace-nowrap">
+                                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                    {pro.rating}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] sm:text-xs text-slate-500 pt-0.5 w-full">
+                              {pro.location && (
+                                <div className="flex items-center gap-1.5 min-w-0 text-slate-600">
+                                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">{pro.location}</span>
+                                </div>
+                              )}
+                              {pro.phone && (
+                                <div className="flex items-center gap-1.5 min-w-0 text-slate-600">
+                                  <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">{pro.phone}</span>
+                                </div>
+                              )}
+                              {pro.email && (
+                                <div className="flex items-center gap-1.5 min-w-0 text-slate-600">
+                                  <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">{pro.email}</span>
+                                </div>
+                              )}
+                              {pro.website && (
+                                <div className="flex items-center gap-1.5 min-w-0 text-slate-600">
+                                  <Globe className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <a 
+                                    href={pro.website.startsWith('http') ? pro.website : `https://${pro.website}`} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="text-indigo-600 hover:underline truncate"
+                                  >
+                                    {pro.website.replace(/^https?:\/\//, '')}
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+
+                            {pro.description && (
+                              <p className="text-[11px] sm:text-xs text-slate-500 line-clamp-2 italic break-words pt-0.5">
+                                {pro.description}
+                              </p>
+                            )}
                           </div>
                         </div>
                         
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2.5 border-t border-slate-100 w-full md:flex md:w-auto md:border-t-0 md:pt-0 shrink-0">
                           <button 
-                            onClick={() => {
-                              setEditingImportIndex(idx);
-                              setNewPro({
-                                ...pro,
-                                categories: pro.category ? pro.category.split(',').map((s: any) => s.trim()) : [],
-                                bio: pro.description || pro.bio || '',
-                                languages: pro.languages || [],
-                                rating: pro.rating || 0,
-                                lat: pro.lat || 0,
-                                lng: pro.lng || 0
-                              });
-                            }}
-                            className="p-3 rounded-xl bg-slate-50 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all"
+                            onClick={() => handleImportSinglePro(pro, idx)}
+                            disabled={importingSingleIndex !== null || isImporting}
+                            className="h-9 sm:h-10 px-3.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider shadow-md shadow-emerald-500/10 active:scale-95 disabled:opacity-50"
+                            title="Add this professional to the directory"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            {importingSingleIndex === idx ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5" />
+                            )}
+                            <span>Add</span>
                           </button>
-                          <button 
-                            onClick={() => {
-                              setPendingImportPros(prev => prev.filter((_, i) => i !== idx));
-                            }}
-                            className="p-3 rounded-xl bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+                            <button 
+                              onClick={() => {
+                                setEditingImportIndex(idx);
+                                setNewPro({
+                                  ...pro,
+                                  categories: pro.category ? pro.category.split(',').map((s: any) => s.trim()) : [],
+                                  bio: pro.description || pro.bio || '',
+                                  languages: pro.languages || [],
+                                  rating: pro.rating || 0,
+                                  lat: pro.lat || 0,
+                                  lng: pro.lng || 0
+                                });
+                              }}
+                              className="h-9 sm:h-10 px-3 rounded-xl bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-all flex items-center justify-center gap-1.5 text-xs font-semibold active:scale-95 border border-slate-200/60"
+                              title="Edit"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 text-indigo-500" />
+                              <span>Edit</span>
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setPendingImportPros(prev => prev.filter((_, i) => i !== idx));
+                              }}
+                              className="h-9 sm:h-10 px-3 rounded-xl bg-slate-50 text-slate-700 hover:bg-rose-50 hover:text-rose-600 transition-all flex items-center justify-center gap-1.5 text-xs font-semibold active:scale-95 border border-slate-200/60"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
 
+                  {/* Edit Modal */}
                   {editingImportIndex !== null && (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
-                      <div className="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[40px] p-8 shadow-2xl space-y-8 animate-in zoom-in-95 duration-300 no-scrollbar">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-xl font-bold text-slate-900">Edit Pending Professional</h4>
-                          <button onClick={() => setEditingImportIndex(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                            <X className="w-6 h-6 text-slate-400" />
+                    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+                      <div className="bg-white w-full sm:max-w-3xl max-h-[88vh] sm:max-h-[90vh] overflow-y-auto rounded-t-[28px] sm:rounded-[40px] p-5 sm:p-8 shadow-2xl space-y-5 sm:space-y-6 animate-in slide-in-from-bottom sm:zoom-in-95 duration-300 no-scrollbar">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                          <h4 className="text-base sm:text-xl font-bold text-slate-900">Edit Professional</h4>
+                          <button onClick={() => setEditingImportIndex(null)} className="p-1.5 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+                            <X className="w-5 h-5" />
                           </button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Name</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-5">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Full Name / Contact</label>
                             <input 
                               value={newPro.name}
                               onChange={e => setNewPro({...newPro, name: e.target.value})}
-                              className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900"
+                              className="w-full h-11 sm:h-12 bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 text-xs sm:text-sm font-medium text-slate-900"
+                              placeholder="e.g. Dr. John Doe"
                             />
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Company</label>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Company / Business Name</label>
                             <input 
                               value={newPro.company_name}
                               onChange={e => setNewPro({...newPro, company_name: e.target.value})}
-                              className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900"
+                              className="w-full h-11 sm:h-12 bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 text-xs sm:text-sm font-medium text-slate-900"
+                              placeholder="e.g. Wellness Clinic"
                             />
                           </div>
-                          <div className="space-y-1.5">
+                          <div className="space-y-1">
                             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Category</label>
                             <CategorySelector 
                               categories={newPro.categories || []}
@@ -5692,29 +5893,70 @@ function AdminView({
                               tagBgClass="bg-indigo-600/10 text-indigo-800"
                             />
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Location</label>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Location / Address</label>
                             <AddressAutocomplete 
                               value={newPro.location}
                               onChange={val => setNewPro({...newPro, location: val})}
                               onSelect={(loc, lat, lng) => setNewPro({...newPro, location: loc, lat, lng})}
                             />
                           </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Phone</label>
+                            <input 
+                              value={newPro.phone || ''}
+                              onChange={e => setNewPro({...newPro, phone: e.target.value})}
+                              className="w-full h-11 sm:h-12 bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 text-xs sm:text-sm font-medium text-slate-900"
+                              placeholder="+34 600 000 000"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Email</label>
+                            <input 
+                              value={newPro.email || ''}
+                              onChange={e => setNewPro({...newPro, email: e.target.value})}
+                              className="w-full h-11 sm:h-12 bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 text-xs sm:text-sm font-medium text-slate-900"
+                              placeholder="contact@example.com"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Website</label>
+                            <input 
+                              value={newPro.website || ''}
+                              onChange={e => setNewPro({...newPro, website: e.target.value})}
+                              className="w-full h-11 sm:h-12 bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 text-xs sm:text-sm font-medium text-slate-900"
+                              placeholder="https://example.com"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Rating (out of 5)</label>
+                            <input 
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="5"
+                              value={newPro.rating ?? ''}
+                              onChange={e => setNewPro({...newPro, rating: parseFloat(e.target.value) || 0})}
+                              className="w-full h-11 sm:h-12 bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 text-xs sm:text-sm font-medium text-slate-900"
+                              placeholder="4.8"
+                            />
+                          </div>
                         </div>
 
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Bio / Description</label>
                           <textarea 
                             value={newPro.bio}
                             onChange={e => setNewPro({...newPro, bio: e.target.value, description: e.target.value})}
-                            className="w-full h-32 bg-slate-50 border border-slate-100 rounded-2xl p-4 font-medium text-slate-900 resize-none"
+                            className="w-full h-24 sm:h-32 bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 text-xs sm:text-sm font-medium text-slate-900 resize-none"
+                            placeholder="Description or summary of services..."
                           />
                         </div>
 
-                        <div className="flex justify-end gap-3 pt-4">
+                        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-2 sm:pt-4 border-t border-slate-100">
                           <button 
                             onClick={() => setEditingImportIndex(null)}
-                            className="px-8 h-14 rounded-2xl font-bold uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all"
+                            className="w-full sm:w-auto px-5 h-11 sm:h-12 rounded-xl sm:rounded-2xl font-bold text-xs uppercase tracking-wider text-slate-500 hover:bg-slate-50 transition-all flex items-center justify-center border border-slate-200 sm:border-transparent"
                           >
                             Cancel
                           </button>
@@ -5726,9 +5968,22 @@ function AdminView({
                               setEditingImportIndex(null);
                               setMsg({ type: 'success', text: 'Professional updated in pending list.' });
                             }}
-                            className="px-10 h-14 bg-indigo-600 text-white rounded-2xl font-bold uppercase tracking-widest shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-95"
+                            className="w-full sm:w-auto px-6 h-11 sm:h-12 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl sm:rounded-2xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center"
                           >
-                            Save Changes
+                            Save for Later
+                          </button>
+                          <button 
+                            onClick={async () => {
+                              const proToSave = { ...newPro };
+                              const idxToRemove = editingImportIndex;
+                              setEditingImportIndex(null);
+                              await handleImportSinglePro(proToSave, idxToRemove);
+                            }}
+                            disabled={importingSingleIndex !== null}
+                            className="w-full sm:w-auto px-6 h-11 sm:h-12 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>Save & Add to Directory</span>
                           </button>
                         </div>
                       </div>
@@ -10622,7 +10877,7 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
                 }}
               >
                 <Pin 
-                  background={'#0038FF'} 
+                  background={pro.is_recommended !== false ? '#0038FF' : '#94a3b8'} 
                   borderColor={'#fff'} 
                   glyphColor={'#fff'}
                   glyph={(index + 1).toString()}
@@ -11233,6 +11488,10 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         return matchesCategory && matchesLanguage && matchesSearch && matchesDistance && matchesRating;
       })
       .sort((a, b) => {
+        const recA = a.is_recommended !== false;
+        const recB = b.is_recommended !== false;
+        if (recA !== recB) return recA ? -1 : 1;
+
         if (aiResults) {
           const scoreA = aiResults[String(a.id)]?.score || 0;
           const scoreB = aiResults[String(b.id)]?.score || 0;
@@ -11658,10 +11917,20 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   onClick={() => setSelectedPro(pro)}
-                  className="group relative bg-white rounded-[32px] p-6 flex flex-col lg:flex-row gap-6 border-2 border-emerald-500/80 transition-all shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 hover:border-emerald-500 cursor-pointer overflow-hidden"
+                  className={cn(
+                    "group relative bg-white rounded-[32px] p-6 flex flex-col lg:flex-row gap-6 border-2 transition-all shadow-sm cursor-pointer overflow-hidden",
+                    pro.is_recommended !== false 
+                      ? "border-emerald-500/80 hover:border-emerald-500 hover:shadow-emerald-500/10"
+                      : "border-slate-100 hover:border-slate-200"
+                  )}
                 >
                   {/* Number Badge to match map pins */}
-                  <div className="absolute top-6 right-6 w-8 h-8 bg-brand-blue text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-lg shadow-brand-blue/20 z-10 transition-transform group-hover:scale-110">
+                  <div className={cn(
+                    "absolute top-6 right-6 w-8 h-8 text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-lg z-10 transition-transform group-hover:scale-110",
+                    pro.is_recommended !== false 
+                      ? "bg-brand-blue shadow-brand-blue/20"
+                      : "bg-slate-400 shadow-slate-400/20"
+                  )}>
                     {index + 1}
                   </div>
 
@@ -11709,12 +11978,14 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                              </>
                            )}
                         </div>
-                        <div className="pt-1">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-bold border border-emerald-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                            <span>Recommended by MyCityUnlocked community</span>
-                          </span>
-                        </div>
+                        {pro.is_recommended !== false && (
+                          <div className="pt-1">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-bold border border-emerald-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                              <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                              <span>Recommended by MyCityUnlocked community</span>
+                            </span>
+                          </div>
+                        )}
                       </div>
                       {pro.top_qualities && pro.top_qualities.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 pt-4 pb-2">
@@ -13125,7 +13396,10 @@ function ProfessionalDetailView({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.92 }}
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="bg-white w-full rounded-[40px] overflow-hidden shadow-2xl relative"
+          className={cn(
+            "bg-white w-full rounded-[40px] overflow-hidden shadow-2xl relative",
+            pro.is_recommended !== false && "border-2 border-emerald-500"
+          )}
           onClick={e => e.stopPropagation()}
         >
         {/* Header Image/Cover Area */}
