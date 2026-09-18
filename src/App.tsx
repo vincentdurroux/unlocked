@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import Papa from 'papaparse';
 import { Logo } from './components/Logo';
 import { 
   Home, 
@@ -683,6 +684,7 @@ interface Professional {
   location?: string;
   coordinates?: { lat: number; lng: number };
   is_highlighted?: boolean;
+  is_recommended?: boolean;
   top_qualities?: string[];
   has_filled_form?: boolean;
   categories?: string[];
@@ -982,6 +984,7 @@ export default function App() {
     }
   });
   const [initialSearch, setInitialSearch] = useState<string | null>(null);
+  const [isPendingAiSearch, setIsPendingAiSearch] = useState(false);
   const [searchParams, setSearchParams] = useState<{ query: string; location: string; category: string; filters?: any }>({ query: '', location: '', category: 'All' });
   const [unreadConversations, setUnreadConversations] = useState<string[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -1568,7 +1571,7 @@ export default function App() {
           const locationContext = `${city}, ${region || ''}, ${country || ''}`;
           
           const response = await ai.models.generateContent({
-            model: "gemini-3.5-flash",
+            model: "gemini-3.1-flash-lite",
             contents: `Target: Identify the nearest major metropolitan city for "${locationContext}". 
             Rules: 
             1. Return ONLY the name of the major city.
@@ -1931,7 +1934,10 @@ export default function App() {
     if (params?.eventId) setInitialEventId(params.eventId);
     if (params?.proId) setInitialProId(params.proId);
     if (params?.guideId) setInitialGuideId(params.guideId);
-    if (params?.searchQuery) setInitialSearch(params.searchQuery);
+    if (params?.searchQuery) {
+      setInitialSearch(params.searchQuery);
+      setIsPendingAiSearch(true);
+    }
     if (params?.chat) setInitialChat(params.chat);
     navigateTo(finalView);
   };
@@ -2431,9 +2437,12 @@ export default function App() {
                     onNavigate={handleNavigate} 
                     initialProId={initialProId}
                     initialSearch={initialSearch}
+                    isPendingSearch={isPendingAiSearch}
+                    setIsPendingSearch={setIsPendingAiSearch}
                     onModalClose={() => {
                       setInitialProId(null);
                       setInitialSearch(null);
+                      setIsPendingAiSearch(false);
                     }}
                     scrollToTop={scrollToTop}
                     onProUpdate={refetchPros}
@@ -3943,12 +3952,13 @@ function AdminView({
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dashboardCategory, setDashboardCategory] = useState<'pros' | 'events' | 'testimonies' | 'reported_users' | 'highlights' | 'guides' | 'announcements'>('pros');
-  const [activeTab, setActiveTab ] = useState<'recommendations' | 'add_pro' | 'edit_pro' | 'add_event' | 'edit_event' | 'all_events' | 'completed' | 'refused'>('recommendations');
+  const [activeTab, setActiveTab ] = useState<'recommendations' | 'add_pro' | 'edit_pro' | 'add_event' | 'edit_event' | 'all_events' | 'completed' | 'refused' | 'import_csv'>('recommendations');
   const [activeRecId, setActiveRecId] = useState<string | null>(null);
   const [editingProId, setEditingProId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [completedPros, setCompletedPros] = useState<Professional[]>([]);
+  const [activeProFilter, setActiveProFilter] = useState<'recommended' | 'google'>('recommended');
   const [activeProSort, setActiveProSort] = useState<'alphabet' | 'created_at'>('created_at');
   const [allTestimonies, setAllTestimonies] = useState<any[]>([]);
   const [testimoniesFilter, setTestimoniesFilter] = useState<'pending' | 'processed'>('pending');
@@ -4011,6 +4021,9 @@ function AdminView({
   const [savingAnn, setSavingAnn] = useState(false);
   const [deletingAnnId, setDeletingAnnId] = useState<string | null>(null);
   const [editingAnnId, setEditingAnnId] = useState<string | null>(null);
+  const [pendingImportPros, setPendingImportPros] = useState<any[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+  const [editingImportIndex, setEditingImportIndex] = useState<number | null>(null);
 
   const fetchAdminAnnouncements = async () => {
     if (!isSupabaseConfigured) return;
@@ -4692,7 +4705,8 @@ function AdminView({
       image: rec.pro_image_url || '',
       languages: rec.pro_languages || [],
       top_qualities: rec.top_qualities || [],
-      has_filled_form: false
+      has_filled_form: false,
+      is_recommended: true
     });
     if (rec.pro_image_url) {
       setPreviewUrl(rec.pro_image_url);
@@ -4735,7 +4749,8 @@ function AdminView({
       lat: Number(latValue),
       lng: Number(lngValue),
       top_qualities: pro.top_qualities || [],
-      has_filled_form: pro.has_filled_form || false
+      has_filled_form: pro.has_filled_form || false,
+      is_recommended: pro.is_recommended ?? true
     });
     setPreviewUrl(imageValue || null);
     setActiveTab('edit_pro');
@@ -5257,7 +5272,8 @@ function AdminView({
                     facebook: '',
                     location: '',
                     lat: 0,
-                    lng: 0
+                    lng: 0,
+                    is_recommended: true
                   });
                   setPreviewUrl(null);
                 }}
@@ -5290,6 +5306,19 @@ function AdminView({
                 )}
               >
                 Refused
+              </button>
+              <button 
+                onClick={() => {
+                  setActiveTab('import_csv');
+                  setActiveRecId(null);
+                  setEditingProId(null);
+                }}
+                className={cn(
+                  "flex-1 lg:flex-none px-3 lg:px-5 py-2 rounded-xl text-[10px] lg:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap",
+                  activeTab === 'import_csv' ? "bg-white text-indigo-600 shadow-sm border border-indigo-100" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                Import CSV
               </button>
             </div>
           </div>
@@ -5438,11 +5467,285 @@ function AdminView({
                activeTab === 'add_pro' ? 'Add New Professional' :
                activeTab === 'edit_pro' ? 'Edit Professional' :
                activeTab === 'refused' ? 'Refused Recommendations' :
+               activeTab === 'import_csv' && pendingImportPros.length > 0 ? 'Review CSV Import' :
                'Review Recommendations'}
             </h3>
           </div>
 
           <div className="space-y-4">
+          {activeTab === 'import_csv' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {pendingImportPros.length === 0 ? (
+                <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-xl space-y-8">
+                  <div className="flex flex-col items-center justify-center p-12 bg-indigo-50/30 rounded-[32px] border-2 border-dashed border-indigo-100 gap-6 text-center">
+                    <div className="w-20 h-20 rounded-full bg-white border-4 border-white shadow-xl flex items-center justify-center text-indigo-500">
+                      <FileText className="w-10 h-10" />
+                    </div>
+                    <div className="max-w-md">
+                      <h4 className="text-xl font-bold font-display text-slate-900 mb-2">Import Professionals via CSV</h4>
+                      <p className="text-slate-500 text-sm">
+                        Upload a CSV file containing professionals scraped from Google. 
+                        You will be able to review and edit them before saving.
+                      </p>
+                    </div>
+                    
+                    <div className="bg-white p-4 rounded-2xl border border-slate-100 text-left w-full max-w-sm">
+                      <h5 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Expected Columns</h5>
+                      <div className="flex flex-wrap gap-2">
+                        {['name', 'company_name', 'category', 'phone', 'email', 'website', 'location', 'description'].map(col => (
+                          <span key={col} className="px-2 py-1 bg-slate-100 rounded-lg text-[10px] font-mono text-slate-600 border border-slate-200">
+                            {col}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <input 
+                      type="file"
+                      accept=".csv"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+
+                        Papa.parse(file, {
+                          header: true,
+                          skipEmptyLines: true,
+                          transformHeader: (header) => header.trim().toLowerCase().replace(/[\s_]/g, ''),
+                          complete: async (results) => {
+                            const data = results.data;
+                            if (!data || data.length === 0) {
+                              setMsg({ type: 'error', text: 'CSV file is empty or invalid.' });
+                              return;
+                            }
+
+                            try {
+                              const prosToImport = data.map((row: any) => {
+                                // Robust column mapping using transformed headers
+                                const name = row.name || row.fullname || row.nom || '';
+                                const company = row.companyname || row.company || row.nomentreprise || '';
+                                const category = row.category || row.profession || row.type || row.categorie || '';
+                                const phone = row.phone || row.telephone || row.tel || '';
+                                const email = row.email || row.mail || row.courriel || '';
+                                const website = row.website || row.site || row.siteweb || '';
+                                const location = row.location || row.address || row.adresse || '';
+                                const description = row.description || row.bio || row.resume || '';
+                                const rating = parseFloat(row.rating || row.note) || 0;
+
+                                return {
+                                  name: String(name).trim(),
+                                  company_name: String(company).trim(),
+                                  category: String(category).trim(),
+                                  phone: String(phone).trim(),
+                                  email: String(email).trim(),
+                                  website: String(website).trim(),
+                                  location: String(location).trim(),
+                                  description: String(description).trim(),
+                                  rating: rating,
+                                  is_recommended: false,
+                                  languages: row.languages ? String(row.languages).split(',').map((s: string) => s.trim()) : []
+                                };
+                              });
+                              setPendingImportPros(prosToImport);
+                              setMsg({ type: 'success', text: `Loaded ${prosToImport.length} professionals. Please review them below.` });
+                            } catch (err: any) {
+                              console.error('Failed to parse CSV:', err);
+                              setMsg({ type: 'error', text: 'Parse failed: ' + err.message });
+                            }
+                          },
+                          error: (error) => {
+                            console.error('Papa Parse error:', error);
+                            setMsg({ type: 'error', text: 'CSV parsing error: ' + error.message });
+                          }
+                        });
+                      }}
+                      className="hidden"
+                      id="csv-upload"
+                    />
+                    <label 
+                      htmlFor="csv-upload"
+                      className="px-8 h-14 bg-indigo-600 text-white rounded-2xl font-bold uppercase tracking-widest shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    >
+                      <Upload className="w-5 h-5" />
+                      Select CSV File
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500">
+                        <Database className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-900">{pendingImportPros.length} Professionals Pending</h4>
+                        <p className="text-xs text-slate-500 font-medium">Verify the data before importing to the directory.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => setPendingImportPros([])}
+                        className="px-6 h-12 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          setIsImporting(true);
+                          try {
+                            await proService.bulkCreateProfessionals(pendingImportPros);
+                            setMsg({ type: 'success', text: `Successfully imported ${pendingImportPros.length} professionals!` });
+                            setPendingImportPros([]);
+                            if (onRefetchPros) await onRefetchPros();
+                            setActiveTab('completed');
+                          } catch (err: any) {
+                            setMsg({ type: 'error', text: 'Import failed: ' + err.message });
+                          } finally {
+                            setIsImporting(false);
+                          }
+                        }}
+                        disabled={isImporting}
+                        className="px-8 h-12 bg-indigo-600 text-white rounded-xl font-bold uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        Import All
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4">
+                    {pendingImportPros.map((pro, idx) => (
+                      <div key={idx} className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm flex items-center justify-between gap-6 group hover:border-indigo-200 transition-all">
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-indigo-50 group-hover:text-indigo-400 transition-colors">
+                            <User className="w-6 h-6" />
+                          </div>
+                          <div className="min-w-0">
+                            <h5 className="font-bold text-slate-900 truncate">{pro.name || 'No Name'}</h5>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                              <span className="text-indigo-500">{pro.category || 'No Category'}</span>
+                              <span>•</span>
+                              <span>{pro.location || 'No Location'}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => {
+                              setEditingImportIndex(idx);
+                              setNewPro({
+                                ...pro,
+                                categories: pro.category ? pro.category.split(',').map((s: any) => s.trim()) : [],
+                                bio: pro.description || pro.bio || '',
+                                languages: pro.languages || [],
+                                rating: pro.rating || 0,
+                                lat: pro.lat || 0,
+                                lng: pro.lng || 0
+                              });
+                            }}
+                            className="p-3 rounded-xl bg-slate-50 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setPendingImportPros(prev => prev.filter((_, i) => i !== idx));
+                            }}
+                            className="p-3 rounded-xl bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {editingImportIndex !== null && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+                      <div className="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[40px] p-8 shadow-2xl space-y-8 animate-in zoom-in-95 duration-300 no-scrollbar">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xl font-bold text-slate-900">Edit Pending Professional</h4>
+                          <button onClick={() => setEditingImportIndex(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                            <X className="w-6 h-6 text-slate-400" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Name</label>
+                            <input 
+                              value={newPro.name}
+                              onChange={e => setNewPro({...newPro, name: e.target.value})}
+                              className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Company</label>
+                            <input 
+                              value={newPro.company_name}
+                              onChange={e => setNewPro({...newPro, company_name: e.target.value})}
+                              className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Category</label>
+                            <CategorySelector 
+                              categories={newPro.categories || []}
+                              onChange={cats => setNewPro({ ...newPro, categories: cats, category: cats.join(', ') })}
+                              primaryColorClass="indigo-600"
+                              ringColorClass="focus-within:ring-indigo-500/20"
+                              borderColorClass="border-indigo-600"
+                              tagBgClass="bg-indigo-600/10 text-indigo-800"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Location</label>
+                            <AddressAutocomplete 
+                              value={newPro.location}
+                              onChange={val => setNewPro({...newPro, location: val})}
+                              onSelect={(loc, lat, lng) => setNewPro({...newPro, location: loc, lat, lng})}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Bio / Description</label>
+                          <textarea 
+                            value={newPro.bio}
+                            onChange={e => setNewPro({...newPro, bio: e.target.value, description: e.target.value})}
+                            className="w-full h-32 bg-slate-50 border border-slate-100 rounded-2xl p-4 font-medium text-slate-900 resize-none"
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4">
+                          <button 
+                            onClick={() => setEditingImportIndex(null)}
+                            className="px-8 h-14 rounded-2xl font-bold uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all"
+                          >
+                            Cancel
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const updated = [...pendingImportPros];
+                              updated[editingImportIndex] = { ...newPro };
+                              setPendingImportPros(updated);
+                              setEditingImportIndex(null);
+                              setMsg({ type: 'success', text: 'Professional updated in pending list.' });
+                            }}
+                            className="px-10 h-14 bg-indigo-600 text-white rounded-2xl font-bold uppercase tracking-widest shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-95"
+                          >
+                            Save Changes
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'recommendations' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {loading ? (
@@ -5664,6 +5967,21 @@ function AdminView({
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                  </div>
+                  <div className="md:col-span-2 p-5 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 flex items-center justify-between gap-4 font-display text-sm">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wide">Recommended Professional</label>
+                      <p className="text-[11px] text-slate-500 font-medium">If enabled, this pro will be prioritized in search results and marked as vetted.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={newPro.is_recommended ?? true} 
+                        onChange={e => setNewPro({...newPro, is_recommended: e.target.checked})}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                     </label>
                   </div>
                 </div>
@@ -5941,6 +6259,21 @@ function AdminView({
                       <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
                     </label>
                   </div>
+                  <div className="md:col-span-2 p-5 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 flex items-center justify-between gap-4 font-display text-sm">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wide">Recommended Professional</label>
+                      <p className="text-[11px] text-slate-500 font-medium">If enabled, this pro will be prioritized in search results and marked as vetted.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={newPro.is_recommended ?? true} 
+                        onChange={e => setNewPro({...newPro, is_recommended: e.target.checked})}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -6037,7 +6370,12 @@ function AdminView({
           )}
 
           {activeTab === 'completed' && (() => {
-            const sortedCompletedPros = [...completedPros].sort((a, b) => {
+            const filteredCompletedPros = completedPros.filter(pro => {
+              if (activeProFilter === 'recommended') return pro.is_recommended !== false;
+              return pro.is_recommended === false;
+            });
+
+            const sortedCompletedPros = [...filteredCompletedPros].sort((a, b) => {
               if (activeProSort === 'alphabet') {
                 return (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
               } else {
@@ -6047,12 +6385,55 @@ function AdminView({
               }
             });
 
+            const recommendedCount = completedPros.filter(p => p.is_recommended !== false).length;
+            const googleCount = completedPros.filter(p => p.is_recommended === false).length;
+
             return (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 -mt-3">
+                {/* Sub-tabs for Active Professionals */}
+                <div className="flex p-1.5 bg-slate-100/80 backdrop-blur-sm rounded-[24px] border border-slate-200/50 w-fit">
+                  <button
+                    onClick={() => setActiveProFilter('recommended')}
+                    className={cn(
+                      "px-6 py-2.5 rounded-[18px] text-[11px] font-bold uppercase tracking-widest transition-all flex items-center gap-2",
+                      activeProFilter === 'recommended' 
+                        ? "bg-white text-indigo-600 shadow-sm border border-slate-200/50" 
+                        : "text-slate-400 hover:text-slate-600"
+                    )}
+                  >
+                    <Star className={cn("w-3.5 h-3.5", activeProFilter === 'recommended' ? "fill-indigo-600" : "fill-none")} />
+                    Recommended
+                    <span className={cn(
+                      "ml-1 px-1.5 py-0.5 rounded-full text-[9px]",
+                      activeProFilter === 'recommended' ? "bg-indigo-50 text-indigo-600" : "bg-slate-200 text-slate-500"
+                    )}>
+                      {recommendedCount}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setActiveProFilter('google')}
+                    className={cn(
+                      "px-6 py-2.5 rounded-[18px] text-[11px] font-bold uppercase tracking-widest transition-all flex items-center gap-2",
+                      activeProFilter === 'google' 
+                        ? "bg-white text-brand-blue shadow-sm border border-slate-200/50" 
+                        : "text-slate-400 hover:text-slate-600"
+                    )}
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    Google Pros
+                    <span className={cn(
+                      "ml-1 px-1.5 py-0.5 rounded-full text-[9px]",
+                      activeProFilter === 'google' ? "bg-brand-blue/10 text-brand-blue" : "bg-slate-200 text-slate-500"
+                    )}>
+                      {googleCount}
+                    </span>
+                  </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] bg-brand-blue/10 text-brand-blue px-2.5 py-1 rounded-full font-bold uppercase tracking-widest">
-                      {completedPros.length} Active
+                      {sortedCompletedPros.length} {activeProFilter === 'recommended' ? 'Vetted' : 'Imported'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -9004,6 +9385,8 @@ function HomeView({
   const feedRef = useRef<HTMLDivElement>(null);
   const [localSearch, setLocalSearch] = useState('');
   const [homeSearchError, setHomeSearchError] = useState('');
+  const [janeSearch, setJaneSearch] = useState('');
+  const janeInputRef = useRef<HTMLTextAreaElement>(null);
 
   const [sec1Idx, setSec1Idx] = useState(0);
   const [sec2Idx, setSec2Idx] = useState(0);
@@ -9080,34 +9463,80 @@ function HomeView({
           </div>
         </div>
 
-        {/* Hero Search Card */}
-        <div 
-          onClick={() => onNavigate('explore')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onNavigate('explore');
-            }
-          }}
-          className="relative z-10 -mt-3 md:mt-0 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#f8fafc] p-5 md:p-8 border border-blue-200/60 hover:border-blue-300/80 transition-all duration-300 hover:scale-[1.015] active:scale-[0.99] group/card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
-        >
-          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-            <div className="flex items-start md:items-center gap-4">
-              <div className="space-y-1 text-left">
-                <h3 className="text-base md:text-lg font-bold text-brand-navy tracking-tight">Looking for a trusted local pro?</h3>
-                <p className="text-slate-500 text-[11px] md:text-[13px] font-medium leading-relaxed">
-                  Search member recommendations or let <strong className="text-brand-blue font-semibold">Jane, your AI assistant</strong>, match you instantly.
-                </p>
+        {/* Hero Jane Search Assistant Widget */}
+        <div className="relative z-10 -mt-3 md:mt-0 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#f8fafc] p-5 md:p-8 border-2 border-blue-200/80 shadow-[0_4px_24px_rgba(37,99,235,0.04)] space-y-6">
+          <div className="text-left space-y-1">
+            <h3 className="text-base md:text-xl font-bold text-brand-navy tracking-tight flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-brand-blue" />
+              Looking for a trusted local pro?
+            </h3>
+            <p className="text-slate-500 text-xs md:text-sm leading-relaxed">
+              Search member recommendations or let <strong className="text-brand-blue font-semibold">Jane, your AI assistant</strong>, match you instantly.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {/* Blue Bordered Ask Jane Container */}
+            <div className="relative bg-white rounded-[20px] border-2 border-blue-200/90 p-4 md:p-5 shadow-sm space-y-2 focus-within:border-brand-blue/60 focus-within:ring-4 focus-within:ring-brand-blue/5 transition-all text-left">
+              <div className="flex items-start gap-3">
+                <Sparkles className="w-4 h-4 text-brand-blue mt-0.5 flex-shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] sm:text-[11px] font-extrabold text-brand-blue uppercase tracking-wider">
+                      Tell Jane what you need...
+                    </label>
+                    {janeSearch && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setJaneSearch('');
+                          janeInputRef.current?.focus();
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0 cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <textarea 
+                    ref={janeInputRef}
+                    rows={2}
+                    placeholder="e.g. plumber, French-speaking dentist, or help sorting out my paperwork"
+                    className="w-full bg-transparent outline-none text-slate-700 font-medium leading-relaxed placeholder:text-slate-300 text-xs sm:text-sm border-none p-0 focus:ring-0 resize-none"
+                    value={janeSearch}
+                    onChange={(e) => setJaneSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (janeSearch.trim()) {
+                          onNavigate('explore', { searchQuery: janeSearch.trim() });
+                        }
+                      }
+                    }}
+                  />
+                </div>
               </div>
             </div>
 
-            <div 
-              className="w-fit self-center sm:self-auto shrink-0 inline-flex items-center justify-center gap-2 px-6 py-2.5 md:px-8 md:py-3 bg-brand-blue group-hover/card:bg-[#0958d9] text-white rounded-xl font-bold text-xs md:text-sm shadow-sm transition-all"
+            {/* Large Blue Recommendations Action Button */}
+            <button 
+              onClick={() => {
+                if (janeSearch.trim()) {
+                  onNavigate('explore', { searchQuery: janeSearch.trim() });
+                }
+              }}
+              disabled={!janeSearch.trim()}
+              className="w-full py-3.5 md:py-4 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-[20px] font-bold text-xs md:text-sm shadow-md shadow-blue-500/15 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
-              <Search className="w-3.5 h-3.5 md:w-4 h-4 text-white shrink-0" />
-              <span>Start searching</span>
+              <Sparkles className="w-4 h-4 fill-white/10" />
+              Find professionals with Jane
+            </button>
+
+            {/* Privacy Safeguard Note */}
+            <div className="flex items-center justify-center gap-1.5 text-slate-400 font-bold text-[10px] md:text-[11px] tracking-wide pt-0.5 text-center">
+              <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+              <span>100% private. Jane is here to help.</span>
             </div>
           </div>
         </div>
@@ -9126,7 +9555,10 @@ function HomeView({
           className="relative z-10 mt-4 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#fffdf5] p-5 md:p-8 border border-amber-200/70 hover:border-amber-300/90 transition-all duration-300 hover:scale-[1.015] active:scale-[0.99] group/rec-card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-yellow"
         >
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-            <div className="flex items-start md:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100/80 border border-amber-200/60 flex items-center justify-center text-amber-700 shrink-0 shadow-sm group-hover/rec-card:scale-105 transition-transform">
+                <UserPlus className="w-6 h-6" />
+              </div>
               <div className="space-y-1 text-left">
                 <h3 className="text-base md:text-lg font-bold text-brand-navy tracking-tight">Know someone great?</h3>
                 <p className="text-slate-600 text-[11px] md:text-[13px] font-medium leading-relaxed">
@@ -10218,11 +10650,13 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
   );
 }
 
-function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModalClose, scrollToTop, onProUpdate, currentUser, userProfile, blockedUsers = [], usersWhoBlockedMe = [], isActive = false }: { 
+function ExploreView({ allPros, onNavigate, initialProId, initialSearch, isPendingSearch = false, setIsPendingSearch, onModalClose, scrollToTop, onProUpdate, currentUser, userProfile, blockedUsers = [], usersWhoBlockedMe = [], isActive = false }: { 
   allPros: Professional[], 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   initialProId?: string | null, 
   initialSearch?: string | null,
+  isPendingSearch?: boolean,
+  setIsPendingSearch?: (val: boolean) => void,
   onModalClose?: () => void, 
   scrollToTop?: () => void,
   onProUpdate?: () => void,
@@ -10232,6 +10666,11 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
   usersWhoBlockedMe?: string[],
   isActive?: boolean
 }) {
+  const allProsRef = useRef(allPros);
+  useEffect(() => {
+    allProsRef.current = allPros;
+  }, [allPros]);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState(initialSearch || '');
   const [deferredSearch, setDeferredSearch] = useState(initialSearch || '');
@@ -10272,7 +10711,7 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
   const [aiResults, setAiResults] = useState<{ [key: string]: { score: number; reason: string } } | null>(null);
   const [aiExactMatch, setAiExactMatch] = useState<boolean>(true);
   const [aiSummaryMessage, setAiSummaryMessage] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(isPendingSearch);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiQuery, setAiQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'standard' | 'ai'>('ai');
@@ -10302,8 +10741,8 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
   }, [searchMode]);
 
   // Hook up handleSearchSubmit to perform an intelligent AI matching process
-  const handleSearchSubmit = async () => {
-    const trimmed = search.trim();
+  const handleSearchSubmit = async (queryOverride?: string) => {
+    const trimmed = (queryOverride !== undefined ? queryOverride : search).trim();
     if (!trimmed) {
       setAiResults(null);
       setAiExactMatch(true);
@@ -10321,8 +10760,34 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
     setAiError(null);
     setAiQuery(trimmed);
     setDeferredSearch(trimmed);
+    setSearch(trimmed);
 
     try {
+      // PHASE 1: UNDERSTANDING (Call Gemini to interpret the query intent)
+      let intent = { trade: "", location: "", keywords: [] as string[] };
+      try {
+        const intentRes = await fetch("/api/ai-extract-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: trimmed }),
+        });
+        if (intentRes.ok) {
+          intent = await intentRes.json();
+        }
+      } catch (e) {
+        console.warn("[Search] Intent extraction failed, falling back to direct matching:", e);
+      }
+
+      // PHASE 2: MATCHING (Find pros based on understanding + full context)
+      // If allPros is not yet loaded, wait for it (up to 5 seconds)
+      if (allProsRef.current.length === 0) {
+        const startTime = Date.now();
+        while (allProsRef.current.length === 0 && Date.now() - startTime < 5000) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      const currentPros = allProsRef.current;
       let data = null;
       let serverFailed = false;
 
@@ -10330,7 +10795,7 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
         const response = await fetch("/api/ai-search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: trimmed, professionals: allPros }),
+          body: JSON.stringify({ query: trimmed, intent, professionals: currentPros }),
         });
         
         if (response.status === 404 || response.status === 405) {
@@ -10367,7 +10832,7 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
 
         const ai = new GoogleGenAI({ apiKey });
         
-        const proListBrief = allPros.map((p: any) => ({
+        const proListBrief = allProsRef.current.map((p: any) => ({
           id: String(p.id),
           name: p.name,
           company_name: p.company_name || "",
@@ -10531,10 +10996,19 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     }
   }, [aiResults, aiLoading]);
 
+  const hasProcessedInitialSearch = useRef<string | null>(null);
+
   useEffect(() => {
-    if (initialSearch !== null && initialSearch !== undefined) {
-      setSearch(initialSearch);
-      setDeferredSearch(initialSearch);
+    const query = initialSearch?.trim();
+    if (query && hasProcessedInitialSearch.current !== query) {
+      // If we have a query, mark as processed and start the AI understanding phase immediately
+      hasProcessedInitialSearch.current = query;
+      setIsPendingSearch?.(false);
+      handleSearchSubmit(query);
+    } else if (initialSearch !== null && initialSearch !== undefined && !query) {
+      setSearch('');
+      setDeferredSearch('');
+      setIsPendingSearch?.(false);
     }
   }, [initialSearch]);
 
@@ -11251,7 +11725,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   onClick={() => setSelectedPro(pro)}
-                  className="group relative bg-white rounded-[32px] p-6 flex flex-col lg:flex-row gap-6 border border-slate-100 transition-all shadow-sm hover:shadow-xl hover:shadow-slate-200/50 hover:border-brand-blue/10 cursor-pointer overflow-hidden"
+                  className="group relative bg-white rounded-[32px] p-6 flex flex-col lg:flex-row gap-6 border-2 border-emerald-500/80 transition-all shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 hover:border-emerald-500 cursor-pointer overflow-hidden"
                 >
                   {/* Number Badge to match map pins */}
                   <div className="absolute top-6 right-6 w-8 h-8 bg-brand-blue text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-lg shadow-brand-blue/20 z-10 transition-transform group-hover:scale-110">
@@ -11283,22 +11757,30 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                         {pro.company_name && (
                           <p className="text-xs font-semibold text-slate-600 truncate -mt-0.5 mb-1.5">{pro.company_name}</p>
                         )}
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                            <span className="text-[11px] font-medium text-brand-blue uppercase tracking-widest">{pro.category}</span>
-                           <span className="text-slate-200">•</span>
-                           <div className={cn(
-                             "flex items-center gap-1 transition-all",
-                             !currentUser && "filter blur-[4px] select-none pointer-events-none"
-                           )}>
-                             <Star className="w-3 h-3 text-brand-yellow fill-brand-yellow" />
-                             <span className="text-xs font-normal text-slate-700">
-                               {pro.review_count && pro.review_count > 0 ? (
-                                 <span className="flex items-center gap-1">
-                                   {pro.rating} <span className="text-slate-400 font-medium font-sans">({pro.review_count})</span>
+                           {(pro.review_count ?? 0) > 0 && (
+                             <>
+                               <span className="text-slate-200">•</span>
+                               <div className={cn(
+                                 "flex items-center gap-1 transition-all",
+                                 !currentUser && "filter blur-[4px] select-none pointer-events-none"
+                               )}>
+                                 <Star className="w-3 h-3 text-brand-yellow fill-brand-yellow" />
+                                 <span className="text-xs font-normal text-slate-700">
+                                   <span className="flex items-center gap-1">
+                                     {pro.rating} <span className="text-slate-400 font-medium font-sans">({pro.review_count})</span>
+                                   </span>
                                  </span>
-                               ) : 'Recommended by the community. Reviews coming soon'}
-                             </span>
-                           </div>
+                               </div>
+                             </>
+                           )}
+                        </div>
+                        <div className="pt-1">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-bold border border-emerald-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                            <span>Recommended by MyCityUnlocked community</span>
+                          </span>
                         </div>
                       </div>
                       {pro.top_qualities && pro.top_qualities.length > 0 && (
@@ -12785,12 +13267,18 @@ function ProfessionalDetailView({
                   <Briefcase className="w-3.5 h-3.5" />
                   {pro.category}
                 </div>
-                <div className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-xl font-medium border border-slate-100 transition-all",
-                  !currentUser && "filter blur-[4px] select-none pointer-events-none"
-                )}>
-                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                  <span>{displayReviewCount > 0 ? `${displayRating} (${displayReviewCount})` : 'Recommended by the community. Reviews coming soon'}</span>
+                {displayReviewCount > 0 && (
+                  <div className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-xl font-medium border border-slate-100 transition-all",
+                    !currentUser && "filter blur-[4px] select-none pointer-events-none"
+                  )}>
+                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                    <span>{displayRating} ({displayReviewCount})</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl font-bold border border-emerald-200/60 shadow-sm">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Recommended by MyCityUnlocked community</span>
                 </div>
               </div>
 

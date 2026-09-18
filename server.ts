@@ -95,15 +95,58 @@ async function startServer() {
     }
   });
 
+  // AI-powered query interpretation endpoint
+  app.post("/api/ai-extract-intent", async (req, res) => {
+    const { query } = req.body;
+    if (!query || !query.trim()) {
+      return res.json({ trade: "", location: "", keywords: [] });
+    }
+
+    try {
+      const response = await getAiClient().models.generateContent({
+        model: "gemini-3.1-flash-lite",
+        contents: `Analyze this user request for a local professional and extract the search parameters.
+        Request: "${query}"`,
+        config: {
+          systemInstruction: `You are a search intent analyzer. Extract the core "trade" (profession), "location", and "keywords" from the user request.
+          Rules:
+          - Trade: The main profession requested (e.g., "Plumber", "Dentist").
+          - Location: The specific city or area mentioned (e.g., "Valencia", "La Eliana").
+          - Keywords: A list of 3-5 specific traits or sub-services (e.g., "French-speaking", "emergency", "implant").
+          - Output: Valid JSON object.`,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              trade: { type: Type.STRING },
+              location: { type: Type.STRING },
+              keywords: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["trade", "location", "keywords"]
+          },
+          temperature: 0.1
+        }
+      });
+
+      const parsed = JSON.parse(response.text || "{}");
+      return res.json(parsed);
+    } catch (error: any) {
+      console.error("[api] Intent extraction error:", error);
+      return res.json({ trade: "", location: "", keywords: [] });
+    }
+  });
+
   // AI-powered pro matching endpoint
   app.post("/api/ai-search", async (req, res) => {
-    const { query, professionals } = req.body;
+    const { query, intent, professionals } = req.body;
 
     if (!query || !query.trim() || !professionals || !Array.isArray(professionals)) {
       return res.json({ results: [] });
     }
 
     try {
+      const intentContext = intent ? `\n\nExtracted Search Intent:\n- Trade: ${intent.trade}\n- Location: ${intent.location}\n- Keywords: ${intent.keywords.join(", ")}` : "";
+      
       // Map professionals list with only relevant fields to stay within token limits and maintain focus
       const proListBrief = professionals.map((p: any) => ({
         id: String(p.id),
@@ -115,7 +158,8 @@ async function startServer() {
         top_qualities: p.top_qualities || [],
         languages: p.languages || [],
         rating: p.rating || 0,
-        location: p.location || ""
+        location: p.location || "",
+        is_recommended: p.is_recommended ?? true
       }));
 
       const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals.
@@ -150,11 +194,16 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
        - With specific trade and location: "We couldn't find a [trade] in [location] in our directory."
        - Without specific location: "We couldn't find an exact match for '[user request]' in our directory."
 
-4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).`;
+4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).
+ 
+5. PRIORITIZATION (CRITICAL):
+   - Professionals with "is_recommended: true" are community-vetted and MUST be prioritized over those with "is_recommended: false".
+   - If multiple professionals match the user's query well, those with "is_recommended: true" should receive a score bonus or be ranked higher than those with "is_recommended: false".
+   - A non-recommended professional should only have a higher score than a recommended one if they are a significantly better match for the specific trade or location requested.`;
 
       const response = await getAiClient().models.generateContent({
         model: "gemini-3.1-flash-lite",
-        contents: `User Query: "${query}"
+        contents: `User Query: "${query}"${intentContext}
 
 Professionals:
 ${JSON.stringify(proListBrief, null, 2)}`,
@@ -236,7 +285,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     try {
       const locationContext = `${city}, ${region || ''}, ${country || ''}`;
       const response = await getAiClient().models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-3.1-flash-lite",
         contents: `Target: Identify the nearest major metropolitan city for "${locationContext}". 
         Rules: 
         1. Return ONLY the name of the major city.

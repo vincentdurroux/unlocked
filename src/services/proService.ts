@@ -24,6 +24,7 @@ export interface SupabaseProfessional {
   top_qualities?: string[];
   has_filled_form?: boolean;
   categories?: string[];
+  is_recommended?: boolean;
 }
 
 export function parseEmbeddedQualities(text: string): { qualities: string[], cleanText: string } {
@@ -138,6 +139,7 @@ export const proService = {
         review_count: item.review_count ?? item.reviews_count ?? 0, // Fallback to 0 if column is missing
         languages: typeof item.languages === 'string' ? JSON.parse(item.languages) : item.languages || [],
         has_filled_form: item.has_filled_form ?? false,
+        is_recommended: item.is_recommended ?? true, // Existing ones are recommended by default
         coordinates: (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng) && (Math.abs(lat) > 0.0001 || Math.abs(lng) > 0.0001)) ? 
           { lat, lng } : null
       };
@@ -196,7 +198,8 @@ export const proService = {
           lng: lng,
           location: cleanLocation,
           top_qualities: topQuals,
-          has_filled_form: pro.has_filled_form || false
+          has_filled_form: pro.has_filled_form || false,
+          is_recommended: pro.is_recommended ?? true
         };
 
         // Remove undefined values to avoid Supabase errors
@@ -241,7 +244,8 @@ export const proService = {
           lat: lat,
           lng: lng,
           location: cleanLocation,
-          has_filled_form: pro.has_filled_form || false
+          has_filled_form: pro.has_filled_form || false,
+          is_recommended: pro.is_recommended ?? true
         };
 
         // Remove undefined values to avoid Supabase errors
@@ -453,6 +457,7 @@ export const proService = {
     setIfChanged('lng', lng, existingRecord.lng);
     setIfChanged('location', cleanLocation, existingRecord.location);
     setIfChanged('has_filled_form', pro.has_filled_form ?? false, existingRecord.has_filled_form);
+    setIfChanged('is_recommended', pro.is_recommended ?? existingRecord.is_recommended ?? true, existingRecord.is_recommended);
 
     // Remove undefined
     Object.keys(updatePayload).forEach(key => {
@@ -1146,6 +1151,71 @@ export const proService = {
     }
 
     return true;
+  },
+
+  async bulkCreateProfessionals(pros: any[]) {
+    if (!isSupabaseConfigured) return null;
+    if (!pros || pros.length === 0) return [];
+
+    console.log(`[proService] Bulk creating ${pros.length} professionals`);
+
+    const formattedPros = pros.map(pro => {
+      let lat = typeof pro.lat === 'string' ? parseFloat(pro.lat) : pro.lat;
+      let lng = typeof pro.lng === 'string' ? parseFloat(pro.lng) : pro.lng;
+      if (isNaN(lat)) lat = 0;
+      if (isNaN(lng)) lng = 0;
+
+      const topQuals = pro.top_qualities || pro.topQualities || [];
+      const finalDescription = pro.description || pro.bio || '';
+      
+      let proProfession = '';
+      if (Array.isArray(pro.categories) && pro.categories.length > 0) {
+        proProfession = pro.categories.join(', ');
+      } else {
+        proProfession = pro.profession || pro.category || pro.job || '';
+      }
+
+      return {
+        name: pro.name,
+        company_name: pro.company_name || '',
+        profession: proProfession,
+        rating: pro.rating || 0,
+        languages: Array.isArray(pro.languages) ? pro.languages : [],
+        image_url: pro.image_url || pro.image || '',
+        description: finalDescription,
+        phone: pro.phone || '',
+        email: pro.email || '',
+        website: pro.website || '',
+        instagram: pro.instagram || '',
+        facebook: pro.facebook || '',
+        whatsapp: pro.whatsapp || '',
+        lat: lat,
+        lng: lng,
+        location: pro.location || '',
+        top_qualities: topQuals,
+        has_filled_form: pro.has_filled_form || false,
+        is_recommended: pro.is_recommended ?? false // Default to false as per user request
+      };
+    });
+
+    // Chunking to avoid large payload errors
+    const chunkSize = 50;
+    const results = [];
+    for (let i = 0; i < formattedPros.length; i += chunkSize) {
+      const chunk = formattedPros.slice(i, i + chunkSize);
+      const { data, error } = await supabase
+        .from('professionals')
+        .insert(chunk)
+        .select();
+      
+      if (error) {
+        console.error(`Error in bulk chunk ${i / chunkSize}:`, error);
+        throw error;
+      }
+      if (data) results.push(...data);
+    }
+
+    return results;
   },
 
   async updateRecommendationStatus(id: string, status: 'pending' | 'validated' | 'refused', adminNotes?: string | null) {
