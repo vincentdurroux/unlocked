@@ -125,12 +125,13 @@ Your purpose is to examine the user's natural language request and return the mo
 
 Review the list of professionals provided and evaluate BOTH trade/service criteria AND location criteria:
 
-1. QUERY PARSING & SYNONYMS (CRITICAL):
+1. QUERY PARSING & SYNONYMS (CRITICAL) - Updated:
    - Trade / Profession Synonyms & Translations:
      * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "hair salon", "barber" ALL match "Hairdresser", "Coiffeur", "Beauty & Wellness", or hair care services.
      * "doctor", "physician", "médecin", "gp" ALL match Doctor/Medical services.
      * "realtor", "real estate agent", "inmobiliaria" ALL match Real Estate / Property services.
      * "plumber", "plombier", "fontanero" ALL match Plumbing services.
+     * "I hurt my back", "back pain", "mal de dos" ALL match "Physiotherapist", "Osteopath", or "Chiropractor".
      * Treat language translations (English, French, Spanish) and word variations (e.g., "hair dresser" vs "hairdresser") as EXACT trade matches!
    - Location Matching:
      * "Valencia area", "in Valencia", "around Valencia", "Valencia city" matches professionals located in Valencia or Valencia metropolitan/province towns (e.g. Valencia, La Eliana, Torrent, Paterna, etc.).

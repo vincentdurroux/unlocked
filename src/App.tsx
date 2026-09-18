@@ -11334,21 +11334,6 @@ ${JSON.stringify(proListBrief, null, 2)}`,
               </div>
             </div>
 
-            {/* No Results banner */}
-            <AnimatePresence>
-              {hasActiveFilter && !aiLoading && filteredPros.length === 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="p-4 bg-amber-50/60 rounded-2xl border border-amber-100/50 text-amber-900 text-xs md:text-sm font-medium flex items-center gap-3 shadow-sm"
-                >
-                  <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                  <span>No matches found. Try using other keywords or clearing some filters! 🌟</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             {/* AI Error banner */}
             {aiError && (
               <div className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 flex items-center gap-3 text-sm">
