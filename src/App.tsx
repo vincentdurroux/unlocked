@@ -425,7 +425,7 @@ import { documentService } from './services/documentService';
 import { guideService, MOCK_GUIDE_CATEGORIES_DATA } from './services/guide_service';
 import { feedbackService } from './services/feedbackService';
 import { emailService } from './services/emailService';
-import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -984,7 +984,6 @@ export default function App() {
     }
   });
   const [initialSearch, setInitialSearch] = useState<string | null>(null);
-  const [isPendingAiSearch, setIsPendingAiSearch] = useState(false);
   const [searchParams, setSearchParams] = useState<{ query: string; location: string; category: string; filters?: any }>({ query: '', location: '', category: 'All' });
   const [unreadConversations, setUnreadConversations] = useState<string[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -1571,7 +1570,7 @@ export default function App() {
           const locationContext = `${city}, ${region || ''}, ${country || ''}`;
           
           const response = await ai.models.generateContent({
-            model: "gemini-3.1-flash-lite",
+            model: "gemini-flash-latest",
             contents: `Target: Identify the nearest major metropolitan city for "${locationContext}". 
             Rules: 
             1. Return ONLY the name of the major city.
@@ -1934,10 +1933,7 @@ export default function App() {
     if (params?.eventId) setInitialEventId(params.eventId);
     if (params?.proId) setInitialProId(params.proId);
     if (params?.guideId) setInitialGuideId(params.guideId);
-    if (params?.searchQuery) {
-      setInitialSearch(params.searchQuery);
-      setIsPendingAiSearch(true);
-    }
+    if (params?.searchQuery) setInitialSearch(params.searchQuery);
     if (params?.chat) setInitialChat(params.chat);
     navigateTo(finalView);
   };
@@ -2437,12 +2433,9 @@ export default function App() {
                     onNavigate={handleNavigate} 
                     initialProId={initialProId}
                     initialSearch={initialSearch}
-                    isPendingSearch={isPendingAiSearch}
-                    setIsPendingSearch={setIsPendingAiSearch}
                     onModalClose={() => {
                       setInitialProId(null);
                       setInitialSearch(null);
-                      setIsPendingAiSearch(false);
                     }}
                     scrollToTop={scrollToTop}
                     onProUpdate={refetchPros}
@@ -10650,13 +10643,11 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
   );
 }
 
-function ExploreView({ allPros, onNavigate, initialProId, initialSearch, isPendingSearch = false, setIsPendingSearch, onModalClose, scrollToTop, onProUpdate, currentUser, userProfile, blockedUsers = [], usersWhoBlockedMe = [], isActive = false }: { 
+function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModalClose, scrollToTop, onProUpdate, currentUser, userProfile, blockedUsers = [], usersWhoBlockedMe = [], isActive = false }: { 
   allPros: Professional[], 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   initialProId?: string | null, 
   initialSearch?: string | null,
-  isPendingSearch?: boolean,
-  setIsPendingSearch?: (val: boolean) => void,
   onModalClose?: () => void, 
   scrollToTop?: () => void,
   onProUpdate?: () => void,
@@ -10666,11 +10657,6 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, isPendi
   usersWhoBlockedMe?: string[],
   isActive?: boolean
 }) {
-  const allProsRef = useRef(allPros);
-  useEffect(() => {
-    allProsRef.current = allPros;
-  }, [allPros]);
-
   const inputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState(initialSearch || '');
   const [deferredSearch, setDeferredSearch] = useState(initialSearch || '');
@@ -10711,7 +10697,7 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, isPendi
   const [aiResults, setAiResults] = useState<{ [key: string]: { score: number; reason: string } } | null>(null);
   const [aiExactMatch, setAiExactMatch] = useState<boolean>(true);
   const [aiSummaryMessage, setAiSummaryMessage] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(isPendingSearch);
+  const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiQuery, setAiQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'standard' | 'ai'>('ai');
@@ -10741,8 +10727,8 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, isPendi
   }, [searchMode]);
 
   // Hook up handleSearchSubmit to perform an intelligent AI matching process
-  const handleSearchSubmit = async (queryOverride?: string) => {
-    const trimmed = (queryOverride !== undefined ? queryOverride : search).trim();
+  const handleSearchSubmit = async () => {
+    const trimmed = search.trim();
     if (!trimmed) {
       setAiResults(null);
       setAiExactMatch(true);
@@ -10760,34 +10746,8 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, isPendi
     setAiError(null);
     setAiQuery(trimmed);
     setDeferredSearch(trimmed);
-    setSearch(trimmed);
 
     try {
-      // PHASE 1: UNDERSTANDING (Call Gemini to interpret the query intent)
-      let intent = { trade: "", location: "", keywords: [] as string[] };
-      try {
-        const intentRes = await fetch("/api/ai-extract-intent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: trimmed }),
-        });
-        if (intentRes.ok) {
-          intent = await intentRes.json();
-        }
-      } catch (e) {
-        console.warn("[Search] Intent extraction failed, falling back to direct matching:", e);
-      }
-
-      // PHASE 2: MATCHING (Find pros based on understanding + full context)
-      // If allPros is not yet loaded, wait for it (up to 5 seconds)
-      if (allProsRef.current.length === 0) {
-        const startTime = Date.now();
-        while (allProsRef.current.length === 0 && Date.now() - startTime < 5000) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-
-      const currentPros = allProsRef.current;
       let data = null;
       let serverFailed = false;
 
@@ -10795,7 +10755,7 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, isPendi
         const response = await fetch("/api/ai-search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: trimmed, intent, professionals: currentPros }),
+          body: JSON.stringify({ query: trimmed, professionals: allPros }),
         });
         
         if (response.status === 404 || response.status === 405) {
@@ -10832,7 +10792,7 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, isPendi
 
         const ai = new GoogleGenAI({ apiKey });
         
-        const proListBrief = allProsRef.current.map((p: any) => ({
+        const proListBrief = allPros.map((p: any) => ({
           id: String(p.id),
           name: p.name,
           company_name: p.company_name || "",
@@ -10880,7 +10840,7 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
 4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).`;
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.1-flash-lite",
+          model: "gemini-flash-latest",
           contents: `User Query: "${trimmed}"
 
 Professionals:
@@ -10907,9 +10867,6 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                 }
               },
               required: ["exactMatchFound", "results"]
-            },
-            thinkingConfig: {
-              thinkingLevel: ThinkingLevel.MINIMAL
             },
             temperature: 0.1
           }
@@ -10996,19 +10953,10 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     }
   }, [aiResults, aiLoading]);
 
-  const hasProcessedInitialSearch = useRef<string | null>(null);
-
   useEffect(() => {
-    const query = initialSearch?.trim();
-    if (query && hasProcessedInitialSearch.current !== query) {
-      // If we have a query, mark as processed and start the AI understanding phase immediately
-      hasProcessedInitialSearch.current = query;
-      setIsPendingSearch?.(false);
-      handleSearchSubmit(query);
-    } else if (initialSearch !== null && initialSearch !== undefined && !query) {
-      setSearch('');
-      setDeferredSearch('');
-      setIsPendingSearch?.(false);
+    if (initialSearch !== null && initialSearch !== undefined) {
+      setSearch(initialSearch);
+      setDeferredSearch(initialSearch);
     }
   }, [initialSearch]);
 

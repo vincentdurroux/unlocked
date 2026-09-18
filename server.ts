@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { Resend } from "resend";
 import dotenv from "dotenv";
 
@@ -11,7 +11,8 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
   // Lazily initialize Gemini to prevent the server from crashing on boot if the API key is missing
   let aiClient: GoogleGenAI | null = null;
@@ -95,58 +96,15 @@ async function startServer() {
     }
   });
 
-  // AI-powered query interpretation endpoint
-  app.post("/api/ai-extract-intent", async (req, res) => {
-    const { query } = req.body;
-    if (!query || !query.trim()) {
-      return res.json({ trade: "", location: "", keywords: [] });
-    }
-
-    try {
-      const response = await getAiClient().models.generateContent({
-        model: "gemini-3.1-flash-lite",
-        contents: `Analyze this user request for a local professional and extract the search parameters.
-        Request: "${query}"`,
-        config: {
-          systemInstruction: `You are a search intent analyzer. Extract the core "trade" (profession), "location", and "keywords" from the user request.
-          Rules:
-          - Trade: The main profession requested (e.g., "Plumber", "Dentist").
-          - Location: The specific city or area mentioned (e.g., "Valencia", "La Eliana").
-          - Keywords: A list of 3-5 specific traits or sub-services (e.g., "French-speaking", "emergency", "implant").
-          - Output: Valid JSON object.`,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              trade: { type: Type.STRING },
-              location: { type: Type.STRING },
-              keywords: { type: Type.ARRAY, items: { type: Type.STRING } }
-            },
-            required: ["trade", "location", "keywords"]
-          },
-          temperature: 0.1
-        }
-      });
-
-      const parsed = JSON.parse(response.text || "{}");
-      return res.json(parsed);
-    } catch (error: any) {
-      console.error("[api] Intent extraction error:", error);
-      return res.json({ trade: "", location: "", keywords: [] });
-    }
-  });
-
   // AI-powered pro matching endpoint
   app.post("/api/ai-search", async (req, res) => {
-    const { query, intent, professionals } = req.body;
+    const { query, professionals } = req.body;
 
     if (!query || !query.trim() || !professionals || !Array.isArray(professionals)) {
       return res.json({ results: [] });
     }
 
     try {
-      const intentContext = intent ? `\n\nExtracted Search Intent:\n- Trade: ${intent.trade}\n- Location: ${intent.location}\n- Keywords: ${intent.keywords.join(", ")}` : "";
-      
       // Map professionals list with only relevant fields to stay within token limits and maintain focus
       const proListBrief = professionals.map((p: any) => ({
         id: String(p.id),
@@ -202,8 +160,8 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
    - A non-recommended professional should only have a higher score than a recommended one if they are a significantly better match for the specific trade or location requested.`;
 
       const response = await getAiClient().models.generateContent({
-        model: "gemini-3.1-flash-lite",
-        contents: `User Query: "${query}"${intentContext}
+        model: "gemini-flash-latest",
+        contents: `User Query: "${query}"
 
 Professionals:
 ${JSON.stringify(proListBrief, null, 2)}`,
@@ -229,9 +187,6 @@ ${JSON.stringify(proListBrief, null, 2)}`,
               }
             },
             required: ["exactMatchFound", "results"]
-          },
-          thinkingConfig: {
-            thinkingLevel: ThinkingLevel.MINIMAL
           },
           temperature: 0.1
         }
@@ -285,7 +240,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     try {
       const locationContext = `${city}, ${region || ''}, ${country || ''}`;
       const response = await getAiClient().models.generateContent({
-        model: "gemini-3.1-flash-lite",
+        model: "gemini-flash-latest",
         contents: `Target: Identify the nearest major metropolitan city for "${locationContext}". 
         Rules: 
         1. Return ONLY the name of the major city.
