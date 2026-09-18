@@ -69,6 +69,169 @@ async function startServer() {
     return { places: [], targetZone };
   }
 
+  const generateGeminiWithFallback = async (requestConfig: any) => {
+    const candidateModels = [
+      "gemini-2.5-flash",
+      "gemini-flash-latest",
+      "gemini-3.8-flash",
+      "gemini-3.1-flash-lite"
+    ];
+    let lastErr: any = null;
+    for (const model of candidateModels) {
+      try {
+        const client = getAiClient();
+        const resp = await client.models.generateContent({
+          ...requestConfig,
+          model
+        });
+        return resp;
+      } catch (err: any) {
+        lastErr = err;
+        const msg = String(err?.message || err);
+        console.warn(`[Gemini Fallback] Model ${model} failed (${msg.slice(0, 120)}). Trying next candidate.`);
+      }
+    }
+    throw lastErr;
+  };
+
+  function fallbackLocalMatching(query: string, candidates: any[], targetZone: any) {
+    const qTokens = (query || '').toLowerCase().split(/[\s,.'"-]+/).filter(t => t.length >= 3);
+    const matched = candidates.map(p => {
+      let score = 0;
+      const nameLower = (p.name || '').toLowerCase();
+      const catLower = (p.category || p.profession || '').toLowerCase();
+      const bioLower = (p.bio || '').toLowerCase();
+      const locLower = (p.location || '').toLowerCase();
+
+      for (const tok of qTokens) {
+        if (catLower.includes(tok)) score += 35;
+        if (nameLower.includes(tok)) score += 25;
+        if (bioLower.includes(tok)) score += 15;
+        if (locLower.includes(tok)) score += 10;
+      }
+
+      if (p.is_community_recommended) score += 15;
+      if (p.distanceKm !== null && p.distanceKm <= 10) score += 10;
+      else if (p.distanceKm !== null && p.distanceKm <= 25) score += 5;
+
+      return {
+        id: String(p.id),
+        score: Math.min(score, 95),
+        reasonUrlExcerpt: `${p.category || 'Spécialiste'} à ${p.location || 'Valence'}`
+      };
+    }).filter(p => p.score >= 30);
+
+    matched.sort((a, b) => b.score - a.score);
+
+    return {
+      exactMatchFound: matched.length > 0,
+      summaryMessage: matched.length > 0 ? null : "Aucun professionnel ne correspond exactement à votre recherche.",
+      results: matched.slice(0, 10),
+      google_places_pros: [],
+      target_zone: targetZone
+    };
+  }
+
+  function fallbackMultiSearchMatching(
+    query: string, 
+    filteredCandidatePros: any[], 
+    eventsBrief: any[], 
+    guidesBrief: any[], 
+    targetZone: any,
+    isNewTopic: boolean,
+    effectiveSearchQuery: string
+  ) {
+    const qTokens = (effectiveSearchQuery || query || '').toLowerCase().split(/[\s,.'"-]+/).filter(t => t.length >= 3);
+    
+    // Match pros
+    const matchedPros = filteredCandidatePros.map(p => {
+      let score = 0;
+      const nameLower = (p.name || '').toLowerCase();
+      const catLower = (p.category || p.profession || '').toLowerCase();
+      const bioLower = (p.bio || '').toLowerCase();
+      for (const tok of qTokens) {
+        if (catLower.includes(tok)) score += 35;
+        if (nameLower.includes(tok)) score += 25;
+        if (bioLower.includes(tok)) score += 15;
+      }
+      if (p.is_community_recommended) score += 15;
+      return {
+        id: String(p.id),
+        score: Math.min(score, 95),
+        reason: `${p.category || 'Professionnel'} recommandé à ${p.location || 'Valence'}`
+      };
+    }).filter(p => p.score >= 30);
+    matchedPros.sort((a, b) => b.score - a.score);
+
+    // Match events
+    const matchedEvents = eventsBrief.map(e => {
+      let score = 20;
+      const titleLower = (e.title || '').toLowerCase();
+      const descLower = (e.description || '').toLowerCase();
+      for (const tok of qTokens) {
+        if (titleLower.includes(tok)) score += 40;
+        if (descLower.includes(tok)) score += 20;
+      }
+      return {
+        id: String(e.id),
+        score: Math.min(score, 95),
+        reason: `Événement à Valence`
+      };
+    }).filter(e => e.score >= 40);
+    matchedEvents.sort((a, b) => b.score - a.score);
+
+    // Match guides
+    const matchedGuides = guidesBrief.map(g => {
+      let score = 20;
+      const titleLower = (g.title || '').toLowerCase();
+      const excerptLower = (g.excerpt || '').toLowerCase();
+      for (const tok of qTokens) {
+        if (titleLower.includes(tok)) score += 40;
+        if (excerptLower.includes(tok)) score += 20;
+      }
+      return {
+        id: String(g.id),
+        score: Math.min(score, 95),
+        reason: `Guide local de Valence`
+      };
+    }).filter(g => g.score >= 40);
+    matchedGuides.sort((a, b) => b.score - a.score);
+
+    const matched_topics: string[] = [];
+    if (matchedPros.length > 0) matched_topics.push("pros");
+    if (matchedEvents.length > 0) matched_topics.push("events");
+    if (matchedGuides.length > 0) matched_topics.push("guides");
+
+    const isFr = /le|la|les|un|une|des|qui|où|cherche|trouver|bonjour|valen/i.test(query);
+    const isEs = /el|la|los|las|un|una|que|donde|busco|encontrar|hola/i.test(query);
+    const detected_language = isFr ? 'fr' : isEs ? 'es' : 'en';
+
+    const jane_message = detected_language === 'fr'
+      ? (matchedPros.length > 0 || matchedEvents.length > 0 || matchedGuides.length > 0
+          ? "Voici les résultats trouvés dans notre annuaire pour votre recherche :"
+          : "Je n'ai pas trouvé de résultat exact pour cette recherche dans notre annuaire, mais n'hésitez pas à parcourir nos différentes rubriques.")
+      : detected_language === 'es'
+      ? (matchedPros.length > 0 || matchedEvents.length > 0 || matchedGuides.length > 0
+          ? "Aquí tienes los resultados encontrados en nuestro directorio:"
+          : "No he encontrado un resultado exacto para esta búsqueda en nuestro directorio.")
+      : (matchedPros.length > 0 || matchedEvents.length > 0 || matchedGuides.length > 0
+          ? "Here are the results found in our directory for your search:"
+          : "I couldn't find an exact match for this search in our directory.");
+
+    return {
+      jane_message,
+      detected_language,
+      matched_topics,
+      pros: matchedPros.slice(0, 10),
+      events: matchedEvents.slice(0, 6),
+      guides: matchedGuides.slice(0, 6),
+      google_places_pros: [],
+      target_zone: targetZone,
+      is_new_topic: isNewTopic,
+      effective_search_query: effectiveSearchQuery || query
+    };
+  }
+
   // Health check endpoint
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
@@ -191,9 +354,13 @@ Your purpose is to examine the user's natural language request and return the mo
 
 Current Target Center / Zone: ${targetZone ? targetZone.zoneName : 'Valence'} (${centerCoords.lat}, ${centerCoords.lng})
 
-Review the list of professionals provided (including both community recommended professionals and imported Google Places directory professionals) and evaluate BOTH trade/service criteria AND location/proximity/language criteria:
+Review the list of professionals provided and evaluate BOTH trade/service criteria AND location/proximity/language criteria:
 
-1. STRICT TRADE COHERENCE & MULTILINGUAL TRADE EQUIVALENCE (CRITICAL):
+1. STRICT DIRECTORY CONSTRAINT (MANDATORY):
+   - You MUST ONLY recommend professionals that are present in the provided JSON list (which represents our Supabase 'professionals' table).
+   - NEVER search, invent, or hallucinate any other professional or business outside this list. If no matching professional is present in the list, you must set "exactMatchFound" to false.
+
+2. STRICT TRADE COHERENCE & MULTILINGUAL TRADE EQUIVALENCE (CRITICAL):
    - You MUST match professionals whose trade, profession, or services (in name, category, or bio) DIRECTLY fulfill what the user is looking for.
    - MULTILINGUAL EQUIVALENCE ACROSS FR/EN/ES:
      * "Air Conditioning" / "Climatisation" / "Clim" / "Aire Acondicionado" / "HVAC": encompasses "air conditioning", "climatisation", "clim", "climatiseur", "aire acondicionado", "clima", "HVAC", "pompe à chaleur", "heat pump", "aerotermia", "froid", "chauffage et climatisation". Any professional with category, profession, or bio mentioning air conditioning, climatisation, clim, or HVAC in any language is a direct match and MUST be matched!
@@ -210,23 +377,18 @@ Review the list of professionals provided (including both community recommended 
    - Broad categories like "Health & Wellness" or "Medical" MUST NEVER be used to justify returning an unrelated medical specialty. A dentist is NOT an osteopath.
    - Any professional whose trade does not correspond to the requested service MUST receive score 0 and NOT be returned.
 
-2. MANDATORY LOCAL PROXIMITY & ABSOLUTE 25 KM LIMIT:
+3. MANDATORY LOCAL PROXIMITY & ABSOLUTE 25 KM LIMIT:
    - All recommended professionals MUST be located in Valencia and surrounding areas within 25 km.
    - ZERO DISTANT PROS: Any pro located > 25 km away MUST receive score 0. NEVER propose professionals from distant cities or outside Valencia province.
    - Spoken language MUST NEVER override distance or pull distant professionals into results.
 
-3. CONVERSATIONAL SPOKEN LANGUAGE INTELLIGENCE:
+4. CONVERSATIONAL SPOKEN LANGUAGE INTELLIGENCE:
    - Detect the user's query language (French, English, or Spanish).
    - If a local professional (< 25 km) speaks the user's language (check the 'languages' array), give them TOP PRIORITY (scores 90-100) and highlight in reasonUrlExcerpt that they speak the user's language (e.g. "Praticien à Valence parlant français").
    - If no local professional speaks the user's language, recommend the closest local trade-matching options in Valencia (scores 60-85).
 
-4. 2-TIER LOCAL RANKING PRIORITY:
-   - TIER 1 (Highest Priority): Recommended Community Professionals ('is_community_recommended: true') WITHIN 25 KM of the target area WHO PRACTICE THE REQUESTED TRADE. Score 85-100 (give 95-100 if speaking user's language). Community recommended pros MUST ALWAYS be ranked above Google Places pros!
-   - TIER 2: Google Places professionals ('source: google_places' or 'is_community_recommended: false') WITHIN 25 KM WHO PRACTICE THE REQUESTED TRADE: Sorted SOLELY by closest distance (closest first). Score 60-80.
-   - STRICTLY NO TIER 3: Distance > 25 km is strictly forbidden.
-
 5. PRESENTATION TONE & REASONS:
-   - Do NOT mention or emphasize Google ratings, star scores or review counts in reasonUrlExcerpt or summaryMessage (e.g. NEVER say 'bénéficie d'une note Google de 4.9' or 'très bien noté sur Google').
+   - Do NOT mention or emphasize Google ratings, star scores or review counts in reasonUrlExcerpt or summaryMessage.
    - Clarify why they match simply and neutrally (mentioning their trade, specialty, language, or neighborhood/town in Valencia).
 
 6. "exactMatchFound" & "summaryMessage" RULES:
@@ -235,45 +397,51 @@ Review the list of professionals provided (including both community recommended 
 
 7. Under "reasonUrlExcerpt" for each matched professional, write a single concise sentence clarifying why they fit the user's need.`;
 
-      const response = await getAiClient().models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: `User Query: "${query}"
+      let parsedData: any = null;
+      try {
+        const response = await generateGeminiWithFallback({
+          contents: `User Query: "${query}"
 
 Target Zone Detected: ${targetZone ? targetZone.zoneName : 'Valence'}
 
 Available Professionals (Unlocked Community & Google Places):
 ${JSON.stringify(allCandidatePros, null, 2)}`,
-        config: {
-          systemInstruction: sysInstruction,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
-              summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
-              results: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING, description: "The professional's ID as a string" },
-                    score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                    reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
-                  },
-                  required: ["id", "score", "reasonUrlExcerpt"]
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
+                summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
+                results: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING, description: "The professional's ID as a string" },
+                      score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
+                      reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                    },
+                    required: ["id", "score", "reasonUrlExcerpt"]
+                  }
                 }
-              }
+              },
+              required: ["exactMatchFound", "results"]
             },
-            required: ["exactMatchFound", "results"]
-          },
-          thinkingConfig: {
-            thinkingLevel: ThinkingLevel.MINIMAL
-          },
-          temperature: 0.1
-        }
-      });
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.MINIMAL
+            },
+            temperature: 0.1
+          }
+        });
 
-      const parsedData = JSON.parse(response.text || "{}");
+        parsedData = JSON.parse(response.text || "{}");
+      } catch (geminiError: any) {
+        console.warn("[api] Gemini AI Search rate-limit or unavailable, using local matching:", geminiError?.message);
+        return res.json(fallbackLocalMatching(query, allCandidatePros, targetZone));
+      }
+
       let results: any[] = [];
       let exactMatchFound = true;
       let summaryMessage: string | null = null;
@@ -310,22 +478,7 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
       });
     } catch (error: any) {
       console.error("[api] Gemini AI Search matching error:", error);
-      const errorMsg = error.message || "";
-      const errorLower = errorMsg.toLowerCase();
-      if (
-        errorLower.includes("quota") ||
-        errorLower.includes("limit") ||
-        errorLower.includes("exhausted") ||
-        errorLower.includes("429") ||
-        errorLower.includes("503") ||
-        errorLower.includes("unavailable") ||
-        errorLower.includes("high demand") ||
-        errorLower.includes("too many requests") ||
-        errorLower.includes("rate limit")
-      ) {
-        return res.status(429).json({ error: "Jane is not available at the moment. Please use manual search in the pages" });
-      }
-      return res.status(500).json({ error: error.message || "Failed to process matching" });
+      return res.json(fallbackLocalMatching(query, [], null));
     }
   });
 
@@ -365,9 +518,9 @@ ${JSON.stringify(allCandidatePros, null, 2)}`,
             .map((m: any) => `${(m.role === 'user' || m.role === 'User') ? 'User' : 'Jane'}: ${m.content || m.text}`)
             .join('\n');
 
-          const topicAnalysis = await getAiClient().models.generateContent({
-            model: "gemini-3.5-flash",
-            contents: `You are an expert conversation flow and search intent analyzer for Unlocked (a local guide & directory in Valencia, Spain).
+          try {
+            const topicAnalysis = await generateGeminiWithFallback({
+              contents: `You are an expert conversation flow and search intent analyzer for Unlocked (a local guide & directory in Valencia, Spain).
 
 Analyze the conversation thread and the latest message to determine whether the user is:
 1. STARTING A NEW TOPIC OR SWITCHING TRADE/SERVICE: (e.g. was looking for an osteopath, now asks for a dentist, a physiotherapist, a plumber, an accountant, a restaurant, a yoga class, NIE help, or any different trade, profession, or activity).
@@ -390,28 +543,32 @@ ${historyFormattedForClassification}
 
 Latest User Message:
 "${query}"`,
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  is_new_topic: { type: Type.BOOLEAN, description: "True if user switched to a new trade/service/activity, false if continuing/refining the previous topic" },
-                  is_conversational_only: { type: Type.BOOLEAN, description: "True if user is only asking a conversational question about already displayed results without requesting new/filtered places" },
-                  topic_transition_reason: { type: Type.STRING, description: "Brief reason explaining whether it is a new topic, refinement, or conversation" },
-                  effective_search_query: { type: Type.STRING, description: "Precise 2-5 word search query for Google Places and local search" }
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    is_new_topic: { type: Type.BOOLEAN, description: "True if user switched to a new trade/service/activity, false if continuing/refining the previous topic" },
+                    is_conversational_only: { type: Type.BOOLEAN, description: "True if user is only asking a conversational question about already displayed results without requesting new/filtered places" },
+                    topic_transition_reason: { type: Type.STRING, description: "Brief reason explaining whether it is a new topic, refinement, or conversation" },
+                    effective_search_query: { type: Type.STRING, description: "Precise 2-5 word search query for Google Places and local search" }
+                  },
+                  required: ["is_new_topic", "effective_search_query"]
                 },
-                required: ["is_new_topic", "effective_search_query"]
-              },
-              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
-            }
-          });
+                thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
+              }
+            });
 
-          const parsedAnalysis = JSON.parse(topicAnalysis.text || "{}");
-          isNewTopic = Boolean(parsedAnalysis.is_new_topic);
-          isConversationalOnly = Boolean(parsedAnalysis.is_conversational_only);
-          topicTransitionReason = parsedAnalysis.topic_transition_reason || "";
-          if (parsedAnalysis.effective_search_query && parsedAnalysis.effective_search_query.trim().length >= 2) {
-            placesSearchQuery = parsedAnalysis.effective_search_query.trim();
+            const parsedAnalysis = JSON.parse(topicAnalysis.text || "{}");
+            isNewTopic = Boolean(parsedAnalysis.is_new_topic);
+            isConversationalOnly = Boolean(parsedAnalysis.is_conversational_only);
+            topicTransitionReason = parsedAnalysis.topic_transition_reason || "";
+            if (parsedAnalysis.effective_search_query && parsedAnalysis.effective_search_query.trim().length >= 2) {
+              placesSearchQuery = parsedAnalysis.effective_search_query.trim();
+            }
+          } catch (topicErr) {
+            console.warn("[api] Topic analysis fallback:", topicErr);
+            placesSearchQuery = query;
           }
 
           // Robust check: if the latest user query mentions a specific Valencia zone/town (e.g. La Eliana, Ruzafa), 
@@ -553,6 +710,10 @@ Your mission is to evaluate the user's natural language request (and any ongoing
 
 ${conversationFlowDirective}
 
+STRICT DATABASE DIRECTORY CONSTRAINT (MANDATORY):
+- You MUST ONLY recommend professionals that are present in the provided JSON "Pros" list (which represents our Supabase 'professionals' table).
+- NEVER search, invent, or hallucinate any other professional or business outside this list. If no matching professional is present in the list, you must say so honestly in "jane_message" and return an empty array for "pros".
+
 TARGET CENTER / ZONE FOR GEOGRAPHIC LOCATION:
 - Active Target Zone: ${targetZone ? targetZone.zoneName : 'Valencia'} (${centerCoords.lat}, ${centerCoords.lng})
 - Radius rule: Strict 25 km boundary around Valencia / target zone.
@@ -579,13 +740,12 @@ ${preferredLanguage ? `1. EXPLICIT LANGUAGE OVERRIDE:
      * HIGHEST RECOMMENDATION PRIORITY: Give them a strong score boost (scores 90-100) because speaking the user's language is a primary asset for expats!
      * Explicitly highlight this in 'jane_message' and in their 'reason' (e.g. "Praticien recommandé à Valence parlant français !").
    - If NO local community professional speaks the user's language:
-     * Recommend the best trade-matching professionals in Valencia (from Google Places or community), and honestly inform the user in 'jane_message' that these local specialists primarily consult in Spanish.
+     * Recommend the best trade-matching professionals in Valencia present in the provided list, and honestly inform the user in 'jane_message' that these local specialists primarily consult in Spanish.
      * NEVER pull a pro located far away (> 25 km) just because they speak French or English! Local proximity in Valencia remains mandatory.
 
-2-TIER LOCAL RANKING PRIORITY FOR PROFESSIONALS:
-- TIER 1 (Highest Priority): Community Recommended Pros ('is_community_recommended: true') WITHIN 25 KM of ${targetZone ? targetZone.zoneName : 'Valencia'} WHO PRACTICE THE REQUESTED TRADE. Scores 85-100 (give 95-100 if they speak user's chat language). If a community pro practices the requested trade or related services, THEY MUST BE SCORED 90-100 AND PLACED FIRST IN "pros"!
-- TIER 2: Google Places pros ('source: google_places') WITHIN 25 KM WHO PRACTICE THE REQUESTED TRADE: Strictly max 6 provided, sorted SOLELY by closest distance to user location (or requested location). Scores 60-80. Mismatched Google Places entries MUST receive score 0.
-- STRICTLY NO TIER 3: Any pro further than 25 km away MUST receive score 0 and be omitted!
+PROFESSIONALS MATCHING CRITERIA:
+- Evaluate the candidates and rank them strictly. Scores 60-100 based on trade match and languages.
+- Any pro further than 25 km away MUST receive score 0 and be omitted!
 
 CRITICAL TRADE COHERENCE & MULTILINGUAL TRADE EQUIVALENCE (MANDATORY):
 1. STRICT TRADE COHERENCE & MULTILINGUAL SYNONYMS:
@@ -607,8 +767,8 @@ CRITICAL TRADE COHERENCE & MULTILINGUAL TRADE EQUIVALENCE (MANDATORY):
 
 2. HONEST & HELPFUL JANE MESSAGE & DYNAMIC LANGUAGE RULE:
    - CRITICAL LANGUAGE RULE: You MUST write your 'jane_message' response in the EXACT same language (French, Spanish, English, etc.) as the user used in their query or ongoing conversation. If the user asks in French, reply in French. If the user asks in Spanish, reply in Spanish. If the user asks in English, reply in English.
-   - When community-recommended professionals ('is_community_recommended: true') exist in the candidate list matching the requested trade, YOU MUST explicitly celebrate and present them as members of the Unlocked community in your "jane_message".
-   - ONLY if there are truly NO community-recommended professionals for that specific trade in the candidate list, then state honestly that none are registered in the community yet and present the verified nearby professionals found on Google Places.
+   - When matching professionals exist in the candidate list matching the requested trade, YOU MUST explicitly present them in your "jane_message".
+   - ONLY if there are truly NO professionals for that specific trade in the candidate list, then state honestly that no professionals of this specialty are registered in the directory yet.
    - Directly address their question or refinement with precision and empathy in the user's language.
    - If a specific neighborhood/zone was detected (${targetZone?.zoneName}), gently confirm in your message that results are centered on ${targetZone?.zoneName} within 10 km.
 
@@ -637,9 +797,10 @@ CRITICAL TRADE COHERENCE & MULTILINGUAL TRADE EQUIVALENCE (MANDATORY):
      * IN "events": Include relevant community events, concerts, social meetups, workshops, cultural festivals.
      * IN "guides": Match relevant city guides, neighborhood discoveries, itineraries, and activity recommendations in Valencia.`;
 
-      const response = await getAiClient().models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: `User Latest Query/Refinement: "${query}"${formattedHistory}
+      let parsedData: any = null;
+      try {
+        const response = await generateGeminiWithFallback({
+          contents: `User Latest Query/Refinement: "${query}"${formattedHistory}
 
 Target Zone: ${targetZone ? targetZone.zoneName : 'Valence'}
 
@@ -651,66 +812,78 @@ ${JSON.stringify(eventsBrief, null, 2)}
 
 Available Guides:
 ${JSON.stringify(guidesBrief, null, 2)}`,
-        config: {
-          systemInstruction: sysInstruction,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              jane_message: { type: Type.STRING, description: "Friendly summary message in user's language" },
-              detected_language: { type: Type.STRING, description: "User's query language code: 'fr', 'es', or 'en'" },
-              matched_topics: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING },
-                description: "Array of topic keys with matches: 'pros', 'events', 'guides'" 
-              },
-              pros: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    score: { type: Type.INTEGER },
-                    reason: { type: Type.STRING }
-                  },
-                  required: ["id", "score", "reason"]
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                jane_message: { type: Type.STRING, description: "Friendly summary message in user's language" },
+                detected_language: { type: Type.STRING, description: "User's query language code: 'fr', 'es', or 'en'" },
+                matched_topics: { 
+                  type: Type.ARRAY, 
+                  items: { type: Type.STRING },
+                  description: "Array of topic keys with matches: 'pros', 'events', 'guides'" 
+                },
+                pros: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      score: { type: Type.INTEGER },
+                      reason: { type: Type.STRING }
+                    },
+                    required: ["id", "score", "reason"]
+                  }
+                },
+                events: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      score: { type: Type.INTEGER },
+                      reason: { type: Type.STRING }
+                    },
+                    required: ["id", "score", "reason"]
+                  }
+                },
+                guides: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      score: { type: Type.INTEGER },
+                      reason: { type: Type.STRING }
+                    },
+                    required: ["id", "score", "reason"]
+                  }
                 }
               },
-              events: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    score: { type: Type.INTEGER },
-                    reason: { type: Type.STRING }
-                  },
-                  required: ["id", "score", "reason"]
-                }
-              },
-              guides: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    score: { type: Type.INTEGER },
-                    reason: { type: Type.STRING }
-                  },
-                  required: ["id", "score", "reason"]
-                }
-              }
+              required: ["jane_message", "matched_topics", "pros", "events", "guides"]
             },
-            required: ["jane_message", "matched_topics", "pros", "events", "guides"]
-          },
-          thinkingConfig: {
-            thinkingLevel: ThinkingLevel.MINIMAL
-          },
-          temperature: 0.1
-        }
-      });
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.MINIMAL
+            },
+            temperature: 0.1
+          }
+        });
 
-      const parsedData = JSON.parse(response.text || "{}");
+        parsedData = JSON.parse(response.text || "{}");
+      } catch (geminiErr: any) {
+        console.warn("[api] Gemini AI Multi-Search fallback triggered:", geminiErr?.message);
+        return res.json(fallbackMultiSearchMatching(
+          query,
+          filteredCandidatePros,
+          eventsBrief,
+          guidesBrief,
+          targetZone,
+          isNewTopic,
+          placesSearchQuery
+        ));
+      }
       
       const rawPros = Array.isArray(parsedData.pros) ? parsedData.pros : [];
       const prosResults = rawPros.map((p: any) => {
@@ -841,22 +1014,15 @@ ${JSON.stringify(guidesBrief, null, 2)}`,
       });
     } catch (error: any) {
       console.error("[api] Gemini AI Multi-Search matching error:", error);
-      const errorMsg = error.message || "";
-      const errorLower = errorMsg.toLowerCase();
-      if (
-        errorLower.includes("quota") ||
-        errorLower.includes("limit") ||
-        errorLower.includes("exhausted") ||
-        errorLower.includes("429") ||
-        errorLower.includes("503") ||
-        errorLower.includes("unavailable") ||
-        errorLower.includes("high demand") ||
-        errorLower.includes("too many requests") ||
-        errorLower.includes("rate limit")
-      ) {
-        return res.status(429).json({ error: "Jane is not available at the moment. Please use manual search in the pages" });
-      }
-      return res.status(500).json({ error: error.message || "Failed to process multi-search matching" });
+      return res.json(fallbackMultiSearchMatching(
+        query,
+        filteredCandidatePros || [],
+        eventsBrief || [],
+        guidesBrief || [],
+        targetZone || null,
+        false,
+        query
+      ));
     }
   });
 
@@ -869,8 +1035,7 @@ ${JSON.stringify(guidesBrief, null, 2)}`,
 
     try {
       const locationContext = `${city}, ${region || ''}, ${country || ''}`;
-      const response = await getAiClient().models.generateContent({
-        model: "gemini-3.5-flash",
+      const response = await generateGeminiWithFallback({
         contents: `Target: Identify the nearest major metropolitan city for "${locationContext}". 
         Rules: 
         1. Return ONLY the name of the major city.
@@ -953,8 +1118,7 @@ Find at least ${Math.min(Math.max(Number(maxResults) || 5, 3), 10)} real, high-q
       let source = "google_search_grounding";
 
       try {
-        const response = await getAiClient().models.generateContent({
-          model: "gemini-3.5-flash",
+        const response = await generateGeminiWithFallback({
           contents: targetPrompt,
           config: {
             systemInstruction,
@@ -973,8 +1137,7 @@ Find at least ${Math.min(Math.max(Number(maxResults) || 5, 3), 10)} real, high-q
         
         try {
           // Fallback without tool if grounding tool has a transient error
-          const fallbackResponse = await getAiClient().models.generateContent({
-            model: "gemini-3.5-flash",
+          const fallbackResponse = await generateGeminiWithFallback({
             contents: targetPrompt,
             config: {
               systemInstruction

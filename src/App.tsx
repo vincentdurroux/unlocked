@@ -6651,7 +6651,7 @@ function AdminView({
                           )}
                         >
                           <div 
-                            onClick={() => setSelectedPro(pro)}
+                            onClick={() => { handleStartEditing(pro); setActiveTab('edit_pro'); }}
                             className="space-y-3 cursor-pointer hover:opacity-85 transition-opacity"
                           >
                             <div className="flex items-start gap-3.5 min-w-0">
@@ -11358,7 +11358,7 @@ function ExploreView({
       let clientGooglePlacesPros: any[] = [];
 
       // Try to fetch Google Places pros directly from the client side if GOOGLE_MAPS_KEY is available
-      if (GOOGLE_MAPS_KEY) {
+      if (false && GOOGLE_MAPS_KEY) {
         try {
           const targetZone = detectTargetZone(trimmed, userLocation);
           const centerLat = targetZone.centerCoords.lat;
@@ -11507,7 +11507,7 @@ function ExploreView({
             source: 'google_places'
           }));
 
-          const briefPros = [...proListBrief, ...googleProsBrief].filter((p: any) =>
+          const briefPros = proListBrief.filter((p: any) =>
             !isTradeMismatched(trimmed, p.name, p.category)
           );
 
@@ -11583,16 +11583,20 @@ function ExploreView({
           source: 'google_places'
         }));
 
-        const allCandidatePros = [...proListBrief, ...googleProsBrief].filter((p: any) =>
+        const allCandidatePros = proListBrief.filter((p: any) =>
           !isTradeMismatched(trimmed, p.name, p.category)
         );
 
-        const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals.
+        const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals in Valencia, Spain.
 Your purpose is to examine the user's natural language request and return the most relevant matching professionals.
 
 Review the list of professionals provided and evaluate BOTH trade/service criteria AND location criteria:
 
-1. CRITICAL TRADE COHERENCE & SPOKEN LANGUAGES (STRICT RELEVANCE):
+1. STRICT DIRECTORY CONSTRAINT (MANDATORY):
+   - You MUST ONLY recommend professionals that are present in the provided JSON list (which represents our Supabase 'professionals' table).
+   - NEVER search, invent, or hallucinate any other professional or business outside this list. If no matching professional is present in the list, you must set "exactMatchFound" to false.
+
+2. CRITICAL TRADE COHERENCE & SPOKEN LANGUAGES (STRICT RELEVANCE):
    - Match ONLY professionals whose actual trade directly matches the requested trade.
    - If the user searches for an osteopath, NEVER match dentists, doctors, pediatricians, or lawyers! Mismatched trades must receive a score of 0.
    - If the user searches for a dentist, NEVER match osteopaths or general doctors.
@@ -11604,53 +11608,90 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
      * "plumber", "plombier", "fontanero" ALL match Plumbing services.
      * Treat language translations (English, French, Spanish) and word variations as EXACT trade matches.
 
-2. SCORING & MATCHING RULES:
+3. SCORING & MATCHING RULES:
    - DIRECT MATCH (Score 70-100): The professional matches BOTH requested trade/service AND requested location/area.
    - ADJACENT / ALTERNATIVE MATCH (Score 15-45): The professional offers a closely related trade in the area.
    - UNRELATED OR WRONG TRADE (Score 0): The professional has an unrelated trade or is in a different city.
 
-3. "exactMatchFound" & "summaryMessage" RULES:
+4. "exactMatchFound" & "summaryMessage" RULES:
    - If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), set "exactMatchFound" to true, and set "summaryMessage" to null.
    - Set "exactMatchFound" to false ONLY if NO professional in the directory directly matches both trade and location.
    - Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched.`;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: `User Query: "${trimmed}"
+        const candidateModels = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.1-flash-lite"];
+        let parsedContent: any = null;
+
+        for (const model of candidateModels) {
+          try {
+            const response = await ai.models.generateContent({
+              model,
+              contents: `User Query: "${trimmed}"
 
 Professionals:
 ${JSON.stringify(allCandidatePros, null, 2)}`,
-          config: {
-            systemInstruction: sysInstruction,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
-                summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
-                results: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING, description: "The professional's ID as a string" },
-                      score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                      reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
-                    },
-                    required: ["id", "score", "reasonUrlExcerpt"]
-                  }
-                }
-              },
-              required: ["exactMatchFound", "results"]
-            },
-            thinkingConfig: {
-              thinkingLevel: ThinkingLevel.MINIMAL
-            },
-            temperature: 0.1
+              config: {
+                systemInstruction: sysInstruction,
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
+                    summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
+                    results: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          id: { type: Type.STRING, description: "The professional's ID as a string" },
+                          score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
+                          reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                        },
+                        required: ["id", "score", "reasonUrlExcerpt"]
+                      }
+                    }
+                  },
+                  required: ["exactMatchFound", "results"]
+                },
+                thinkingConfig: {
+                  thinkingLevel: ThinkingLevel.MINIMAL
+                },
+                temperature: 0.1
+              }
+            });
+            parsedContent = JSON.parse(response.text || "{}");
+            if (parsedContent) break;
+          } catch (modelErr) {
+            console.warn(`[Client Search] Model ${model} failed, trying next candidate:`, modelErr);
           }
-        });
+        }
 
-        const parsedContent = JSON.parse(response.text || "{}");
+        if (!parsedContent) {
+          // Local semantic fallback
+          const qToks = trimmed.toLowerCase().split(/[\s,.'"-]+/).filter(t => t.length >= 3);
+          const fallbackResults = allCandidatePros.map(p => {
+            let sc = 0;
+            const cat = (p.category || '').toLowerCase();
+            const bio = (p.bio || '').toLowerCase();
+            const name = (p.name || '').toLowerCase();
+            for (const t of qToks) {
+              if (cat.includes(t)) sc += 35;
+              if (name.includes(t)) sc += 25;
+              if (bio.includes(t)) sc += 15;
+            }
+            return {
+              id: String(p.id),
+              score: Math.min(sc, 95),
+              reasonUrlExcerpt: `${p.category || 'Spécialiste'} à ${p.location || 'Valence'}`
+            };
+          }).filter(p => p.score >= 30).sort((a, b) => b.score - a.score);
+
+          parsedContent = {
+            exactMatchFound: fallbackResults.length > 0,
+            summaryMessage: fallbackResults.length > 0 ? null : "Aucun professionnel trouvé pour cette recherche.",
+            results: fallbackResults.slice(0, 10)
+          };
+        }
+
         parsedContent.google_places_pros = clientGooglePlacesPros;
         data = parsedContent;
       }

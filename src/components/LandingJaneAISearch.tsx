@@ -130,12 +130,6 @@ interface LandingJaneAISearchProps {
 
 const QUICK_INSPIRATIONS = [
   {
-    icon: Stethoscope,
-    label: "Where can I find an English doctor?",
-    query: "Where can I find an English-speaking doctor in Valencia?",
-    color: "bg-blue-50 text-blue-700 border-blue-200/80 hover:bg-blue-100/70"
-  },
-  {
     icon: PartyPopper,
     label: "What can I do this weekend?",
     query: "What events and activities can I do this weekend in Valencia?",
@@ -149,8 +143,8 @@ const QUICK_INSPIRATIONS = [
   },
   {
     icon: Wrench,
-    label: "I need a reliable plumber nearby",
-    query: "I need a reliable plumber or handyman in Valencia",
+    label: "I need a plumber nearby",
+    query: "I need a plumber nearby",
     color: "bg-purple-50 text-purple-800 border-purple-200/80 hover:bg-purple-100/70"
   },
   {
@@ -378,7 +372,7 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
   }, [hasSearched, isSearching, isFollowUpLoading, searchResult, conversation.length]);
 
   const getBriefData = () => {
-    const combined = [...allPros, ...googlePlacesPros];
+    const combined = allPros;
     const map = new Map<string, any>();
     combined.forEach((p: any) => map.set(String(p.id), p));
     const uniquePros = Array.from(map.values());
@@ -423,6 +417,85 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
     }));
 
     return { proListBrief, eventsBrief, guidesBrief };
+  };
+
+  const performLocalSearchFallback = (
+    searchQuery: string,
+    candidatePros: any[],
+    eventsBrief: any[],
+    guidesBrief: any[],
+    chosenLang: string
+  ): AISearchResponse => {
+    const qTokens = (searchQuery || '').toLowerCase().split(/[\s,.'"-]+/).filter(t => t.length >= 3);
+
+    const matchedPros = candidatePros.map(p => {
+      let score = 0;
+      const cat = (p.category || p.profession || '').toLowerCase();
+      const name = (p.name || '').toLowerCase();
+      const bio = (p.bio || '').toLowerCase();
+      for (const tok of qTokens) {
+        if (cat.includes(tok)) score += 35;
+        if (name.includes(tok)) score += 25;
+        if (bio.includes(tok)) score += 15;
+      }
+      if (p.is_community_recommended) score += 15;
+      return {
+        id: String(p.id),
+        score: Math.min(score, 95),
+        reason: `${p.category || 'Professionnel'} à ${p.location || 'Valence'}`
+      };
+    }).filter(p => p.score >= 30).sort((a, b) => b.score - a.score).slice(0, 4);
+
+    const matchedEvents = eventsBrief.map(e => {
+      let score = 20;
+      const title = (e.title || '').toLowerCase();
+      const desc = (e.description || '').toLowerCase();
+      for (const tok of qTokens) {
+        if (title.includes(tok)) score += 40;
+        if (desc.includes(tok)) score += 20;
+      }
+      return {
+        id: String(e.id),
+        score: Math.min(score, 95),
+        reason: "Événement à Valence"
+      };
+    }).filter(e => e.score >= 40).sort((a, b) => b.score - a.score).slice(0, 4);
+
+    const matchedGuides = guidesBrief.map(g => {
+      let score = 20;
+      const title = (g.title || '').toLowerCase();
+      const excerpt = (g.excerpt || '').toLowerCase();
+      for (const tok of qTokens) {
+        if (title.includes(tok)) score += 40;
+        if (excerpt.includes(tok)) score += 20;
+      }
+      return {
+        id: String(g.id),
+        score: Math.min(score, 95),
+        reason: "Guide pratique de Valence"
+      };
+    }).filter(g => g.score >= 40).sort((a, b) => b.score - a.score).slice(0, 4);
+
+    const topics: string[] = [];
+    if (matchedPros.length > 0) topics.push("pros");
+    if (matchedEvents.length > 0) topics.push("events");
+    if (matchedGuides.length > 0) topics.push("guides");
+
+    const msg = chosenLang === 'fr'
+      ? (topics.length > 0 ? "Voici les résultats trouvés dans notre annuaire pour votre recherche :" : "Je n'ai pas trouvé de résultat exact pour cette recherche, mais n'hésitez pas à explorer nos différentes catégories.")
+      : chosenLang === 'es'
+      ? (topics.length > 0 ? "Aquí tienes los resultados encontrados en nuestro directorio:" : "No he encontrado resultados exactos para esta búsqueda en nuestro directorio.")
+      : (topics.length > 0 ? "Here are the results found in our directory for your search:" : "I couldn't find an exact match for this search in our directory.");
+
+    return {
+      jane_message: msg,
+      detected_language: chosenLang as any,
+      matched_topics: topics,
+      pros: matchedPros,
+      events: matchedEvents,
+      guides: matchedGuides,
+      google_places_pros: []
+    };
   };
 
   const handleSearch = async (overrideQuery?: string, explicitLanguage?: 'en' | 'fr' | 'es') => {
@@ -476,8 +549,8 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
         if (response.ok) {
           data = await response.json();
           success = true;
-        } else if (response.status === 429) {
-          throw new Error("Jane is not available at the moment. Please use manual search in the pages");
+        } else {
+          console.warn("Server AI multi-search returned status:", response.status);
         }
       } catch (err: any) {
         console.warn("Server AI multi-search failed, attempting client fallback:", err);
@@ -486,274 +559,121 @@ export const LandingJaneAISearch: React.FC<LandingJaneAISearchProps> = ({
 
     // Client-side fallback if server fails
     if (!success) {
+      let clientGooglePlacesPros: any[] = [];
+      const allCandidatePros = [...proListBrief].filter((p: any) =>
+        !isTradeMismatched(q, p.name, p.category)
+      );
+
       try {
         const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
-        if (!apiKey) {
-          throw new Error("The server AI search service is busy or unavailable (Error 404). To use client-side AI search on static hosts (e.g., Vercel), please configure the VITE_GEMINI_API_KEY environment variable in your Vercel project settings.");
-        }
-
-        const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
-        let clientGooglePlacesPros: any[] = [];
-
-        if (googleMapsKey) {
-          try {
-            const targetZone = detectTargetZone(q, userLocation);
-            const centerLat = targetZone.centerCoords.lat;
-            const centerLng = targetZone.centerCoords.lng;
-
-            const normalizedQuery = q.toLowerCase();
-            const isProximity = normalizedQuery.includes('autour') || 
-                                normalizedQuery.includes('proche') || 
-                                normalizedQuery.includes('near') || 
-                                normalizedQuery.includes('around') || 
-                                normalizedQuery.includes('close to') || 
-                                normalizedQuery.includes('moi') || 
-                                normalizedQuery.includes('me') || 
-                                normalizedQuery.includes('ici');
-
-            const textQuery = buildOptimizedPlacesQuery(
-              q,
-              targetZone.isSpecificZone,
-              targetZone.zoneName,
-              !!userLocation
-            );
-
-            const requestBody: any = {
-              textQuery,
-              maxResultCount: 20,
-              languageCode: "en"
-            };
-
-            const biasRadius = targetZone.isSpecificZone ? 5000.0 : (userLocation ? 5000.0 : 25000.0);
-
-            requestBody.locationBias = {
-              circle: {
-                center: { latitude: centerLat, longitude: centerLng },
-                radius: biasRadius
-              }
-            };
-
-            const gpResponse = await fetch("https://places.googleapis.com/v1/places:searchText", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-Goog-Api-Key": googleMapsKey,
-                "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.primaryTypeDisplayName,places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,places.photos,places.location"
-              },
-              body: JSON.stringify(requestBody)
-            });
-
-            if (gpResponse.ok) {
-              const gpData = await gpResponse.json();
-              const places = gpData.places || [];
-              const mappedPlaces = places
-                .map((place: any, idx: number) => {
-                  let photoUrl = "";
-                  // Do not fetch or set profile photo for Google Pros
-
-                  const cleanAddress = (place.formattedAddress || "Valencia, Spain").replace(', Spain', '').replace(', Espagne', '');
-
-                  let coords = {
-                    lat: centerLat + ((idx * 0.005) % 0.02) - 0.01,
-                    lng: centerLng + ((idx * 0.005) % 0.02) - 0.01
-                  };
-
-                  if (place.location && typeof place.location.latitude === 'number' && typeof place.location.longitude === 'number') {
-                    coords = {
-                      lat: place.location.latitude,
-                      lng: place.location.longitude
-                    };
-                  }
-
-                  const dist = calculateDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
-
-                  return {
-                    id: `google_${place.id}`,
-                    name: place.displayName?.text || "Professional",
-                    company_name: place.displayName?.text || "",
-                    category: place.primaryTypeDisplayName?.text || "Professional",
-                    bio: `${place.displayName?.text || 'Professional'}. ${cleanAddress ? 'Adresse : ' + cleanAddress : ''}`,
-                    location: cleanAddress,
-                    coordinates: coords,
-                    distanceKm: dist,
-                    rating: typeof place.rating === 'number' ? place.rating : 0,
-                    reviews_count: place.userRatingCount || 0,
-                    phone: place.nationalPhoneNumber || "",
-                    website: place.websiteUri || "",
-                    googleMapsUri: place.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((place.displayName?.text || '') + ' Valencia')}`,
-                    image: photoUrl,
-                    source: 'google_places',
-                    is_community_recommended: false
-                  };
-                })
-                .filter((place: any) => !isTradeMismatched(q, place.name, place.category));
-
-              // Strictly sort Google Places by closest distance first, max 6
-              mappedPlaces.sort((a: any, b: any) => {
-                const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
-                const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
-                return distA - distB;
-              });
-
-              clientGooglePlacesPros = mappedPlaces.slice(0, 6);
-            }
-          } catch (gpErr) {
-            console.warn("Client-side fallback Google Places fetch failed:", gpErr);
-          }
-        }
-
-        const googleProsBrief = clientGooglePlacesPros.map((p: any) => ({
-          id: String(p.id),
-          name: p.name,
-          company_name: p.company_name || "",
-          category: p.category || "Professional",
-          categories: [p.category || "Professional"],
-          bio: p.bio || "",
-          top_qualities: [],
-          languages: [],
-          rating: p.rating || 0,
-          location: p.location || "Valencia",
-          distanceKm: p.distanceKm || null,
-          website: p.website || "",
-          googleMapsUri: p.googleMapsUri || "",
-          is_community_recommended: false,
-          source: 'google_places'
-        }));
-
-        const allCandidatePros = [...proListBrief, ...googleProsBrief].filter((p: any) =>
-          !isTradeMismatched(q, p.name, p.category)
-        );
-
-        allCandidatePros.sort((a: any, b: any) => {
-          if (a.is_community_recommended && !b.is_community_recommended) return -1;
-          if (!a.is_community_recommended && b.is_community_recommended) return 1;
-          const distA = typeof a.distanceKm === 'number' ? a.distanceKm : 999999;
-          const distB = typeof b.distanceKm === 'number' ? b.distanceKm : 999999;
-          return distA - distB;
-        });
-
-        const ai = new GoogleGenAI({ apiKey });
-        const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" in Valencia.
+        if (apiKey) {
+          const ai = new GoogleGenAI({ apiKey });
+          const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" in Valencia.
 Match items selectively across pros, events, and guides for the user query.
 Rules:
-- 2-TIER LOCAL RANKING PRIORITY FOR PROFESSIONALS (MANDATORY):
-  * TIER 1 (ABSOLUTE HIGHEST PRIORITY): App Community Recommended Professionals ('is_community_recommended: true') WITHIN 25 KM of the target area WHO PRACTICE THE REQUESTED TRADE. Scores 85-100 (give 95-100 if they speak user's chat language). Community recommended professionals MUST ALWAYS be prioritized and returned ahead of any Google Places pros for matching trades!
-  * TIER 2 (SECONDARY/FALLBACK): Google Places pros ('source: google_places' or 'is_community_recommended: false') WITHIN 25 KM WHO PRACTICE THE REQUESTED TRADE. Scores 60-80. Mismatched Google Places entries MUST receive score 0.
-- STRICT TRADE COHERENCE: Match ONLY professionals whose specialty directly corresponds to the requested service. (e.g. if searching for an osteopath, NEVER match dentists, doctors, or lawyers).
-- GEOGRAPHIC PROXIMITY IS KING & SPOKEN LANGUAGES: Distance and location are paramount. Professionals located far away (> 25 km from the target area) MUST NOT be selected, prioritized, or returned, regardless of what language they speak! Spoken language must NEVER override distance or pull distant professionals into results. Simply asking in French or another language does NOT restrict or filter results by language. ONLY when the user explicitly specifies a language requirement (e.g. "francophone", "parlant français", "en français", "french speaking", "anglophone", "English", "Spanish", "Español"), prioritize local pros within 25 km who speak that language.
-- ACTIVITÉS & CHOSES À FAIRE (THINGS TO DO, LEISURE, SPORTS, ENTERTAINMENT):
-  * When the user searches for activities ("choses à faire", "activités", "que faire", "sorties", "loisirs", "things to do", "sports", or "entertainment"):
-    - PRIORITY ORDER: PROPOSE EVENTS FIRST! In "matched_topics", place "events" first if there are matching events (e.g. ["events", "pros", "guides"]).
-    - IN "jane_message": Present upcoming community events, festivals, concerts, cultural activities and meetups FIRST in your message, followed by recommended entertainment, sports, and leisure professionals, and discovery guides.
-    - IN "pros": Broadly DIVERSIFY suggestions across premium leisure options while maintaining strict coherence! Propose relevant professionals in:
-      * Entertainment & Culture: Live music, stand-up comedy clubs, escape rooms, theaters, flamenco shows, art galleries, museums.
-      * Sports, Water & Outdoor: Paddle surf (SUP), kayak/boat rentals, sailing excursions, bike & electric scooter rentals, hiking guides, golf, tennis/padel clubs, surfing/diving.
-      * Wellness & Mind: Spas, thermal baths, yoga & pilates studios, meditation centers.
-      * Gastronomy & Creativity: Paella cooking classes, pottery/ceramics workshops, wine tasting courses, walking food tours, salsa/bachata dance classes.
-      * Event, Services & Outing Prep: Professional vacation photographers & videographers (to capture moments, portraits), private chefs & home catering, private drivers & chauffeurs, local tour guides, massage therapists, beauty therapists, and nail artists (pre-outing pampering).
-      - STRICT COHERENCE RULE: NEVER match dentists, general doctors, pediatricians, lawyers, accountants, realtors, or plumbers for activity queries. Unrelated professional categories MUST receive score 0 and be omitted from "pros"!
-    - DO NOT limit suggestions only to children/kids activities unless explicitly requested!
-- Include a category in "matched_topics" if there are relevant items.
+- STRICT DATABASE DIRECTORY CONSTRAINT (MANDATORY):
+  * You MUST ONLY recommend professionals that are present in the provided JSON "Pros" list (which represents our Supabase 'professionals' table).
+  * NEVER search, invent, or hallucinate any other professional or business outside this list. If no matching professional is present in the list, you must say so honestly in "jane_message" and return an empty array for "pros".
+- STRICT TRADE COHERENCE: Match ONLY professionals whose specialty directly corresponds to the requested service.
+- GEOGRAPHIC PROXIMITY IS KING & SPOKEN LANGUAGES: Distance and location are paramount. Professionals located far away (> 25 km from the target area) MUST NOT be selected.
 - Score 0-100, only return items with score >= 40.
-- Proactively match events that relate to community, expats, socializing, learning local culture (like tapas or wine), networking, beach, or local activities.
-- LANGUAGE RULE: You MUST write your 'jane_message' in ${chosenLang === 'en' ? 'English' : chosenLang === 'fr' ? 'French' : 'Spanish'} and return detected_language: "${chosenLang}". If no community pros exist for this specific trade, be honest and present the closest verified pros found.`;
+- LANGUAGE RULE: You MUST write your 'jane_message' in ${chosenLang === 'en' ? 'English' : chosenLang === 'fr' ? 'French' : 'Spanish'} and return detected_language: "${chosenLang}".`;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3.5-flash-lite",
-          contents: `Query: "${q}"\nPros: ${JSON.stringify(allCandidatePros)}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
-          config: {
-            systemInstruction: sysInstruction,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                jane_message: { type: Type.STRING },
-                detected_language: { type: Type.STRING },
-                matched_topics: { type: Type.ARRAY, items: { type: Type.STRING } },
-                pros: {
-                  type: Type.ARRAY,
-                  items: {
+          const candidateModels = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.1-flash-lite"];
+          let parsed: any = null;
+
+          for (const model of candidateModels) {
+            try {
+              const response = await ai.models.generateContent({
+                model,
+                contents: `Query: "${q}"\nPros: ${JSON.stringify(allCandidatePros.slice(0, 45))}\nEvents: ${JSON.stringify(eventsBrief.slice(0, 20))}\nGuides: ${JSON.stringify(guidesBrief.slice(0, 20))}`,
+                config: {
+                  systemInstruction: sysInstruction,
+                  responseMimeType: "application/json",
+                  responseSchema: {
                     type: Type.OBJECT,
                     properties: {
-                      id: { type: Type.STRING },
-                      score: { type: Type.INTEGER },
-                      reason: { type: Type.STRING }
+                      jane_message: { type: Type.STRING },
+                      detected_language: { type: Type.STRING },
+                      matched_topics: { type: Type.ARRAY, items: { type: Type.STRING } },
+                      pros: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            id: { type: Type.STRING },
+                            score: { type: Type.INTEGER },
+                            reason: { type: Type.STRING }
+                          },
+                          required: ["id", "score", "reason"]
+                        }
+                      },
+                      events: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            id: { type: Type.STRING },
+                            score: { type: Type.INTEGER },
+                            reason: { type: Type.STRING }
+                          },
+                          required: ["id", "score", "reason"]
+                        }
+                      },
+                      guides: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            id: { type: Type.STRING },
+                            score: { type: Type.INTEGER },
+                            reason: { type: Type.STRING }
+                          },
+                          required: ["id", "score", "reason"]
+                        }
+                      }
                     },
-                    required: ["id", "score", "reason"]
-                  }
-                },
-                events: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING },
-                      score: { type: Type.INTEGER },
-                      reason: { type: Type.STRING }
-                    },
-                    required: ["id", "score", "reason"]
-                  }
-                },
-                guides: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING },
-                      score: { type: Type.INTEGER },
-                      reason: { type: Type.STRING }
-                    },
-                    required: ["id", "score", "reason"]
-                  }
+                    required: ["jane_message", "matched_topics", "pros", "events", "guides"]
+                  },
+                  thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
                 }
-              },
-              required: ["jane_message", "matched_topics", "pros", "events", "guides"]
-            },
-            thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
+              });
+              parsed = JSON.parse(response.text || "{}");
+              if (parsed) break;
+            } catch (modelErr) {
+              console.warn(`[Client Multi-Search] Model ${model} failed:`, modelErr);
+            }
           }
-        });
 
-        const parsed = JSON.parse(response.text || "{}");
-        const prosResults = (parsed.pros || []).filter((p: any) => (p.score || 0) >= 40);
+          if (parsed) {
+            const prosResults = (parsed.pros || []).filter((p: any) => (p.score || 0) >= 40).slice(0, 4);
+            const eventsResults = (parsed.events || []).filter((e: any) => (e.score || 0) >= 40).slice(0, 4);
+            const guidesResults = (parsed.guides || []).filter((g: any) => (g.score || 0) >= 40).slice(0, 4);
 
-        const eventsResults = (parsed.events || []).filter((e: any) => (e.score || 0) >= 40);
-        const guidesResults = (parsed.guides || []).filter((g: any) => (g.score || 0) >= 40);
+            const topics: string[] = [];
+            if (prosResults.length > 0) topics.push("pros");
+            if (eventsResults.length > 0) topics.push("events");
+            if (guidesResults.length > 0) topics.push("guides");
 
-        const topics: string[] = [];
-        if (prosResults.length > 0) topics.push("pros");
-        if (eventsResults.length > 0) topics.push("events");
-        if (guidesResults.length > 0) topics.push("guides");
-
-        data = {
-          jane_message: parsed.jane_message || "Here is what I found for you in Valencia:",
-          detected_language: parsed.detected_language || chosenLang,
-          matched_topics: topics,
-          pros: prosResults,
-          events: eventsResults,
-          guides: guidesResults,
-          google_places_pros: clientGooglePlacesPros
-        };
-        success = true;
-      } catch (clientErr: any) {
-        console.error("Client AI search fallback error:", clientErr);
-        const errMsg = clientErr.message || JSON.stringify(clientErr) || "";
-        const errLower = errMsg.toLowerCase();
-        if (
-          errLower.includes("quota") ||
-          errLower.includes("limit") ||
-          errLower.includes("exhausted") ||
-          errLower.includes("429") ||
-          errLower.includes("503") ||
-          errLower.includes("unavailable") ||
-          errLower.includes("too many requests") ||
-          errLower.includes("busy") ||
-          errLower.includes("rate limit") ||
-          errLower.includes("sollicitée")
-        ) {
-          setErrorMessage("Jane is temporarily overloaded. Please try again in a few seconds.");
-        } else {
-          setErrorMessage(clientErr.message || "An error occurred during search. Please try again.");
+            data = {
+              jane_message: parsed.jane_message || "Here is what I found for you in Valencia:",
+              detected_language: parsed.detected_language || chosenLang,
+              matched_topics: topics,
+              pros: prosResults,
+              events: eventsResults,
+              guides: guidesResults,
+              google_places_pros: clientGooglePlacesPros
+            };
+            success = true;
+          }
         }
+      } catch (clientErr: any) {
+        console.warn("Client AI search failed, engaging local directory matching:", clientErr);
+      }
+
+      if (!data) {
+        data = performLocalSearchFallback(q, allCandidatePros, eventsBrief, guidesBrief, chosenLang);
+        success = true;
       }
     }
 
@@ -763,7 +683,7 @@ Rules:
       }
       setSearchResult(data);
       if (data.google_places_pros && Array.isArray(data.google_places_pros)) {
-        setGooglePlacesPros(data.google_places_pros.slice(0, 6));
+        setGooglePlacesPros(data.google_places_pros.slice(0, 4));
       }
       setSelectedTopicTab('all');
       setHasSearched(true);
@@ -908,7 +828,7 @@ Rules:
           let clientGooglePlacesPros: any[] = isNewTopic ? [] : [...googlePlacesPros];
           let isProximityGlobal = false;
 
-          if (googleMapsKey) {
+          if (false && googleMapsKey) {
             try {
               // Extract target zone and query based on follow-up and history
               const targetZone = detectTargetZone(placesSearchQuery, userLocation);
@@ -1092,13 +1012,13 @@ Rules:
           const sysInstruction = `You are Jane, the friendly and intelligent AI assistant for "Unlocked" in Valencia.
 ${isNewTopic ? `The user has switched to a NEW SEARCH TOPIC for: "${placesSearchQuery}". Completely reset search context, evaluate new matches and smoothly acknowledge the new search.` : `Continue the ongoing discussion and refine search results for "${placesSearchQuery}".`}
 
-2-TIER LOCAL RANKING PRIORITY FOR PROFESSIONALS (MANDATORY):
-1. TIER 1 (ABSOLUTE HIGHEST PRIORITY): Community Recommended Pros ('is_community_recommended: true') registered in the Unlocked app within the target zone / 25km. If a community pro matches the user's request, they MUST be returned with a score of 90-100 and prioritized above ALL other results! Community recommended professionals MUST ALWAYS be prioritized and returned ahead of any Google Places pros!
-2. TIER 2 (SECONDARY/FALLBACK): Google Places pros ('source: google_places' or 'is_community_recommended: false') within 25km: Include when relevant, sorted strictly by proximity. Strictly limit Google Places pros to max 6. Scores 60-80.
+STRICT DATABASE DIRECTORY CONSTRAINT (MANDATORY):
+* You MUST ONLY recommend professionals that are present in the provided JSON "Pros" list (which represents our Supabase 'professionals' table).
+* NEVER search, invent, or hallucinate any other professional or business outside this list. If no matching professional is present in the list, you must say so honestly in "jane_message" and return an empty array for "pros".
 
 GEOGRAPHIC PROXIMITY IS KING & SPOKEN LANGUAGES:
 - Distance and location are paramount. Professionals located far away (> 25 km from the target area) MUST NOT be selected or returned, regardless of what language they speak! Spoken language must NEVER override distance. Simply asking in French or another language does NOT restrict or filter results by language.
-- ONLY when the user explicitly specifies a language requirement (e.g. "francophone", "parlant français", "en français", "french speaking", "anglophone", "English", "Spanish", "Español"), strictly prioritize local pros within 25 km who speak that language. Community pros matching both trade and language rank highest in Tier 1.
+- ONLY when the user explicitly specifies a language requirement (e.g. "francophone", "parlant français", "en français", "french speaking", "anglophone", "English", "Spanish", "Español"), strictly prioritize local pros within 25 km who speak that language.
 
 CRITICAL TRADE COHERENCE:
 - Match ONLY professionals whose specialty directly corresponds to the requested service.

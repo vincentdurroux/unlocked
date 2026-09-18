@@ -210,7 +210,7 @@ export const AdminAgenticProSearch: React.FC<AdminAgenticProSearchProps> = ({
   const [customQuery, setCustomQuery] = useState('');
   const [languagePreference, setLanguagePreference] = useState('English');
   const [specialRequirements, setSpecialRequirements] = useState('');
-  const [maxResults, setMaxResults] = useState(5);
+  const [maxResults, setMaxResults] = useState(4);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Execution States
@@ -697,10 +697,10 @@ export const AdminAgenticProSearch: React.FC<AdminAgenticProSearchProps> = ({
                           onChange={(e) => setMaxResults(Number(e.target.value))}
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
                         >
+                          <option value={1}>1 Professional</option>
+                          <option value={2}>2 Professionals</option>
                           <option value={3}>3 Professionals</option>
-                          <option value={5}>5 Professionals (Recommended)</option>
-                          <option value={8}>8 Professionals</option>
-                          <option value={10}>10 Professionals</option>
+                          <option value={4}>4 Professionals (Recommended)</option>
                         </select>
                       </div>
 
