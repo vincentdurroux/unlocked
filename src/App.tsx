@@ -11986,6 +11986,14 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                             </span>
                           </div>
                         )}
+                        {pro.is_recommended === false && (
+                          <div className="pt-1">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 text-orange-700 rounded-full text-[10px] font-bold border border-orange-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                              <span className="font-black text-[10px]">G</span>
+                              <span>Google pro</span>
+                            </span>
+                          </div>
+                        )}
                       </div>
                       {pro.top_qualities && pro.top_qualities.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 pt-4 pb-2">
@@ -13483,10 +13491,18 @@ function ProfessionalDetailView({
                     <span>{displayRating} ({displayReviewCount})</span>
                   </div>
                 )}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl font-bold border border-emerald-200/60 shadow-sm">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Recommended by MyCityUnlocked community</span>
-                </div>
+                {pro.is_recommended !== false && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl font-bold border border-emerald-200/60 shadow-sm">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>Recommended by MyCityUnlocked community</span>
+                  </div>
+                )}
+                {pro.is_recommended === false && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-xl font-bold border border-orange-200/60 shadow-sm">
+                    <span className="font-black text-sm">G</span>
+                    <span>Google pro</span>
+                  </div>
+                )}
               </div>
 
               {pro.top_qualities && pro.top_qualities.length > 0 && (
