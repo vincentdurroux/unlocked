@@ -160,7 +160,7 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
    - A non-recommended professional should only have a higher score than a recommended one if they are a significantly better match for the specific trade or location requested.`;
 
       const response = await getAiClient().models.generateContent({
-        model: "gemini-flash-latest",
+        model: "gemini-3.1-flash-lite",
         contents: `User Query: "${query}"
 
 Professionals:
