@@ -21,6 +21,7 @@ import {
   ChevronRight,
   ChevronLeft,
   ChevronDown,
+  ChevronUp,
   Globe,
   ArrowLeft,
   Filter,
@@ -3724,23 +3725,28 @@ function RecommendationItem({ rec, onUpdate, onStartAdding }: { rec: any, onUpda
 interface CategorySelectorProps {
   categories: string[];
   onChange: (cats: string[]) => void;
-  primaryColorClass: string;
-  ringColorClass: string;
-  borderColorClass: string;
-  tagBgClass: string;
+  primaryColorClass?: string;
+  ringColorClass?: string;
+  borderColorClass?: string;
+  tagBgClass?: string;
+  existingCategories?: string[];
+  categoryUsageCounts?: Record<string, number>;
 }
 
 function CategorySelector({ 
   categories = [], 
   onChange, 
-  ringColorClass,
-  tagBgClass
+  ringColorClass = "focus-within:ring-brand-blue/20",
+  tagBgClass = "bg-brand-blue/10 text-brand-blue border border-brand-blue/10",
+  existingCategories,
+  categoryUsageCounts = {}
 }: CategorySelectorProps) {
   const [inputValue, setInputValue] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [fallbackCategories, setFallbackCategories] = useState<string[]>([]);
 
-  const popular = [
+  const defaultPopular = [
     "Dance School",
     "Yoga Studio",
     "Gym & Fitness",
@@ -3759,6 +3765,49 @@ function CategorySelector({
     "Locksmith"
   ];
 
+  // If existingCategories not passed, fetch dynamically from proService
+  useEffect(() => {
+    if (!existingCategories || existingCategories.length === 0) {
+      proService.getProfessionals().then(pros => {
+        if (pros && pros.length > 0) {
+          const catMap = new globalThis.Map<string, string>();
+          pros.forEach((p: any) => {
+            const list: string[] = [];
+            if (Array.isArray(p.categories)) list.push(...p.categories);
+            if (typeof p.category === 'string') list.push(...p.category.split(','));
+            if (typeof p.profession === 'string') list.push(...p.profession.split(','));
+            list.forEach(c => {
+              const trimmed = String(c).trim();
+              if (trimmed && !catMap.has(trimmed.toLowerCase())) {
+                catMap.set(trimmed.toLowerCase(), trimmed);
+              }
+            });
+          });
+          defaultPopular.forEach(dp => {
+            if (!catMap.has(dp.toLowerCase())) catMap.set(dp.toLowerCase(), dp);
+          });
+          setFallbackCategories(Array.from(catMap.values() as IterableIterator<string>).sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+        }
+      }).catch(err => console.error('Error loading fallback categories:', err));
+    }
+  }, [existingCategories]);
+
+  // Master list of available existing categories
+  const allExisting = useMemo(() => {
+    const source = (existingCategories && existingCategories.length > 0) 
+      ? existingCategories 
+      : (fallbackCategories.length > 0 ? fallbackCategories : defaultPopular);
+      
+    const map = new globalThis.Map<string, string>();
+    source.forEach(c => {
+      const clean = String(c).trim();
+      if (clean && !map.has(clean.toLowerCase())) {
+        map.set(clean.toLowerCase(), clean);
+      }
+    });
+    return Array.from(map.values() as IterableIterator<string>).sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [existingCategories, fallbackCategories]);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -3773,19 +3822,41 @@ function CategorySelector({
 
   const addCategory = (cat: string) => {
     const trimmed = cat.trim();
-    if (trimmed && !categories.includes(trimmed)) {
-      onChange([...categories, trimmed]);
+    if (!trimmed) return;
+    
+    // Canonical match to avoid casing duplicates
+    const canonical = allExisting.find(c => c.toLowerCase() === trimmed.toLowerCase()) || trimmed;
+    
+    // Check if already selected (case-insensitive)
+    const alreadySelected = categories.some(c => c.toLowerCase() === canonical.toLowerCase());
+    if (!alreadySelected) {
+      onChange([...categories, canonical]);
     }
     setInputValue('');
   };
 
   const removeCategory = (catToRemove: string) => {
-    onChange(categories.filter(c => c !== catToRemove));
+    onChange(categories.filter(c => c.toLowerCase() !== catToRemove.toLowerCase()));
   };
 
-  const filteredSuggestions = popular.filter(
-    s => s.toLowerCase().includes(inputValue.toLowerCase()) && !categories.includes(s)
-  );
+  const trimmedInput = inputValue.trim().toLowerCase();
+
+  const filteredSuggestions = useMemo(() => {
+    if (!trimmedInput) {
+      return allExisting;
+    }
+    return allExisting.filter(s => s.toLowerCase().includes(trimmedInput));
+  }, [allExisting, trimmedInput]);
+
+  const exactMatch = useMemo(() => {
+    if (!trimmedInput) return null;
+    return allExisting.find(s => s.toLowerCase() === trimmedInput);
+  }, [allExisting, trimmedInput]);
+
+  const isInputAlreadySelected = useMemo(() => {
+    if (!trimmedInput) return false;
+    return categories.some(c => c.toLowerCase() === trimmedInput);
+  }, [categories, trimmedInput]);
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -3822,52 +3893,124 @@ function CategorySelector({
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
-              if (inputValue.trim()) {
+              if (exactMatch) {
+                addCategory(exactMatch);
+                setIsOpen(false);
+              } else if (filteredSuggestions.length > 0 && trimmedInput) {
+                // If there is an exact first suggestion, pick it to avoid duplicates
+                addCategory(filteredSuggestions[0]);
+                setIsOpen(false);
+              } else if (inputValue.trim()) {
                 addCategory(inputValue);
+                setIsOpen(false);
               }
+            } else if (e.key === 'Escape') {
+              setIsOpen(false);
             }
           }}
-          placeholder={categories.length === 0 ? "e.g. Dance School, Yoga Gym" : "Add more..."}
-          className="flex-1 bg-transparent min-w-[120px] outline-none text-slate-900 border-none px-2 py-1 font-medium text-sm focus:ring-0"
+          placeholder={categories.length === 0 ? "Search or select from existing categories..." : "Add category..."}
+          className="flex-1 bg-transparent min-w-[140px] outline-none text-slate-900 border-none px-2 py-1 font-medium text-sm focus:ring-0"
         />
         <div className="text-slate-400 px-2 flex items-center self-stretch justify-center h-full pointer-events-none">
-          <ChevronDown className="w-4 h-4 ml-auto" />
+          <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${isOpen ? 'rotate-180 text-brand-blue' : ''}`} />
         </div>
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden divide-y divide-slate-50 font-display">
-          {filteredSuggestions.map((suggestion) => (
-            <button
-              type="button"
-              key={suggestion}
-              onClick={() => {
-                addCategory(suggestion);
-                setIsOpen(false);
-              }}
-              className="w-full text-left px-4 py-3 text-xs md:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2"
-            >
-              <Plus className="w-3.5 h-3.5 text-slate-200" />
-              {suggestion}
-            </button>
-          ))}
-          {inputValue.trim() && !categories.includes(inputValue.trim()) && (
+        <div className="absolute z-50 left-0 right-0 mt-2 bg-white border border-slate-200/90 rounded-2xl shadow-2xl max-h-72 overflow-hidden flex flex-col font-display animate-in fade-in zoom-in-95 duration-150">
+          {/* Header presenting existing categories */}
+          <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-600">
+              <Tag className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Existing Categories ({filteredSuggestions.length})</span>
+            </div>
+            <span className="text-[10px] text-slate-400 font-medium">
+              {trimmedInput ? 'Filtered by your search' : 'Select to avoid duplicate categories'}
+            </span>
+          </div>
+
+          {/* List of existing categories */}
+          <div className="overflow-y-auto divide-y divide-slate-50 flex-1 overscroll-contain">
+            {filteredSuggestions.map((suggestion) => {
+              const isSelected = categories.some(c => c.toLowerCase() === suggestion.toLowerCase());
+              const count = categoryUsageCounts[suggestion] || 0;
+              return (
+                <button
+                  type="button"
+                  key={suggestion}
+                  disabled={isSelected}
+                  onClick={() => {
+                    if (!isSelected) {
+                      addCategory(suggestion);
+                      setIsOpen(false);
+                    }
+                  }}
+                  className={cn(
+                    "w-full text-left px-4 py-2.5 text-xs md:text-sm transition-colors flex items-center justify-between group",
+                    isSelected 
+                      ? "bg-slate-50/80 text-slate-400 cursor-not-allowed" 
+                      : "text-slate-700 hover:bg-indigo-50/50 hover:text-indigo-900 cursor-pointer"
+                  )}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {isSelected ? (
+                      <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                    ) : (
+                      <Plus className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 transition-colors shrink-0" />
+                    )}
+                    <span className={cn("truncate font-medium", isSelected && "line-through text-slate-400")}>
+                      {suggestion}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    {count > 0 && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-semibold group-hover:bg-indigo-100/60 group-hover:text-indigo-700 transition-colors">
+                        {count} {count > 1 ? 'pros' : 'pro'}
+                      </span>
+                    )}
+                    {isSelected && (
+                      <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">
+                        Already selected
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+
+            {filteredSuggestions.length === 0 && !trimmedInput && (
+              <div className="px-4 py-6 text-xs text-slate-400 font-medium text-center">
+                No existing categories found.
+              </div>
+            )}
+
+            {filteredSuggestions.length === 0 && trimmedInput && !exactMatch && (
+              <div className="px-4 py-3 text-xs text-slate-400 font-medium text-center bg-slate-50/50">
+                No existing category matches "{inputValue.trim()}".
+              </div>
+            )}
+          </div>
+
+          {/* Option to create a NEW category if it does not match existing */}
+          {trimmedInput && !exactMatch && !isInputAlreadySelected && (
             <button
               type="button"
               onClick={() => {
                 addCategory(inputValue);
                 setIsOpen(false);
               }}
-              className="w-full text-left px-4 py-3 text-xs md:text-sm font-bold text-slate-900 hover:bg-slate-50 transition-colors flex items-center gap-2"
+              className="w-full text-left px-4 py-3 text-xs md:text-sm font-bold text-amber-800 bg-amber-50/90 hover:bg-amber-100 transition-colors flex items-center justify-between border-t border-amber-200/60 shrink-0"
             >
-              <Plus className="w-3.5 h-3.5 text-slate-200" />
-              Add "{inputValue.trim()}"
+              <div className="flex items-center gap-2 min-w-0">
+                <Plus className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="truncate">
+                  Create: <strong className="underline decoration-amber-500 font-extrabold text-amber-950">"{inputValue.trim()}"</strong>
+                </span>
+              </div>
+              <span className="text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded bg-amber-200/80 text-amber-900 shrink-0 ml-2">
+                New Category
+              </span>
             </button>
-          )}
-          {filteredSuggestions.length === 0 && !inputValue.trim() && (
-            <div className="px-4 py-3 text-xs text-slate-400 font-medium text-center">
-              No recommendations left. Type to add custom category.
-            </div>
           )}
         </div>
       )}
@@ -4666,8 +4809,102 @@ function AdminView({
     lat: 0,
     lng: 0,
     top_qualities: [] as string[],
-    has_filled_form: false
+    has_filled_form: false,
+    is_recommended: true
   });
+
+  // Compute existing categories and usage counts from allPros and completedPros
+  const { existingCategories, categoryUsageCounts } = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const canonicalMap = new globalThis.Map<string, string>(); // lowercase -> canonical display name
+    
+    // Combine completedPros and allPros
+    const prosMap = new globalThis.Map<string | number, any>();
+    (allPros || []).forEach(p => { if (p && p.id != null) prosMap.set(p.id, p); });
+    (completedPros || []).forEach(p => { if (p && p.id != null) prosMap.set(p.id, p); });
+    
+    prosMap.forEach(pro => {
+      const rawCats: string[] = [];
+      if (Array.isArray(pro.categories)) {
+        rawCats.push(...pro.categories);
+      } else if (typeof pro.categories === 'string' && pro.categories.trim()) {
+        try {
+          const parsed = JSON.parse(pro.categories);
+          if (Array.isArray(parsed)) rawCats.push(...parsed);
+          else rawCats.push(...pro.categories.split(','));
+        } catch {
+          rawCats.push(...pro.categories.split(','));
+        }
+      }
+      if (typeof pro.category === 'string') {
+        rawCats.push(...pro.category.split(','));
+      }
+      if (typeof pro.profession === 'string') {
+        rawCats.push(...pro.profession.split(','));
+      }
+      
+      const seenInThisPro = new Set<string>();
+      rawCats.forEach(raw => {
+        if (!raw) return;
+        const clean = String(raw).trim();
+        if (!clean) return;
+        const lower = clean.toLowerCase();
+        if (seenInThisPro.has(lower)) return;
+        seenInThisPro.add(lower);
+        
+        counts[lower] = (counts[lower] || 0) + 1;
+        if (!canonicalMap.has(lower)) {
+          canonicalMap.set(lower, clean);
+        } else {
+          const existingCanonical = canonicalMap.get(lower)!;
+          if (clean !== clean.toLowerCase() && existingCanonical === existingCanonical.toLowerCase()) {
+            canonicalMap.set(lower, clean);
+          }
+        }
+      });
+    });
+
+    // Default popular categories
+    const popularDefaults = [
+      "Dance School",
+      "Yoga Studio",
+      "Gym & Fitness",
+      "Hairdresser",
+      "Nursery School",
+      "Coworking Space",
+      "Real Estate Agent",
+      "Tax Advisor / Gestor",
+      "Dentist",
+      "Physiotherapist",
+      "General Practitioner",
+      "Therapist / Psychologist",
+      "Web Developer",
+      "Electrician",
+      "Plumber",
+      "Locksmith"
+    ];
+
+    popularDefaults.forEach(def => {
+      const lower = def.toLowerCase();
+      if (!canonicalMap.has(lower)) {
+        canonicalMap.set(lower, def);
+      }
+    });
+
+    const sorted = Array.from(canonicalMap.values() as IterableIterator<string>).sort((a: string, b: string) => 
+      a.localeCompare(b, undefined, { sensitivity: 'base' })
+    );
+
+    const displayCounts: Record<string, number> = {};
+    sorted.forEach((cat: string) => {
+      displayCounts[cat] = counts[cat.toLowerCase()] || 0;
+    });
+
+    return {
+      existingCategories: sorted,
+      categoryUsageCounts: displayCounts
+    };
+  }, [completedPros, allPros]);
 
   const [newEvent, setNewEvent] = useState({
     title: '',
@@ -4720,12 +4957,23 @@ function AdminView({
     setActiveRecId(rec.id);
     setEditingProId(null);
     setSelectedFile(null);
-    const initialCategories = rec.pro_category ? rec.pro_category.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+    let initialCategories: string[] = [];
+    if (Array.isArray(rec.pro_category)) {
+      initialCategories = rec.pro_category.filter(Boolean);
+    } else if (typeof rec.pro_category === 'string' && rec.pro_category.trim()) {
+      try {
+        const parsed = JSON.parse(rec.pro_category);
+        if (Array.isArray(parsed)) initialCategories = parsed.filter(Boolean);
+        else initialCategories = rec.pro_category.split(',').map((s: string) => s.trim()).filter(Boolean);
+      } catch {
+        initialCategories = rec.pro_category.split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+    }
     setNewPro({
       ...newPro,
       name: rec.pro_name || '',
       company_name: rec.company_name || '',
-      category: rec.pro_category || '',
+      category: rec.pro_category || initialCategories.join(', '),
       categories: initialCategories,
       phone: rec.pro_phone || '',
       whatsapp: rec.whatsapp || '',
@@ -4753,14 +5001,35 @@ function AdminView({
     const bioValue = pro.bio || '';
     const imageValue = pro.image || '';
     const categoryValue = pro.category || '';
-    const categoriesValue = pro.categories || (pro.category ? pro.category.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
+    
+    let categoriesValue: string[] = [];
+    const rawCategories = (pro as any).categories;
+    const rawCategory = (pro as any).category;
+    const rawProfession = (pro as any).profession;
+
+    if (Array.isArray(rawCategories)) {
+      categoriesValue = rawCategories.filter(Boolean);
+    } else if (typeof rawCategories === 'string' && rawCategories.trim()) {
+      try {
+        const parsed = JSON.parse(rawCategories);
+        if (Array.isArray(parsed)) categoriesValue = parsed.filter(Boolean);
+        else categoriesValue = rawCategories.split(',').map((s: string) => s.trim()).filter(Boolean);
+      } catch {
+        categoriesValue = rawCategories.split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+    } else if (typeof rawCategory === 'string' && rawCategory.trim()) {
+      categoriesValue = rawCategory.split(',').map((s: string) => s.trim()).filter(Boolean);
+    } else if (typeof rawProfession === 'string' && rawProfession.trim()) {
+      categoriesValue = rawProfession.split(',').map((s: string) => s.trim()).filter(Boolean);
+    }
+
     const latValue = pro.coordinates?.lat ?? 0;
     const lngValue = pro.coordinates?.lng ?? 0;
 
     setNewPro({
       name: pro.name || '',
       company_name: pro.company_name || '',
-      category: categoryValue,
+      category: categoryValue || categoriesValue.join(', '),
       categories: categoriesValue,
       rating: pro.rating ?? 0,
       review_count: pro.review_count || 0,
@@ -4948,7 +5217,9 @@ function AdminView({
         name: newPro.name,
         company_name: newPro.company_name,
         profession: (newPro.categories || []).join(', ') || newPro.category,
+        category: (newPro.categories || []).join(', ') || newPro.category,
         categories: newPro.categories,
+        is_recommended: (newPro as any).is_recommended ?? true,
         rating: newPro.rating || 0,
         review_count: newPro.review_count || 0,
         languages: newPro.languages,
@@ -5891,6 +6162,8 @@ function AdminView({
                               ringColorClass="focus-within:ring-indigo-500/20"
                               borderColorClass="border-indigo-600"
                               tagBgClass="bg-indigo-600/10 text-indigo-800"
+                              existingCategories={existingCategories}
+                              categoryUsageCounts={categoryUsageCounts}
                             />
                           </div>
                           <div className="space-y-1">
@@ -6125,11 +6398,13 @@ function AdminView({
                     <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Category (indicate one or more)</label>
                     <CategorySelector 
                       categories={newPro.categories || []}
-                      onChange={cats => setNewPro({ ...newPro, categories: cats })}
+                      onChange={cats => setNewPro({ ...newPro, categories: cats, category: cats.join(', ') })}
                       primaryColorClass="amber-500"
                       ringColorClass="focus-within:ring-amber-500/20"
                       borderColorClass="border-amber-500"
                       tagBgClass="bg-amber-500/10 text-amber-800 border border-amber-500/10"
+                      existingCategories={existingCategories}
+                      categoryUsageCounts={categoryUsageCounts}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -6409,11 +6684,13 @@ function AdminView({
                     <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Category (indicate one or more)</label>
                     <CategorySelector 
                       categories={newPro.categories || []}
-                      onChange={cats => setNewPro({ ...newPro, categories: cats })}
+                      onChange={cats => setNewPro({ ...newPro, categories: cats, category: cats.join(', ') })}
                       primaryColorClass="brand-blue"
                       ringColorClass="focus-within:ring-brand-blue/20"
                       borderColorClass="border-brand-blue"
                       tagBgClass="bg-brand-blue/10 text-brand-blue border border-brand-blue/10"
+                      existingCategories={existingCategories}
+                      categoryUsageCounts={categoryUsageCounts}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -9935,7 +10212,7 @@ function HomeView({
               <div 
                 className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 hover:border-amber-500/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
                 id="discover-card-pro"
-                onClick={() => setSelectedPro(proToShow)}
+                onClick={() => onNavigate('explore', { proId: proToShow.id })}
               >
                 <div className="relative flex-1">
                   <AnimatePresence mode="wait" initial={false}>
@@ -10967,6 +11244,621 @@ function proSpeaksAnyLanguage(pro: any, requestedLanguages: string[]): boolean {
   });
 }
 
+function calculateGeoDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+const getDistance = calculateGeoDistance;
+
+function DirectoryProCardItem({
+  pro,
+  index,
+  isExpanded,
+  onToggleExpand,
+  currentUser,
+  userProfile,
+  blockedUsers = [],
+  usersWhoBlockedMe = [],
+  onNavigate,
+  onProUpdate,
+  aiResult,
+  userLocation,
+  hasRealLocation
+}: {
+  key?: React.Key;
+  pro: Professional;
+  index: number;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  currentUser?: any;
+  userProfile?: any;
+  blockedUsers?: string[];
+  usersWhoBlockedMe?: string[];
+  onNavigate: (view: View, params?: { eventId?: string; proId?: string; guideId?: string; searchQuery?: string; chat?: any }) => void;
+  onProUpdate?: () => void;
+  aiResult?: { score: number; reason: string };
+  userLocation: { lat: number; lng: number } | null;
+  hasRealLocation: boolean;
+}) {
+  const [localReviews, setLocalReviews] = useState<any[]>([]);
+  const [reviewCarouselIndex, setReviewCarouselIndex] = useState(0);
+  const [isWritingReview, setIsWritingReview] = useState(false);
+  const [reviewSuccess, setReviewSuccess] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [hoveredRating, setHoveredRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasAlreadyReviewed, setHasAlreadyReviewed] = useState(false);
+  const [checkingReview, setCheckingReview] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [shared, setShared] = useState(false);
+
+  const displayReviewCount = pro.review_count || 0;
+  const displayRating = pro.rating || 0;
+
+  // Swipe gesture support for testimonials carousel
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchEndX.current = null;
+    touchStartX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX.current || !touchEndX.current) return;
+    const distance = touchStartX.current - touchEndX.current;
+    const minSwipeDistance = 50;
+    const totalPages = Math.ceil(localReviews.length / 3);
+    
+    if (distance > minSwipeDistance) {
+      setReviewCarouselIndex((prev) => Math.min(totalPages - 1, prev + 1));
+    } else if (distance < -minSwipeDistance) {
+      setReviewCarouselIndex((prev) => Math.max(0, prev - 1));
+    }
+  };
+
+  useEffect(() => {
+    if (!isExpanded) return;
+
+    setIsWritingReview(false);
+    setReviewSuccess(false);
+    setRating(0);
+    setComment('');
+    setReviewCarouselIndex(0);
+
+    const fetchReviews = async () => {
+      try {
+        const reviews = await proService.getTestimonies(pro.id);
+        if (reviews && reviews.length > 0) {
+          const emails: string[] = [];
+          const names: string[] = [];
+          
+          reviews.forEach((r: any) => {
+            if (!r.author) return;
+            if (r.author.includes('|')) {
+              const parts = r.author.split('|');
+              names.push(parts[0].trim());
+              emails.push(parts[1].trim());
+            } else {
+              names.push(r.author.trim());
+              if (r.author.includes('@')) {
+                emails.push(r.author.trim());
+              }
+            }
+          });
+
+          let profiles: any[] = [];
+          try {
+            if (isSupabaseConfigured) {
+              const promises: any[] = [];
+              if (emails.length > 0) {
+                promises.push(supabase.from('profiles').select('id, full_name, email, chat_enabled').in('email', emails));
+              }
+              if (names.length > 0) {
+                promises.push(supabase.from('profiles').select('id, full_name, email, chat_enabled').in('full_name', names));
+              }
+              
+              if (promises.length > 0) {
+                const results = await Promise.all(promises);
+                results.forEach((res: any) => {
+                  if (res.data) {
+                    profiles = [...profiles, ...res.data];
+                  }
+                });
+              }
+            }
+          } catch (pe) {
+            console.warn('Error fetching matching profiles for testimonies:', pe);
+          }
+
+          const mappedReviews = reviews.map((r: any) => {
+            let cleanAuthor = r.author || '';
+            let extractedEmail = '';
+            if (r.author && r.author.includes('|')) {
+              const parts = r.author.split('|');
+              cleanAuthor = parts[0].trim();
+              extractedEmail = parts[1].trim();
+            } else if (r.author && r.author.includes('@')) {
+              extractedEmail = r.author.trim();
+            }
+
+            let matchedProfile = null;
+            if (extractedEmail) {
+              matchedProfile = profiles.find((p: any) => p.email && p.email.toLowerCase() === extractedEmail.toLowerCase());
+            }
+            if (!matchedProfile && cleanAuthor) {
+              matchedProfile = profiles.find((p: any) => p.full_name && p.full_name.toLowerCase() === cleanAuthor.toLowerCase());
+            }
+
+            const isSelf = currentUser && (
+              (matchedProfile && matchedProfile.id === currentUser.id) ||
+              (extractedEmail && extractedEmail.toLowerCase() === currentUser.email?.toLowerCase())
+            );
+
+            const isChatAvailable = (matchedProfile && !isSelf) ? (matchedProfile.chat_enabled !== false) : false;
+
+            return {
+              id: r.id,
+              author: r.author,
+              userId: matchedProfile ? matchedProfile.id : (r.user_id || r.author_id || r.profile_id || r.creator_id),
+              rating: r.rating,
+              comment: r.comment,
+              date: new Date(r.created_at).toLocaleDateString(),
+              isChatAvailable: isChatAvailable
+            };
+          });
+
+          setLocalReviews(mappedReviews);
+        } else {
+          setLocalReviews([]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch reviews:', err);
+      }
+    };
+
+    const checkExistingReview = async () => {
+      if (!currentUser) return;
+      setCheckingReview(true);
+      try {
+        const authorName = userProfile?.full_name || currentUser?.email?.split('@')[0] || '';
+        if (authorName) {
+          const reviewed = await proService.hasUserReviewedPro(authorName, pro.id, currentUser?.email || undefined);
+          setHasAlreadyReviewed(reviewed);
+        }
+      } catch (err) {
+        console.error('Error checking review status:', err);
+      } finally {
+        setCheckingReview(false);
+      }
+    };
+
+    fetchReviews();
+    checkExistingReview();
+
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel(`realtime_testimonies_pro_card_${pro.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'testimonies',
+          filter: `pro_id=eq.${pro.id}`
+        },
+        () => {
+          fetchReviews();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isExpanded, pro.id, currentUser, userProfile]);
+
+  return (
+    <motion.div
+      layout
+      transition={{ layout: { type: 'spring', stiffness: 350, damping: 30 }, opacity: { duration: 0.2 } }}
+      id={`pro-card-${pro.id}`}
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "group relative bg-white rounded-[32px] border-2 transition-all shadow-sm overflow-hidden scroll-mt-28 cursor-pointer",
+        isExpanded
+          ? "col-span-1 md:col-span-2 border-brand-blue/40 shadow-xl p-6 sm:p-8 md:p-10 ring-1 ring-brand-blue/10"
+          : pro.is_recommended !== false 
+            ? "border-emerald-500/80 hover:border-emerald-500 hover:shadow-emerald-500/10 p-6 flex flex-col lg:flex-row gap-6"
+            : "border-slate-100 hover:border-slate-200 p-6 flex flex-col lg:flex-row gap-6"
+      )}
+      onClick={() => {
+        onToggleExpand();
+      }}
+    >
+      {/* Number Badge to match map pins */}
+      <div className={cn(
+        "absolute top-6 right-6 w-8 h-8 text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-lg z-10 transition-transform group-hover:scale-110",
+        pro.is_recommended !== false 
+          ? "bg-brand-blue shadow-brand-blue/20"
+          : "bg-slate-400 shadow-slate-400/20"
+      )}>
+        {index + 1}
+      </div>
+
+      {/* AI Match Score Badge */}
+      {aiResult && pro.is_recommended !== false && (
+        <div className={cn(
+          "absolute top-6 px-2.5 py-1 bg-blue-50 text-brand-blue rounded-full flex items-center gap-1 text-[10px] font-bold border border-blue-100/50 z-10",
+          isExpanded ? "right-36" : "right-16"
+        )}>
+          <Sparkles className="w-3 h-3 text-brand-blue fill-blue-200" />
+          <span>{aiResult.score}% Jane match</span>
+        </div>
+      )}
+
+      {/* Unified Card Layout */}
+      <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50/50 rounded-full -mr-16 -mt-16 group-hover:bg-brand-blue/5 transition-colors duration-500" />
+      
+      <div className="relative w-24 h-24 sm:w-40 sm:h-40 lg:w-32 lg:h-32 rounded-2xl bg-slate-50 overflow-hidden flex-shrink-0 border border-slate-100 shadow-sm group-hover:scale-105 transition-transform duration-700 flex items-center justify-center">
+        {pro.image ? (
+          <img src={pro.image} alt={pro.name} className="w-full h-full object-cover" />
+        ) : (
+          <User className="w-1/2 h-1/2 text-slate-200" />
+        )}
+      </div>
+
+      <div className="relative flex-1 flex flex-col justify-between min-w-0 py-1 space-y-4">
+        <div className="space-y-2">
+          <div className="space-y-0.5">
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="font-bold text-slate-900 text-xl truncate group-hover:text-brand-blue transition-colors tracking-tight pr-8">{pro.name}</h4>
+              {isExpanded && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleExpand();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 shadow-2xs transition-all active:scale-95 shrink-0"
+                  title="Collapse card"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                  <span>Collapse</span>
+                </button>
+              )}
+            </div>
+            {pro.company_name && (
+              <p className="text-xs font-semibold text-slate-600 truncate -mt-0.5 mb-1.5">{pro.company_name}</p>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-medium text-brand-blue uppercase tracking-widest">{pro.category}</span>
+              {(pro.review_count ?? 0) > 0 && (
+                <>
+                  <span className="text-slate-200">•</span>
+                  <div className={cn(
+                    "flex items-center gap-1 transition-all",
+                    !currentUser && "filter blur-[4px] select-none pointer-events-none"
+                  )}>
+                    <Star className="w-3 h-3 text-brand-yellow fill-brand-yellow" />
+                    <span className="text-xs font-normal text-slate-700">
+                      <span className="flex items-center gap-1">
+                        {displayRating} <span className="text-slate-400 font-medium font-sans">({displayReviewCount})</span>
+                      </span>
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+            {pro.is_recommended !== false && (
+              <div className="pt-1">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-bold border border-emerald-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                  <span>Recommended by MyCityUnlocked community</span>
+                </span>
+              </div>
+            )}
+            {pro.is_recommended === false && (
+              <div className="pt-1">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 text-orange-700 rounded-full text-[10px] font-bold border border-orange-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <span className="font-black text-[10px]">G</span>
+                  <span>Google pro</span>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {pro.top_qualities && pro.top_qualities.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-4 pb-2">
+              {pro.top_qualities.map(quality => {
+                const cfg = getQualityConfig(quality);
+                const IconComp = cfg.icon;
+                return (
+                  <span 
+                    key={quality} 
+                    className="px-2 py-1 bg-slate-50 text-slate-700 rounded-xl text-[10px] font-bold border border-slate-100 flex items-center gap-1.5 shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+                  >
+                    <IconComp className={`w-3 h-3 ${cfg.iconColor}`} />
+                    {quality}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          <div className={cn(
+            "text-sm text-slate-500 leading-relaxed font-medium transition-all mb-4",
+            !currentUser && "filter blur-[4.5px] select-none pointer-events-none",
+            !isExpanded && "line-clamp-2"
+          )}>
+            {isExpanded ? (
+              <div className="markdown-body text-slate-700 leading-relaxed text-sm md:text-base pt-2">
+                <SimpleMarkdown>{pro.bio}</SimpleMarkdown>
+              </div>
+            ) : (
+              pro.bio
+            )}
+          </div>
+
+          {aiResult?.reason && (
+            <div className="mt-3 p-3 bg-blue-50/40 rounded-2xl border border-blue-100/45 flex items-start gap-2 max-w-full">
+              <Sparkles className="w-3.5 h-3.5 text-brand-blue mt-0.5 flex-shrink-0 animate-pulse" />
+              <p className="text-xs text-blue-900 font-medium italic leading-relaxed">
+                "{aiResult.reason}"
+              </p>
+            </div>
+          )}
+        </div>
+        
+        <div className="mt-6 pt-4 border-t border-slate-100 space-y-4">
+          {pro.languages && Array.isArray(pro.languages) && pro.languages.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex items-center gap-1 mr-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none shrink-0">
+                <Globe className="w-3 h-3 text-slate-400" />
+                <span>Languages:</span>
+              </div>
+              {pro.languages.map(lang => (
+                <span key={lang} className="px-2 py-0.5 bg-slate-50 text-slate-500 rounded-lg text-[10px] font-semibold border border-slate-100/60 transition-colors hover:bg-slate-100/50">
+                  {lang}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3 min-w-0 w-full">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest min-w-0 flex-1">
+              <MapPin className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+              <span className={cn(
+                "truncate font-medium text-slate-500 normal-case",
+                !currentUser && "filter blur-[4.5px] select-none text-slate-300 inline-block pointer-events-none"
+              )}>
+                {pro.location || "Carrer Sorní, 12, 46004 Valencia"}
+              </span>
+            </div>
+
+            {hasRealLocation && userLocation && pro.coordinates && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-50/70 border border-rose-100 text-rose-600 rounded-full text-[10px] font-semibold shrink-0 shadow-[0_1px_2px_rgba(244,63,94,0.02)] select-none">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
+                </span>
+                <span>
+                  {(() => {
+                    const d = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
+                    return d < 1 ? `${Math.round(d * 1000)}m` : `${d.toFixed(1)} km`;
+                  })()}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* EXPANDED INLINE SECTIONS (Contact, Map, Reviews) */}
+          <AnimatePresence>
+            {isExpanded && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="space-y-6 pt-4 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
+              {/* Direct Contact & Location Map Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/80 rounded-3xl p-6 border border-slate-200/80 relative overflow-hidden">
+                <div className={cn("space-y-3", !currentUser && "filter blur-[6px] select-none pointer-events-none")}>
+                  <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Direct Contact</h5>
+                  {pro.phone && (
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-cyan-50 border border-cyan-150 flex items-center justify-center shrink-0 text-cyan-600 shadow-2xs">
+                        <Phone className="w-3.5 h-3.5" />
+                      </div>
+                      <a href={`tel:${pro.phone}`} className="text-sm text-slate-700 hover:text-brand-blue transition-colors font-semibold truncate min-w-0" title={pro.phone}>{pro.phone}</a>
+                    </div>
+                  )}
+                  {pro.whatsapp && (
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-150 flex items-center justify-center shrink-0 text-[#25D366] shadow-2xs">
+                        <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                          <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z"/>
+                        </svg>
+                      </div>
+                      <a href={`https://wa.me/${pro.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-700 hover:text-brand-blue transition-colors font-semibold truncate min-w-0" title={pro.whatsapp}>{pro.whatsapp}</a>
+                    </div>
+                  )}
+                  {pro.email && (
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-150 flex items-center justify-center shrink-0 text-brand-blue shadow-2xs mt-0.5">
+                        <Mail className="w-3.5 h-3.5" />
+                      </div>
+                      <a href={`mailto:${pro.email}`} className="text-sm text-slate-700 hover:text-brand-blue transition-colors break-all font-semibold min-w-0 pt-1" title={pro.email}>{pro.email}</a>
+                    </div>
+                  )}
+                  {pro.website && (
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-600 shadow-2xs mt-0.5">
+                        <Link className="w-3.5 h-3.5" />
+                      </div>
+                      <a href={pro.website.startsWith('http') ? pro.website : `https://${pro.website}`} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-700 hover:text-brand-blue transition-colors break-all font-semibold min-w-0 pt-1" title={pro.website}>
+                        {pro.website.replace(/^https?:\/\/(www\.)?/, '')}
+                      </a>
+                    </div>
+                  )}
+                  {pro.instagram && (
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-pink-50 border border-pink-150 flex items-center justify-center shrink-0 text-pink-500 shadow-2xs mt-0.5">
+                        <Instagram className="w-3.5 h-3.5" />
+                      </div>
+                      <a href={pro.instagram.startsWith('http') ? pro.instagram : `https://instagram.com/${pro.instagram.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-700 hover:text-brand-blue transition-colors break-all font-semibold min-w-0 pt-1" title={pro.instagram}>
+                        {pro.instagram.startsWith('@') ? pro.instagram : `@${pro.instagram}`}
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                <div className={cn("space-y-3", !currentUser && "filter blur-[6px] select-none pointer-events-none")}>
+                  <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Location & Map</h5>
+                  {pro.location && (
+                    <>
+                      <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pro.location)}`} target="_blank" rel="noopener noreferrer" className="flex items-start gap-3 group/loc cursor-pointer p-1 rounded-xl hover:bg-white/80 transition-colors">
+                        <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-150 flex items-center justify-center shrink-0 text-rose-500 shadow-2xs mt-0.5">
+                          <MapPin className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="text-sm text-slate-700 font-semibold leading-relaxed">{pro.location}</span>
+                      </a>
+                      {pro.coordinates && (
+                        <div className="w-full h-36 rounded-2xl overflow-hidden border border-slate-200 shadow-xs relative">
+                          <APIProvider apiKey={GOOGLE_MAPS_KEY}>
+                            <Map defaultCenter={pro.coordinates} defaultZoom={15} gestureHandling={'none'} disableDefaultUI={true} mapId={`MINI_MAP_${pro.id}`} className="w-full h-full">
+                              <AdvancedMarker position={pro.coordinates}>
+                                <Pin background="#E11D48" glyphColor="#fff" borderColor="#BE123D" />
+                              </AdvancedMarker>
+                            </Map>
+                          </APIProvider>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {!currentUser && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-white/85 backdrop-blur-md rounded-3xl text-center z-10">
+                    <Lock className="w-6 h-6 text-brand-blue mb-2" />
+                    <p className="text-xs font-bold text-slate-900 mb-3">Sign up for free to view direct contact & map</p>
+                    <button onClick={() => onNavigate('login')} className="px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm">
+                      Sign up for free
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Testimonials Section */}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Testimonials ({localReviews.length})</h5>
+                </div>
+
+                <div className={cn("space-y-3", !currentUser && "filter blur-[6px] select-none pointer-events-none")}>
+                  {localReviews.length > 0 ? (
+                    localReviews.slice(reviewCarouselIndex * 3, reviewCarouselIndex * 3 + 3).map((review) => (
+                      <div key={review.id} className="bg-white rounded-2xl p-4 border border-slate-200/80 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-slate-900 text-xs">{formatName(review.author)}</span>
+                          <div className="flex items-center gap-0.5">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <Star key={s} className={cn("w-3 h-3", s <= review.rating ? "text-amber-400 fill-amber-400" : "text-slate-200")} />
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-600 italic">"{review.comment}"</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-slate-400 italic text-center py-4">No testimonials yet.</p>
+                  )}
+                </div>
+
+                {currentUser && (
+                  <div className="pt-2">
+                    {!isWritingReview ? (
+                      <button onClick={() => setIsWritingReview(true)} className="w-full py-2.5 bg-white text-slate-900 border border-slate-300 hover:border-slate-900 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all">
+                        <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" /> Write a Review
+                      </button>
+                    ) : (
+                      <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                        <div className="flex justify-center gap-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button key={star} type="button" onClick={() => setRating(star)} className="p-1">
+                              <Star className={cn("w-5 h-5", (rating) >= star ? "fill-amber-400 text-amber-400" : "text-slate-200")} />
+                            </button>
+                          ))}
+                        </div>
+                        <textarea placeholder="Your review..." value={comment} onChange={(e) => setComment(e.target.value)} className="w-full p-2.5 bg-white rounded-xl border border-slate-200 text-xs outline-none h-20 resize-none" />
+                        <div className="flex gap-2">
+                          <button onClick={() => setIsWritingReview(false)} className="px-3 py-1.5 bg-white text-slate-600 rounded-lg text-xs font-bold border border-slate-200">Cancel</button>
+                          <button disabled={!rating || !comment.trim() || isSubmitting} onClick={async () => {
+                            setIsSubmitting(true);
+                            try {
+                              const name = userProfile?.full_name || currentUser?.email?.split('@')[0] || 'Member';
+                              const email = currentUser?.email || '';
+                              await proService.addTestimony({ pro_id: pro.id, author: email ? `${name}|${email}` : name, rating, comment }, email);
+                              setReviewSuccess(true);
+                              setIsWritingReview(false);
+                              setRating(0);
+                              setComment('');
+                              if (onProUpdate) onProUpdate();
+                            } catch (err) {
+                              console.error(err);
+                            } finally {
+                              setIsSubmitting(false);
+                            }
+                          }} className="flex-1 py-1.5 bg-brand-blue text-white rounded-lg text-xs font-bold disabled:opacity-50">
+                            {isSubmitting ? 'Posting...' : 'Post Review'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {!isExpanded && (
+            <div className="pt-2 flex items-center justify-between">
+              <span className="text-xs font-bold text-brand-blue flex items-center gap-1.5 group-hover:translate-x-0.5 transition-transform">
+                <span>View contact, map & reviews</span>
+                <ChevronRight className="w-4 h-4" />
+              </span>
+              {!currentUser && (
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5 text-slate-400" /> Free signup unlocks full data
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModalClose, scrollToTop, onProUpdate, currentUser, userProfile, blockedUsers = [], usersWhoBlockedMe = [], isActive = false }: { 
   allPros: Professional[], 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
@@ -11359,22 +12251,13 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
   const [selectedLanguage, setSelectedLanguage] = useState('All');
   const [minRating, setMinRating] = useState(0);
-  const [selectedPro, setSelectedPro] = useState<Professional | null>(() => {
+  const [expandedProId, setExpandedProId] = useState<string | number | null>(() => {
     if (initialProId && allPros && allPros.length > 0) {
-      return allPros.find(p => String(p.id) === String(initialProId)) || null;
+      const found = allPros.find(p => String(p.id) === String(initialProId));
+      return found ? String(found.id) : null;
     }
     return null;
   });
-
-  // Sync selectedPro with freshly fetched allPros to show updated ratings/counts in modal
-  useEffect(() => {
-    if (selectedPro) {
-      const updated = allPros.find(p => p.id === selectedPro.id);
-      if (updated) {
-        setSelectedPro(updated);
-      }
-    }
-  }, [allPros]);
 
   const allProfessions = useMemo(() => {
     const list = new Set<string>();
@@ -11398,36 +12281,42 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   }, [allProfessions, search, searchMode]);
 
   const scrollToPro = (pro: Professional) => {
-    const element = document.getElementById(`pro-card-${pro.id}`);
-    const mainContainer = document.querySelector('main');
-    if (element && mainContainer) {
-      const containerRect = mainContainer.getBoundingClientRect();
-      const targetRect = element.getBoundingClientRect();
-      const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
-      
-      const targetScrollTop = offset - (containerRect.height / 2) + (targetRect.height / 2);
-      mainContainer.scrollTo({
-        top: Math.max(0, targetScrollTop),
-        behavior: 'smooth'
-      });
-      window.scrollTo(0, 0);
+    setExpandedProId(String(pro.id));
+    setTimeout(() => {
+      const element = document.getElementById(`pro-card-${pro.id}`);
+      const mainContainer = document.querySelector('main');
+      if (element && mainContainer) {
+        const containerRect = mainContainer.getBoundingClientRect();
+        const targetRect = element.getBoundingClientRect();
+        const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
+        
+        const targetScrollTop = offset - (containerRect.height / 2) + (targetRect.height / 2);
+        mainContainer.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior: 'smooth'
+        });
+        window.scrollTo(0, 0);
 
-      // Add a temporary highlight effect
-      element.classList.add('ring-4', 'ring-brand-blue/40', 'scale-[1.02]', 'z-20');
-      setTimeout(() => {
-        element.classList.remove('ring-4', 'ring-brand-blue/40', 'scale-[1.02]', 'z-20');
-      }, 2000);
-    }
+        // Add a temporary highlight effect
+        element.classList.add('ring-4', 'ring-brand-blue/40', 'scale-[1.01]', 'z-20');
+        setTimeout(() => {
+          element.classList.remove('ring-4', 'ring-brand-blue/40', 'scale-[1.01]', 'z-20');
+        }, 2000);
+      }
+    }, 120);
   };
 
   useEffect(() => {
     if (initialProId) {
       const pro = allPros.find(p => String(p.id) === String(initialProId));
-      if (pro && (!selectedPro || String(selectedPro.id) !== String(pro.id))) {
-        setSelectedPro(pro);
+      if (pro) {
+        setExpandedProId(String(pro.id));
+        setTimeout(() => {
+          scrollToPro(pro);
+        }, 200);
       }
     }
-  }, [initialProId, allPros, selectedPro]);
+  }, [initialProId, allPros]);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(() => {
     try {
       const saved = localStorage.getItem('unlocked_user_location');
@@ -11497,25 +12386,6 @@ ${JSON.stringify(proListBrief, null, 2)}`,
       // If navigator.geolocation is not available, just set hasRealLocation to false
       setHasRealLocation(false);
     }
-  };
-
-  // Selected pro details view open
-  useEffect(() => {
-    if (selectedPro) {
-      // Keep scroll position stable when modal is active
-    }
-  }, [selectedPro]);
-
-  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
   };
 
   const checkMatches = (text: string) => {
@@ -12058,190 +12928,29 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           {/* List View below the map */}
           <div id="pro-cards-list" className="grid grid-cols-1 md:grid-cols-2 gap-6 scroll-mt-28">
             {filteredPros.length > 0 ? (
-              filteredPros.map((pro, index) => (
-                <motion.div 
-                  key={pro.id} 
-                  id={`pro-card-${pro.id}`}
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  onClick={() => setSelectedPro(pro)}
-                  className={cn(
-                    "group relative bg-white rounded-[32px] p-6 flex flex-col lg:flex-row gap-6 border-2 transition-all shadow-sm cursor-pointer overflow-hidden",
-                    pro.is_recommended !== false 
-                      ? "border-emerald-500/80 hover:border-emerald-500 hover:shadow-emerald-500/10"
-                      : "border-slate-100 hover:border-slate-200"
-                  )}
-                >
-                  {/* Number Badge to match map pins */}
-                  <div className={cn(
-                    "absolute top-6 right-6 w-8 h-8 text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-lg z-10 transition-transform group-hover:scale-110",
-                    pro.is_recommended !== false 
-                      ? "bg-brand-blue shadow-brand-blue/20"
-                      : "bg-slate-400 shadow-slate-400/20"
-                  )}>
-                    {index + 1}
-                  </div>
-
-                  {/* AI Match Score Badge */}
-                  {aiResults && aiResults[String(pro.id)] && pro.is_recommended !== false && (
-                    <div className="absolute top-6 right-16 px-2.5 py-1 bg-blue-50 text-brand-blue rounded-full flex items-center gap-1 text-[10px] font-bold border border-blue-100/50 z-10">
-                      <Sparkles className="w-3 h-3 text-brand-blue fill-blue-200" />
-                      <span>{aiResults[String(pro.id)].score}% Jane match</span>
-                    </div>
-                  )}
-
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50/50 rounded-full -mr-16 -mt-16 group-hover:bg-brand-blue/5 transition-colors duration-500" />
-                  
-                  <div className="relative w-24 h-24 sm:w-40 sm:h-40 lg:w-32 lg:h-32 rounded-2xl bg-slate-50 overflow-hidden flex-shrink-0 border border-slate-100 shadow-sm group-hover:scale-105 transition-transform duration-700 flex items-center justify-center">
-                    {pro.image ? (
-                      <img src={pro.image} alt={pro.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <User className="w-1/2 h-1/2 text-slate-200" />
-                    )}
-                  </div>
-  
-                  <div className="relative flex-1 flex flex-col justify-between min-w-0 py-1">
-                    <div className="space-y-2">
-                      <div className="space-y-0.5">
-                        <h4 className="font-bold text-slate-900 text-xl truncate group-hover:text-brand-blue transition-colors tracking-tight pr-8">{pro.name}</h4>
-                        {pro.company_name && (
-                          <p className="text-xs font-semibold text-slate-600 truncate -mt-0.5 mb-1.5">{pro.company_name}</p>
-                        )}
-                        <div className="flex flex-wrap items-center gap-2">
-                           <span className="text-[11px] font-medium text-brand-blue uppercase tracking-widest">{pro.category}</span>
-                           {(pro.review_count ?? 0) > 0 && (
-                             <>
-                               <span className="text-slate-200">•</span>
-                               <div className={cn(
-                                 "flex items-center gap-1 transition-all",
-                                 !currentUser && "filter blur-[4px] select-none pointer-events-none"
-                               )}>
-                                 <Star className="w-3 h-3 text-brand-yellow fill-brand-yellow" />
-                                 <span className="text-xs font-normal text-slate-700">
-                                   <span className="flex items-center gap-1">
-                                     {pro.rating} <span className="text-slate-400 font-medium font-sans">({pro.review_count})</span>
-                                   </span>
-                                 </span>
-                               </div>
-                             </>
-                           )}
-                        </div>
-                        {pro.is_recommended !== false && (
-                          <div className="pt-1">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-bold border border-emerald-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                              <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                              <span>Recommended by MyCityUnlocked community</span>
-                            </span>
-                          </div>
-                        )}
-                        {pro.is_recommended === false && (
-                          <div className="pt-1">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 text-orange-700 rounded-full text-[10px] font-bold border border-orange-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                              <span className="font-black text-[10px]">G</span>
-                              <span>Google pro</span>
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      {pro.top_qualities && pro.top_qualities.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 pt-4 pb-2">
-                          {pro.top_qualities.map(quality => {
-                            const cfg = getQualityConfig(quality);
-                            const IconComp = cfg.icon;
-                            return (
-                              <span 
-                                key={quality} 
-                                className="px-2 py-1 bg-slate-50 text-slate-700 rounded-xl text-[10px] font-bold border border-slate-100 flex items-center gap-1.5 shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
-                              >
-                                <IconComp className={`w-3 h-3 ${cfg.iconColor}`} />
-                                {quality}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      <p className={cn(
-                        "text-sm text-slate-500 line-clamp-2 leading-relaxed font-medium transition-all mb-4",
-                        !currentUser && "filter blur-[4.5px] select-none pointer-events-none"
-                      )}>
-                        {pro.bio}
-                      </p>
-
-                      {/* AI Tailored Matching Reason */}
-                      {aiResults && aiResults[String(pro.id)]?.reason && (
-                        <div className="mt-3 p-3 bg-blue-50/40 rounded-2xl border border-blue-100/45 flex items-start gap-2 max-w-full">
-                          <Sparkles className="w-3.5 h-3.5 text-brand-blue mt-0.5 flex-shrink-0 animate-pulse" />
-                          <p className="text-xs text-blue-900 font-medium italic leading-relaxed">
-                            "{aiResults[String(pro.id)].reason}"
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="mt-6 pt-4 border-t border-slate-50/80 space-y-3.5">
-                      {/* Languages Row */}
-                      {pro.languages && Array.isArray(pro.languages) && pro.languages.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <div className="flex items-center gap-1 mr-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none shrink-0">
-                            <Globe className="w-3 h-3 text-slate-400" />
-                            <span>Languages:</span>
-                          </div>
-                          {pro.languages.map(lang => (
-                            <span key={lang} className="px-2 py-0.5 bg-slate-50 text-slate-500 rounded-lg text-[10px] font-semibold border border-slate-100/60 transition-colors hover:bg-slate-100/50">
-                              {lang}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Location & Distance Row */}
-                      <div className="flex items-center justify-between gap-3 min-w-0 w-full">
-                        <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest min-w-0 flex-1">
-                          <MapPin className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
-                          <span className={cn(
-                            "truncate font-medium text-slate-500 normal-case",
-                            !currentUser && "filter blur-[4.5px] select-none text-slate-300 inline-block pointer-events-none"
-                          )}>
-                            {pro.location || "Carrer Sorní, 12, 46004 Valencia"}
-                          </span>
-                        </div>
-
-                        {hasRealLocation && userLocation && pro.coordinates && (
-                          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-50/70 border border-rose-100 text-rose-600 rounded-full text-[10px] font-semibold shrink-0 shadow-[0_1px_2px_rgba(244,63,94,0.02)] select-none">
-                            <span className="relative flex h-1.5 w-1.5">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
-                            </span>
-                            <span>
-                              {(() => {
-                                const d = getDistance(userLocation.lat, userLocation.lng, pro.coordinates.lat, pro.coordinates.lng);
-                                return d < 1 ? `${Math.round(d * 1000)}m` : `${d.toFixed(1)} km`;
-                              })()}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Sign up prompt for visitors */}
-                      {!currentUser && (
-                        <div className="pt-0.5">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onNavigate('login');
-                            }}
-                            className="text-[9px] font-bold text-brand-blue uppercase tracking-widest hover:underline flex items-center gap-1.5 transition-all active:scale-95"
-                          >
-                            <Lock className="w-2.5 h-2.5 text-brand-blue" /> Join Unlocked to view location & map
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              ))
+              filteredPros.map((pro, index) => {
+                const isExpanded = String(expandedProId) === String(pro.id);
+                return (
+                  <DirectoryProCardItem
+                    key={pro.id}
+                    pro={pro}
+                    index={index}
+                    isExpanded={isExpanded}
+                    onToggleExpand={() => {
+                      setExpandedProId((prev) => (String(prev) === String(pro.id) ? null : String(pro.id)));
+                    }}
+                    currentUser={currentUser}
+                    userProfile={userProfile}
+                    blockedUsers={blockedUsers}
+                    usersWhoBlockedMe={usersWhoBlockedMe}
+                    onNavigate={onNavigate}
+                    onProUpdate={onProUpdate}
+                    aiResult={aiResults ? aiResults[String(pro.id)] : undefined}
+                    userLocation={userLocation}
+                    hasRealLocation={hasRealLocation}
+                  />
+                );
+              })
             ) : (
               <div className="col-span-full py-32 text-center space-y-6">
                 <div className="w-32 h-32 bg-slate-50 rounded-full flex items-center justify-center mx-auto ring-1 ring-slate-100">
@@ -12270,25 +12979,6 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           </div>
         </div>
       </div>
-
-      {/* Detail Modal Integration */}
-      <AnimatePresence>
-        {selectedPro && (
-          <ProfessionalDetailView 
-            pro={selectedPro} 
-            onClose={() => {
-              setSelectedPro(null);
-              onModalClose?.();
-            }} 
-            onNavigate={onNavigate}
-            onProUpdate={onProUpdate}
-            currentUser={currentUser}
-            userProfile={userProfile}
-            blockedUsers={blockedUsers}
-            usersWhoBlockedMe={usersWhoBlockedMe}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -13543,97 +14233,99 @@ function ProfessionalDetailView({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.18 }}
-      className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/60 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain flex justify-center" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
+      transition={{ duration: 0.2 }}
+      className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-950/75 backdrop-blur-xl z-[100] overflow-y-auto overscroll-contain flex justify-center selection:bg-brand-blue selection:text-white" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
       onClick={onClose}
     >
-      <div className="min-h-full w-full max-w-5xl flex items-start justify-center py-6 md:py-12 px-4 md:px-8">
+      <div className="min-h-full w-full max-w-5xl flex items-start justify-center py-5 md:py-10 px-3 sm:px-4 md:px-8">
         <motion.div 
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.92 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          initial={{ opacity: 0, scale: 0.94, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.94, y: 16 }}
+          transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
           className={cn(
-            "bg-white w-full rounded-[40px] overflow-hidden shadow-2xl relative",
-            pro.is_recommended !== false && "border-2 border-emerald-500"
+            "bg-white w-full rounded-3xl md:rounded-[36px] overflow-hidden shadow-2xl relative transition-all",
+            pro.is_recommended !== false ? "border-2 border-emerald-500" : "border border-slate-200/90"
           )}
           onClick={e => e.stopPropagation()}
         >
-        {/* Header Image/Cover Area */}
-        <div className="h-40 md:h-56 bg-gradient-to-br from-brand-blue/30 via-slate-100 to-amber-500/10 relative">
-          <div className="absolute top-6 right-6 flex items-center gap-2 z-10">
-            <button 
-              type="button"
-              onClick={async (e) => {
-                e.stopPropagation();
-                const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
-                const shareData = {
-                  title: pro.name,
-                  text: pro.company_name || `Check out this verified professional on Unlocked Valencia: ${pro.name}!`,
-                  url: shareUrl
-                };
-                
-                if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-                  try {
-                    await navigator.share(shareData);
-                  } catch (err) {
-                    console.warn('Share sheets failed or cancelled:', err);
-                  }
-                } else {
-                  try {
-                    await navigator.clipboard.writeText(shareUrl);
-                    setShared(true);
-                    setTimeout(() => setShared(false), 2000);
-                  } catch (err) {
-                    console.error('Failed to copy share link:', err);
-                  }
+        {/* Top-right action buttons */}
+        <div className="absolute top-4 right-4 md:top-6 md:right-7 flex items-center gap-2 z-20">
+          <button 
+            type="button"
+            onClick={async (e) => {
+              e.stopPropagation();
+              const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
+              const shareData = {
+                title: pro.name,
+                text: pro.company_name || `Check out this verified professional on Unlocked Valencia: ${pro.name}!`,
+                url: shareUrl
+              };
+              
+              if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+                try {
+                  await navigator.share(shareData);
+                } catch (err) {
+                  console.warn('Share sheets failed or cancelled:', err);
                 }
-              }}
-              className={`p-2.5 backdrop-blur-md rounded-full shadow-lg transition-all active:scale-95 ${
-                shared 
-                  ? "bg-emerald-500 hover:bg-emerald-600 text-white scale-105" 
-                  : "bg-white/40 hover:bg-white/90 text-slate-600"
-              }`}
-            >
-              {shared ? (
-                <Check className="w-5 h-5" />
-              ) : (
-                <ShareIcon className="w-5 h-5" />
-              )}
-            </button>
-            <button 
-              onClick={onClose} 
-              className="p-2.5 bg-white/40 hover:bg-white/90 backdrop-blur-md rounded-full shadow-lg text-slate-600 transition-all active:scale-95"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+              } else {
+                try {
+                  await navigator.clipboard.writeText(shareUrl);
+                  setShared(true);
+                  setTimeout(() => setShared(false), 2000);
+                } catch (err) {
+                  console.error('Failed to copy share link:', err);
+                }
+              }
+            }}
+            className={`p-2.5 rounded-full transition-all active:scale-95 border ${
+              shared 
+                ? "bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-500 shadow-sm" 
+                : "bg-slate-100/90 hover:bg-slate-200/90 text-slate-600 border-slate-200/80 shadow-2xs"
+            }`}
+            title={shared ? "Link copied!" : "Share profile"}
+          >
+            {shared ? (
+              <Check className="w-5 h-5" />
+            ) : (
+              <ShareIcon className="w-5 h-5" />
+            )}
+          </button>
+          <button 
+            onClick={onClose} 
+            className="p-2.5 bg-slate-100/90 hover:bg-slate-200/90 text-slate-600 rounded-full border border-slate-200/80 shadow-2xs transition-all active:scale-95"
+            title="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="px-6 md:px-12 pb-12 -mt-16 md:-mt-22 relative">
-          <div className="flex flex-col md:flex-row gap-6 md:items-end mb-10">
-            <div className="w-36 h-36 md:w-44 md:h-44 rounded-[32px] bg-white p-1.5 overflow-hidden shadow-2xl border-4 border-white ring-1 ring-slate-100 group flex items-center justify-center flex-shrink-0">
+        <div className="pt-8 md:pt-10 px-5 sm:px-8 md:px-12 pb-10 md:pb-12 relative">
+          <div className="flex flex-col md:flex-row gap-5 md:gap-7 md:items-center mb-8 md:mb-10 pr-20 md:pr-24">
+            <div className="w-28 h-28 md:w-36 md:h-36 rounded-2xl md:rounded-3xl bg-slate-50 p-1 overflow-hidden shadow-md border border-slate-200 flex items-center justify-center flex-shrink-0 group">
               {pro.image ? (
-                <img src={pro.image} alt={pro.name} className="w-full h-full object-cover rounded-[24px] group-hover:scale-110 transition-transform duration-700" />
+                <img src={pro.image} alt={pro.name} className="w-full h-full object-cover rounded-[14px] md:rounded-[22px] group-hover:scale-105 transition-transform duration-500" />
               ) : (
-                <User className="w-20 h-20 text-slate-200" />
+                <div className="w-full h-full rounded-[14px] md:rounded-[22px] bg-slate-100 flex items-center justify-center">
+                  <User className="w-14 h-14 md:w-16 md:h-16 text-slate-300" />
+                </div>
               )}
             </div>
-            <div className="flex-1 space-y-3 pb-2">
+            <div className="flex-1 space-y-3 pb-1">
               <div className="flex flex-col gap-1 items-start">
-                <h3 className="text-4xl md:text-5xl font-black text-slate-900 font-display tracking-tight leading-none">{pro.name}</h3>
+                <h3 className="text-3xl md:text-5xl font-black text-slate-900 font-display tracking-tight leading-tight">{pro.name}</h3>
                 {pro.company_name && (
-                  <p className="text-lg font-semibold text-slate-600 font-sans tracking-tight">{pro.company_name}</p>
+                  <p className="text-base md:text-lg font-semibold text-slate-500 font-sans tracking-tight">{pro.company_name}</p>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-xl font-medium border border-brand-blue/10">
+              <div className="flex flex-wrap items-center gap-2.5 text-xs md:text-sm">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-xl font-bold border border-brand-blue/15 shadow-2xs">
                   <Briefcase className="w-3.5 h-3.5" />
                   {pro.category}
                 </div>
                 {displayReviewCount > 0 && (
                   <div className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-xl font-medium border border-slate-100 transition-all",
+                    "flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-900 rounded-xl font-bold border border-amber-200 shadow-2xs transition-all",
                     !currentUser && "filter blur-[4px] select-none pointer-events-none"
                   )}>
                     <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
@@ -13641,30 +14333,30 @@ function ProfessionalDetailView({
                   </div>
                 )}
                 {pro.is_recommended !== false && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl font-bold border border-emerald-200/60 shadow-sm">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-800 rounded-xl font-bold border border-emerald-200/80 shadow-2xs">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span>Recommended by MyCityUnlocked community</span>
                   </div>
                 )}
                 {pro.is_recommended === false && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-xl font-bold border border-orange-200/60 shadow-sm">
-                    <span className="font-black text-sm">G</span>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-800 rounded-xl font-bold border border-orange-200/80 shadow-2xs">
+                    <span className="font-black text-xs px-1.5 py-0.5 bg-orange-200 rounded text-orange-800">G</span>
                     <span>Google pro</span>
                   </div>
                 )}
               </div>
 
               {pro.top_qualities && pro.top_qualities.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-2">
+                <div className="flex flex-wrap gap-2 pt-1">
                   {pro.top_qualities.map((quality) => {
                     const cfg = getQualityConfig(quality);
                     const QualityIcon = cfg.icon;
                     return (
                       <span 
                         key={quality} 
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border ${cfg.color} transition-all duration-300 hover:scale-[1.03] select-none`}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border ${cfg.color} transition-all duration-300 hover:scale-[1.03] select-none shadow-2xs`}
                       >
-                        <QualityIcon className={`w-4 h-4 ${cfg.iconColor} shrink-0`} />
+                        <QualityIcon className={`w-3.5 h-3.5 ${cfg.iconColor} shrink-0`} />
                         {quality}
                       </span>
                     );
@@ -13674,43 +14366,51 @@ function ProfessionalDetailView({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-16">
-            <div className="lg:col-span-2 space-y-12">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
+            <div className="lg:col-span-2 space-y-10">
               {/* Direct Contact & Info Bar */}
-              <div className="bg-slate-50/30 rounded-2xl p-6 w-full border border-slate-100/50 relative overflow-hidden min-h-[160px] flex flex-col justify-center">
+              <div className="bg-slate-50/70 rounded-3xl p-6 md:p-8 w-full border border-slate-200/80 shadow-xs relative overflow-hidden min-h-[170px] flex flex-col justify-center">
                 <div className={cn(
-                  "grid grid-cols-1 md:grid-cols-2 gap-8 transition-all duration-300",
+                  "grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 transition-all duration-300",
                   !currentUser && "filter blur-[6.5px] select-none pointer-events-none"
                 )}>
                   <div className="space-y-3">
                     {pro.phone && (
                       <div className="flex items-center gap-3 min-w-0">
-                        <Phone className="w-3.5 h-3.5 text-cyan-500/70 shrink-0" />
-                        <a href={`tel:${pro.phone}`} className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium truncate min-w-0" title={pro.phone}>{pro.phone}</a>
+                        <div className="w-8 h-8 rounded-xl bg-cyan-50 border border-cyan-150 flex items-center justify-center shrink-0 text-cyan-600 shadow-2xs">
+                          <Phone className="w-3.5 h-3.5" />
+                        </div>
+                        <a href={`tel:${pro.phone}`} className="text-sm text-slate-600 hover:text-brand-blue transition-colors font-medium truncate min-w-0" title={pro.phone}>{pro.phone}</a>
                       </div>
                     )}
                     {pro.whatsapp && (
                       <div className="flex items-center gap-3 min-w-0">
-                        <svg className="w-4 h-4 text-[#25D366]/80 fill-current shrink-0" viewBox="0 0 24 24">
-                          <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z"/>
-                        </svg>
-                        <a href={`https://wa.me/${pro.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-500 hover:text-brand-blue transition-colors font-medium truncate min-w-0" title={pro.whatsapp}>{pro.whatsapp}</a>
+                        <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-150 flex items-center justify-center shrink-0 text-[#25D366] shadow-2xs">
+                          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                            <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z"/>
+                          </svg>
+                        </div>
+                        <a href={`https://wa.me/${pro.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-600 hover:text-brand-blue transition-colors font-medium truncate min-w-0" title={pro.whatsapp}>{pro.whatsapp}</a>
                       </div>
                     )}
                     {pro.email && (
                       <div className="flex items-start gap-3 min-w-0">
-                        <Mail className="w-3.5 h-3.5 text-brand-blue/70 shrink-0 mt-1" />
-                        <a href={`mailto:${pro.email}`} className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0" title={pro.email}>{pro.email}</a>
+                        <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-150 flex items-center justify-center shrink-0 text-brand-blue shadow-2xs mt-0.5">
+                          <Mail className="w-3.5 h-3.5" />
+                        </div>
+                        <a href={`mailto:${pro.email}`} className="text-sm text-slate-600 hover:text-brand-blue transition-colors break-all font-medium min-w-0 pt-1" title={pro.email}>{pro.email}</a>
                       </div>
                     )}
                     {pro.website && (
                       <div className="flex items-start gap-3 min-w-0">
-                        <Link className="w-3.5 h-3.5 text-slate-400/70 shrink-0 mt-1" />
+                        <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-600 shadow-2xs mt-0.5">
+                          <Link className="w-3.5 h-3.5" />
+                        </div>
                         <a 
                           href={pro.website.startsWith('http') ? pro.website : `https://${pro.website}`} 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0"
+                          className="text-sm text-slate-600 hover:text-brand-blue transition-colors break-all font-medium min-w-0 pt-1"
                           title={pro.website}
                         >
                           {pro.website.replace(/^https?:\/\/(www\.)?/, '')}
@@ -13719,12 +14419,14 @@ function ProfessionalDetailView({
                     )}
                     {pro.instagram && (
                       <div className="flex items-start gap-3 min-w-0">
-                        <Instagram className="w-3.5 h-3.5 text-pink-500/70 shrink-0 mt-1" />
+                        <div className="w-8 h-8 rounded-xl bg-pink-50 border border-pink-150 flex items-center justify-center shrink-0 text-pink-500 shadow-2xs mt-0.5">
+                          <Instagram className="w-3.5 h-3.5" />
+                        </div>
                         <a 
                           href={pro.instagram.startsWith('http') ? pro.instagram : `https://instagram.com/${pro.instagram.replace(/^@/, '')}`} 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0"
+                          className="text-sm text-slate-600 hover:text-brand-blue transition-colors break-all font-medium min-w-0 pt-1"
                           title={pro.instagram}
                         >
                           {pro.instagram.startsWith('@') ? pro.instagram : `@${pro.instagram}`}
@@ -13733,12 +14435,14 @@ function ProfessionalDetailView({
                     )}
                     {pro.facebook && (
                       <div className="flex items-start gap-3 min-w-0">
-                        <Facebook className="w-3.5 h-3.5 text-blue-600/70 shrink-0 mt-1" />
+                        <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-150 flex items-center justify-center shrink-0 text-blue-600 shadow-2xs mt-0.5">
+                          <Facebook className="w-3.5 h-3.5" />
+                        </div>
                         <a 
                           href={pro.facebook.startsWith('http') ? pro.facebook : `https://facebook.com/${pro.facebook}`} 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="text-sm text-slate-500 hover:text-brand-blue transition-colors break-all font-medium min-w-0"
+                          className="text-sm text-slate-600 hover:text-brand-blue transition-colors break-all font-medium min-w-0 pt-1"
                           title={pro.facebook}
                         >
                           {pro.facebook.replace(/^https?:\/\/(www\.)?(facebook\.com\/)?/, '')}
@@ -13746,33 +14450,37 @@ function ProfessionalDetailView({
                       </div>
                     )}
                     {pro.languages && Array.isArray(pro.languages) && pro.languages.length > 0 && (
-                      <div className="flex items-center gap-3">
-                        <Globe className="w-3.5 h-3.5 text-slate-400/70" />
-                        <div className="flex flex-wrap gap-2">
+                      <div className="flex items-center gap-3 pt-1">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-150 flex items-center justify-center shrink-0 text-indigo-600 shadow-2xs">
+                          <Globe className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
                           {pro.languages.map(lang => (
-                            <span key={lang} className="text-sm text-slate-500 font-medium">{lang}</span>
+                            <span key={lang} className="text-xs bg-white text-slate-700 font-semibold px-2.5 py-1 rounded-lg border border-slate-200/80 shadow-2xs">{lang}</span>
                           ))}
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {pro.location && (
                       <>
                         <a 
                           href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pro.location)}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-start gap-3 group/loc cursor-pointer"
+                          className="flex items-start gap-3 group/loc cursor-pointer p-2 -ml-2 rounded-xl hover:bg-white/80 transition-colors"
                         >
-                          <MapPin className="w-3.5 h-3.5 text-rose-500/70 group-hover/loc:text-rose-500 transition-colors mt-0.5" />
-                          <span className="text-sm text-slate-500 group-hover/loc:text-brand-blue transition-colors underline decoration-slate-200 underline-offset-4 font-medium leading-relaxed">{pro.location}</span>
+                          <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-150 flex items-center justify-center shrink-0 text-rose-500 group-hover/loc:bg-rose-100 shadow-2xs transition-colors mt-0.5">
+                            <MapPin className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="text-sm text-slate-600 group-hover/loc:text-brand-blue transition-colors underline decoration-slate-300 underline-offset-4 font-medium leading-relaxed">{pro.location}</span>
                         </a>
                         
                         {/* Mini Map */}
                         {pro.coordinates && (
-                          <div className="w-full h-32 rounded-2xl overflow-hidden border border-slate-100 shadow-sm relative group/map">
+                          <div className="w-full h-36 rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs relative group/map">
                             <Map
                               defaultCenter={pro.coordinates}
                               defaultZoom={15}
@@ -13785,22 +14493,30 @@ function ProfessionalDetailView({
                                 <Pin background="#E11D48" glyphColor="#fff" borderColor="#BE123D" />
                               </AdvancedMarker>
                             </Map>
-                            <div className="absolute inset-0 bg-transparent cursor-pointer" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pro.location!)}`, '_blank')} />
+                            <div 
+                              className="absolute inset-0 bg-slate-900/0 group-hover/map:bg-slate-900/10 transition-all cursor-pointer flex items-center justify-center" 
+                              onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pro.location!)}`, '_blank')}
+                            >
+                              <span className="opacity-0 group-hover/map:opacity-100 transition-opacity bg-white/95 backdrop-blur-xs text-slate-800 text-xs font-bold px-3 py-1.5 rounded-xl shadow-md flex items-center gap-1.5 pointer-events-none">
+                                <MapPin className="w-3.5 h-3.5 text-rose-500" /> Open in Google Maps
+                              </span>
+                            </div>
                           </div>
                         )}
                       </>
                     )}
                   </div>
                 </div>
+
                 {!currentUser && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-white/45 backdrop-blur-[4px] rounded-2xl text-center z-10 transition-all">
-                    <div className="w-11 h-11 rounded-full bg-brand-blue/10 flex items-center justify-center text-brand-blue mb-2 shadow-sm animate-pulse">
-                      <Lock className="w-5 h-5 stroke-[2.5px]" />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-white/65 backdrop-blur-md rounded-3xl text-center z-10 transition-all border border-slate-200/60 shadow-xs">
+                    <div className="w-12 h-12 rounded-2xl bg-brand-blue/10 border border-brand-blue/20 flex items-center justify-center text-brand-blue mb-3 shadow-xs">
+                      <Lock className="w-5 h-5 stroke-[2.2px]" />
                     </div>
-                    <p className="text-sm font-semibold text-slate-950 tracking-tight mb-4 max-w-xs mx-auto">Join our community for free to reveal full information and testimonials</p>
+                    <p className="text-sm font-bold text-slate-950 tracking-tight mb-4 max-w-xs mx-auto">Join our community for free to reveal full information and testimonials</p>
                     <button 
                       onClick={() => { onClose(); onNavigate('login'); }}
-                      className="px-5 py-2.5 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-[10px] font-semibold uppercase tracking-wider shadow-lg shadow-brand-blue/25 transition-all active:scale-95 flex items-center gap-1.5"
+                      className="px-5 py-2.5 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md shadow-brand-blue/25 hover:shadow-lg transition-all active:scale-95 flex items-center gap-2"
                     >
                       <Lock className="w-3.5 h-3.5" /> Sign up for free to Unlocked
                     </button>
@@ -13808,23 +14524,23 @@ function ProfessionalDetailView({
                 )}
               </div>
 
-              <section className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-brand-blue" />
-                  <h4 className="text-lg font-semibold text-slate-900 font-display uppercase tracking-wider">About</h4>
+              <section className="space-y-3.5 bg-slate-50/60 rounded-3xl p-6 md:p-8 border border-slate-200/70">
+                <div className="flex items-center gap-2.5 pb-1">
+                  <div className="w-2.5 h-2.5 rounded-full bg-brand-blue" />
+                  <h4 className="text-sm font-bold text-slate-900 font-display uppercase tracking-wider">About</h4>
                 </div>
-                <div className="markdown-body">
+                <div className="markdown-body text-slate-700 leading-relaxed text-sm md:text-base">
                   <SimpleMarkdown>{pro.bio}</SimpleMarkdown>
                 </div>
               </section>
 
               {/* Reviews Section */}
-              <section className="space-y-6 pt-6">
+              <section className="space-y-6 pt-2">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-2 h-2 rounded-full bg-brand-yellow shrink-0" />
-                    <h4 className="text-lg font-semibold text-slate-900 font-display uppercase tracking-wider">Testimonials</h4>
-                    <span className="text-xs bg-slate-100/80 border border-slate-200 text-slate-500 px-2 py-0.5 rounded-full font-bold font-mono">
+                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                    <h4 className="text-sm font-bold text-slate-900 font-display uppercase tracking-wider">Testimonials</h4>
+                    <span className="text-xs bg-slate-100 border border-slate-200 text-slate-600 px-2.5 py-0.5 rounded-full font-bold font-mono">
                       {localReviews.length}
                     </span>
                   </div>
@@ -13836,18 +14552,18 @@ function ProfessionalDetailView({
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
                     className={cn(
-                      "space-y-4 transition-all duration-300 touch-pan-y",
+                      "space-y-3.5 transition-all duration-300 touch-pan-y",
                       !currentUser && "filter blur-[7px] select-none pointer-events-none"
                     )}
                   >
                     {localReviews.length > 0 ? (
                       localReviews.slice(reviewCarouselIndex * 3, reviewCarouselIndex * 3 + 3).map((review) => (
-                        <div key={review.id} className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100 space-y-3 animate-in fade-in duration-300">
-                          <div className="flex justify-between items-start">
-                            <div className="space-y-1">
+                        <div key={review.id} className="bg-white rounded-2xl p-5 md:p-6 border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-all space-y-3">
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="space-y-1.5">
                               <div 
                                 className={cn(
-                                  "font-bold text-slate-900 flex items-center gap-2 transition-colors",
+                                  "font-bold text-slate-900 flex items-center gap-2 text-sm md:text-base transition-colors",
                                   review.isChatAvailable 
                                     ? "cursor-pointer hover:text-brand-blue group/author" 
                                     : "cursor-default"
@@ -13870,38 +14586,35 @@ function ProfessionalDetailView({
                                   onClose();
                                 }}
                               >
-                                {formatName(review.author)}
+                                <span>{formatName(review.author)}</span>
                                 {review.isChatAvailable && (
                                   <div className={cn(
-                                    "w-6 h-6 rounded-full flex items-center justify-center transition-colors",
+                                    "w-6 h-6 rounded-lg flex items-center justify-center transition-all",
                                     (review.userId && (blockedUsers.includes(review.userId) || usersWhoBlockedMe.includes(review.userId)))
-                                      ? "bg-slate-50 cursor-not-allowed"
-                                      : "bg-slate-100 group-hover/author:bg-brand-blue/10"
-                                  )}>
-                                    <MessageSquare className={cn(
-                                      "w-3.5 h-3.5 transition-all",
-                                      (review.userId && (blockedUsers.includes(review.userId) || usersWhoBlockedMe.includes(review.userId)))
-                                        ? "text-slate-250"
-                                        : "text-slate-400 group-hover/author:text-brand-blue"
-                                    )} />
+                                      ? "bg-slate-100 cursor-not-allowed text-slate-300"
+                                      : "bg-slate-100 group-hover/author:bg-brand-blue text-slate-500 group-hover/author:text-white"
+                                  )}
+                                  title="Send a message to reviewer"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
                                   </div>
                                 )}
                               </div>
-                              <div className="flex items-center gap-0.5">
+                              <div className="flex items-center gap-1">
                                 {[1, 2, 3, 4, 5].map((s) => (
-                                  <Star key={s} className={cn("w-3 h-3", s <= review.rating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200")} />
+                                  <Star key={s} className={cn("w-3.5 h-3.5", s <= review.rating ? "text-amber-400 fill-amber-400" : "text-slate-200")} />
                                 ))}
                               </div>
                             </div>
-                            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{review.date}</span>
+                            <span className="text-[11px] font-semibold text-slate-400 font-mono tracking-tight shrink-0">{review.date}</span>
                           </div>
                           <p className="text-sm text-slate-600 leading-relaxed italic">"{review.comment}"</p>
                         </div>
                       ))
                     ) : (
-                      <div className="py-12 text-center space-y-3 bg-slate-50/30 rounded-3xl border border-dashed border-slate-200">
-                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
-                          <MessageCircle className="w-6 h-6 text-slate-200" />
+                      <div className="py-12 text-center space-y-3 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
+                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-2xs border border-slate-100">
+                          <MessageCircle className="w-6 h-6 text-slate-300" />
                         </div>
                         <p className="text-sm text-slate-400 font-medium italic">No testimonials yet. Be the first to share your experience!</p>
                       </div>
@@ -13909,23 +14622,23 @@ function ProfessionalDetailView({
                   </div>
 
                   {localReviews.length > 3 && (
-                    <div className="flex justify-center mt-6 animate-in fade-in duration-300">
-                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 p-1 rounded-xl shadow-sm">
+                    <div className="flex justify-center mt-6">
+                      <div className="flex items-center gap-2 bg-white border border-slate-200/80 p-1.5 rounded-2xl shadow-xs">
                         <button
                           onClick={() => setReviewCarouselIndex((prev) => Math.max(0, prev - 1))}
                           disabled={reviewCarouselIndex === 0}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-950 hover:bg-white disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-500 transition-all shadow-none disabled:shadow-none hover:shadow-xs active:scale-95 animate-none"
+                          className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                           title="Previous reviews"
                         >
                           <ChevronLeft className="w-4 h-4" />
                         </button>
-                        <span className="text-[11px] font-bold text-slate-600 px-2.5 font-mono tracking-tight whitespace-nowrap select-none">
+                        <span className="text-xs font-bold text-slate-700 px-3 font-mono tracking-tight whitespace-nowrap select-none">
                           {reviewCarouselIndex + 1} / {Math.ceil(localReviews.length / 3)}
                         </span>
                         <button
                           onClick={() => setReviewCarouselIndex((prev) => Math.min(Math.ceil(localReviews.length / 3) - 1, prev + 1))}
                           disabled={reviewCarouselIndex + 1 >= Math.ceil(localReviews.length / 3)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-950 hover:bg-white disabled:opacity-25 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-500 transition-all shadow-none disabled:shadow-none hover:shadow-xs active:scale-95 animate-none"
+                          className="p-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                           title="Next reviews"
                         >
                           <ChevronRight className="w-4 h-4" />
@@ -13935,14 +14648,14 @@ function ProfessionalDetailView({
                   )}
 
                   {!currentUser && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/45 backdrop-blur-[4px] rounded-3xl p-6 text-center z-10 transition-all">
-                      <div className="w-11 h-11 rounded-full bg-brand-blue/10 flex items-center justify-center text-brand-blue mb-2 shadow-sm animate-pulse">
-                        <Lock className="w-5 h-5 stroke-[2.5px]" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/65 backdrop-blur-md rounded-3xl p-6 text-center z-10 transition-all border border-slate-200/60 shadow-xs">
+                      <div className="w-12 h-12 rounded-2xl bg-brand-blue/10 border border-brand-blue/20 flex items-center justify-center text-brand-blue mb-3 shadow-xs">
+                        <Lock className="w-5 h-5 stroke-[2.2px]" />
                       </div>
-                      <p className="text-sm font-semibold text-slate-950 tracking-tight text-center px-4 mb-4">Join our community for free to reveal full information and testimonials</p>
+                      <p className="text-sm font-bold text-slate-950 tracking-tight text-center px-4 mb-4 max-w-xs mx-auto">Join our community for free to reveal full information and testimonials</p>
                       <button 
                         onClick={() => { onClose(); onNavigate('login'); }}
-                        className="px-5 py-2.5 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-[10px] font-semibold uppercase tracking-wider shadow-lg shadow-brand-blue/25 transition-all active:scale-95 flex items-center gap-1.5 justify-center mx-auto"
+                        className="px-5 py-2.5 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md shadow-brand-blue/25 hover:shadow-lg transition-all active:scale-95 flex items-center gap-2 justify-center mx-auto"
                       >
                         <Lock className="w-3.5 h-3.5" /> Sign up for free to Unlocked
                       </button>
@@ -13956,9 +14669,9 @@ function ProfessionalDetailView({
               <div className="space-y-6">
                 <motion.div 
                   layout
-                  className="bg-slate-50 rounded-3xl p-8 border border-slate-100 space-y-6 overflow-hidden"
+                  className="bg-slate-50/80 rounded-3xl p-6 md:p-8 border border-slate-200/80 space-y-6 overflow-hidden shadow-xs"
                 >
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <h4 className="text-lg font-bold text-slate-900 leading-tight">Experience with this professional?</h4>
                     <p className="text-sm text-slate-500 font-medium">Help the community by sharing your feedback about {pro.name}.</p>
                   </div>
@@ -13970,20 +14683,20 @@ function ProfessionalDetailView({
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
-                        className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-8 text-center space-y-4"
+                        className="bg-emerald-50/80 border border-emerald-200 rounded-2xl p-6 text-center space-y-4 shadow-2xs"
                       >
-                        <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20 rotate-3">
+                        <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center mx-auto shadow-md shadow-emerald-500/20 rotate-3">
                           <Check className="w-6 h-6 text-white" />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           <h4 className="text-emerald-900 font-bold text-lg">Sent for moderation</h4>
-                          <p className="text-emerald-700/80 text-sm leading-relaxed px-4">
+                          <p className="text-emerald-700/85 text-sm leading-relaxed px-2">
                             Thank you! Your testimonial has been submitted for moderation and will be published once approved by an administrator.
                           </p>
                         </div>
                         <button 
                           onClick={() => setReviewSuccess(false)}
-                          className="px-6 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-500/10 hover:bg-emerald-600 transition-all active:scale-95"
+                          className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/15 transition-all active:scale-95"
                         >
                           Understood
                         </button>
@@ -13993,14 +14706,14 @@ function ProfessionalDetailView({
                         key="already-reviewed"
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="bg-brand-blue/5 border border-brand-blue/10 rounded-2xl p-6 text-center space-y-3"
+                        className="bg-brand-blue/5 border border-brand-blue/15 rounded-2xl p-6 text-center space-y-3"
                       >
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center mx-auto shadow-sm">
+                        <div className="w-10 h-10 bg-white rounded-xl border border-slate-100 flex items-center justify-center mx-auto shadow-2xs">
                           <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
                         </div>
                         <div className="space-y-1">
                           <h4 className="text-slate-900 font-bold text-sm">Review Submitted</h4>
-                          <p className="text-slate-500 text-xs leading-relaxed px-4">
+                          <p className="text-slate-500 text-xs leading-relaxed px-2">
                             You have already shared your experience with {pro.name}. Thank you for your contribution to our community!
                           </p>
                         </div>
@@ -14013,9 +14726,9 @@ function ProfessionalDetailView({
                         exit={{ opacity: 0, y: -10 }}
                         onClick={() => setIsWritingReview(true)}
                         disabled={checkingReview}
-                        className="w-full py-4 bg-white text-slate-900 border-2 border-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-900 hover:text-white transition-all active:scale-95 shadow-sm disabled:opacity-50"
+                        className="w-full py-3.5 bg-white text-slate-900 border border-slate-300 hover:border-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-900 hover:text-white transition-all active:scale-98 shadow-xs disabled:opacity-50"
                       >
-                        <Star className="w-4 h-4" />
+                        <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
                         {checkingReview ? 'Checking...' : 'Write a Review'}
                       </motion.button>
                     ) : (
@@ -14024,10 +14737,10 @@ function ProfessionalDetailView({
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="space-y-6"
+                        className="space-y-5"
                       >
                         {reviewError && (
-                          <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl space-y-3 text-left">
+                          <div className="p-4 bg-rose-50 border border-rose-150 rounded-2xl space-y-3 text-left">
                             <div className="flex items-start gap-2.5">
                               <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
                               <div className="space-y-1">
@@ -14099,18 +14812,19 @@ DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`);
                           </div>
                         )}
 
-                        <div className="flex justify-center gap-2 py-2">
+                        <div className="flex justify-center gap-2.5 py-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
                           {[1, 2, 3, 4, 5].map((star) => (
                             <button
                               key={star}
+                              type="button"
                               onMouseEnter={() => setHoveredRating(star)}
                               onMouseLeave={() => setHoveredRating(0)}
                               onClick={() => setRating(star)}
-                              className="transition-transform active:scale-90"
+                              className="transition-transform active:scale-90 hover:scale-110 p-1"
                             >
                               <Star 
                                 className={cn(
-                                  "w-8 h-8 transition-colors",
+                                  "w-7 h-7 transition-colors",
                                   (hoveredRating || rating) >= star ? "fill-amber-400 text-amber-400" : "text-slate-200"
                                 )} 
                               />
@@ -14118,23 +14832,23 @@ DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`);
                           ))}
                         </div>
 
-                        <div className="space-y-3">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Your Feedback</label>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Your Feedback</label>
                           <textarea 
                             placeholder="Tell us about your experience..." 
                             value={comment}
                             onChange={(e) => setComment(e.target.value)}
-                            className="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:ring-2 focus:ring-brand-blue outline-none h-32 text-sm font-medium resize-none shadow-inner" 
+                            className="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:border-brand-blue focus:ring-3 focus:ring-brand-blue/15 outline-none h-32 text-sm font-medium resize-none shadow-2xs transition-all text-slate-800 placeholder:text-slate-400" 
                           />
                         </div>
 
-                        <div className="flex gap-3 pt-2">
+                        <div className="flex gap-3 pt-1">
                           <button 
                             onClick={() => {
                               setIsWritingReview(false);
                               setReviewError(null);
                             }}
-                            className="flex-1 py-3 bg-white text-slate-500 rounded-xl text-sm font-bold border border-slate-200 hover:bg-slate-50 transition-all"
+                            className="flex-1 py-3 bg-white text-slate-600 rounded-xl text-sm font-bold border border-slate-200 hover:bg-slate-100 transition-all active:scale-95"
                           >
                             Cancel
                           </button>
@@ -14166,7 +14880,7 @@ DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`);
                                 setIsSubmitting(false);
                               }
                             }}
-                            className="flex-1 py-3 bg-brand-blue text-white rounded-xl text-sm font-bold shadow-lg shadow-brand-blue/20 active:scale-95 transition-all disabled:opacity-50"
+                            className="flex-1 py-3 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-sm font-bold shadow-md shadow-brand-blue/20 active:scale-95 transition-all disabled:opacity-50"
                           >
                             {isSubmitting ? 'Posting...' : 'Post Review'}
                           </button>
