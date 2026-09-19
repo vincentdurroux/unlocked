@@ -398,10 +398,128 @@ export function rowToPro(
   };
 }
 
-// Main robust CSV parse function with auto-delimiter and fallback detection
+// Main robust CSV parse core helper with auto-delimiter, BOM strip, header extraction and fallback
+export interface GenericCSVParseResult {
+  rawColumns: string[];
+  rawRows: Record<string, any>[];
+  delimiter: string;
+}
+
+export function parseCSVCore(text: string): GenericCSVParseResult {
+  if (!text || !text.trim()) {
+    throw new Error('The CSV file is empty or contains no readable data.');
+  }
+
+  // Remove BOM if present
+  if (text.charCodeAt(0) === 0xFEFF) {
+    text = text.slice(1);
+  }
+
+  // Check for Excel "sep=;" line at the top
+  let explicitDelimiter: string | undefined = undefined;
+  const firstLineMatch = text.match(/^sep=([^\r\n]+)[\r\n]+/i);
+  if (firstLineMatch) {
+    explicitDelimiter = firstLineMatch[1].trim();
+    text = text.slice(firstLineMatch[0].length);
+  }
+
+  // Strip leading empty lines
+  text = text.replace(/^([\r\n]+)/, '');
+
+  const delimitersToTry = explicitDelimiter 
+    ? [explicitDelimiter, ';', ',', '\t', '|']
+    : [',', ';', '\t', '|'];
+
+  let bestResult: { rows: Record<string, any>[]; fields: string[]; delimiter: string } | null = null;
+
+  for (const delim of delimitersToTry) {
+    const parsed = Papa.parse(text, {
+      header: true,
+      skipEmptyLines: 'greedy',
+      delimiter: delim,
+      transformHeader: (h) => h.trim().replace(/^['"]|['"]$/g, '')
+    });
+
+    const fields = (parsed.meta.fields || []).map(f => f.trim()).filter(Boolean);
+    const rows = (parsed.data as Record<string, any>[]).filter(row => {
+      if (!row || typeof row !== 'object') return false;
+      return Object.values(row).some(v => v !== null && v !== undefined && String(v).trim() !== '');
+    });
+
+    if (fields.length > 1 && rows.length > 0) {
+      bestResult = { rows, fields, delimiter: delim };
+      break;
+    }
+
+    if (!bestResult && fields.length > 0 && rows.length > 0) {
+      bestResult = { rows, fields, delimiter: delim };
+    }
+  }
+
+  // Fallback if header: true resulted in 0 or 1 column or empty rows
+  if (!bestResult || bestResult.fields.length <= 1) {
+    for (const delim of delimitersToTry) {
+      const parsed = Papa.parse(text, {
+        header: false,
+        skipEmptyLines: 'greedy',
+        delimiter: delim
+      });
+
+      const rawGrid = (parsed.data as string[][]).filter(row => Array.isArray(row) && row.some(cell => String(cell).trim() !== ''));
+
+      if (rawGrid.length >= 1) {
+        // Find first row with non-empty cells
+        const headerRowIndex = rawGrid.findIndex(row => row.filter(cell => String(cell).trim() !== '').length > 0);
+        if (headerRowIndex !== -1) {
+          const headerRow = rawGrid[headerRowIndex].map((h, i) => String(h).trim() || `Column_${i + 1}`);
+          const dataRows = rawGrid.slice(headerRowIndex + 1);
+
+          const mappedRows: Record<string, any>[] = dataRows.map(rowArray => {
+            const rowObj: Record<string, any> = {};
+            headerRow.forEach((colName, idx) => {
+              rowObj[colName] = rowArray[idx] !== undefined ? String(rowArray[idx]).trim() : '';
+            });
+            return rowObj;
+          });
+
+          if (!bestResult || headerRow.length > bestResult.fields.length) {
+            bestResult = {
+              fields: headerRow,
+              rows: mappedRows,
+              delimiter: delim
+            };
+          }
+        }
+      }
+    }
+  }
+
+  // Final fallback: if there is at least something in the file
+  if (!bestResult || bestResult.fields.length === 0) {
+    const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+    if (lines.length > 0) {
+      const header = lines[0] || 'Data';
+      const dataLines = lines.slice(1);
+      const rows = (dataLines.length > 0 ? dataLines : lines).map(line => ({ [header]: line }));
+      return {
+        rawColumns: [header],
+        rawRows: rows,
+        delimiter: ','
+      };
+    }
+    throw new Error('Unable to read columns from the CSV file. Please check that the file is not empty and is formatted correctly.');
+  }
+
+  return {
+    rawColumns: bestResult.fields,
+    rawRows: bestResult.rows,
+    delimiter: bestResult.delimiter || ','
+  };
+}
+
+// Main robust CSV parse function for professionals with auto-delimiter and fallback detection
 export function parseProfessionalCSV(file: File): Promise<CSVParseResult> {
   return new Promise((resolve, reject) => {
-    // First, read text to detect BOM and special delimiter headers (like "sep=;")
     const reader = new FileReader();
 
     reader.onload = (e) => {
@@ -410,68 +528,27 @@ export function parseProfessionalCSV(file: File): Promise<CSVParseResult> {
         return reject(new Error('Le fichier CSV est vide.'));
       }
 
-      // Remove BOM
-      if (text.charCodeAt(0) === 0xFEFF) {
-        text = text.slice(1);
+      try {
+        const { rawColumns, rawRows, delimiter } = parseCSVCore(text);
+        const detectedMapping = detectColumnMappings(rawColumns);
+
+        const pros = rawRows
+          .map(row => rowToPro(row, detectedMapping, rawColumns))
+          .filter(pro => pro.name || pro.company_name || pro.phone || pro.email || pro.category);
+
+        // If filtering yielded 0, keep raw mapped rows
+        const finalPros = pros.length > 0 ? pros : rawRows.map(row => rowToPro(row, detectedMapping, rawColumns));
+
+        resolve({
+          pros: finalPros,
+          rawColumns,
+          rawRows,
+          detectedMapping,
+          delimiter
+        });
+      } catch (err) {
+        reject(err);
       }
-
-      // Check for Excel "sep=;" line at the top
-      let explicitDelimiter: string | undefined = undefined;
-      const firstLineMatch = text.match(/^sep=([^\r\n]+)[\r\n]+/i);
-      if (firstLineMatch) {
-        explicitDelimiter = firstLineMatch[1];
-        text = text.slice(firstLineMatch[0].length);
-      }
-
-      Papa.parse(text, {
-        header: true,
-        skipEmptyLines: 'greedy',
-        delimiter: explicitDelimiter,
-        delimitersToGuess: [',', ';', '\t', '|'],
-        complete: (results) => {
-          let rows = results.data as Record<string, any>[];
-          let meta = results.meta;
-
-          // Edge case: if only 1 column was detected and its header or values contain semicolons or commas,
-          // Papa failed delimiter auto-detection. Let's force semicolon or comma and re-parse!
-          const headerFields = meta.fields || [];
-          if (headerFields.length <= 1 && text.includes(';')) {
-            const reParsed = Papa.parse(text, {
-              header: true,
-              skipEmptyLines: 'greedy',
-              delimiter: ';'
-            });
-            if (reParsed.meta.fields && reParsed.meta.fields.length > 1) {
-              rows = reParsed.data as Record<string, any>[];
-              meta = reParsed.meta;
-            }
-          }
-
-          const rawColumns = (meta.fields || []).map(f => f.trim()).filter(Boolean);
-          if (rawColumns.length === 0 || rows.length === 0) {
-            return reject(new Error('Unable to read columns from the CSV file.'));
-          }
-
-          // Detect column mappings
-          const detectedMapping = detectColumnMappings(rawColumns);
-
-          // Convert all rows into ParsedProImport
-          const pros = rows
-            .map(row => rowToPro(row, detectedMapping, rawColumns))
-            .filter(pro => pro.name || pro.company_name || pro.phone || pro.email || pro.category);
-
-          resolve({
-            pros,
-            rawColumns,
-            rawRows: rows,
-            detectedMapping,
-            delimiter: meta.delimiter || ','
-          });
-        },
-        error: (err) => {
-          reject(err);
-        }
-      });
     };
 
     reader.onerror = () => {
@@ -481,3 +558,147 @@ export function parseProfessionalCSV(file: File): Promise<CSVParseResult> {
     reader.readAsText(file, 'utf-8');
   });
 }
+
+export interface ParsedEventImport {
+  title: string;
+  start_date: string;
+  end_date?: string;
+  start_time?: string;
+  end_time?: string;
+  category: string;
+  location: string;
+  description: string;
+  image?: string;
+  lat?: number;
+  lng?: number;
+  rawRow?: Record<string, any>;
+}
+
+export interface EventCSVParseResult {
+  events: ParsedEventImport[];
+  rawColumns: string[];
+  rawRows: Record<string, any>[];
+  detectedMapping: Record<string, string>;
+  delimiter: string;
+}
+
+const EVENT_FIELD_MATCHERS: Record<keyof Omit<ParsedEventImport, 'rawRow'>, string[]> = {
+  title: ['title', 'titre', 'name', 'nom', 'event', 'evenement', 'sujet', 'subject'],
+  start_date: ['startdate', 'date', 'datedebut', 'start', 'day', 'jour', 'dateevenement'],
+  end_date: ['enddate', 'datefin', 'end'],
+  start_time: ['starttime', 'time', 'heure', 'heuredebut', 'horaire', 'debut'],
+  end_time: ['endtime', 'heurefin', 'fin'],
+  category: ['category', 'categories', 'type', 'types', 'theme', 'tag', 'tags', 'rubrique'],
+  location: ['location', 'address', 'venue', 'lieu', 'adresse', 'place', 'ville', 'city'],
+  description: ['description', 'details', 'about', 'resume', 'summary', 'bio', 'contenu', 'content'],
+  image: ['image', 'photo', 'picture', 'poster', 'img', 'url'],
+  lat: ['latitude', 'lat'],
+  lng: ['longitude', 'lng', 'long', 'lon']
+};
+
+export function detectEventColumnMappings(rawColumns: string[]): Record<string, string> {
+  const mapping: Record<string, string> = {};
+  const normalizedColumns = rawColumns.map(col => ({
+    original: col,
+    normalized: normalizeHeaderKey(col)
+  }));
+
+  for (const [field, aliases] of Object.entries(EVENT_FIELD_MATCHERS)) {
+    let matched = normalizedColumns.find(c => aliases.includes(c.normalized));
+    if (!matched) {
+      matched = normalizedColumns.find(c =>
+        aliases.some(alias => c.normalized.includes(alias) || alias.includes(c.normalized))
+      );
+    }
+    if (matched) {
+      mapping[field] = matched.original;
+    }
+  }
+
+  return mapping;
+}
+
+export function rowToEvent(
+  row: Record<string, any>,
+  mapping: Record<string, string>,
+  allRawColumns: string[]
+): ParsedEventImport {
+  const getMappedVal = (field: string): string => {
+    const colName = mapping[field];
+    if (colName && row[colName] !== undefined && row[colName] !== null) {
+      return String(row[colName]).trim();
+    }
+    return '';
+  };
+
+  const title = getMappedVal('title');
+  const start_date = getMappedVal('start_date');
+  const end_date = getMappedVal('end_date');
+  const start_time = getMappedVal('start_time');
+  const end_time = getMappedVal('end_time');
+  const category = getMappedVal('category') || 'Community';
+  const location = getMappedVal('location');
+  const description = getMappedVal('description');
+  const image = getMappedVal('image');
+  const latVal = getMappedVal('lat');
+  const lngVal = getMappedVal('lng');
+
+  const lat = latVal ? parseFloat(String(latVal).replace(',', '.')) : undefined;
+  const lng = lngVal ? parseFloat(String(lngVal).replace(',', '.')) : undefined;
+
+  return {
+    title: title.trim(),
+    start_date: start_date.trim(),
+    end_date: end_date.trim() || undefined,
+    start_time: start_time.trim() || undefined,
+    end_time: end_time.trim() || undefined,
+    category: category.trim(),
+    location: location.trim(),
+    description: description.trim(),
+    image: image.trim() || undefined,
+    lat: isNaN(lat as number) ? undefined : lat,
+    lng: isNaN(lng as number) ? undefined : lng,
+    rawRow: row
+  };
+}
+
+export function parseEventCSV(file: File): Promise<EventCSVParseResult> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      let text = e.target?.result as string;
+      if (!text) {
+        return reject(new Error('Le fichier CSV est vide.'));
+      }
+
+      try {
+        const { rawColumns, rawRows, delimiter } = parseCSVCore(text);
+        const detectedMapping = detectEventColumnMappings(rawColumns);
+
+        const events = rawRows
+          .map(row => rowToEvent(row, detectedMapping, rawColumns))
+          .filter(ev => ev.title || ev.start_date || ev.location);
+
+        const finalEvents = events.length > 0 ? events : rawRows.map(row => rowToEvent(row, detectedMapping, rawColumns));
+
+        resolve({
+          events: finalEvents,
+          rawColumns,
+          rawRows,
+          detectedMapping,
+          delimiter
+        });
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    reader.onerror = () => {
+      reject(new Error('Error reading the CSV file.'));
+    };
+
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
