@@ -131,6 +131,108 @@ const CleanerIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
   </svg>
 );
 
+// Helper to normalize and merge specific categories
+export function normalizeCategoryName(cat: string): string {
+  if (!cat || typeof cat !== 'string') return '';
+  const trimmed = cat.trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+
+  // 1. Fusion Yoga & Pilates
+  if (
+    lower === 'yoga' ||
+    lower === 'pilates' ||
+    lower === 'yoga studio' ||
+    lower === 'pilates studio' ||
+    lower === 'yoga & pilates' ||
+    lower === 'yoga & pilates studio' ||
+    lower === 'yoga / pilates' ||
+    lower === 'yoga/pilates'
+  ) {
+    return 'Yoga & Pilates Studio';
+  }
+
+  // 2. Harmonisation Gestor et Tax advisor
+  if (
+    lower === 'gestor' ||
+    lower === 'tax advisor' ||
+    lower === 'tax advisor / gestor' ||
+    lower === 'gestor / tax advisor' ||
+    lower === 'tax advisor & gestor' ||
+    lower === 'gestor & tax advisor' ||
+    lower === 'gestor/tax advisor' ||
+    lower === 'tax consultant' ||
+    lower === 'gestoria'
+  ) {
+    return 'Gestor / Tax Advisor';
+  }
+
+  // 3. Physiotherapist -> Physiotherapy
+  if (
+    lower === 'physiotherapist' ||
+    lower === 'physiotherapeute' ||
+    lower === 'physiotherapy' ||
+    lower === 'kinesitherapeute' ||
+    lower === 'kine' ||
+    lower === 'physio'
+  ) {
+    return 'Physiotherapy';
+  }
+
+  // 4. Merge Interior Design categories -> "Interior Design"
+  if (
+    lower === 'interior design' ||
+    lower === 'interior designer' ||
+    lower === 'interior decorator' ||
+    lower === 'interior decoration' ||
+    lower === 'interior design / decorator' ||
+    lower === 'interior design & decoration' ||
+    lower === 'architecte d\'interieur' ||
+    lower === 'architecture d\'interieur' ||
+    lower === 'architecte d’interieur'
+  ) {
+    return 'Interior Design';
+  }
+
+  // 5. Electrical -> Electrician
+  if (
+    lower === 'electrical' ||
+    lower === 'electrician' ||
+    lower === 'electricien' ||
+    lower === 'electricite'
+  ) {
+    return 'Electrician';
+  }
+
+  // 6. Firewood Supplier
+  if (
+    lower.includes('firewood') ||
+    lower.includes('bois de chauffage') ||
+    lower.includes('vendeur de bois') ||
+    lower === 'firewood'
+  ) {
+    return 'Firewood Supplier';
+  }
+
+  // 7. Automotive -> Garage/Auto repair
+  if (
+    lower === 'automotive' ||
+    lower === 'auto' ||
+    lower === 'auto repair' ||
+    lower === 'car repair' ||
+    lower === 'garage' ||
+    lower === 'mechanic' ||
+    lower === 'mecanicien' ||
+    lower === 'garage/auto repair' ||
+    lower === 'garage / auto repair' ||
+    lower === 'garage / repair'
+  ) {
+    return 'Garage/Auto repair';
+  }
+
+  return trimmed;
+}
+
 const NOTIFICATION_ICONS = [
   { 
     id: 'dentist', 
@@ -3748,21 +3850,24 @@ function CategorySelector({
 
   const defaultPopular = [
     "Dance School",
-    "Yoga Studio",
+    "Yoga & Pilates Studio",
     "Gym & Fitness",
     "Hairdresser",
     "Nursery School",
     "Coworking Space",
     "Real Estate Agent",
-    "Tax Advisor / Gestor",
+    "Gestor / Tax Advisor",
+    "Interior Design",
     "Dentist",
-    "Physiotherapist",
+    "Physiotherapy",
     "General Practitioner",
     "Therapist / Psychologist",
     "Web Developer",
     "Electrician",
     "Plumber",
-    "Locksmith"
+    "Locksmith",
+    "Firewood Supplier",
+    "Garage/Auto repair"
   ];
 
   // If existingCategories not passed, fetch dynamically from proService
@@ -3777,9 +3882,9 @@ function CategorySelector({
             if (typeof p.category === 'string') list.push(...p.category.split(','));
             if (typeof p.profession === 'string') list.push(...p.profession.split(','));
             list.forEach(c => {
-              const trimmed = String(c).trim();
-              if (trimmed && !catMap.has(trimmed.toLowerCase())) {
-                catMap.set(trimmed.toLowerCase(), trimmed);
+              const norm = normalizeCategoryName(String(c));
+              if (norm && !catMap.has(norm.toLowerCase())) {
+                catMap.set(norm.toLowerCase(), norm);
               }
             });
           });
@@ -4902,7 +5007,7 @@ function AdminView({
       const seenInThisPro = new Set<string>();
       rawCats.forEach(raw => {
         if (!raw) return;
-        const clean = String(raw).trim();
+        const clean = normalizeCategoryName(String(raw));
         if (!clean) return;
         const lower = clean.toLowerCase();
         if (seenInThisPro.has(lower)) return;
@@ -4923,21 +5028,24 @@ function AdminView({
     // Default popular categories
     const popularDefaults = [
       "Dance School",
-      "Yoga Studio",
+      "Yoga & Pilates Studio",
       "Gym & Fitness",
       "Hairdresser",
       "Nursery School",
       "Coworking Space",
       "Real Estate Agent",
-      "Tax Advisor / Gestor",
+      "Gestor / Tax Advisor",
+      "Interior Design",
       "Dentist",
-      "Physiotherapist",
+      "Physiotherapy",
       "General Practitioner",
       "Therapist / Psychologist",
       "Web Developer",
       "Electrician",
       "Plumber",
-      "Locksmith"
+      "Locksmith",
+      "Firewood Supplier",
+      "Garage/Auto repair"
     ];
 
     popularDefaults.forEach(def => {
@@ -7092,7 +7200,13 @@ function AdminView({
                     sortedCompletedPros.map((pro) => (
                       <div key={pro.id} className="bg-white p-4 md:p-6 rounded-3xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full max-w-full overflow-hidden">
                         <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1 overflow-hidden">
-                          <img src={pro.image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300'} alt="" className="w-12 h-12 rounded-full object-cover shadow-sm border border-slate-100 shrink-0" referrerPolicy="no-referrer" />
+                          {pro.image ? (
+                            <img src={pro.image} alt="" className="w-12 h-12 rounded-full object-cover shadow-sm border border-slate-100 shrink-0" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center border border-slate-100 shrink-0 text-slate-400">
+                              <User className="w-6 h-6" />
+                            </div>
+                          )}
                           <div className="min-w-0 flex-1 overflow-hidden">
                             <div className="flex flex-wrap items-center gap-2">
                               <h4 className="font-bold text-slate-900 truncate max-w-full">{pro.name}</h4>
@@ -8401,7 +8515,7 @@ function AdminView({
                                   <img src={currentHighlight.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentHighlight.name)}&background=f1f5f9&color=475569`} alt="" className="w-8 h-8 rounded-full object-cover" />
                                   <div className="min-w-0">
                                     <h5 className="font-bold text-slate-900 text-xs truncate">{currentHighlight.name}</h5>
-                                    <p className="text-[10px] text-slate-400 truncate">{currentHighlight.category}</p>
+                                    <p className="text-[10px] text-slate-400 truncate">{normalizeCategoryName(currentHighlight.category)}</p>
                                   </div>
                                 </div>
                                 <span className="px-2.5 py-1 bg-amber-500 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider shrink-0">Active</span>
@@ -8445,7 +8559,7 @@ function AdminView({
                                   <div className="min-w-0">
                                     <h5 className="font-bold text-slate-900 text-xs truncate">{pro.name}</h5>
                                     <p className="text-[10px] text-slate-400 truncate">
-                                      {pro.company_name ? `${pro.company_name} • ` : ''}{pro.category}
+                                      {pro.company_name ? `${pro.company_name} • ` : ''}{normalizeCategoryName(pro.category)}
                                     </p>
                                   </div>
                                 </div>
@@ -12135,7 +12249,7 @@ function DirectoryProCardItem({
               <p className="text-xs font-semibold text-slate-600 -mt-0.5 mb-1.5 break-words">{pro.company_name}</p>
             )}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-medium text-brand-blue uppercase tracking-widest">{pro.category}</span>
+              <span className="text-[11px] font-medium text-brand-blue uppercase tracking-widest">{normalizeCategoryName(pro.category)}</span>
               {(pro.review_count ?? 0) > 0 && (
                 <>
                   <span className="text-slate-200">•</span>
@@ -12939,10 +13053,16 @@ ${JSON.stringify(proListBrief, null, 2)}`,
       if (!p) return;
       if (p.categories && Array.isArray(p.categories)) {
         p.categories.forEach(c => {
-          if (c && typeof c === 'string') list.add(c);
+          if (c && typeof c === 'string') {
+            const norm = normalizeCategoryName(c);
+            if (norm) list.add(norm);
+          }
         });
       } else if (p.category && typeof p.category === 'string') {
-        list.add(p.category);
+        p.category.split(',').forEach(c => {
+          const norm = normalizeCategoryName(c);
+          if (norm) list.add(norm);
+        });
       }
     });
     return Array.from(list).sort();
@@ -13067,9 +13187,11 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     const searchLower = text.toLowerCase().trim();
     return (allPros || []).some(pro => {
       if (!pro) return false;
-      const matchesCategory = selectedCategory === 'All' || 
-                              (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
-                              pro.category === selectedCategory;
+      const proCats = [
+        ...(Array.isArray(pro.categories) ? pro.categories : []),
+        ...(typeof pro.category === 'string' ? pro.category.split(',') : [])
+      ].map(c => normalizeCategoryName(String(c)));
+      const matchesCategory = selectedCategory === 'All' || proCats.includes(selectedCategory);
       const matchesLanguage = selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
       const matchesRating = (pro.rating || 0) >= minRating;
       
@@ -13123,9 +13245,11 @@ ${JSON.stringify(proListBrief, null, 2)}`,
   const filteredPros = hasActiveFilter 
     ? (allPros || []).filter(pro => {
         if (!pro) return false;
-        const matchesCategory = selectedCategory === 'All' || 
-                                (pro.categories && Array.isArray(pro.categories) && pro.categories.includes(selectedCategory)) ||
-                                pro.category === selectedCategory;
+        const proCats = [
+          ...(Array.isArray(pro.categories) ? pro.categories : []),
+          ...(typeof pro.category === 'string' ? pro.category.split(',') : [])
+        ].map(c => normalizeCategoryName(String(c)));
+        const matchesCategory = selectedCategory === 'All' || proCats.includes(selectedCategory);
         const matchesLanguage = selectedLanguage === 'All' || (pro.languages && Array.isArray(pro.languages) && pro.languages.includes(selectedLanguage));
         const matchesRating = (pro.rating || 0) >= minRating;
         
