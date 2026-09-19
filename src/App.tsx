@@ -9919,7 +9919,6 @@ function HomeView({
   const [sec4Idx, setSec4Idx] = useState(0);
 
   const [selectedPro, setSelectedPro] = useState<Professional | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<any | null>(null);
 
   const [discoverTestimonies, setDiscoverTestimonies] = useState<any[]>([]);
@@ -10355,7 +10354,7 @@ function HomeView({
               <div 
                 className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 hover:border-brand-blue/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
                 id="discover-card-event"
-                onClick={() => setSelectedEvent(featuredEvent)}
+                onClick={() => onNavigate('events', { eventId: featuredEvent.id })}
               >
                 <div className="relative flex-1">
                   <AnimatePresence mode="wait" initial={false}>
@@ -10581,15 +10580,6 @@ function HomeView({
             userProfile={userProfile}
             blockedUsers={blockedUsers}
             usersWhoBlockedMe={usersWhoBlockedMe}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {selectedEvent && (
-          <EventDetailModal
-            event={selectedEvent}
-            onClose={() => setSelectedEvent(null)}
           />
         )}
       </AnimatePresence>
@@ -11777,7 +11767,45 @@ function DirectoryProCardItem({
                     localReviews.slice(reviewCarouselIndex * 3, reviewCarouselIndex * 3 + 3).map((review) => (
                       <div key={review.id} className="bg-white rounded-2xl p-4 border border-slate-200/80 space-y-2">
                         <div className="flex justify-between items-center">
-                          <span className="font-bold text-slate-900 text-xs">{formatName(review.author)}</span>
+                          <div 
+                            className={cn(
+                              "font-bold text-slate-900 text-xs flex items-center gap-1.5 transition-colors",
+                              review.isChatAvailable 
+                                ? "cursor-pointer hover:text-brand-blue group/author" 
+                                : "cursor-default"
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!review.isChatAvailable) return;
+                              onNavigate('messages', { 
+                                chat: {
+                                  id: `chat-${review.id}`,
+                                  userId: review.userId,
+                                  name: review.author,
+                                  displayName: formatName(review.author),
+                                  avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formatName(review.author))}&background=random`,
+                                  online: true,
+                                  time: 'just now',
+                                  lastMsg: `Hello ${formatName(review.author)}! I saw your review for ${pro.name}.`,
+                                  returnToProId: pro.id
+                                }
+                              });
+                            }}
+                          >
+                            <span>{formatName(review.author)}</span>
+                            {review.isChatAvailable && (
+                              <div className={cn(
+                                "w-5 h-5 rounded-md flex items-center justify-center transition-all",
+                                (review.userId && (blockedUsers.includes(review.userId) || usersWhoBlockedMe.includes(review.userId)))
+                                  ? "bg-slate-100 cursor-not-allowed text-slate-300"
+                                  : "bg-slate-100 group-hover/author:bg-brand-blue text-slate-500 group-hover/author:text-white"
+                              )}
+                              title="Send a message to reviewer"
+                              >
+                                <MessageSquare className="w-3 h-3" />
+                              </div>
+                            )}
+                          </div>
                           <div className="flex items-center gap-0.5">
                             {[1, 2, 3, 4, 5].map((s) => (
                               <Star key={s} className={cn("w-3 h-3", s <= review.rating ? "text-amber-400 fill-amber-400" : "text-slate-200")} />
@@ -14900,12 +14928,7 @@ DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`);
 }
 
 function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEvents }: { initialEventId?: string | null, onModalClose?: () => void, scrollToTop?: () => void, events?: Event[] }) {
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(() => {
-    if (initialEventId && propEvents && propEvents.length > 0) {
-      return propEvents.find(e => String(e.id) === String(initialEventId)) || null;
-    }
-    return null;
-  });
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId || null);
   const [events, setEvents] = useState<Event[]>(propEvents && propEvents.length > 0 ? propEvents : (isSupabaseConfigured ? [] : MOCK_EVENTS));
   const [loading, setLoading] = useState(!propEvents || propEvents.length === 0);
   const [sharedEventId, setSharedEventId] = useState<string | null>(null);
@@ -14935,10 +14958,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
 
   useEffect(() => {
     if (initialEventId && events.length > 0) {
-      const event = events.find(e => String(e.id) === String(initialEventId));
-      if (event) {
-        setSelectedEvent(event);
-      }
+      setSelectedEventId(initialEventId);
     }
   }, [initialEventId, events]);
 
@@ -14956,264 +14976,206 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto w-full">
-          {events.map(event => (
-          <div 
-            key={event.id} 
-            className="card bg-white group hover-lift cursor-pointer"
-            onClick={() => setSelectedEvent(event)}
-          >
-            <div className="h-40 overflow-hidden relative">
-              <img src={event.image} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-lg text-center min-w-[50px] flex flex-col justify-center items-center">
-                <p className="text-[10px] font-semibold text-blue-600 uppercase leading-tight">
-                  {event.start_date || event.date}
-                </p>
-                {event.end_date && (
-                  <>
-                    <p className="text-[8px] text-blue-600 font-normal lowercase leading-none my-0.5">to</p>
-                    <p className="text-[10px] font-semibold text-blue-600 uppercase leading-tight">
-                      {event.end_date}
-                    </p>
-                  </>
+          {events.map(event => {
+            const isExpanded = String(selectedEventId) === String(event.id);
+            return (
+              <motion.div
+                layout
+                transition={{ layout: { type: 'spring', stiffness: 350, damping: 30 }, opacity: { duration: 0.2 } }}
+                key={event.id}
+                id={`event-card-${event.id}`}
+                className={cn(
+                  "group relative bg-white rounded-[32px] border-2 transition-all shadow-sm overflow-hidden scroll-mt-28 cursor-pointer",
+                  isExpanded
+                    ? "col-span-1 md:col-span-2 lg:col-span-3 border-brand-blue/40 shadow-xl p-6 sm:p-8 md:p-10 ring-1 ring-brand-blue/15"
+                    : "border-slate-100 hover:border-slate-200 p-6 flex flex-col justify-between"
                 )}
-              </div>
-              <button 
-                type="button"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const shareUrl = `${window.location.origin}${window.location.pathname}?eventId=${event.id}`;
-                  const shareData = {
-                    title: event.title,
-                    text: event.title,
-                    url: shareUrl
-                  };
-                  
-                  if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-                    try {
-                      await navigator.share(shareData);
-                    } catch (err) {
-                      console.warn('Share sheets failed or cancelled:', err);
-                    }
+                onClick={() => {
+                  if (isExpanded) {
+                    setSelectedEventId(null);
+                    onModalClose?.();
                   } else {
-                    try {
-                      await navigator.clipboard.writeText(shareUrl);
-                      setSharedEventId(event.id);
-                      setTimeout(() => setSharedEventId(null), 2000);
-                    } catch (err) {
-                      console.error('Failed to copy share link:', err);
-                    }
+                    setSelectedEventId(event.id);
                   }
                 }}
-                className={`absolute top-4 right-4 p-2 rounded-full backdrop-blur transition-all duration-300 z-10 ${
-                  sharedEventId === event.id 
-                    ? "bg-emerald-500 text-white scale-110 shadow-lg shadow-emerald-500/20" 
-                    : "bg-black/50 hover:bg-black/75 hover:scale-105 active:scale-90 text-white"
-                }`}
-                title="Share event"
               >
-                {sharedEventId === event.id ? (
-                  <Check className="w-4 h-4" />
-                ) : (
-                  <ShareIcon className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-            <div className="p-4 space-y-3">
-              <div className="flex justify-between items-start">
-                <h4 className="font-bold text-lg">{event.title}</h4>
-                <span className="text-[10px] font-bold bg-brand-blue/5 text-brand-blue px-2 py-1 rounded-full">{event.category}</span>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-slate-500">
-                <div className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {event.start_time || event.time}
-                  {event.end_time && ` - ${event.end_time}`}
+                <div className={cn("overflow-hidden relative rounded-2xl bg-slate-50", isExpanded ? "h-64 sm:h-80 mb-6" : "h-40 mb-4")}>
+                  <img src={event.image} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <div className="absolute top-4 left-4 bg-white/95 backdrop-blur px-3.5 py-2 rounded-xl text-center min-w-[55px] flex flex-col justify-center items-center shadow-md">
+                    <p className="text-xs font-bold text-brand-blue uppercase leading-tight">
+                      {event.start_date || event.date}
+                    </p>
+                    {event.end_date && (
+                      <>
+                        <p className="text-[9px] text-slate-400 font-medium lowercase leading-none my-0.5">to</p>
+                        <p className="text-xs font-bold text-brand-blue uppercase leading-tight">
+                          {event.end_date}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const shareUrl = `${window.location.origin}${window.location.pathname}?eventId=${event.id}`;
+                      const shareData = {
+                        title: event.title,
+                        text: event.title,
+                        url: shareUrl
+                      };
+                      
+                      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+                        try {
+                          await navigator.share(shareData);
+                        } catch (err) {
+                          console.warn('Share sheets failed or cancelled:', err);
+                        }
+                      } else {
+                        try {
+                          await navigator.clipboard.writeText(shareUrl);
+                          setSharedEventId(event.id);
+                          setTimeout(() => setSharedEventId(null), 2000);
+                        } catch (err) {
+                          console.error('Failed to copy share link:', err);
+                        }
+                      }
+                    }}
+                    className={`absolute top-4 right-4 p-2.5 rounded-full backdrop-blur-md transition-all duration-300 z-10 shadow-md ${
+                      sharedEventId === event.id 
+                        ? "bg-emerald-500 text-white scale-110 shadow-emerald-500/20" 
+                        : "bg-black/50 hover:bg-black/75 hover:scale-105 text-white"
+                    }`}
+                    title="Share event"
+                  >
+                    {sharedEventId === event.id ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <ShareIcon className="w-4 h-4" />
+                    )}
+                  </button>
+
+                  {isExpanded && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEventId(null);
+                        onModalClose?.();
+                      }}
+                      className="absolute bottom-4 right-4 p-2.5 bg-white/90 hover:bg-white backdrop-blur-md rounded-full text-slate-700 transition-all shadow-lg active:scale-95 z-10"
+                      title="Close"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
-                <div className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  {event.location}
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-start gap-4">
+                    <h4 className={cn("font-bold font-display text-slate-900", isExpanded ? "text-2xl sm:text-3xl" : "text-lg")}>{event.title}</h4>
+                    <span className="text-[10px] font-bold bg-brand-blue/10 text-brand-blue px-3 py-1 rounded-full shrink-0 uppercase tracking-wider">{event.category}</span>
+                  </div>
+
+                  <div className={cn("flex flex-wrap items-center gap-4 text-xs text-slate-600 font-medium", isExpanded && "text-sm py-2 border-y border-slate-100")}>
+                    {(event.start_time || event.time) && (
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-brand-blue" />
+                        <span>{event.start_time || event.time}</span>
+                        {event.end_time && <span>- {event.end_time}</span>}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4 text-brand-blue" />
+                      <span>{event.location}</span>
+                    </div>
+                  </div>
+
+                  {!isExpanded && (
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-50">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Click to view details</span>
+                      <span className="text-brand-blue font-bold text-xs flex items-center gap-1 group-hover:gap-2 transition-all">
+                        View Details
+                        <ArrowRight className="w-3 h-3" />
+                      </span>
+                    </div>
+                  )}
+
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
+                        className="overflow-hidden space-y-6 pt-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="markdown-body text-slate-600 leading-relaxed text-sm sm:text-base">
+                          <SimpleMarkdown>
+                            {event.description || `Join us for ${event.title} at ${event.location}! This is a great opportunity to meet new people and enjoy the local atmosphere.`}
+                          </SimpleMarkdown>
+                        </div>
+
+                        {event.coordinates && (
+                          <div className="space-y-3">
+                            <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Location & Map</h5>
+                            <div className="h-52 w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner">
+                              <APIProvider apiKey={GOOGLE_MAPS_KEY}>
+                                <Map
+                                  defaultCenter={event.coordinates}
+                                  defaultZoom={15}
+                                  gestureHandling="none"
+                                  disableDefaultUI
+                                  mapId={`event_map_${event.id}`}
+                                  className="w-full h-full"
+                                >
+                                  <AdvancedMarker position={event.coordinates}>
+                                    <Pin background={'#0870B8'} glyphColor={'#FFFFFF'} borderColor={'#0870B8'} />
+                                  </AdvancedMarker>
+                                </Map>
+                              </APIProvider>
+                            </div>
+                            <p className="text-xs text-slate-500 font-medium">{event.location}</p>
+                          </div>
+                        )}
+
+                        <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const title = encodeURIComponent(event.title);
+                              const details = encodeURIComponent(event.description || '');
+                              const location = encodeURIComponent(event.location);
+                              const googleUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&location=${location}`;
+                              window.open(googleUrl, '_blank');
+                            }}
+                            className="flex-1 py-3.5 bg-brand-blue text-white rounded-2xl font-bold text-xs sm:text-sm shadow-lg shadow-brand-blue/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                          >
+                            <Calendar className="w-4 h-4" />
+                            Add to Calendar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedEventId(null);
+                              onModalClose?.();
+                            }}
+                            className="px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs sm:text-sm transition-all"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-              </div>
-              <div className="flex justify-end pt-2">
-                <span className="text-brand-blue font-bold text-xs flex items-center gap-1 group-hover:gap-2 transition-all">
-                  View Details
-                  <ArrowRight className="w-3 h-3" />
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+              </motion.div>
+            );
+          })}
+        </div>
       )}
-
-      <AnimatePresence>
-        {selectedEvent && (
-          <EventDetailModal 
-            event={selectedEvent} 
-            onClose={() => {
-              setSelectedEvent(null);
-              onModalClose?.();
-            }} 
-          />
-        )}
-      </AnimatePresence>
     </div>
-  );
-}
-
-function EventDetailModal({ event, onClose }: { event: Event, onClose: () => void }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [shared, setShared] = useState(false);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
-    }
-  }, [event.id]);
-
-  return (
-    <motion.div 
-      ref={scrollRef}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.18 }}
-      className="fixed inset-x-0 bottom-[80px] md:inset-0 z-[100] overflow-y-auto overscroll-contain bg-slate-900/60 backdrop-blur-sm flex justify-center" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
-      onClick={onClose}
-    >
-      <div className="min-h-full w-full max-w-lg flex items-start justify-center p-4 py-8 md:py-16">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.92 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="relative bg-white w-full rounded-[32px] overflow-hidden shadow-2xl"
-          onClick={e => e.stopPropagation()}
-        >
-        <div className="h-48 relative">
-          <img src={event.image} alt="" className="w-full h-full object-cover" />
-          <div className="absolute top-4 right-4 flex items-center gap-2">
-            <button 
-              type="button"
-              onClick={async (e) => {
-                e.stopPropagation();
-                const shareUrl = `${window.location.origin}${window.location.pathname}?eventId=${event.id}`;
-                const shareData = {
-                  title: event.title,
-                  text: event.title,
-                  url: shareUrl
-                };
-                
-                if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-                  try {
-                    await navigator.share(shareData);
-                  } catch (err) {
-                    console.warn('Share sheets failed or cancelled:', err);
-                  }
-                } else {
-                  try {
-                    await navigator.clipboard.writeText(shareUrl);
-                    setShared(true);
-                    setTimeout(() => setShared(false), 2000);
-                  } catch (err) {
-                    console.error('Failed to copy share link:', err);
-                  }
-                }
-              }}
-              className={`p-2 backdrop-blur-md rounded-full text-white transition-all shadow-md active:scale-95 z-20 ${
-                shared 
-                  ? "bg-emerald-500 hover:bg-emerald-600 scale-105" 
-                  : "bg-white/20 hover:bg-white/40"
-              }`}
-            >
-              {shared ? (
-                <Check className="w-5 h-5" />
-              ) : (
-                <ShareIcon className="w-5 h-5" />
-              )}
-            </button>
-            <button 
-              onClick={onClose}
-              className="p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white transition-all shadow-md active:scale-95 z-20"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-        <div className="p-8 space-y-6">
-          <div className="space-y-2">
-            <div className="flex justify-between items-start">
-              <h2 className="text-2xl font-bold text-slate-900">{event.title}</h2>
-              <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue rounded-full text-[10px] font-bold uppercase tracking-wider">
-                {event.category}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-4 text-sm text-slate-500">
-              <div className="flex items-center gap-1.5 font-medium">
-                <Calendar className="w-4 h-4 text-brand-blue" />
-                {event.start_date || event.date}
-                {event.end_date && ` to ${event.end_date}`}
-              </div>
-              <div className="flex items-center gap-1.5 font-medium">
-                <Clock className="w-4 h-4 text-brand-blue" />
-                {event.start_time || event.time}
-                {event.end_time && ` - ${event.end_time}`}
-              </div>
-              <div className="flex items-center gap-1.5 font-medium">
-                <MapPin className="w-4 h-4 text-brand-blue" />
-                {event.location}
-              </div>
-            </div>
-          </div>
-
-          <div className="markdown-body">
-            <SimpleMarkdown>
-              {event.description || `Join us for ${event.title} at ${event.location}! This is a great opportunity to meet new people and enjoy the local atmosphere.`}
-            </SimpleMarkdown>
-          </div>
-
-          {event.coordinates && (
-            <div className="space-y-4">
-              <h3 className="font-bold text-slate-900">Location</h3>
-              <div className="h-48 w-full rounded-2xl overflow-hidden border border-slate-100 shadow-inner group">
-                <Map
-                  defaultCenter={event.coordinates}
-                  defaultZoom={15}
-                  gestureHandling="none"
-                  disableDefaultUI
-                  mapId="event_map"
-                >
-                  <AdvancedMarker position={event.coordinates}>
-                    <Pin background={'#0870B8'} glyphColor={'#FFFFFF'} borderColor={'#0870B8'} />
-                  </AdvancedMarker>
-                </Map>
-              </div>
-              <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                <Info className="w-3 h-3" />
-                {event.location}
-              </p>
-            </div>
-          )}
-
-          <div className="pt-4">
-            <button 
-              onClick={() => {
-                const title = encodeURIComponent(event.title);
-                const details = encodeURIComponent(event.description || '');
-                const location = encodeURIComponent(event.location);
-                const googleUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&location=${location}`;
-                window.open(googleUrl, '_blank');
-              }}
-              className="w-full py-4 bg-brand-blue text-white rounded-2xl font-bold text-sm shadow-xl shadow-brand-blue/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-            >
-              <Calendar className="w-4 h-4" />
-              Add to Calendar
-            </button>
-          </div>
-        </div>
-      </motion.div>
-      </div>
-    </motion.div>
   );
 }
 
