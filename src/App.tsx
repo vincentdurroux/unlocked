@@ -9784,7 +9784,7 @@ function HomeView({
             {/* Privacy Safeguard Note */}
             <div className="flex items-center justify-center gap-1.5 text-slate-400 font-bold text-[10px] md:text-[11px] tracking-wide pt-0.5 text-center">
               <Lock className="w-3 h-3 text-slate-400 shrink-0" />
-              <span>100% private. Jane is here to help.</span>
+              <span>100% secure. Jane is here to help.</span>
             </div>
           </div>
         </div>
@@ -10898,6 +10898,75 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
   );
 }
 
+// Spoken language detection and matching helper functions for Jane AI search
+function detectRequestedLanguages(query: string): string[] {
+  if (!query || typeof query !== "string") return [];
+  const q = query.toLowerCase();
+  const detected: string[] = [];
+
+  if (/\b(fran[cç]ais|fran[cç]aise|fran[cç]aises|french|francophone|francophones)\b/i.test(q)) {
+    detected.push("French");
+  }
+  if (/\b(anglais|anglaise|anglaises|english|anglophone|anglophones|ingles|inglés)\b/i.test(q)) {
+    detected.push("English");
+  }
+  if (/\b(espagnol|espagnole|espagnols|espagnoles|spanish|español|espanol|hispanophone|hispanophones|hispano|castellano|castillan)\b/i.test(q)) {
+    detected.push("Spanish");
+  }
+  if (/\b(allemand|allemande|allemands|allemandes|german|deutsch|germanophone)\b/i.test(q)) {
+    detected.push("German");
+  }
+  if (/\b(italien|italienne|italiens|italiennes|italian|italiano|italophone)\b/i.test(q)) {
+    detected.push("Italian");
+  }
+  if (/\b(portugais|portugaise|portugaises|portuguese|portugu[eê]s|lusophone)\b/i.test(q)) {
+    detected.push("Portuguese");
+  }
+  if (/\b(n[ée]erlandais|n[ée]erlandaise|dutch|hollandais|hollandaise|nederlands)\b/i.test(q)) {
+    detected.push("Dutch");
+  }
+  if (/\b(russe|russes|russian|russophone|ruso)\b/i.test(q)) {
+    detected.push("Russian");
+  }
+  if (/\b(arabe|arabes|arabic|arabophone|[aá]rabe)\b/i.test(q)) {
+    detected.push("Arabic");
+  }
+  if (/\b(chinois|chinoise|chinoises|chinese|mandarin|canton[a-z]+|sinophone)\b/i.test(q)) {
+    detected.push("Chinese");
+  }
+  if (/\b(japonais|japonaise|japonaises|japanese|japone?s)\b/i.test(q)) {
+    detected.push("Japanese");
+  }
+
+  return detected;
+}
+
+function proSpeaksAnyLanguage(pro: any, requestedLanguages: string[]): boolean {
+  if (!pro || !Array.isArray(pro.languages) || requestedLanguages.length === 0) return false;
+
+  const proLangs = pro.languages.map((l: any) => (typeof l === "string" ? l.trim().toLowerCase() : ""));
+
+  return requestedLanguages.some(targetLang => {
+    const t = targetLang.toLowerCase();
+    return proLangs.some((lang: string) => {
+      if (!lang) return false;
+      if (lang === t) return true;
+      if (t === "french" && (lang.includes("fran") || lang.includes("french"))) return true;
+      if (t === "english" && (lang.includes("angl") || lang.includes("engl") || lang.includes("ingl"))) return true;
+      if (t === "spanish" && (lang.includes("esp") || lang.includes("span") || lang.includes("cast"))) return true;
+      if (t === "german" && (lang.includes("allem") || lang.includes("germ") || lang.includes("deutsch"))) return true;
+      if (t === "italian" && lang.includes("ital")) return true;
+      if (t === "portuguese" && lang.includes("portug")) return true;
+      if (t === "dutch" && (lang.includes("dutch") || lang.includes("neerl") || lang.includes("néerl") || lang.includes("holl"))) return true;
+      if (t === "russian" && lang.includes("russ")) return true;
+      if (t === "arabic" && lang.includes("arab")) return true;
+      if (t === "chinese" && lang.includes("chin")) return true;
+      if (t === "japanese" && (lang.includes("japon") || lang.includes("japan"))) return true;
+      return false;
+    });
+  });
+}
+
 function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModalClose, scrollToTop, onProUpdate, currentUser, userProfile, blockedUsers = [], usersWhoBlockedMe = [], isActive = false }: { 
   allPros: Professional[], 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
@@ -10982,8 +11051,8 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
   }, [searchMode]);
 
   // Hook up handleSearchSubmit to perform an intelligent AI matching process
-  const handleSearchSubmit = async () => {
-    const trimmed = search.trim();
+  const handleSearchSubmit = async (overrideQuery?: string) => {
+    const trimmed = (typeof overrideQuery === 'string' ? overrideQuery : search).trim();
     if (!trimmed) {
       setAiResults(null);
       setAiExactMatch(true);
@@ -11092,7 +11161,24 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
        - With specific trade and location: "We couldn't find a [trade] in [location] in our directory."
        - Without specific location: "We couldn't find an exact match for '[user request]' in our directory."
 
-4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).`;
+4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).
+ 
+5. PRIORITIZATION (CRITICAL):
+   - Professionals with "is_recommended: true" are community-vetted and MUST be prioritized over those with "is_recommended: false".
+   - If multiple professionals match the user's query well, those with "is_recommended: true" should receive a score bonus or be ranked higher than those with "is_recommended: false".
+   - A non-recommended professional should only have a higher score than a recommended one if they are a significantly better match for the specific trade or location requested.
+
+6. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
+   - Check if the user's query requests a specific spoken language (e.g. "qui parle français", "parlant français", "francophone", "french speaking", "speaking english", "anglais", "habla español", "spanish", "deutsch", "allemand", etc.).
+   - If a language is requested:
+     * FIRST PRIORITY: Check each professional's "languages" list for that language (handling translations like French/Français, English/Anglais, Spanish/Español, etc.).
+     * EXCLUSION RULE (CRITICAL): If AT LEAST ONE matching professional speaks the requested language:
+       - You MUST ONLY return professionals who speak that language (give them positive scores 70-100).
+       - You MUST give score: 0 to ANY professional who does NOT speak that language! (Do NOT include or suggest non-speakers when at least 1 speaker exists).
+       - Set exactMatchFound to true (if score >= 60).
+     * ONLY if NO professional in the directory speaks the requested language:
+       - You may return alternative professionals in that trade with lower scores (score 20-45).
+       - Set exactMatchFound to false, and in "summaryMessage" explain in the user's query language that no professional speaking that language was found for this service.`;
 
         const response = await ai.models.generateContent({
           model: "gemini-flash-latest",
@@ -11146,7 +11232,37 @@ ${JSON.stringify(proListBrief, null, 2)}`,
       }
 
       const resultsDict: { [key: string]: { score: number; reason: string } } = {};
-      const rawResults = Array.isArray(data.results) ? data.results : (Array.isArray(data) ? data : []);
+      let rawResults = Array.isArray(data.results) ? data.results : (Array.isArray(data) ? data : []);
+
+      // Spoken language filter enforcement
+      const requestedLangs = detectRequestedLanguages(trimmed);
+      if (requestedLangs.length > 0) {
+        const proLookup: Record<string, any> = {};
+        (allPros || []).forEach((p: any) => {
+          if (p && p.id != null) proLookup[String(p.id)] = p;
+        });
+
+        const matchingSpeakers = rawResults.filter((r: any) => {
+          const sc = typeof r.score === 'number' ? r.score : 0;
+          if (sc <= 0) return false;
+          const pro = proLookup[String(r.id)];
+          return pro && proSpeaksAnyLanguage(pro, requestedLangs);
+        });
+
+        if (matchingSpeakers.length > 0) {
+          // If at least one matching speaker is found, strictly omit non-speakers!
+          rawResults = rawResults.filter((r: any) => {
+            const pro = proLookup[String(r.id)];
+            return pro && proSpeaksAnyLanguage(pro, requestedLangs);
+          }).map((r: any) => ({
+            ...r,
+            score: Math.max(typeof r.score === 'number' ? r.score : 0, 75)
+          }));
+          exactMatch = true;
+          summaryMsg = null;
+        }
+      }
+
       let highestScore = 0;
 
       rawResults.forEach((item: any) => {
@@ -11212,6 +11328,9 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     if (initialSearch !== null && initialSearch !== undefined) {
       setSearch(initialSearch);
       setDeferredSearch(initialSearch);
+      if (initialSearch.trim() && searchMode === 'ai') {
+        handleSearchSubmit(initialSearch);
+      }
     }
   }, [initialSearch]);
 
@@ -11439,6 +11558,21 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
   const hasActiveFilter = (typeof deferredSearch === 'string' && deferredSearch.trim() !== '') || aiResults !== null || selectedCategory !== 'All' || selectedLanguage !== 'All' || maxDistance !== 'All' || minRating > 0;
 
+  // Spoken language requirement handling for AI search
+  const aiSearchQuery = aiQuery || deferredSearch || search;
+  const requestedLangs = useMemo(() => {
+    if (aiResults === null) return [];
+    return detectRequestedLanguages(aiSearchQuery);
+  }, [aiResults, aiSearchQuery]);
+
+  const hasMatchingLanguageSpeakers = useMemo(() => {
+    if (requestedLangs.length === 0 || !aiResults) return false;
+    return (allPros || []).some(p => {
+      const sc = aiResults[String(p.id)]?.score || 0;
+      return sc > 0 && proSpeaksAnyLanguage(p, requestedLangs);
+    });
+  }, [requestedLangs, aiResults, allPros]);
+
   // Check if we have strong exact matches from AI search
   const hasStrongAiMatches = aiResults !== null && aiExactMatch && (Object.values(aiResults) as any[]).some(r => r.score >= 30);
 
@@ -11460,6 +11594,12 @@ ${JSON.stringify(proListBrief, null, 2)}`,
             // Only keep professionals that have a positive score (> 0).
             // Any professional with score <= 0 or missing from aiResults has nothing to do with the search and is hidden.
             matchesSearch = !!matchInfo && typeof matchInfo.score === 'number' && matchInfo.score > 0;
+
+            // If a language was requested in Jane search and at least 1 speaker exists,
+            // strictly exclude any professional who does NOT speak that language!
+            if (matchesSearch && hasMatchingLanguageSpeakers) {
+              matchesSearch = proSpeaksAnyLanguage(pro, requestedLangs);
+            }
           } else {
             const searchLower = searchStr.toLowerCase();
             const proName = typeof pro.name === 'string' ? pro.name : '';
@@ -11488,10 +11628,19 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         return matchesCategory && matchesLanguage && matchesSearch && matchesDistance && matchesRating;
       })
       .sort((a, b) => {
+        // 1. Spoken language priority: if a language was requested in AI search, prioritize pros who speak it
+        if (requestedLangs.length > 0) {
+          const speaksA = proSpeaksAnyLanguage(a, requestedLangs);
+          const speaksB = proSpeaksAnyLanguage(b, requestedLangs);
+          if (speaksA !== speaksB) return speaksA ? -1 : 1;
+        }
+
+        // 2. Recommended pros priority
         const recA = a.is_recommended !== false;
         const recB = b.is_recommended !== false;
         if (recA !== recB) return recA ? -1 : 1;
 
+        // 3. AI match score
         if (aiResults) {
           const scoreA = aiResults[String(a.id)]?.score || 0;
           const scoreB = aiResults[String(b.id)]?.score || 0;
@@ -11589,7 +11738,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
               {/* Privacy Safeguard Note */}
               <div className="flex items-center justify-center gap-1.5 text-slate-400 font-bold text-[10px] md:text-[11px] tracking-wide pt-1 text-center">
                 <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span>100% private. Jane is here to help.</span>
+                <span>100% secure. Jane is here to help.</span>
               </div>
             </div>
 

@@ -7,6 +7,75 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// Language helper functions for AI matching
+function detectRequestedLanguages(query: string): string[] {
+  if (!query || typeof query !== "string") return [];
+  const q = query.toLowerCase();
+  const detected: string[] = [];
+
+  if (/\b(fran[cç]ais|fran[cç]aise|fran[cç]aises|french|francophone|francophones)\b/i.test(q)) {
+    detected.push("French");
+  }
+  if (/\b(anglais|anglaise|anglaises|english|anglophone|anglophones|ingles|inglés)\b/i.test(q)) {
+    detected.push("English");
+  }
+  if (/\b(espagnol|espagnole|espagnols|espagnoles|spanish|español|espanol|hispanophone|hispanophones|hispano|castellano|castillan)\b/i.test(q)) {
+    detected.push("Spanish");
+  }
+  if (/\b(allemand|allemande|allemands|allemandes|german|deutsch|germanophone)\b/i.test(q)) {
+    detected.push("German");
+  }
+  if (/\b(italien|italienne|italiens|italiennes|italian|italiano|italophone)\b/i.test(q)) {
+    detected.push("Italian");
+  }
+  if (/\b(portugais|portugaise|portugaises|portuguese|portugu[eê]s|lusophone)\b/i.test(q)) {
+    detected.push("Portuguese");
+  }
+  if (/\b(n[ée]erlandais|n[ée]erlandaise|dutch|hollandais|hollandaise|nederlands)\b/i.test(q)) {
+    detected.push("Dutch");
+  }
+  if (/\b(russe|russes|russian|russophone|ruso)\b/i.test(q)) {
+    detected.push("Russian");
+  }
+  if (/\b(arabe|arabes|arabic|arabophone|[aá]rabe)\b/i.test(q)) {
+    detected.push("Arabic");
+  }
+  if (/\b(chinois|chinoise|chinoises|chinese|mandarin|canton[a-z]+|sinophone)\b/i.test(q)) {
+    detected.push("Chinese");
+  }
+  if (/\b(japonais|japonaise|japonaises|japanese|japone?s)\b/i.test(q)) {
+    detected.push("Japanese");
+  }
+
+  return detected;
+}
+
+function proSpeaksAnyLanguage(pro: any, requestedLanguages: string[]): boolean {
+  if (!pro || !Array.isArray(pro.languages) || requestedLanguages.length === 0) return false;
+
+  const proLangs = pro.languages.map((l: any) => (typeof l === "string" ? l.trim().toLowerCase() : ""));
+
+  return requestedLanguages.some(targetLang => {
+    const t = targetLang.toLowerCase();
+    return proLangs.some((lang: string) => {
+      if (!lang) return false;
+      if (lang === t) return true;
+      if (t === "french" && (lang.includes("fran") || lang.includes("french"))) return true;
+      if (t === "english" && (lang.includes("angl") || lang.includes("engl") || lang.includes("ingl"))) return true;
+      if (t === "spanish" && (lang.includes("esp") || lang.includes("span") || lang.includes("cast"))) return true;
+      if (t === "german" && (lang.includes("allem") || lang.includes("germ") || lang.includes("deutsch"))) return true;
+      if (t === "italian" && lang.includes("ital")) return true;
+      if (t === "portuguese" && lang.includes("portug")) return true;
+      if (t === "dutch" && (lang.includes("dutch") || lang.includes("neerl") || lang.includes("néerl") || lang.includes("holl"))) return true;
+      if (t === "russian" && lang.includes("russ")) return true;
+      if (t === "arabic" && lang.includes("arab")) return true;
+      if (t === "chinese" && lang.includes("chin")) return true;
+      if (t === "japanese" && (lang.includes("japon") || lang.includes("japan"))) return true;
+      return false;
+    });
+  });
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -158,7 +227,19 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
 5. PRIORITIZATION (CRITICAL):
    - Professionals with "is_recommended: true" are community-vetted and MUST be prioritized over those with "is_recommended: false".
    - If multiple professionals match the user's query well, those with "is_recommended: true" should receive a score bonus or be ranked higher than those with "is_recommended: false".
-   - A non-recommended professional should only have a higher score than a recommended one if they are a significantly better match for the specific trade or location requested.`;
+   - A non-recommended professional should only have a higher score than a recommended one if they are a significantly better match for the specific trade or location requested.
+
+6. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
+   - Check if the user's query requests a specific spoken language (e.g. "qui parle français", "parlant français", "francophone", "french speaking", "speaking english", "anglais", "habla español", "spanish", "deutsch", "allemand", etc.).
+   - If a language is requested:
+     * FIRST PRIORITY: Check each professional's "languages" list for that language (handling translations like French/Français, English/Anglais, Spanish/Español, etc.).
+     * EXCLUSION RULE (CRITICAL): If AT LEAST ONE matching professional speaks the requested language:
+       - You MUST ONLY return professionals who speak that language (give them positive scores 70-100).
+       - You MUST give score: 0 to ANY professional who does NOT speak that language! (Do NOT include or suggest non-speakers when at least 1 speaker exists).
+       - Set exactMatchFound to true (if score >= 60).
+     * ONLY if NO professional in the directory speaks the requested language:
+       - You may return alternative professionals in that trade with lower scores (score 20-45).
+       - Set exactMatchFound to false, and in "summaryMessage" explain in the user's query language that no professional speaking that language was found for this service.`;
 
       const response = await getAiClient().models.generateContent({
         model: "gemini-3.1-flash-lite",
@@ -204,6 +285,51 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         results = Array.isArray(parsedData.results) ? parsedData.results : [];
         exactMatchFound = typeof parsedData.exactMatchFound === "boolean" ? parsedData.exactMatchFound : true;
         summaryMessage = parsedData.summaryMessage || null;
+      }
+
+      // Check if user requested a specific spoken language
+      const requestedLangs = detectRequestedLanguages(query);
+      if (requestedLangs.length > 0) {
+        const proLookup: Record<string, any> = {};
+        professionals.forEach((p: any) => {
+          if (p && p.id != null) proLookup[String(p.id)] = p;
+        });
+        
+        // Find matching pros with score > 0 who speak any of the requested languages
+        const matchingSpeakers = results.filter((r: any) => {
+          if ((r.score || 0) <= 0) return false;
+          const pro = proLookup[String(r.id)];
+          return pro && proSpeaksAnyLanguage(pro, requestedLangs);
+        });
+
+        if (matchingSpeakers.length > 0) {
+          // At least 1 speaker found! Strictly exclude any non-speaker
+          results = results
+            .filter((r: any) => {
+              const pro = proLookup[String(r.id)];
+              return pro && proSpeaksAnyLanguage(pro, requestedLangs);
+            })
+            .map((r: any) => {
+              // Ensure speakers have strong direct match scores
+              return {
+                ...r,
+                score: Math.max(r.score || 0, 75)
+              };
+            });
+
+          // Prioritize by recommended status and score
+          results.sort((a: any, b: any) => {
+            const proA = proLookup[String(a.id)];
+            const proB = proLookup[String(b.id)];
+            const recA = proA?.is_recommended !== false;
+            const recB = proB?.is_recommended !== false;
+            if (recA !== recB) return recA ? -1 : 1;
+            return (b.score || 0) - (a.score || 0);
+          });
+
+          exactMatchFound = true;
+          summaryMessage = null;
+        }
       }
 
       // Verify if any pro has a high confidence match score (>= 40)
