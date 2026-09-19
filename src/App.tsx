@@ -101,7 +101,7 @@ import {
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
 import { compressImage } from './services/imageService';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { APIProvider, Map, AdvancedMarker, Pin, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
@@ -12192,16 +12192,18 @@ function DirectoryProCardItem({
   return (
     <motion.div
       layout
-      transition={{ layout: { type: 'spring', stiffness: 350, damping: 30 }, opacity: { duration: 0.2 } }}
+      transition={{ layout: { duration: 0.38, ease: [0.16, 1, 0.3, 1] }, opacity: { duration: 0.25 } }}
       id={`pro-card-${pro.id}`}
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
-        "group relative bg-white rounded-[28px] sm:rounded-[32px] border-2 transition-all duration-300 shadow-sm overflow-hidden scroll-mt-28 cursor-pointer w-full max-w-full p-4 sm:p-6 flex flex-col sm:flex-row gap-4 sm:gap-6",
-        isExpanded
-          ? "col-span-1 md:col-span-2 border-brand-blue ring-4 ring-brand-blue/15 shadow-2xl bg-gradient-to-b from-white via-white to-blue-50/20"
-          : pro.is_recommended !== false 
-            ? "border-emerald-500/80 hover:border-emerald-500 hover:shadow-emerald-500/10 hover:shadow-md hover:-translate-y-0.5"
+        "group relative rounded-[28px] sm:rounded-[32px] border-2 transition-colors duration-300 shadow-sm overflow-hidden scroll-mt-28 cursor-pointer w-full max-w-full p-4 sm:p-6 flex flex-col sm:flex-row gap-4 sm:gap-6 bg-white",
+        pro.is_recommended !== false
+          ? isExpanded
+            ? "col-span-1 md:col-span-2 border-emerald-500 ring-4 ring-emerald-500/20 shadow-2xl"
+            : "border-emerald-500/90 hover:border-emerald-500 hover:shadow-emerald-500/10 hover:shadow-md hover:-translate-y-0.5"
+          : isExpanded
+            ? "col-span-1 md:col-span-2 border-brand-blue ring-4 ring-brand-blue/15 shadow-2xl bg-gradient-to-b from-white via-white to-blue-50/20"
             : "border-slate-100 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5"
       )}
       onClick={() => {
@@ -12227,7 +12229,10 @@ function DirectoryProCardItem({
       )}
 
       {/* Unified Card Layout */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50/50 rounded-full -mr-16 -mt-16 group-hover:bg-brand-blue/5 transition-colors duration-500 pointer-events-none" />
+      <div className={cn(
+        "absolute top-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 transition-colors duration-500 pointer-events-none",
+        pro.is_recommended !== false ? "bg-emerald-100/30 group-hover:bg-emerald-200/30" : "bg-slate-50/50 group-hover:bg-brand-blue/5"
+      )} />
       
       <div className="relative w-20 h-20 sm:w-32 sm:h-32 lg:w-32 lg:h-32 rounded-2xl bg-slate-50 overflow-hidden flex-shrink-0 border border-slate-100 shadow-sm group-hover:scale-105 transition-transform duration-700 flex items-center justify-center">
         {pro.image ? (
@@ -12335,7 +12340,15 @@ function DirectoryProCardItem({
                 <span>Languages:</span>
               </div>
               {pro.languages.map(lang => (
-                <span key={lang} className="px-2 py-0.5 bg-slate-50 text-slate-500 rounded-lg text-[10px] font-semibold border border-slate-100/60 transition-colors hover:bg-slate-100/50">
+                <span 
+                  key={lang} 
+                  className={cn(
+                    "px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors",
+                    pro.is_recommended !== false
+                      ? "bg-emerald-50/50 text-emerald-800 border border-emerald-500/80 hover:bg-emerald-100/60"
+                      : "bg-slate-50 text-slate-500 border border-slate-100/60 hover:bg-slate-100/50"
+                  )}
+                >
                   {lang}
                 </span>
               ))}
@@ -12343,15 +12356,19 @@ function DirectoryProCardItem({
           )}
 
           <div className="flex items-center justify-between gap-3 min-w-0 w-full pt-1">
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest min-w-0 flex-1">
-              <MapPin className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
-              <span className={cn(
-                "truncate font-medium text-slate-500 normal-case",
-                !currentUser && "filter blur-[4.5px] select-none text-slate-300 inline-block pointer-events-none"
-              )}>
-                {pro.location || "Carrer Sorní, 12, 46004 Valencia"}
-              </span>
-            </div>
+            {!isExpanded ? (
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest min-w-0 flex-1">
+                <MapPin className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+                <span className={cn(
+                  "truncate font-medium text-slate-500 normal-case",
+                  !currentUser && "filter blur-[4.5px] select-none text-slate-300 inline-block pointer-events-none"
+                )}>
+                  {pro.location || "Carrer Sorní, 12, 46004 Valencia"}
+                </span>
+              </div>
+            ) : (
+              <div className="flex-1" />
+            )}
 
             <div className="flex items-center gap-2 shrink-0">
               {hasRealLocation && userLocation && pro.coordinates && (
@@ -12369,30 +12386,19 @@ function DirectoryProCardItem({
                 </div>
               )}
 
-              {/* Explicit Expand Pill Indicator */}
-              <div className={cn(
-                "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs shrink-0 select-none",
-                isExpanded
-                  ? "bg-brand-blue text-white shadow-brand-blue/20"
-                  : "bg-blue-50/90 text-brand-blue border border-blue-100 group-hover:bg-brand-blue group-hover:text-white group-hover:shadow-md"
-              )}>
-                <span>{isExpanded ? "Moins d'infos" : "Plus d'infos"}</span>
-                <ChevronDown className={cn(
-                  "w-3.5 h-3.5 transition-transform duration-300",
-                  isExpanded ? "rotate-180" : "group-hover:translate-y-0.5"
-                )} />
-              </div>
+
             </div>
           </div>
 
           {/* EXPANDED INLINE SECTIONS (Contact, Map, Reviews) */}
-          <AnimatePresence>
+          <AnimatePresence initial={false}>
             {isExpanded && (
               <motion.div
-                initial={{ opacity: 0, height: 0, y: -8 }}
-                animate={{ opacity: 1, height: 'auto', y: 0 }}
-                exit={{ opacity: 0, height: 0, y: -8 }}
-                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                key="expanded-details"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
                 className="overflow-hidden"
               >
                 <div className="space-y-6 pt-4 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
@@ -13724,57 +13730,59 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           )}
 
           {/* List View below the map */}
-          <div id="pro-cards-list" className="grid grid-cols-1 md:grid-cols-2 gap-6 scroll-mt-28">
-            {filteredPros.length > 0 ? (
-              filteredPros.map((pro, index) => {
-                const isExpanded = String(expandedProId) === String(pro.id);
-                return (
-                  <DirectoryProCardItem
-                    key={pro.id}
-                    pro={pro}
-                    index={index}
-                    isExpanded={isExpanded}
-                    onToggleExpand={() => {
-                      setExpandedProId((prev) => (String(prev) === String(pro.id) ? null : String(pro.id)));
-                    }}
-                    currentUser={currentUser}
-                    userProfile={userProfile}
-                    blockedUsers={blockedUsers}
-                    usersWhoBlockedMe={usersWhoBlockedMe}
-                    onNavigate={onNavigate}
-                    onProUpdate={onProUpdate}
-                    aiResult={aiResults ? aiResults[String(pro.id)] : undefined}
-                    userLocation={userLocation}
-                    hasRealLocation={hasRealLocation}
-                  />
-                );
-              })
-            ) : (
-              <div className="col-span-full py-32 text-center space-y-6">
-                <div className="w-32 h-32 bg-slate-50 rounded-full flex items-center justify-center mx-auto ring-1 ring-slate-100">
-                  <Search className="w-12 h-12 text-brand-blue" />
-                </div>
-                {!hasActiveFilter ? (
-                  <div className="space-y-2">
-                    <p className="text-slate-900 font-bold text-2xl">
-                      {searchMode === 'ai' ? "Ask Jane for recommendations" : "Start your search"}
-                    </p>
-                    <p className="text-slate-400 max-w-md mx-auto font-medium">
-                      {searchMode === 'ai' 
-                        ? "Tell Jane what you need in natural language, and she will find the perfect community-recommended matches for you." 
-                        : "Use the search bar or filters above to find the best local professionals recommended by the community."}
-                    </p>
+          <LayoutGroup>
+            <div id="pro-cards-list" className="grid grid-cols-1 md:grid-cols-2 gap-6 scroll-mt-28">
+              {filteredPros.length > 0 ? (
+                filteredPros.map((pro, index) => {
+                  const isExpanded = String(expandedProId) === String(pro.id);
+                  return (
+                    <DirectoryProCardItem
+                      key={pro.id}
+                      pro={pro}
+                      index={index}
+                      isExpanded={isExpanded}
+                      onToggleExpand={() => {
+                        setExpandedProId((prev) => (String(prev) === String(pro.id) ? null : String(pro.id)));
+                      }}
+                      currentUser={currentUser}
+                      userProfile={userProfile}
+                      blockedUsers={blockedUsers}
+                      usersWhoBlockedMe={usersWhoBlockedMe}
+                      onNavigate={onNavigate}
+                      onProUpdate={onProUpdate}
+                      aiResult={aiResults ? aiResults[String(pro.id)] : undefined}
+                      userLocation={userLocation}
+                      hasRealLocation={hasRealLocation}
+                    />
+                  );
+                })
+              ) : (
+                <div className="col-span-full py-32 text-center space-y-6">
+                  <div className="w-32 h-32 bg-slate-50 rounded-full flex items-center justify-center mx-auto ring-1 ring-slate-100">
+                    <Search className="w-12 h-12 text-brand-blue" />
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-slate-900 font-bold text-2xl">No pros found</p>
-                    <p className="text-slate-400 max-w-md mx-auto font-medium">We didn't find any professional matching your search. Try different filters or keywords!</p>
-                  </div>
-                )}
+                  {!hasActiveFilter ? (
+                    <div className="space-y-2">
+                      <p className="text-slate-900 font-bold text-2xl">
+                        {searchMode === 'ai' ? "Ask Jane for recommendations" : "Start your search"}
+                      </p>
+                      <p className="text-slate-400 max-w-md mx-auto font-medium">
+                        {searchMode === 'ai' 
+                          ? "Tell Jane what you need in natural language, and she will find the perfect community-recommended matches for you." 
+                          : "Use the search bar or filters above to find the best local professionals recommended by the community."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-slate-900 font-bold text-2xl">No pros found</p>
+                      <p className="text-slate-400 max-w-md mx-auto font-medium">We didn't find any professional matching your search. Try different filters or keywords!</p>
+                    </div>
+                  )}
 
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          </LayoutGroup>
         </div>
       </div>
     </div>
