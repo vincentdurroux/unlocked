@@ -304,8 +304,16 @@ export function renderFormattedContent(text: string, defaultBoldClass = "font-ex
       lastIndex = linkRegex.lastIndex;
     }
 
-    if (lastIndex < line.length) {
-      parts.push(...parseBoldParts(line.substring(lastIndex)));
+    if (lastIndex < cleanLine.length) {
+      parts.push(...parseBoldParts(cleanLine.substring(lastIndex)));
+    }
+
+    if (isHeader) {
+      return (
+        <div key={lineIdx} className="text-base sm:text-lg font-bold text-slate-950 pt-2 pb-1">
+          {parts}
+        </div>
+      );
     }
 
     return (
@@ -333,7 +341,7 @@ export function SimpleMarkdown({ children }: { children: string }) {
               <span>✨ What can you expect?</span>
             </div>
             <div className="leading-relaxed text-slate-700 font-normal">
-              {renderFormattedContent(parsed.expect, "font-bold text-slate-950 bg-slate-200/60 px-1 py-0.5 rounded")}
+              {renderFormattedContent(parsed.expect, "font-bold text-slate-950")}
             </div>
           </div>
         )}
@@ -345,7 +353,7 @@ export function SimpleMarkdown({ children }: { children: string }) {
               <span>🎯 Perfect for</span>
             </div>
             <div className="leading-relaxed text-emerald-950 font-normal">
-              {renderFormattedContent(parsed.perfectFor, "font-bold text-emerald-950 bg-emerald-200/60 px-1 py-0.5 rounded")}
+              {renderFormattedContent(parsed.perfectFor, "font-bold text-emerald-950")}
             </div>
           </div>
         )}
@@ -357,7 +365,7 @@ export function SimpleMarkdown({ children }: { children: string }) {
               <span>💡 Good to know (tips)</span>
             </div>
             <div className="leading-relaxed text-amber-950 font-normal">
-              {renderFormattedContent(parsed.goodToKnow, "font-bold text-amber-950 bg-amber-200/60 px-1 py-0.5 rounded")}
+              {renderFormattedContent(parsed.goodToKnow, "font-bold text-amber-950")}
             </div>
           </div>
         )}
@@ -369,7 +377,7 @@ export function SimpleMarkdown({ children }: { children: string }) {
               <span>🔗 More information</span>
             </div>
             <div className="leading-relaxed text-sky-950 font-normal">
-              {renderFormattedContent(parsed.moreInfo, "font-bold text-sky-950 bg-sky-200/60 px-1 py-0.5 rounded")}
+              {renderFormattedContent(parsed.moreInfo, "font-bold text-sky-950")}
             </div>
           </div>
         )}
@@ -379,7 +387,7 @@ export function SimpleMarkdown({ children }: { children: string }) {
 
   return (
     <div className="space-y-3 text-slate-700 leading-relaxed text-xs sm:text-sm">
-      {renderFormattedContent(children, "font-bold text-slate-900 bg-slate-100 px-1 py-0.5 rounded")}
+      {renderFormattedContent(children, "font-bold text-slate-950")}
     </div>
   );
 }

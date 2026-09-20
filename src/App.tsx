@@ -432,14 +432,14 @@ const getQualityConfig = (name: string) => {
   return cfg;
 };
 
-function SimpleMarkdown({ children }: { children?: string }) {
+function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPlain?: boolean }) {
   if (!children) return null;
 
   // If this text contains structured event sections, render them with themed cards and friendly emojis
   const parsed = parseDescriptionSections(children);
   const hasStructuredSections = !!(parsed.expect || parsed.perfectFor || parsed.goodToKnow || parsed.moreInfo);
 
-  if (hasStructuredSections && (children.includes('What can you expect') || children.includes('Perfect for') || children.includes('Good to know') || children.includes('More information'))) {
+  if (!isPlain && hasStructuredSections && (children.includes('What can you expect') || children.includes('Perfect for') || children.includes('Good to know') || children.includes('More information'))) {
     return (
       <div className="space-y-4 text-xs sm:text-sm text-slate-700 not-italic">
         {parsed.expect && (
@@ -449,7 +449,7 @@ function SimpleMarkdown({ children }: { children?: string }) {
               <span>✨ What can you expect?</span>
             </div>
             <div className="leading-relaxed text-slate-700 font-normal">
-              {renderFormattedContent(parsed.expect, "font-bold text-slate-950 bg-slate-200/60 px-1 py-0.5 rounded")}
+              {renderFormattedContent(parsed.expect, "font-bold text-slate-950")}
             </div>
           </div>
         )}
@@ -460,8 +460,8 @@ function SimpleMarkdown({ children }: { children?: string }) {
               <Users className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>🎯 Perfect for</span>
             </div>
-            <div className="leading-relaxed text-emerald-950 font-normal">
-              {renderFormattedContent(parsed.perfectFor, "font-bold text-emerald-950 bg-emerald-200/60 px-1 py-0.5 rounded")}
+            <div className="leading-relaxed text-emerald-955 font-normal">
+              {renderFormattedContent(parsed.perfectFor, "font-bold text-emerald-950")}
             </div>
           </div>
         )}
@@ -472,8 +472,8 @@ function SimpleMarkdown({ children }: { children?: string }) {
               <Info className="w-4 h-4 text-amber-600 shrink-0" />
               <span>💡 Good to know (tips)</span>
             </div>
-            <div className="leading-relaxed text-amber-950 font-normal">
-              {renderFormattedContent(parsed.goodToKnow, "font-bold text-amber-950 bg-amber-200/60 px-1 py-0.5 rounded")}
+            <div className="leading-relaxed text-amber-955 font-normal">
+              {renderFormattedContent(parsed.goodToKnow, "font-bold text-amber-950")}
             </div>
           </div>
         )}
@@ -484,8 +484,8 @@ function SimpleMarkdown({ children }: { children?: string }) {
               <ExternalLink className="w-4 h-4 text-sky-600 shrink-0" />
               <span>🔗 More information</span>
             </div>
-            <div className="leading-relaxed text-sky-950 font-normal">
-              {renderFormattedContent(parsed.moreInfo, "font-bold text-sky-950 bg-sky-200/60 px-1 py-0.5 rounded")}
+            <div className="leading-relaxed text-sky-955 font-normal">
+              {renderFormattedContent(parsed.moreInfo, "font-bold text-sky-950")}
             </div>
           </div>
         )}
@@ -534,6 +534,11 @@ function SimpleMarkdown({ children }: { children?: string }) {
       })}
     </div>
   );
+}
+
+function stripMarkdown(text?: string): string {
+  if (!text) return '';
+  return text.replace(/(\*\*|__)/g, '');
 }
 
 function parseInlineMarkdown(text: string): React.ReactNode {
@@ -3823,7 +3828,7 @@ function AdDetailModal({ ad, onClose }: { ad: Ad | any, onClose: () => void }) {
             <div className="space-y-3">
               <h4 className="font-bold text-slate-900">Description</h4>
               <div className="markdown-body">
-                <SimpleMarkdown>{ad.description || "No description provided for this item."}</SimpleMarkdown>
+                <SimpleMarkdown isPlain={true}>{ad.description || "No description provided for this item."}</SimpleMarkdown>
               </div>
             </div>
 
@@ -10296,8 +10301,11 @@ function HomeView({
               loading="eager"
               fetchPriority="high"
               decoding="sync"
+              draggable="false"
+              onContextMenu={(e) => e.preventDefault()}
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-              className="w-full max-w-[300px] md:max-w-[480px] h-auto object-contain block align-bottom"
+              className="w-full max-w-[300px] md:max-w-[480px] h-auto object-contain block align-bottom pointer-events-none select-none"
+              style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
             />
           </div>
         </div>
@@ -11052,7 +11060,7 @@ function ExpertGuideModal({ isOpen, onClose, article: rawArticle }: { isOpen: bo
 
               {/* Guide Content - Simple and highly readable text */}
               <div className="markdown-body">
-                <SimpleMarkdown>{article.content}</SimpleMarkdown>
+                <SimpleMarkdown isPlain={true}>{article.content}</SimpleMarkdown>
               </div>
 
               {/* Bottom Contact Section / Author Details */}
@@ -11903,7 +11911,7 @@ function DirectoryProCardItem({
           )}>
             {isExpanded ? (
               <div className="markdown-body text-slate-700 leading-relaxed text-sm md:text-base pt-2">
-                <SimpleMarkdown>{pro.bio}</SimpleMarkdown>
+                <SimpleMarkdown isPlain={true}>{pro.bio}</SimpleMarkdown>
               </div>
             ) : (
               pro.bio
@@ -14940,7 +14948,7 @@ function ProfessionalDetailView({
                   <h4 className="text-sm font-bold text-slate-900 font-display uppercase tracking-wider">About</h4>
                 </div>
                 <div className="markdown-body text-slate-700 leading-relaxed text-sm md:text-base">
-                  <SimpleMarkdown>{pro.bio}</SimpleMarkdown>
+                  <SimpleMarkdown isPlain={true}>{pro.bio}</SimpleMarkdown>
                 </div>
               </section>
 
@@ -15321,12 +15329,11 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
   // Category filter state
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  // Jane AI Event Search state
-  const [janeQuery, setJaneQuery] = useState('');
-  const [isJaneSearching, setIsJaneSearching] = useState(false);
-  const [janeMatches, setJaneMatches] = useState<Record<string, { score: number; reason: string }> | null>(null);
-  const [janeSummary, setJaneSummary] = useState<string | null>(null);
-  const [janeError, setJaneError] = useState<string | null>(null);
+  // Keyword Search & Filters states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'tomorrow' | 'weekend'>('all');
+  const [priceFilter, setPriceFilter] = useState<'all' | 'free' | 'paid'>('all');
+  const [vibeFilter, setVibeFilter] = useState<'all' | 'expat' | 'outdoor' | 'social' | 'family' | 'culture'>('all');
 
   useEffect(() => {
     if (propEvents && propEvents.length > 0) {
@@ -15359,139 +15366,41 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
     }
   }, [initialEventId, events]);
 
-  // Handle Jane AI Event Search
-  const handleJaneSearch = async (queryToSearch?: string) => {
-    const query = (queryToSearch !== undefined ? queryToSearch : janeQuery).trim();
-    if (!query) return;
+  const hasActiveFilters = selectedCategory !== 'all' || searchQuery.trim() !== '' || dateFilter !== 'all' || priceFilter !== 'all' || vibeFilter !== 'all';
 
-    setIsJaneSearching(true);
-    setJaneError(null);
-
-    const scrollToResults = () => {
-      setTimeout(() => {
-        document.getElementById('events-results-section')?.scrollIntoView({ behavior: 'smooth' });
-      }, 150);
-    };
-
-    try {
-      const result = await eventService.matchEventsWithJane(query, events);
-      if (result.results && result.results.length > 0) {
-        const matchMap: Record<string, { score: number; reason: string }> = {};
-        result.results.forEach((m) => {
-          if (m.id) {
-            matchMap[String(m.id)] = {
-              score: m.score || 85,
-              reason: m.reason || ''
-            };
-          }
-        });
-        setJaneMatches(matchMap);
-        setJaneSummary(result.summaryMessage || `Found ${result.results.length} curated events matching "${query}".`);
-        scrollToResults();
-      } else {
-        // Fallback local smart matching if AI returned no specific IDs
-        const lowerQ = query.toLowerCase().trim();
-        const localMatchMap: Record<string, { score: number; reason: string }> = {};
-        let count = 0;
-
-        const isEveningSearch = /soir|night|evening|20h|21h|22h/i.test(lowerQ);
-        const isMorningSearch = /matin|morning|9h|10h|11h/i.test(lowerQ);
-        const isWeekendSearch = /week-end|weekend|samedi|dimanche|saturday|sunday/i.test(lowerQ);
-        const isFreeSearch = /gratuit|free/i.test(lowerQ);
-
-        events.forEach(ev => {
-          const title = (ev.title || '').toLowerCase();
-          const desc = (ev.description || '').toLowerCase();
-          const cat = (ev.category || '').toLowerCase();
-          const loc = (ev.location || '').toLowerCase();
-          const tags = (ev.tags || '').toLowerCase();
-          const time = (ev.start_time || ev.time || '').toLowerCase();
-          const dateStr = (ev.start_date || ev.date || '').toLowerCase();
-          const combined = `${title} ${cat} ${desc} ${loc} ${tags} ${time} ${dateStr}`;
-
-          let score = 0;
-          let matchedReasons: string[] = [];
-
-          if (combined.includes(lowerQ)) {
-            score += 90;
-            matchedReasons.push(`Corresponds directly to "${query}" in title & description`);
-          } else {
-            const keywords = lowerQ.split(/\s+/).filter(w => w.length > 2);
-            const matches = keywords.filter(k => combined.includes(k));
-            if (matches.length > 0) {
-              score += matches.length * 30;
-              matchedReasons.push(`Matches terms: ${matches.join(', ')}`);
-            }
-          }
-
-          if (isEveningSearch && (time.includes('18:') || time.includes('19:') || time.includes('20:') || time.includes('21:') || time.includes('22:') || desc.includes('soir') || desc.includes('night'))) {
-            score += 25;
-            matchedReasons.push('Evening schedule');
-          }
-
-          if (isWeekendSearch && (dateStr.includes('sat') || dateStr.includes('sun') || desc.includes('weekend') || desc.includes('week-end'))) {
-            score += 25;
-            matchedReasons.push('Weekend schedule');
-          }
-
-          if (isFreeSearch && (ev.is_free || desc.includes('gratuit') || desc.includes('free'))) {
-            score += 25;
-            matchedReasons.push('Free event');
-          }
-
-          if (score >= 30) {
-            localMatchMap[String(ev.id)] = {
-              score: Math.min(score, 98),
-              reason: `Jane: ${matchedReasons.join(' • ')}`
-            };
-            count++;
-          }
-        });
-
-        if (count > 0) {
-          setJaneMatches(localMatchMap);
-          setJaneSummary(`Found ${count} events related to "${query}".`);
-          scrollToResults();
-        } else {
-          setJaneMatches({});
-          setJaneSummary(`No exact matches for "${query}". Try searching for categories like Jazz, Paella, Tech, or Beach.`);
-          scrollToResults();
-        }
+  // Auto scroll down to results section when filters are applied and events match
+  useEffect(() => {
+    if (hasActiveFilters) {
+      const el = document.getElementById('events-results-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
       }
-    } catch (err: any) {
-      console.warn('Jane AI matching fallback:', err);
-      // Client-side smart fallback
-      const lowerQ = query.toLowerCase().trim();
-      const localMatchMap: Record<string, { score: number; reason: string }> = {};
-      let count = 0;
-
-      events.forEach(ev => {
-        const combined = `${ev.title} ${ev.category} ${ev.description} ${ev.location} ${ev.tags} ${ev.start_time} ${ev.start_date}`.toLowerCase();
-        if (combined.includes(lowerQ) || lowerQ.split(/\s+/).some(w => w.length > 2 && combined.includes(w))) {
-          localMatchMap[String(ev.id)] = {
-            score: 85,
-            reason: `Matches key details for "${query}" in event description & schedule.`
-          };
-          count++;
-        }
-      });
-      setJaneMatches(localMatchMap);
-      setJaneSummary(count > 0 ? `Found ${count} matching events for "${query}".` : `No direct event matches found for "${query}".`);
-      scrollToResults();
-    } finally {
-      setIsJaneSearching(false);
     }
-  };
+  }, [selectedCategory, searchQuery, dateFilter, priceFilter, vibeFilter]);
 
-  const handleClearJaneSearch = () => {
-    setJaneQuery('');
-    setJaneMatches(null);
-    setJaneSummary(null);
-    setJaneError(null);
+  const handleResetFilters = () => {
+    setSelectedCategory('all');
+    setSearchQuery('');
+    setDateFilter('all');
+    setPriceFilter('all');
+    setVibeFilter('all');
   };
 
   // Filtered & sorted events
   const filteredEvents = useMemo(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
+
+    const tom = new Date();
+    tom.setDate(tom.getDate() + 1);
+    const tomY = tom.getFullYear();
+    const tomM = String(tom.getMonth() + 1).padStart(2, '0');
+    const tomD = String(tom.getDate()).padStart(2, '0');
+    const tomorrowStr = `${tomY}-${tomM}-${tomD}`;
+
     return events.filter(ev => {
       // 0. Auto-exclude expired events
       if (isEventExpired(ev)) return false;
@@ -15503,22 +15412,86 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         }
       }
 
-      // 2. Jane AI Search Filter
-      if (janeMatches !== null) {
-        return !!janeMatches[String(ev.id)];
+      // 2. Keyword Search Filter (searches inside title, description, category, location, and tags)
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        const title = (ev.title || '').toLowerCase();
+        const desc = (ev.description || '').toLowerCase();
+        const cat = (ev.category || '').toLowerCase();
+        const loc = (ev.location || '').toLowerCase();
+        const tags = (ev.tags || '').toLowerCase();
+        const combined = `${title} ${cat} ${desc} ${loc} ${tags}`;
+        // Verify match
+        if (!combined.includes(query) && !query.split(/\s+/).every(word => combined.includes(word))) {
+          return false;
+        }
+      }
+
+      // 3. Date Filter (today, tomorrow, weekend)
+      const evDate = ev.start_date || ev.date || '';
+      if (dateFilter === 'today') {
+        if (evDate !== todayStr) return false;
+      } else if (dateFilter === 'tomorrow') {
+        if (evDate !== tomorrowStr) return false;
+      } else if (dateFilter === 'weekend') {
+        if (evDate) {
+          try {
+            const parsed = new Date(evDate);
+            const dayOfWeek = parsed.getDay(); // 0 is Sunday, 5 is Friday, 6 is Saturday
+            if (dayOfWeek !== 0 && dayOfWeek !== 5 && dayOfWeek !== 6) {
+              return false;
+            }
+          } catch (e) {
+            return false;
+          }
+        } else {
+          return false;
+        }
+      }
+
+      // 4. Price Filter
+      const evPrice = (ev.price || '').toLowerCase();
+      const isFree = !!ev.is_free || evPrice.includes('free') || evPrice.includes('gratuit');
+      if (priceFilter === 'free') {
+        if (!isFree) return false;
+      } else if (priceFilter === 'paid') {
+        if (isFree) return false;
+      }
+
+      // 5. Vibe Filter
+      if (vibeFilter !== 'all') {
+        const title = (ev.title || '').toLowerCase();
+        const desc = (ev.description || '').toLowerCase();
+        const cat = (ev.category || '').toLowerCase();
+        const tags = (ev.tags || '').toLowerCase();
+        const combined = `${title} ${cat} ${desc} ${tags}`;
+
+        if (vibeFilter === 'expat') {
+          if (!combined.includes('expat') && !combined.includes('english') && !combined.includes('meetup') && !combined.includes('social') && !combined.includes('networking')) {
+            return false;
+          }
+        } else if (vibeFilter === 'outdoor') {
+          if (!combined.includes('outdoor') && !combined.includes('park') && !combined.includes('plage') && !combined.includes('beach') && !combined.includes('turia') && !combined.includes('jardin')) {
+            return false;
+          }
+        } else if (vibeFilter === 'social') {
+          if (!combined.includes('drink') && !combined.includes('bar') && !combined.includes('social') && !combined.includes('apero') && !combined.includes('tapas') && !combined.includes('party')) {
+            return false;
+          }
+        } else if (vibeFilter === 'family') {
+          if (!combined.includes('family') && !combined.includes('enfant') && !combined.includes('kid') && !combined.includes('famille') && !combined.includes('atelier')) {
+            return false;
+          }
+        } else if (vibeFilter === 'culture') {
+          if (!combined.includes('art') && !combined.includes('museum') && !combined.includes('musée') && !combined.includes('culture') && !combined.includes('exhibition') && !combined.includes('concert')) {
+            return false;
+          }
+        }
       }
 
       return true;
-    }).sort((a, b) => {
-      // If Jane search active, sort by Jane match score descending
-      if (janeMatches !== null) {
-        const scoreA = janeMatches[String(a.id)]?.score || 0;
-        const scoreB = janeMatches[String(b.id)]?.score || 0;
-        if (scoreB !== scoreA) return scoreB - scoreA;
-      }
-      return 0;
     });
-  }, [events, selectedCategory, janeMatches]);
+  }, [events, selectedCategory, searchQuery, dateFilter, priceFilter, vibeFilter]);
 
   // Compute category counts
   const categoryCounts = useMemo(() => {
@@ -15542,105 +15515,59 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         </p>
       </div>
 
-      {/* AI Event Search Bar Card - Discreet Soft Warm Orange Style */}
-      <div className="bg-gradient-to-br from-orange-50/70 via-amber-50/40 to-orange-50/50 rounded-2xl p-4 sm:p-5 border border-orange-100/90 shadow-xs space-y-3">
+      {/* Keyword Event Search Bar Card - Elegant Light Theme */}
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-100 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-xs">
-              <Sparkles className="w-4 h-4 text-orange-500" />
+            <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
+              <Search className="w-4 h-4 text-orange-500" />
             </div>
             <div>
-              <h3 className="text-sm sm:text-base font-bold text-orange-600">
-                Tell Jane what you need
+              <h3 className="text-sm sm:text-base font-bold text-slate-800">
+                Search Events in Valencia
               </h3>
               <p className="text-xs text-slate-500">
-                Find curated events matching your vibe, plans, or interests (e.g. jazz night, paella masterclass, tech meetup...)
+                Find meetups, concerts, culinary classes, and activities by keywords or descriptions
               </p>
             </div>
           </div>
 
-          {janeMatches !== null && (
+          {hasActiveFilters && (
             <button
               type="button"
-              onClick={handleClearJaneSearch}
-              className="self-start sm:self-auto px-3 py-1 bg-white hover:bg-orange-50 text-slate-600 hover:text-orange-700 rounded-lg text-xs font-semibold transition-all border border-orange-200/80 shadow-xs flex items-center gap-1.5 cursor-pointer"
+              onClick={handleResetFilters}
+              className="self-start sm:self-auto px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-600 hover:text-orange-700 rounded-lg text-xs font-bold transition-all border border-orange-100 flex items-center gap-1.5 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset Search</span>
+              <span>Reset All Filters</span>
             </button>
           )}
         </div>
 
         {/* Input Bar */}
-        <form 
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleJaneSearch();
-          }}
-          className="flex flex-col sm:flex-row gap-2"
-        >
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-orange-400/80 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={janeQuery}
-              onChange={(e) => setJaneQuery(e.target.value)}
-              placeholder="What kind of event are you looking for? (e.g., Live jazz, Paella class, Tech networking...)"
-              className="w-full h-11 pl-10 pr-9 bg-white border border-orange-200/70 rounded-xl text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300/40 focus:border-orange-400 transition-all shadow-xs"
-            />
-            {janeQuery && (
-              <button
-                type="button"
-                onClick={() => setJaneQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          <button
-            type="submit"
-            disabled={isJaneSearching || !janeQuery.trim()}
-            className="h-11 px-5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-semibold rounded-xl text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50 shrink-0 cursor-pointer"
-          >
-            {isJaneSearching ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Searching events...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-3.5 h-3.5 text-orange-100" />
-                <span>Search</span>
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* Jane AI Response Summary Banner */}
-        {janeSummary && (
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-3.5 bg-white/95 rounded-xl border border-orange-200/70 shadow-xs flex items-start gap-2.5 text-slate-800"
-          >
-            <div className="w-6 h-6 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 mt-0.5">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-            <div className="space-y-0.5 flex-1 text-xs">
-              <div className="font-semibold text-slate-800 flex items-center gap-2">
-                <span>Jane's Recommendation</span>
-                <span className="text-[11px] font-normal text-slate-400">({filteredEvents.length} result{filteredEvents.length > 1 ? 's' : ''})</span>
-              </div>
-              <p className="text-slate-600 leading-relaxed">{janeSummary}</p>
-            </div>
-          </motion.div>
-        )}
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search events by name, location, keyword, or description..."
+            className="w-full h-11 pl-10 pr-9 bg-slate-50 border border-slate-200/80 rounded-xl text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300/40 focus:border-orange-400 transition-all shadow-xs"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Category Filter Chips Bar */}
-      <div id="events-results-section" className="space-y-2">
+      <div id="events-results-section" className="space-y-3">
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400">Filter by category</h4>
           {selectedCategory !== 'all' && (
@@ -15649,7 +15576,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
               onClick={() => setSelectedCategory('all')}
               className="text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
             >
-              Reset filter
+              Reset category
             </button>
           )}
         </div>
@@ -15705,6 +15632,97 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         </div>
       </div>
 
+      {/* Additional Interactive Filters Grid */}
+      <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200/60 space-y-4">
+        <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+          <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+          <span>More Filters</span>
+        </h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Date Selector */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+              <Calendar className="w-3 h-3 text-orange-500" />
+              <span>When</span>
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { id: 'all', label: 'Any Day' },
+                { id: 'today', label: 'Today' },
+                { id: 'tomorrow', label: 'Tomorrow' },
+                { id: 'weekend', label: 'This Weekend' }
+              ].map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setDateFilter(opt.id as any)}
+                  className={cn(
+                    "px-2 py-1.5 text-[11px] font-bold rounded-lg border transition-all text-center cursor-pointer",
+                    dateFilter === opt.id
+                      ? "bg-orange-500 border-orange-500 text-white shadow-xs"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Price Selector */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+              <Euro className="w-3 h-3 text-emerald-500" />
+              <span>Price</span>
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'free', label: 'Free' },
+                { id: 'paid', label: 'Paid' }
+              ].map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setPriceFilter(opt.id as any)}
+                  className={cn(
+                    "px-2 py-1.5 text-[11px] font-bold rounded-lg border transition-all text-center cursor-pointer",
+                    priceFilter === opt.id
+                      ? "bg-orange-500 border-orange-500 text-white shadow-xs"
+                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Atmosphere / Vibe Selector */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+              <Smile className="w-3 h-3 text-sky-500" />
+              <span>Vibe & Experience</span>
+            </label>
+            <select
+              value={vibeFilter}
+              onChange={(e) => setVibeFilter(e.target.value as any)}
+              className="w-full h-9 px-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:border-orange-500 transition-all cursor-pointer"
+            >
+              <option value="all">🌟 All Vibes & Atmospheres</option>
+              <option value="expat">💬 Expat & Social Meetups</option>
+              <option value="outdoor">🌳 Outdoor & Nature Parks</option>
+              <option value="social">🍻 Drinks, Tapas & Parties</option>
+              <option value="family">👨‍👩‍👧 Family & Kids Workshops</option>
+              <option value="culture">🏛️ Arts, Museums & Culture</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div id="events-results-section" className="scroll-mt-24" />
+
       {/* Events Grid or Loading / Empty States */}
       {loading && events.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -15719,20 +15737,15 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
           <div className="space-y-1">
             <h4 className="text-lg font-bold text-slate-800">No matching events found</h4>
             <p className="text-sm text-slate-500 max-w-md mx-auto">
-              {janeMatches !== null 
-                ? "No events found matching your exact search. Try asking with broader keywords or browse all categories."
-                : "No events are currently scheduled in this category. Check back soon or select another category!"}
+              No events found matching your search or filters. Try adjusting your selections or clearing filters.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => {
-              setSelectedCategory('all');
-              handleClearJaneSearch();
-            }}
+            onClick={handleResetFilters}
             className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
           >
-            Show All Events
+            Clear All Filters
           </button>
         </div>
       ) : (
@@ -15742,7 +15755,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
             const badge = getCategoryBadge(event.category);
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
             const formattedTime = formatEventTime(event.start_time, event.end_time, event.time);
-            const janeMatchInfo = janeMatches ? janeMatches[String(event.id)] : null;
+            const janeMatchInfo = null;
 
             return (
               <motion.div
@@ -17880,7 +17893,7 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
                 ) : (
                   <div className="text-slate-700 leading-relaxed font-sans space-y-6 text-sm sm:text-base">
                     <div className="markdown-body">
-                      <SimpleMarkdown>{docContent}</SimpleMarkdown>
+                      <SimpleMarkdown isPlain={true}>{docContent}</SimpleMarkdown>
                     </div>
                     <div className="pt-6 border-t border-slate-100 flex justify-start">
                       <button 
@@ -18185,7 +18198,7 @@ function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void 
             
             <div className="prose prose-slate max-w-none">
               <div className="markdown-body">
-                <SimpleMarkdown>{docContent}</SimpleMarkdown>
+                <SimpleMarkdown isPlain={true}>{docContent}</SimpleMarkdown>
               </div>
             </div>
 
