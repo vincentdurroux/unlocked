@@ -15479,8 +15479,8 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
       {/* Header Section */}
       <div className="border-b border-slate-100 pb-5">
-        <h2 className="text-2xl sm:text-3xl font-semibold font-display text-slate-800 tracking-tight">
-          <span className="text-orange-500 font-bold">What</span>'s Up in Your City
+        <h2 className="text-2xl sm:text-3xl font-bold font-display text-slate-800 tracking-tight">
+          <span className="text-orange-500 font-bold">What's Up</span> in Your City
         </h2>
         <p className="text-slate-500 text-sm sm:text-base max-w-2xl mt-1">
           Discover verified meetups, concerts, culinary tastings, workshops, and cultural highlights across Valencia.
@@ -16251,38 +16251,40 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
         </div>
       ) : (
         /* Main Guides Dashboard Layout */
-        <>
-          <div className="px-6 pt-6 pb-2 space-y-6">
-            {/* Page Header */}
-            <div className="space-y-1">
-              <h2 className="text-3xl font-bold font-display text-brand-navy tracking-tight">Ready to settle into your City?</h2>
-              <p className="text-slate-500 text-sm">Find practical guides, local tips and expert advice to help you feel at home faster.</p>
-            </div>
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+          {/* Header Section */}
+          <div className="border-b border-slate-100 pb-5">
+            <h2 className="text-2xl sm:text-3xl font-bold font-display text-slate-800 tracking-tight">
+              Ready to <span className="text-emerald-600 font-bold">settle into</span> your City?
+            </h2>
+            <p className="text-slate-500 text-sm sm:text-base max-w-2xl mt-1">
+              Find practical guides, local tips and expert advice to help you feel at home faster.
+            </p>
+          </div>
 
-            {/* Modern Search */}
-            <div className="flex items-center gap-2.5 max-w-xl lg:mx-0 mx-auto">
-              <div className="relative flex-1">
-                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search guides"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-normal text-sm"
-                />
+          {/* Modern Search */}
+          <div className="flex items-center gap-2.5 max-w-xl lg:mx-0 mx-auto">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-slate-400" />
               </div>
-              <button
-                onClick={() => {
-                  document.getElementById('all-guides-section')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="bg-brand-blue text-white font-semibold text-sm px-5 py-3.5 rounded-2xl flex items-center gap-2 hover:bg-brand-blue/90 active:scale-95 transition-all duration-200 shadow-sm whitespace-nowrap"
-              >
-                <Search className="h-4 w-4" />
-                <span>Search</span>
-              </button>
+              <input
+                type="text"
+                placeholder="Search guides"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-normal text-sm"
+              />
             </div>
+            <button
+              onClick={() => {
+                document.getElementById('all-guides-section')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-brand-blue text-white font-semibold text-sm px-5 py-3.5 rounded-2xl flex items-center gap-2 hover:bg-brand-blue/90 active:scale-95 transition-all duration-200 shadow-sm whitespace-nowrap"
+            >
+              <Search className="h-4 w-4" />
+              <span>Search</span>
+            </button>
           </div>
 
           {/* "Start Here" Cards */}
@@ -16434,7 +16436,7 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
           <div className="text-center pt-4">
             <p className="text-slate-400 text-sm font-medium italic">More articles to come...</p>
           </div>
-        </>
+        </div>
       )}
 
 
