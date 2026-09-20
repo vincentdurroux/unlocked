@@ -437,9 +437,8 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
 
   // If this text contains structured event sections, render them with themed cards and friendly emojis
   const parsed = parseDescriptionSections(children);
-  const hasStructuredSections = !!(parsed.expect || parsed.perfectFor || parsed.goodToKnow || parsed.moreInfo);
 
-  if (!isPlain && hasStructuredSections && (children.includes('What can you expect') || children.includes('Perfect for') || children.includes('Good to know') || children.includes('More information'))) {
+  if (!isPlain && parsed.hasRealSections) {
     return (
       <div className="space-y-4 text-xs sm:text-sm text-slate-700 not-italic">
         {parsed.expect && (
@@ -1290,6 +1289,7 @@ export default function App() {
   const mainRef = useRef<HTMLElement>(null);
   const { professionals: allPros, loading: prosLoading, refetch: refetchPros } = useProfessionals([]);
   const initialViewRef = useRef<View | null>(null);
+  const isProgrammaticNavigationRef = useRef(false);
   const [activeView, setActiveView] = useState<View>(() => {
     const isColdStart = typeof window !== 'undefined' && !sessionStorage.getItem('unlocked_app_session');
     if (typeof window !== 'undefined') {
@@ -1369,6 +1369,7 @@ export default function App() {
   const [searchParams, setSearchParams] = useState<{ query: string; location: string; category: string; filters?: any }>({ query: '', location: '', category: 'All' });
   const [unreadConversations, setUnreadConversations] = useState<string[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [discoveredEventTitle, setDiscoveredEventTitle] = useState<string | null>(null);
   const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
   const [usersWhoBlockedMe, setUsersWhoBlockedMe] = useState<string[]>([]);
   const [globalAlert, setGlobalAlert] = useState<{type: 'error' | 'info' | 'success', text: string} | null>(null);
@@ -1659,6 +1660,9 @@ export default function App() {
   // Handle browser back button (popstate)
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
+      if (isProgrammaticNavigationRef.current) {
+        return;
+      }
       // Check if we are in a sub-view (detail page)
       const hasSubView = initialProId || initialEventId || initialGuideId || selectedPost || selectedAd || showMessagesModal;
 
@@ -2346,6 +2350,11 @@ export default function App() {
   };
 
   const navigateTo = (view: View) => {
+    isProgrammaticNavigationRef.current = true;
+    setTimeout(() => {
+      isProgrammaticNavigationRef.current = false;
+    }, 150);
+
     if (view === 'messages') {
       setShowMessagesModal(true);
       return;
@@ -2951,6 +2960,8 @@ export default function App() {
                   allArticles={allArticles}
                   setGlobalAlert={setGlobalAlert}
                   onRefetchAnnouncements={fetchAnnouncementsFromDb}
+                  discoveredEventTitle={discoveredEventTitle}
+                  setDiscoveredEventTitle={setDiscoveredEventTitle}
                 />
               )}
               {activeView === 'marketplace' && (
@@ -4428,7 +4439,9 @@ function AdminView({
   setGuideCategories,
   allArticles = [],
   setGlobalAlert,
-  onRefetchAnnouncements
+  onRefetchAnnouncements,
+  discoveredEventTitle,
+  setDiscoveredEventTitle
 }: { 
   scrollToTop?: () => void, 
   onRefetchPros?: () => Promise<void>, 
@@ -4467,7 +4480,9 @@ function AdminView({
   setSavingAnnouncement?: React.Dispatch<React.SetStateAction<boolean>>,
   setAnnouncement?: React.Dispatch<React.SetStateAction<any>>,
   setGlobalAlert: React.Dispatch<React.SetStateAction<any>>,
-  onRefetchAnnouncements?: () => void
+  onRefetchAnnouncements?: () => void,
+  discoveredEventTitle?: string | null,
+  setDiscoveredEventTitle?: (title: string | null) => void
 }) {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -7585,6 +7600,8 @@ function AdminView({
               previewUrl={previewUrl}
               setPreviewUrl={setPreviewUrl}
               scrollToTop={scrollToTop}
+              discoveredEventTitle={discoveredEventTitle}
+              setDiscoveredEventTitle={setDiscoveredEventTitle}
             />
           )}
 
@@ -7593,6 +7610,34 @@ function AdminView({
               <AdminAiEventSearch
                 onRefetchEvents={onRefetchEvents}
                 setMsg={setMsg}
+                setDiscoveredEventTitle={setDiscoveredEventTitle}
+                onEditEvent={(event) => {
+                  setEditingEventId(null);
+                  setDiscoveredEventTitle(event.title);
+                  const sDate = event.start_date || event.date || '';
+                  const eDate = event.end_date && event.end_date !== sDate ? event.end_date : '';
+                  setNewEvent({
+                    title: event.title || '',
+                    start_date: sDate,
+                    end_date: eDate,
+                    start_time: event.start_time || event.time || '',
+                    end_time: event.end_time || '',
+                    location: event.location || '',
+                    category: event.category || '',
+                    description: event.description || '',
+                    image: event.image || '',
+                    lat: event.coordinates?.lat || 0,
+                    lng: event.coordinates?.lng || 0,
+                    ticket_url: event.ticket_url || event.sources?.[0]?.url || '',
+                    price: event.price || '',
+                    is_free: event.is_free !== undefined ? event.is_free : true,
+                    sources: event.sources ? [...event.sources] : []
+                  });
+                  setPreviewUrl(event.image || null);
+                  setSelectedFile(null);
+                  setActiveTab('edit_event');
+                  scrollToTop?.();
+                }}
               />
             </div>
           )}
@@ -10294,7 +10339,7 @@ function HomeView({
             </div>
           </div>
 
-          <div className="w-full md:w-[50%] flex justify-center md:justify-start md:-translate-x-12 mb-0">
+          <div className="w-full md:w-[50%] flex justify-center md:justify-start md:-translate-x-12 mb-0 pointer-events-none select-none touch-none" style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none', pointerEvents: 'none' }}>
             <img 
               src="/people.png" 
               alt="Community illustration" 
@@ -10302,10 +10347,21 @@ function HomeView({
               fetchPriority="high"
               decoding="sync"
               draggable="false"
-              onContextMenu={(e) => e.preventDefault()}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onTouchMove={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-              className="w-full max-w-[300px] md:max-w-[480px] h-auto object-contain block align-bottom pointer-events-none select-none"
-              style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
+              className="w-full max-w-[300px] md:max-w-[480px] h-auto object-contain block align-bottom pointer-events-none select-none touch-none"
+              style={{ 
+                WebkitTouchCallout: 'none', 
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none',
+                userSelect: 'none',
+                pointerEvents: 'none'
+              }}
             />
           </div>
         </div>
@@ -15366,6 +15422,18 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
     }
   }, [initialEventId, events]);
 
+  useEffect(() => {
+    if (selectedEventId) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`event-card-${selectedEventId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedEventId]);
+
   const hasActiveFilters = selectedCategory !== 'all' || searchQuery.trim() !== '' || dateFilter !== 'all' || priceFilter !== 'all' || vibeFilter !== 'all';
 
   // Auto scroll down to results section when filters are applied and events match
@@ -15401,6 +15469,40 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
     const tomD = String(tom.getDate()).padStart(2, '0');
     const tomorrowStr = `${tomY}-${tomM}-${tomD}`;
 
+    // Calculate dates for this weekend (Friday, Saturday, Sunday)
+    const todayDay = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    const getRelativeDateStr = (offset: number) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() + offset);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const date = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${date}`;
+    };
+
+    let fridayStr = '';
+    let saturdayStr = '';
+    let sundayStr = '';
+
+    if (todayDay === 0) { // Sunday
+      fridayStr = getRelativeDateStr(-2);
+      saturdayStr = getRelativeDateStr(-1);
+      sundayStr = getRelativeDateStr(0);
+    } else if (todayDay === 6) { // Saturday
+      fridayStr = getRelativeDateStr(-1);
+      saturdayStr = getRelativeDateStr(0);
+      sundayStr = getRelativeDateStr(1);
+    } else if (todayDay === 5) { // Friday
+      fridayStr = getRelativeDateStr(0);
+      saturdayStr = getRelativeDateStr(1);
+      sundayStr = getRelativeDateStr(2);
+    } else { // Mon - Thu
+      const daysToFriday = 5 - todayDay;
+      fridayStr = getRelativeDateStr(daysToFriday);
+      saturdayStr = getRelativeDateStr(daysToFriday + 1);
+      sundayStr = getRelativeDateStr(daysToFriday + 2);
+    }
+
     return events.filter(ev => {
       // 0. Auto-exclude expired events
       if (isEventExpired(ev)) return false;
@@ -15435,13 +15537,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         if (evDate !== tomorrowStr) return false;
       } else if (dateFilter === 'weekend') {
         if (evDate) {
-          try {
-            const parsed = new Date(evDate);
-            const dayOfWeek = parsed.getDay(); // 0 is Sunday, 5 is Friday, 6 is Saturday
-            if (dayOfWeek !== 0 && dayOfWeek !== 5 && dayOfWeek !== 6) {
-              return false;
-            }
-          } catch (e) {
+          if (evDate !== fridayStr && evDate !== saturdayStr && evDate !== sundayStr) {
             return false;
           }
         } else {

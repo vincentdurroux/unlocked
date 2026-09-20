@@ -64,6 +64,8 @@ export interface GroundedEvent {
 interface AdminAiEventSearchProps {
   onRefetchEvents?: () => Promise<void>;
   setMsg?: (msg: { type: 'success' | 'error'; text: string }) => void;
+  onEditEvent?: (event: GroundedEvent) => void;
+  setDiscoveredEventTitle?: (title: string | null) => void;
 }
 
 const MONTH_OPTIONS = [
@@ -183,23 +185,73 @@ export function parseDescriptionSections(description: string) {
   let goodToKnow = '';
   let moreInfo = '';
 
-  if (!description) return { expect, perfectFor, goodToKnow, moreInfo };
+  if (!description) return { expect, perfectFor, goodToKnow, moreInfo, hasRealSections: false };
 
-  const expectMatch = description.match(/\*\*(?:[✨\s]*)?What can you expect\?\*\*\s*([\s\S]*?)(?=\*\*(?:[🎯\s]*)?Perfect for\*\*|\*\*(?:[💡\s]*)?Good to know \(tips\)\*\*|\*\*(?:[🔗\s]*)?More information\*\*|$)/i);
-  const perfectMatch = description.match(/\*\*(?:[🎯\s]*)?Perfect for\*\*\s*([\s\S]*?)(?=\*\*(?:[💡\s]*)?Good to know \(tips\)\*\*|\*\*(?:[🔗\s]*)?More information\*\*|$)/i);
-  const goodMatch = description.match(/\*\*(?:[💡\s]*)?Good to know \(tips\)\*\*\s*([\s\S]*?)(?=\*\*(?:[🔗\s]*)?More information\*\*|$)/i);
-  const infoMatch = description.match(/\*\*(?:[🔗\s]*)?More information\*\*\s*([\s\S]*?)$/i);
+  // Define robust regexes to match the section titles (case-insensitive)
+  // They match lines starting with hashes or bold markers, optional numbering (like "1."), optional emojis, then the title phrase
+  const expectRegex = /(?:^|\n)(?:###?\s+|\*\*?)(?:\d+\.\s+)?(?:[✨\s]*)?What can you expect\??(?:\*\*?|\s*)/i;
+  const perfectRegex = /(?:^|\n)(?:###?\s+|\*\*?)(?:\d+\.\s+)?(?:[🎯\s]*)?Perfect for(?:\*\*?|\s*)/i;
+  const goodRegex = /(?:^|\n)(?:###?\s+|\*\*?)(?:\d+\.\s+)?(?:[💡\s]*)?Good to know(?:\s*\(tips\))?(?:\*\*?|\s*)/i;
+  const infoRegex = /(?:^|\n)(?:###?\s+|\*\*?)(?:\d+\.\s+)?(?:[🔗\s]*)?More information(?:\*\*?|\s*)/i;
 
-  if (expectMatch) expect = enrichSectionTextWithEmojis(expectMatch[1].trim(), 'expect');
-  if (perfectMatch) perfectFor = enrichSectionTextWithEmojis(perfectMatch[1].trim(), 'perfectFor');
-  if (goodMatch) goodToKnow = enrichSectionTextWithEmojis(goodMatch[1].trim(), 'goodToKnow');
-  if (infoMatch) moreInfo = enrichSectionTextWithEmojis(infoMatch[1].trim(), 'moreInfo');
+  // Find the start indices and the match lengths of each section header
+  const sections: { key: string; start: number; end: number }[] = [];
 
-  if (!expect && !perfectFor && !goodToKnow && !moreInfo) {
-    expect = enrichSectionTextWithEmojis(description.trim(), 'expect');
+  const matchExpect = description.match(expectRegex);
+  const matchPerfect = description.match(perfectRegex);
+  const matchGood = description.match(goodRegex);
+  const matchInfo = description.match(infoRegex);
+
+  if (matchExpect && matchExpect.index !== undefined) {
+    sections.push({ key: 'expect', start: matchExpect.index, end: matchExpect.index + matchExpect[0].length });
+  }
+  if (matchPerfect && matchPerfect.index !== undefined) {
+    sections.push({ key: 'perfectFor', start: matchPerfect.index, end: matchPerfect.index + matchPerfect[0].length });
+  }
+  if (matchGood && matchGood.index !== undefined) {
+    sections.push({ key: 'goodToKnow', start: matchGood.index, end: matchGood.index + matchGood[0].length });
+  }
+  if (matchInfo && matchInfo.index !== undefined) {
+    sections.push({ key: 'moreInfo', start: matchInfo.index, end: matchInfo.index + matchInfo[0].length });
   }
 
-  return { expect, perfectFor, goodToKnow, moreInfo };
+  const hasRealSections = sections.length > 0;
+
+  // Sort sections by their start position in the description
+  sections.sort((a, b) => a.start - b.start);
+
+  // If we found at least one real section header, extract the content for each
+  if (hasRealSections) {
+    for (let i = 0; i < sections.length; i++) {
+      const current = sections[i];
+      const next = sections[i + 1];
+      const contentStart = current.end;
+      const contentEnd = next ? next.start : description.length;
+      const content = description.substring(contentStart, contentEnd).trim();
+
+      if (current.key === 'expect') expect = content;
+      else if (current.key === 'perfectFor') perfectFor = content;
+      else if (current.key === 'goodToKnow') goodToKnow = content;
+      else if (current.key === 'moreInfo') moreInfo = content;
+    }
+  }
+
+  // Fallback if no sections matched at all:
+  if (!expect && !perfectFor && !goodToKnow && !moreInfo) {
+    // If the description seems to already have our markdown headers but they failed regex matching,
+    // we should try to clean them up or at least not treat the whole thing as one section's content
+    // if it contains things like "###". 
+    // For now, if it's a simple text, put it in expect.
+    expect = description.trim();
+  }
+
+  // Enrich with emojis
+  if (expect) expect = enrichSectionTextWithEmojis(expect, 'expect');
+  if (perfectFor) perfectFor = enrichSectionTextWithEmojis(perfectFor, 'perfectFor');
+  if (goodToKnow) goodToKnow = enrichSectionTextWithEmojis(goodToKnow, 'goodToKnow');
+  if (moreInfo) moreInfo = enrichSectionTextWithEmojis(moreInfo, 'moreInfo');
+
+  return { expect, perfectFor, goodToKnow, moreInfo, hasRealSections };
 }
 
 export function getCategoryWithEmoji(cat: string) {
@@ -329,9 +381,8 @@ export function SimpleMarkdown({ children }: { children: string }) {
   if (!children) return null;
 
   const parsed = parseDescriptionSections(children);
-  const hasStructuredSections = parsed.expect || parsed.perfectFor || parsed.goodToKnow || parsed.moreInfo;
 
-  if (hasStructuredSections) {
+  if (parsed.hasRealSections) {
     return (
       <div className="space-y-3.5 text-xs sm:text-sm text-slate-700">
         {parsed.expect && (
@@ -392,7 +443,7 @@ export function SimpleMarkdown({ children }: { children: string }) {
   );
 }
 
-export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetchEvents, setMsg }) => {
+export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetchEvents, setMsg, onEditEvent, setDiscoveredEventTitle }) => {
   const [activeSubTab, setActiveSubTab] = useState<'live_search' | 'db_repository' | 'published_events'>('live_search');
 
   // Search console state
@@ -595,10 +646,10 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
   const buildEditedDescription = () => {
     const parts = [];
-    if (editExpect.trim()) parts.push(`**✨ What can you expect?**\n${enrichSectionTextWithEmojis(editExpect.trim(), 'expect')}`);
-    if (editPerfectFor.trim()) parts.push(`**🎯 Perfect for**\n${enrichSectionTextWithEmojis(editPerfectFor.trim(), 'perfectFor')}`);
-    if (editGoodToKnow.trim()) parts.push(`**💡 Good to know (tips)**\n${enrichSectionTextWithEmojis(editGoodToKnow.trim(), 'goodToKnow')}`);
-    if (editMoreInfo.trim()) parts.push(`**🔗 More information**\n${enrichSectionTextWithEmojis(editMoreInfo.trim(), 'moreInfo')}`);
+    if (editExpect.trim()) parts.push(`### 1. What can you expect?\n${enrichSectionTextWithEmojis(editExpect.trim(), 'expect')}`);
+    if (editPerfectFor.trim()) parts.push(`### 2. Perfect for\n${enrichSectionTextWithEmojis(editPerfectFor.trim(), 'perfectFor')}`);
+    if (editGoodToKnow.trim()) parts.push(`### 3. Good to know (tips)\n${enrichSectionTextWithEmojis(editGoodToKnow.trim(), 'goodToKnow')}`);
+    if (editMoreInfo.trim()) parts.push(`### 4. More information\n${enrichSectionTextWithEmojis(editMoreInfo.trim(), 'moreInfo')}`);
     return parts.join('\n\n');
   };
 
@@ -1657,7 +1708,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                     <div className="pt-5 mt-5 border-t border-slate-100 flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => openEditModal(event)}
+                        onClick={() => onEditEvent ? onEditEvent(event) : openEditModal(event)}
                         className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5"
                       >
                         <Edit3 className="w-3.5 h-3.5 text-brand-blue" />

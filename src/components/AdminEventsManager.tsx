@@ -148,6 +148,8 @@ interface AdminEventsManagerProps {
   previewUrl: string | null;
   setPreviewUrl: (url: string | null) => void;
   scrollToTop?: () => void;
+  discoveredEventTitle?: string | null;
+  setDiscoveredEventTitle?: (title: string | null) => void;
 }
 
 export function AdminEventsManager({
@@ -165,7 +167,9 @@ export function AdminEventsManager({
   setSelectedFile,
   previewUrl,
   setPreviewUrl,
-  scrollToTop
+  scrollToTop,
+  discoveredEventTitle,
+  setDiscoveredEventTitle
 }: AdminEventsManagerProps) {
   // All Events State
   const [searchQuery, setSearchQuery] = useState('');
@@ -189,17 +193,23 @@ export function AdminEventsManager({
   const [showLivePreview, setShowLivePreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const lastParsedDescription = useRef<string | null>(null);
+
   // When opening edit mode, parse the 4 description sections
   useEffect(() => {
     if (activeTab === 'edit_event' || activeTab === 'add_event') {
       const rawDesc = newEvent.description || '';
-      const parsed = parseDescriptionSections(rawDesc);
-      setEditExpect(parsed.expect);
-      setEditPerfectFor(parsed.perfectFor);
-      setEditGoodToKnow(parsed.goodToKnow);
-      setEditMoreInfo(parsed.moreInfo);
+      // If the description has changed from what we last parsed/synced, re-parse it
+      if (rawDesc !== lastParsedDescription.current) {
+        const parsed = parseDescriptionSections(rawDesc);
+        setEditExpect(parsed.expect || '');
+        setEditPerfectFor(parsed.perfectFor || '');
+        setEditGoodToKnow(parsed.goodToKnow || '');
+        setEditMoreInfo(parsed.moreInfo || '');
+        lastParsedDescription.current = rawDesc;
+      }
     }
-  }, [activeTab, editingEventId]);
+  }, [activeTab, editingEventId, newEvent.description, newEvent.title]);
 
   // Sync structured sections back to newEvent.description
   const syncStructuredToDescription = (
@@ -222,6 +232,7 @@ export function AdminEventsManager({
       parts.push(`### 4. More information\n${moreInfo.trim()}`);
     }
     const combined = parts.join('\n\n');
+    lastParsedDescription.current = combined; // Mark as synced so useEffect doesn't re-parse
     setNewEvent((prev: any) => ({ ...prev, description: combined }));
   };
 
@@ -352,7 +363,7 @@ export function AdminEventsManager({
       ticket_url: event.ticket_url || event.sources?.[0]?.url || '',
       price: event.price || '',
       is_free: event.is_free !== undefined ? event.is_free : true,
-      sources: event.sources || []
+      sources: event.sources ? [...event.sources] : []
     });
     setPreviewUrl(event.image_url || event.image || null);
     setSelectedFile(null);
@@ -380,7 +391,7 @@ export function AdminEventsManager({
       ticket_url: event.ticket_url || event.sources?.[0]?.url || '',
       price: event.price || '',
       is_free: event.is_free !== undefined ? event.is_free : true,
-      sources: event.sources || []
+      sources: event.sources ? [...event.sources] : []
     });
     setPreviewUrl(event.image_url || event.image || null);
     setSelectedFile(null);
@@ -563,9 +574,15 @@ export function AdminEventsManager({
 
       if (editingEventId) {
         await eventService.updateEvent(editingEventId, payload);
+        if (discoveredEventTitle) {
+          await eventService.markDiscoveredAsPublished(discoveredEventTitle);
+        }
         setMsg({ type: 'success', text: `Event "${payload.title}" updated successfully!` });
       } else {
         await eventService.createEvent(payload);
+        if (discoveredEventTitle) {
+          await eventService.markDiscoveredAsPublished(discoveredEventTitle);
+        }
         setMsg({ type: 'success', text: `Event "${payload.title}" created successfully!` });
       }
 
@@ -575,6 +592,7 @@ export function AdminEventsManager({
       setEditingEventId(null);
       setSelectedFile(null);
       setPreviewUrl(null);
+      if (setDiscoveredEventTitle) setDiscoveredEventTitle(null);
       setActiveTab('all_events');
       scrollToTop?.();
     } catch (err: any) {
@@ -1273,7 +1291,7 @@ export function AdminEventsManager({
                         setEditExpect(e.target.value);
                         syncStructuredToDescription(e.target.value, editPerfectFor, editGoodToKnow, editMoreInfo);
                       }}
-                      placeholder="- 🎶 Live jazz music with international headliners&#10;- 🍷 Local Valencian wine tastings&#10;- 🌟 Sunset open-air experience"
+                      placeholder="- 🎶 Main activities and highlights&#10;- 🍷 Key features of the experience&#10;- 🌟 Unique selling points"
                       className="w-full bg-white border border-sky-200/60 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 resize-none"
                     />
                   </div>
@@ -1320,7 +1338,7 @@ export function AdminEventsManager({
                         setEditPerfectFor(e.target.value);
                         syncStructuredToDescription(editExpect, e.target.value, editGoodToKnow, editMoreInfo);
                       }}
-                      placeholder="- 🎶 Jazz enthusiasts and music lovers&#10;- 🍷 Couples and friends looking for a night out"
+                      placeholder="- 👥 Target audience and community groups&#10;- 🎯 People interested in this type of activity"
                       className="w-full bg-white border border-emerald-200/60 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
                     />
                   </div>
