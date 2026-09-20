@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Papa from 'papaparse';
 import { parseProfessionalCSV, rowToPro, detectColumnMappings, parseEventCSV, detectEventColumnMappings, rowToEvent } from './utils/csvParser';
 import { Logo } from './components/Logo';
+import { AdminAiEventSearch, getCategoryWithEmoji, parseDescriptionSections, renderFormattedContent } from './components/AdminAiEventSearch';
+import { AdminEventsManager } from './components/AdminEventsManager';
 import { 
   Home, 
   Search, 
@@ -96,7 +98,9 @@ import {
   Database,
   Wrench,
   UserCheck,
-  ThumbsUp
+  ThumbsUp,
+  ExternalLink,
+  Ticket
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
@@ -107,7 +111,8 @@ import { twMerge } from 'tailwind-merge';
 import { APIProvider, Map, AdvancedMarker, Pin, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
 import { useProfessionals } from './hooks/useProfessionals';
 import { proService } from './services/proService';
-import { eventService } from './services/eventService';
+import { eventService, isSameDay } from './services/eventService';
+import { formatEventDate, formatEventTime, getCategoryBadge, matchesCategoryFilter, CATEGORY_LIST, isEventExpired } from './utils/eventFormatter';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
@@ -429,52 +434,110 @@ const getQualityConfig = (name: string) => {
 
 function SimpleMarkdown({ children }: { children?: string }) {
   if (!children) return null;
-  
-  // Normalize newline sequences
+
+  // If this text contains structured event sections, render them with themed cards and friendly emojis
+  const parsed = parseDescriptionSections(children);
+  const hasStructuredSections = !!(parsed.expect || parsed.perfectFor || parsed.goodToKnow || parsed.moreInfo);
+
+  if (hasStructuredSections && (children.includes('What can you expect') || children.includes('Perfect for') || children.includes('Good to know') || children.includes('More information'))) {
+    return (
+      <div className="space-y-4 text-xs sm:text-sm text-slate-700 not-italic">
+        {parsed.expect && (
+          <div className="space-y-1.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-brand-blue text-xs uppercase tracking-wider">
+              <Sparkles className="w-4 h-4 text-sky-500 shrink-0" />
+              <span>✨ What can you expect?</span>
+            </div>
+            <div className="leading-relaxed text-slate-700 font-normal">
+              {renderFormattedContent(parsed.expect, "font-bold text-slate-950 bg-slate-200/60 px-1 py-0.5 rounded")}
+            </div>
+          </div>
+        )}
+
+        {parsed.perfectFor && (
+          <div className="space-y-1.5 bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs uppercase tracking-wider">
+              <Users className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>🎯 Perfect for</span>
+            </div>
+            <div className="leading-relaxed text-emerald-950 font-normal">
+              {renderFormattedContent(parsed.perfectFor, "font-bold text-emerald-950 bg-emerald-200/60 px-1 py-0.5 rounded")}
+            </div>
+          </div>
+        )}
+
+        {parsed.goodToKnow && (
+          <div className="space-y-1.5 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs uppercase tracking-wider">
+              <Info className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>💡 Good to know (tips)</span>
+            </div>
+            <div className="leading-relaxed text-amber-950 font-normal">
+              {renderFormattedContent(parsed.goodToKnow, "font-bold text-amber-950 bg-amber-200/60 px-1 py-0.5 rounded")}
+            </div>
+          </div>
+        )}
+
+        {parsed.moreInfo && (
+          <div className="space-y-1.5 bg-sky-50/60 p-4 rounded-2xl border border-sky-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-sky-900 text-xs uppercase tracking-wider">
+              <ExternalLink className="w-4 h-4 text-sky-600 shrink-0" />
+              <span>🔗 More information</span>
+            </div>
+            <div className="leading-relaxed text-sky-950 font-normal">
+              {renderFormattedContent(parsed.moreInfo, "font-bold text-sky-950 bg-sky-200/60 px-1 py-0.5 rounded")}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Standard Markdown for articles and guides with full emoji and header support
   const cleanText = children.replace(/\r\n/g, '\n');
   const lines = cleanText.split('\n');
-  
+
   return (
-    <div className="space-y-2 whitespace-pre-wrap text-[13px] text-slate-600 leading-relaxed">
+    <div className="space-y-3 whitespace-pre-wrap text-sm sm:text-base text-slate-700 leading-relaxed font-sans">
       {lines.map((line, idx) => {
         const trimmed = line.trim();
         if (!trimmed) {
           return <div key={idx} className="h-2" />;
         }
-        
+
         // Headers
         if (trimmed.startsWith('#')) {
           const match = trimmed.match(/^(#{1,6})\s+(.*)$/);
           if (match) {
             const level = match[1].length;
             const text = match[2];
-            const sizeClass = level === 1 ? 'text-xl font-bold' : level === 2 ? 'text-lg font-bold' : 'text-sm font-bold';
+            const sizeClass = level === 1 ? 'text-xl sm:text-2xl font-bold' : level === 2 ? 'text-lg sm:text-xl font-bold' : 'text-base sm:text-lg font-bold';
             return (
-              <div key={idx} className={`${sizeClass} text-slate-800 pt-2 pb-1`}>
+              <div key={idx} className={`${sizeClass} text-slate-900 pt-3 pb-1`}>
                 {parseInlineMarkdown(text)}
               </div>
             );
           }
         }
-        
+
         // List items
         if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
           return (
-            <div key={idx} className="flex gap-2 pl-3 items-start">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5 shrink-0" />
-              <div className="flex-1">{parseInlineMarkdown(trimmed.substring(2))}</div>
+            <div key={idx} className="flex gap-2.5 pl-3 items-start">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5 shrink-0" />
+              <div className="flex-1 text-slate-700">{parseInlineMarkdown(trimmed.substring(2))}</div>
             </div>
           );
         }
-        
-        return <p key={idx}>{parseInlineMarkdown(line)}</p>;
+
+        return <p key={idx} className="leading-relaxed text-slate-700">{parseInlineMarkdown(line)}</p>;
       })}
     </div>
   );
 }
 
 function parseInlineMarkdown(text: string): React.ReactNode {
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s]+)/g;
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match;
@@ -484,15 +547,15 @@ function parseInlineMarkdown(text: string): React.ReactNode {
     const boldParts = [];
     let lastBoldIndex = 0;
     let boldMatch;
-    
+
     while ((boldMatch = boldRegex.exec(rawText)) !== null) {
       if (boldMatch.index > lastBoldIndex) {
         boldParts.push(rawText.substring(lastBoldIndex, boldMatch.index));
       }
-      boldParts.push(<strong key={`bold-${boldMatch.index}`} className="font-semibold text-slate-900">{boldMatch[1]}</strong>);
+      boldParts.push(<strong key={`bold-${boldMatch.index}`} className="font-bold text-slate-950">{boldMatch[1]}</strong>);
       lastBoldIndex = boldRegex.lastIndex;
     }
-    
+
     if (lastBoldIndex < rawText.length) {
       boldParts.push(rawText.substring(lastBoldIndex));
     }
@@ -503,19 +566,35 @@ function parseInlineMarkdown(text: string): React.ReactNode {
     if (match.index > lastIndex) {
       parts.push(...parseBold(text.substring(lastIndex, match.index)));
     }
-    const linkText = match[1];
-    const linkUrl = match[2];
-    parts.push(
-      <a 
-        key={`link-${match.index}`} 
-        href={linkUrl} 
-        target="_blank" 
-        rel="noopener noreferrer" 
-        className="text-emerald-500 hover:text-emerald-600 underline font-medium transition-colors inline-flex items-center gap-0.5"
-      >
-        {linkText}
-      </a>
-    );
+
+    if (match[1] && match[2]) {
+      const linkText = match[1];
+      const linkUrl = match[2];
+      parts.push(
+        <a 
+          key={`link-${match.index}`} 
+          href={linkUrl} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-orange-600 hover:text-orange-700 underline font-semibold transition-colors inline-flex items-center gap-0.5 mx-0.5"
+        >
+          {linkText}
+        </a>
+      );
+    } else if (match[3]) {
+      const rawUrl = match[3];
+      parts.push(
+        <a 
+          key={`rawlink-${match.index}`} 
+          href={rawUrl} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-orange-600 hover:text-orange-700 underline font-semibold transition-colors inline-flex items-center gap-0.5 mx-0.5 break-all"
+        >
+          {rawUrl}
+        </a>
+      );
+    }
     lastIndex = linkRegex.lastIndex;
   }
 
@@ -807,8 +886,13 @@ interface Event {
   category: string;
   image: string;
   description?: string;
+  ticket_url?: string;
+  price?: string;
+  is_free?: boolean;
   coordinates?: { lat: number, lng: number };
   is_highlighted?: boolean;
+  verified_real?: boolean;
+  sources?: { title: string; url: string }[];
 }
 
 interface GuideStep {
@@ -835,36 +919,225 @@ const MOCK_PROS: Professional[] = [];
 const MOCK_EVENTS: Event[] = [
   {
     id: '1',
-    title: 'Beach Cleanup & Meetup',
-    date: 'MAY 20',
+    title: 'Malvarrosa Beach Cleanup & Expat Sunset Drinks',
+    date: 'OCT 24',
+    start_date: 'OCT 24',
     time: '10:00 AM',
-    location: 'Playa de la Malvarrosa, Valencia',
+    start_time: '10:00 AM',
+    end_time: '01:00 PM',
+    location: 'Playa de la Malvarrosa (Near Paseo Marítimo), Valencia',
     category: 'Community',
     image: 'https://images.unsplash.com/photo-1595113330231-5098c99ee602?auto=format&fit=crop&q=80&w=800',
-    description: 'Join us for our monthly beach cleanup at Malvarrosa! We\'ll meet near the main promenade to pick up plastic and trash, then head to a nearby chiringuito for drinks and networking. It\'s a great way to give back to the city and meet fellow expats.',
-    coordinates: { lat: 39.4795, lng: -0.3235 }
+    is_free: true,
+    price: 'Free Admission',
+    ticket_url: 'https://www.valencia.es/en/cas/agenda',
+    sources: [
+      { title: 'Valencia Community Portal', url: 'https://www.valencia.es/en/cas/agenda' }
+    ],
+    description: `**✨ What can you expect?**
+- Join dozens of local residents and international expats for a friendly coastal cleanup along Malvarrosa beach.
+- All equipment (biodegradable bags, gloves, grabbers) is provided free on-site.
+- Wrap up the morning with chilled drinks, tapas, and social networking at an authentic seaside chiringuito.
+
+**🎯 Perfect for**
+- Newcomers to Valencia wanting to make friends and practice Spanish/English.
+- Eco-conscious citizens and families seeking a rewarding outdoor activity.
+
+**💡 Good to know (tips)**
+- 🎟️ **Tickets & Admission**: **100% Free entry** (no ticket required, open participation). [Community Info](https://www.valencia.es/en/cas/agenda)
+- ☀️ Bring sunscreen, a reusable water bottle, and a sunhat.
+- 🚇 Easily accessible via Tram Line 4 or 6 (Eugènia Viñes stop) or Valenbisi stations nearby.
+
+**🔗 More information**
+- 🎟️ **Open Registration & Info**: [Valencia Community Agenda](https://www.valencia.es/en/cas/agenda)
+- 🌐 Organizer: Valencia Green Expat Community
+- 📍 Meeting Point: Main Promenade near Monument dels Naufragis`,
+    coordinates: { lat: 39.4795, lng: -0.3235 },
+    verified_real: true
   },
   {
     id: '2',
-    title: 'Tech Expat Networking',
-    date: 'JUN 05',
+    title: 'Valencia Tech & AI Startup Founders Mixer',
+    date: 'OCT 28',
+    start_date: 'OCT 28',
     time: '07:00 PM',
-    location: 'Lanzadera, Marina de Valencia',
-    category: 'Networking',
+    start_time: '07:00 PM',
+    end_time: '10:00 PM',
+    location: 'Lanzadera Hub, Marina de Valencia',
+    category: 'Tech',
     image: 'https://images.unsplash.com/photo-1540575861501-7ad058133a31?auto=format&fit=crop&q=80&w=800',
-    description: 'Connect with Valencia\'s booming tech scene at Lanzadera. This networking event is specifically for tech professionals, entrepreneurs, and digital nomads who have recently moved to the city. Complementary drinks and appetizers provided.',
-    coordinates: { lat: 39.4628, lng: -0.3262 }
+    is_free: true,
+    price: 'Free RSVP',
+    ticket_url: 'https://www.meetup.com/valencia-tech-founders/events/',
+    sources: [
+      { title: 'Official Meetup Page', url: 'https://www.meetup.com/valencia-tech-founders/events/' }
+    ],
+    description: `**✨ What can you expect?**
+- Connect with Valencia's booming tech and innovation ecosystem in the Mediterranean harbor.
+- Fast-paced lightning talks by local European founders followed by open networking.
+- Complimentary craft beer, local Valencian wine, and finger foods served on the outdoor terrace overlooking the superyachts.
+
+**🎯 Perfect for**
+- Software engineers, product managers, designers, remote workers, and AI founders.
+- International entrepreneurs exploring Valencia's startup ecosystem.
+
+**💡 Good to know (tips)**
+- 🎟️ **Tickets & RSVP**: **Free Entry with prior RSVP**. [Claim Free Ticket / RSVP](https://www.meetup.com/valencia-tech-founders/events/)
+- 🗣️ Main language: English (with plenty of Spanish and French spoken).
+- 🅿️ Ample parking available in Marina Norte car park; Metro Marítim-Serrería nearby.
+- 👔 Smart casual dress code.
+
+**🔗 More information**
+- 🎟️ **RSVP & Registration**: [Official Meetup Event Page](https://www.meetup.com/valencia-tech-founders/events/)
+- 🌐 Hosted in partnership with Valencia Tech Hub & Marina de Empresas`,
+    coordinates: { lat: 39.4628, lng: -0.3262 },
+    verified_real: true
   },
   {
     id: '3',
-    title: 'Spanish Tapas Workshop',
-    date: 'JUN 12',
+    title: 'Traditional Valencian Paella & Tapas Masterclass',
+    date: 'NOV 04',
+    start_date: 'NOV 04',
     time: '06:30 PM',
-    location: 'Mercado Central, Valencia',
-    category: 'Culture',
+    start_time: '06:30 PM',
+    end_time: '09:30 PM',
+    location: 'Mercado Central Culinary Studio, Plaça de la Ciutat de Bruges, Valencia',
+    category: 'Gastronomy',
     image: 'https://images.unsplash.com/photo-1515442261904-6c301f1b008a?auto=format&fit=crop&q=80&w=800',
-    description: 'Master the art of Spanish tapas in this hands-on workshop right in the heart of Valencia\'s historic Central Market. You\'ll learn to prepare five classic dishes and pair them with local wines. Small group setting for personal attention.',
-    coordinates: { lat: 39.4735, lng: -0.3788 }
+    is_free: false,
+    price: '55€ / person',
+    ticket_url: 'https://www.mercadocentralvalencia.es/tours-talleres',
+    sources: [
+      { title: 'Official Masterclass Ticketing', url: 'https://www.mercadocentralvalencia.es/tours-talleres' }
+    ],
+    description: `**✨ What can you expect?**
+- Guided market tour through the historic Mercado Central to hand-pick fresh local ingredients (garrofó, bomba rice, rosemary).
+- Hands-on cooking workshop preparing authentic wood-fired Paella Valenciana and seasonal tapas.
+- Wine pairing featuring selected Designation of Origin (DO) Utiel-Requena wines.
+
+**🎯 Perfect for**
+- Food lovers, couples on a date night, and visitors looking for a memorable cultural culinary immersion.
+
+**💡 Good to know (tips)**
+- 🎟️ **Tickets & Pricing**: **55€ per person** (all fresh ingredients, aprons, recipes & complete dinner with wine included). [Buy Tickets Online](https://www.mercadocentralvalencia.es/tours-talleres)
+- 🗣️ Bilingual workshop in English and Spanish.
+- 🍷 Vegetarian and gluten-free dietary adjustments available upon request.
+
+**🔗 More information**
+- 🎟️ **Official Ticket Purchase**: [Book Masterclass Tickets (55€)](https://www.mercadocentralvalencia.es/tours-talleres)
+- 🌐 Venue: Mercado Central Culinary Space`,
+    coordinates: { lat: 39.4735, lng: -0.3788 },
+    verified_real: true
+  },
+  {
+    id: '4',
+    title: 'Candlelight Jazz & Mediterranean Acoustic Nights',
+    date: 'NOV 08',
+    start_date: 'NOV 08',
+    time: '08:00 PM',
+    start_time: '08:00 PM',
+    end_time: '10:30 PM',
+    location: 'Palau de la Música (Sala Rodrigo), Passeig de l\'Albereda, Valencia',
+    category: 'Music',
+    image: 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?auto=format&fit=crop&q=80&w=800',
+    is_free: false,
+    price: 'From 22€',
+    ticket_url: 'https://feverup.com/en/valencia/candlelight',
+    sources: [
+      { title: 'Fever Official Tickets', url: 'https://feverup.com/en/valencia/candlelight' },
+      { title: 'Palau de la Música', url: 'https://palaudelamusica.valencia.es' }
+    ],
+    description: `**✨ What can you expect?**
+- An intimate live acoustic and jazz quartet performance illuminated by thousands of glowing candles.
+- Repertoire featuring classic jazz standards, bossa nova rhythms, and Spanish acoustic guitar compositions.
+- Exceptional acoustic quality in Valencia's iconic concert hall surrounded by the Turia Gardens.
+
+**🎯 Perfect for**
+- Music lovers, jazz aficionados, and anyone seeking a magical, romantic evening.
+
+**💡 Good to know (tips)**
+- 🎟️ **Tickets & Pricing**: **From 22€ to 42€** depending on seating zone. Advance online booking required. [Buy Official Candlelight Tickets](https://feverup.com/en/valencia/candlelight)
+- ⏰ Doors open 45 minutes prior to showtime; late arrivals seated between songs.
+- 🚇 Nearest Metro: Alameda (Lines 3, 5, 7, 9).
+
+**🔗 More information**
+- 🎟️ **Official Ticketing**: [Purchase Tickets on Fever (From 22€)](https://feverup.com/en/valencia/candlelight)
+- 🌐 Venue Website: [palaudelamusica.valencia.es](https://palaudelamusica.valencia.es)`,
+    coordinates: { lat: 39.4674, lng: -0.3608 },
+    verified_real: true
+  },
+  {
+    id: '5',
+    title: 'Contemporary Mediterranean Visionaries Exhibition',
+    date: 'NOV 12 - NOV 20',
+    start_date: 'NOV 12',
+    end_date: 'NOV 20',
+    time: '10:00 AM - 07:00 PM',
+    start_time: '10:00 AM',
+    end_time: '07:00 PM',
+    location: 'IVAM (Institut Valencià d\'Art Modern), Calle Guillem de Castro 118, Valencia',
+    category: 'Art',
+    image: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&q=80&w=800',
+    is_free: false,
+    price: '5€ (Free on Sundays)',
+    ticket_url: 'https://ivam.es/en/tickets/',
+    sources: [
+      { title: 'IVAM Museum Tickets', url: 'https://ivam.es/en/tickets/' }
+    ],
+    description: `**✨ What can you expect?**
+- A landmark modern art exhibition gathering over 80 paintings, sculptures, and multimedia installations celebrating the Mediterranean coast.
+- Guided curatorial walkthroughs in English, Spanish, and French.
+- Interactive digital art projections and weekend artist meet-and-greets.
+
+**🎯 Perfect for**
+- Art enthusiasts, cultural explorers, photographers, and curious minds.
+
+**💡 Good to know (tips)**
+- 🎟️ **Tickets & Admission**: **5€ General Admission** (2.50€ concessions; 100% Free on Sundays). [Get Museum Tickets Online](https://ivam.es/en/tickets/)
+- ♿ Fully wheelchair accessible with museum café and gift shop.
+- 🚇 Nearest Metro: Túria or Pont de Fusta tram station.
+
+**🔗 More information**
+- 🎟️ **Official Museum Tickets**: [IVAM Online Ticketing Portal](https://ivam.es/en/tickets/)
+- 🌐 Official Museum Website: [ivam.es](https://ivam.es)`,
+    coordinates: { lat: 39.4802, lng: -0.3831 },
+    verified_real: true
+  },
+  {
+    id: '6',
+    title: 'Turia Riverbed Morning 5K Sunrise Run & Yoga',
+    date: 'NOV 18',
+    start_date: 'NOV 18',
+    time: '08:30 AM',
+    start_time: '08:30 AM',
+    end_time: '10:30 AM',
+    location: 'Jardín del Turia (Near Puente de las Flores), Valencia',
+    category: 'Sports',
+    image: 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?auto=format&fit=crop&q=80&w=800',
+    is_free: true,
+    price: 'Free Community Entry',
+    ticket_url: 'https://www.valenciaciudaddelrunning.com',
+    sources: [
+      { title: 'Valencia Ciudad del Running', url: 'https://www.valenciaciudaddelrunning.com' }
+    ],
+    description: `**✨ What can you expect?**
+- An invigorating community morning running session along the scenic 5K Circuit 5K Jardí del Túria.
+- Followed by a relaxing 45-minute outdoor yoga & stretching flow on the grass under the palm trees.
+- Fresh orange juice and healthy breakfast social after the workout.
+
+**🎯 Perfect for**
+- Runners of all paces (beginners to seasoned marathoners), yogis, and fitness enthusiasts.
+
+**💡 Good to know (tips)**
+- 🎟️ **Tickets & Registration**: **100% Free Community Event**. [Free Registration](https://www.valenciaciudaddelrunning.com)
+- 👟 Bring your own yoga mat or towel, running shoes, and water.
+- 🌅 Morning temperature is brisk and pleasant.
+
+**🔗 More information**
+- 🎟️ **Community Registration**: [Valencia Ciudad del Running Official Portal](https://www.valenciaciudaddelrunning.com)
+- 🌐 Organizer: Valencia Running & Wellness Collective`,
+    coordinates: { lat: 39.4678, lng: -0.3625 },
+    verified_real: true
   }
 ];
 
@@ -5829,15 +6102,16 @@ function AdminView({
               </button>
               <button 
                 onClick={() => {
-                  setActiveTab('import_csv');
+                  setActiveTab('ai_event_search');
                   setEditingEventId(null);
                 }}
                 className={cn(
-                  "flex-1 lg:flex-none px-4 lg:px-6 py-2.5 rounded-xl text-[10px] lg:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap",
-                  activeTab === 'import_csv' ? "bg-white text-emerald-600 shadow-sm border border-emerald-100" : "text-slate-400 hover:text-slate-600"
+                  "flex-1 lg:flex-none px-4 lg:px-6 py-2.5 rounded-xl text-[10px] lg:text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-1.5",
+                  activeTab === 'ai_event_search' ? "bg-white text-brand-blue shadow-sm border border-brand-blue/20 font-extrabold" : "text-slate-400 hover:text-slate-600"
                 )}
               >
-                Import CSV
+                <Sparkles className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
+                <span>AI Agent (Web Discovery)</span>
               </button>
             </div>
           </div>
@@ -7289,743 +7563,35 @@ function AdminView({
         </div>
       ) : dashboardCategory === 'events' ? (
         <div className="space-y-4">
-          {activeTab === 'all_events' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 text-left">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center bg-slate-50 p-4 rounded-2xl border border-slate-100 gap-2">
-                <p className="text-xs text-slate-500 font-medium">Manage and edit your community events & meetups.</p>
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-2.5 py-1 rounded-full font-bold uppercase tracking-widest shrink-0 self-start sm:self-auto">
-                  {events.length} Events
-                </span>
-              </div>
-              <div className="grid gap-4">
-                {events.length > 0 ? (
-                  events.map((event) => {
-                    const isProcessing = deletingId === event.id;
-                    return (
-                      <div key={event.id} className="bg-white p-4 md:p-6 rounded-3xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4 min-w-0">
-                          <img src={event.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=800'} alt="" className="w-14 h-14 rounded-2xl object-cover shadow-sm border border-slate-100 shrink-0" referrerPolicy="no-referrer" />
-                          <div className="min-w-0 text-left">
-                            <span className="text-[10px] uppercase font-bold text-emerald-600 tracking-wider bg-emerald-50 px-2 py-0.5 rounded-full inline-block mb-1">
-                              {event.category || 'Event'}
-                            </span>
-                            <h4 className="font-bold text-slate-900 leading-snug break-words">{event.title}</h4>
-                            <p className="text-xs text-slate-500 mt-0.5 whitespace-normal break-words">{event.start_date} {event.start_time ? `• ${event.start_time}` : ''}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => {
-                              setEditingEventId(event.id);
-                              setNewEvent({
-                                title: event.title || '',
-                                start_date: event.start_date || '',
-                                end_date: event.end_date || '',
-                                start_time: event.start_time || '',
-                                end_time: event.end_time || '',
-                                location: event.location || '',
-                                category: event.category || '',
-                                description: event.description || '',
-                                image: event.image || '',
-                                lat: event.coordinates?.lat || 0,
-                                lng: event.coordinates?.lng || 0
-                              });
-                              setPreviewUrl(event.image || null);
-                              setActiveTab('edit_event');
-                              scrollToTop?.();
-                            }}
-                            className="p-2.5 bg-slate-50 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button 
-                            disabled={isProcessing}
-                            onClick={async () => {
-                              if (window.confirm(`Are you sure you want to delete "${event.title}"?`)) {
-                                setDeletingId(event.id);
-                                try {
-                                  await eventService.deleteEvent(event.id);
-                                  setMsg({ type: 'success', text: 'Event deleted successfully!' });
-                                  if (onRefetchEvents) {
-                                    await onRefetchEvents();
-                                  }
-                                } catch (err) {
-                                  console.error('Failed to delete event:', err);
-                                  setMsg({ type: 'error', text: 'Failed to delete event.' });
-                                } finally {
-                                  setDeletingId(null);
-                                }
-                              }
-                            }}
-                            className="p-2.5 bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all disabled:opacity-50"
-                          >
-                            {isProcessing ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200">
-                    <p className="text-slate-400 text-sm font-medium">No events found.</p>
-                  </div>
-                )}
-              </div>
+          {(activeTab === 'all_events' || activeTab === 'add_event' || activeTab === 'edit_event') && (
+            <AdminEventsManager
+              events={events as any}
+              onRefetchEvents={onRefetchEvents}
+              setMsg={setMsg}
+              currentUser={currentUser}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              editingEventId={editingEventId}
+              setEditingEventId={setEditingEventId}
+              newEvent={newEvent}
+              setNewEvent={setNewEvent}
+              selectedFile={selectedFile}
+              setSelectedFile={setSelectedFile}
+              previewUrl={previewUrl}
+              setPreviewUrl={setPreviewUrl}
+              scrollToTop={scrollToTop}
+            />
+          )}
+
+          {activeTab === 'ai_event_search' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <AdminAiEventSearch
+                onRefetchEvents={onRefetchEvents}
+                setMsg={setMsg}
+              />
             </div>
           )}
 
-          {activeTab === 'import_csv' && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full max-w-full overflow-hidden">
-              {pendingImportEvents.length === 0 ? (
-                <div className="bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[36px] border border-slate-100 shadow-xl space-y-6 sm:space-y-8 w-full max-w-full overflow-hidden">
-                  <div className="flex flex-col items-center justify-center p-5 sm:p-10 md:p-12 bg-emerald-50/30 rounded-2xl sm:rounded-[32px] border-2 border-dashed border-emerald-100 gap-4 sm:gap-6 text-center w-full">
-                    <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl sm:rounded-full bg-white border-2 sm:border-4 border-white shadow-md sm:shadow-xl flex items-center justify-center text-emerald-500">
-                      <FileText className="w-7 h-7 sm:w-10 sm:h-10" />
-                    </div>
-                    <div className="max-w-md space-y-1.5">
-                      <h4 className="text-lg sm:text-xl font-bold font-display text-slate-900">Import Events via CSV</h4>
-                      <p className="text-slate-500 text-xs sm:text-sm leading-relaxed">
-                        Drag & drop or select your CSV file (Eventbrite, Meetup, Excel, Google Sheets, etc.). 
-                        Delimiters and column headers are automatically detected.
-                      </p>
-                    </div>
-                    
-                    <div className="bg-white p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 text-left w-full max-w-lg space-y-2">
-                      <h5 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Automatically Detected Fields</h5>
-                      <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                        {[
-                          { label: 'Title / Event Name', tip: 'title, name, event...' },
-                          { label: 'Start Date', tip: 'start_date, date, start...' },
-                          { label: 'End Date', tip: 'end_date, end...' },
-                          { label: 'Start Time', tip: 'start_time, time, heure...' },
-                          { label: 'End Time', tip: 'end_time, fin...' },
-                          { label: 'Category', tip: 'category, type, theme...' },
-                          { label: 'Location / Venue', tip: 'location, address, venue...' },
-                          { label: 'Description', tip: 'description, details, about...' },
-                          { label: 'Image URL', tip: 'image, photo, poster...' }
-                        ].map(col => (
-                          <span key={col.label} title={col.tip} className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-slate-50 rounded-lg text-[11px] sm:text-xs font-medium text-slate-600 border border-slate-200">
-                            {col.label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <input 
-                      type="file"
-                      accept=".csv,text/csv,text/plain,application/vnd.ms-excel"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-
-                        setIsImporting(true);
-                        try {
-                          const result = await parseEventCSV(file);
-                          if (!result.rawRows || result.rawRows.length === 0) {
-                            setMsg({ type: 'error', text: 'The CSV file is empty or unreadable.' });
-                            return;
-                          }
-
-                          setCsvEventRawColumns(result.rawColumns);
-                          setCsvEventRawRows(result.rawRows);
-                          setCsvEventColumnMapping(result.detectedMapping);
-                          setPendingImportEvents(result.events);
-
-                          if (result.events.length === 0) {
-                            setMsg({ type: 'error', text: 'No events detected. Please check columns or adjust mappings.' });
-                          } else {
-                            setMsg({ 
-                              type: 'success', 
-                              text: `${result.events.length} events detected (delimiter: "${result.delimiter}"). Review details below.` 
-                            });
-                          }
-                        } catch (err: any) {
-                          console.error('Failed to parse CSV:', err);
-                          setMsg({ type: 'error', text: 'Error reading CSV: ' + err.message });
-                        } finally {
-                          setIsImporting(false);
-                          if (e.target) e.target.value = '';
-                        }
-                      }}
-                      className="hidden"
-                      id="event-csv-upload"
-                    />
-                    <label 
-                      htmlFor="event-csv-upload"
-                      className="w-full sm:w-auto px-6 sm:px-8 h-12 sm:h-14 bg-emerald-500 text-white rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm uppercase tracking-wider sm:tracking-widest shadow-xl shadow-emerald-500/20 hover:bg-emerald-600 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                    >
-                      {isImporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-                      Select CSV File
-                    </label>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
-                  <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4 w-full max-w-full overflow-hidden">
-                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-500 shrink-0">
-                        <Database className="w-5 h-5 sm:w-6 sm:h-6" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-bold text-slate-900 text-base sm:text-lg">
-                            {pendingImportEvents.length} Events Ready
-                          </h4>
-                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] sm:text-xs font-bold rounded-full border border-emerald-200">
-                            CSV Loaded
-                          </span>
-                        </div>
-                        <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">
-                          Add one-by-one with "Add", or import all at once. Review details before saving.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto shrink-0">
-                      <button
-                        onClick={() => setShowEventColumnMapper(!showEventColumnMapper)}
-                        className={`h-10 sm:h-11 px-3.5 sm:px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 border ${
-                          showEventColumnMapper
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <SlidersHorizontal className="w-3.5 h-3.5" />
-                        <span>{showEventColumnMapper ? 'Hide Mapping' : 'Adjust Columns'}</span>
-                      </button>
-                      <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
-                        <button 
-                          onClick={() => {
-                            setPendingImportEvents([]);
-                            setCsvEventRawColumns([]);
-                            setCsvEventRawRows([]);
-                            setCsvEventColumnMapping({});
-                            setShowEventColumnMapper(false);
-                          }}
-                          className="h-10 sm:h-11 px-3 sm:px-4 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all flex items-center justify-center border border-slate-200 sm:border-transparent"
-                        >
-                          Cancel
-                        </button>
-                        <button 
-                          onClick={async () => {
-                            setIsImporting(true);
-                            try {
-                              for (const ev of pendingImportEvents) {
-                                await eventService.createEvent(ev);
-                              }
-                              setMsg({ type: 'success', text: `Successfully imported ${pendingImportEvents.length} events!` });
-                              setPendingImportEvents([]);
-                              setCsvEventRawColumns([]);
-                              setCsvEventRawRows([]);
-                              setCsvEventColumnMapping({});
-                              if (onRefetchEvents) await onRefetchEvents();
-                              setActiveTab('all_events');
-                            } catch (err: any) {
-                              setMsg({ type: 'error', text: 'Import failed: ' + err.message });
-                            } finally {
-                              setIsImporting(false);
-                            }
-                          }}
-                          disabled={isImporting || pendingImportEvents.length === 0}
-                          className="h-10 sm:h-11 px-4 sm:px-6 bg-emerald-500 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-95"
-                        >
-                          {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                          <span>Import All ({pendingImportEvents.length})</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {showEventColumnMapper && (
-                    <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[32px] border border-emerald-100 shadow-lg animate-in fade-in slide-in-from-top-2 duration-300 space-y-4 sm:space-y-6 w-full max-w-full overflow-hidden">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-4 pb-3 sm:pb-4 border-b border-slate-100">
-                        <div>
-                          <h5 className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
-                            <SlidersHorizontal className="w-4 h-4 text-emerald-500" />
-                            CSV Column Mapping
-                          </h5>
-                          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-                            Match each event field with the corresponding column from your CSV file.
-                          </p>
-                        </div>
-                        <span className="text-[10px] sm:text-xs font-medium text-slate-400 shrink-0">
-                          {csvEventRawColumns.length} columns found in CSV
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
-                        {[
-                          { field: 'title', label: 'Event Title' },
-                          { field: 'start_date', label: 'Start Date' },
-                          { field: 'end_date', label: 'End Date' },
-                          { field: 'start_time', label: 'Start Time' },
-                          { field: 'end_time', label: 'End Time' },
-                          { field: 'category', label: 'Category' },
-                          { field: 'location', label: 'Location / Address' },
-                          { field: 'description', label: 'Description' },
-                          { field: 'image', label: 'Image URL' }
-                        ].map(({ field, label }) => {
-                          const currentVal = csvEventColumnMapping[field] || '';
-                          return (
-                            <div key={field} className="bg-slate-50/70 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-100 space-y-1 sm:space-y-1.5 min-w-0">
-                              <div className="flex items-center justify-between gap-2">
-                                <label className="text-[10px] sm:text-[11px] font-bold text-slate-700 tracking-wide truncate">{label}</label>
-                                {currentVal && (
-                                  <span className="text-[9px] sm:text-[10px] text-emerald-600 font-semibold flex items-center gap-1 shrink-0">
-                                    <CheckCircle2 className="w-3 h-3" /> Mapped
-                                  </span>
-                                )}
-                              </div>
-                              <select
-                                value={currentVal}
-                                onChange={(e) => handleUpdateEventColumnMapping(field, e.target.value)}
-                                className="w-full h-9 sm:h-10 bg-white border border-slate-200 rounded-lg sm:rounded-xl px-2.5 sm:px-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 truncate"
-                              >
-                                <option value="">-- Ignore / Unmapped --</option>
-                                {csvEventRawColumns.map((col) => (
-                                  <option key={col} value={col}>
-                                    {col}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid gap-3 sm:gap-4 w-full max-w-full">
-                    {pendingImportEvents.map((ev, idx) => {
-                      const isEditingThis = editingImportEventIndex === idx;
-
-                      if (isEditingThis) {
-                        return (
-                          <div key={idx} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[28px] border-2 border-emerald-500 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                              <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs uppercase tracking-wider">
-                                <Edit2 className="w-4 h-4 text-emerald-500" />
-                                <span>Editing Event #{idx + 1}</span>
-                              </div>
-                              <button 
-                                type="button"
-                                onClick={() => setEditingImportEventIndex(null)}
-                                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-all"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                              {/* Title */}
-                              <div className="space-y-1 md:col-span-2">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Event Title</label>
-                                <input 
-                                  type="text"
-                                  value={ev.title || ''}
-                                  onChange={e => handleUpdatePendingEventField(idx, 'title', e.target.value)}
-                                  placeholder="Ex: Valencia Beach Meetup"
-                                  className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-
-                              {/* Category */}
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Category</label>
-                                <input 
-                                  type="text"
-                                  value={ev.category || ''}
-                                  onChange={e => handleUpdatePendingEventField(idx, 'category', e.target.value)}
-                                  placeholder="Community, Networking, Tech..."
-                                  className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-
-                              {/* Poster Image URL */}
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Poster Image URL</label>
-                                <input 
-                                  type="text"
-                                  value={ev.image || ''}
-                                  onChange={e => handleUpdatePendingEventField(idx, 'image', e.target.value)}
-                                  placeholder="https://..."
-                                  className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-
-                              {/* Start Date */}
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Start Date</label>
-                                <input 
-                                  type="date"
-                                  value={ev.start_date || ''}
-                                  onChange={e => handleUpdatePendingEventField(idx, 'start_date', e.target.value)}
-                                  className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-
-                              {/* End Date */}
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">End Date (Optional)</label>
-                                <input 
-                                  type="date"
-                                  value={ev.end_date || ''}
-                                  onChange={e => handleUpdatePendingEventField(idx, 'end_date', e.target.value)}
-                                  className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-
-                              {/* Start Time */}
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Start Time (Optional)</label>
-                                <input 
-                                  type="time"
-                                  value={ev.start_time || ''}
-                                  onChange={e => handleUpdatePendingEventField(idx, 'start_time', e.target.value)}
-                                  className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-
-                              {/* End Time */}
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">End Time (Optional)</label>
-                                <input 
-                                  type="time"
-                                  value={ev.end_time || ''}
-                                  onChange={e => handleUpdatePendingEventField(idx, 'end_time', e.target.value)}
-                                  className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-
-                              {/* Location Address */}
-                              <div className="space-y-1 md:col-span-2">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Location Address</label>
-                                <AddressAutocomplete 
-                                  value={ev.location || ''}
-                                  onChange={val => handleUpdatePendingEventField(idx, 'location', val)}
-                                  onSelect={(loc, lat, lng) => {
-                                    handleUpdatePendingEventField(idx, 'location', loc);
-                                    handleUpdatePendingEventField(idx, 'lat', lat);
-                                    handleUpdatePendingEventField(idx, 'lng', lng);
-                                  }}
-                                />
-                              </div>
-
-                              {/* Description */}
-                              <div className="space-y-1 md:col-span-2">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Description</label>
-                                <textarea 
-                                  rows={3}
-                                  value={ev.description || ''}
-                                  onChange={e => handleUpdatePendingEventField(idx, 'description', e.target.value)}
-                                  placeholder="Event details..."
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Buttons */}
-                            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
-                              <button 
-                                type="button"
-                                onClick={() => handleRemovePendingEvent(idx)}
-                                className="px-3 py-2 text-rose-500 hover:bg-rose-50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" /> Remove
-                              </button>
-                              <div className="flex items-center gap-2">
-                                <button 
-                                  type="button"
-                                  onClick={() => setEditingImportEventIndex(null)}
-                                  className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider transition-all"
-                                >
-                                  Done Editing
-                                </button>
-                                <button 
-                                  type="button"
-                                  disabled={importingSingleEventIndex === idx}
-                                  onClick={async () => {
-                                    setEditingImportEventIndex(null);
-                                    await handleImportSingleEvent(ev, idx);
-                                  }}
-                                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
-                                >
-                                  {importingSingleEventIndex === idx ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  ) : (
-                                    <Check className="w-3.5 h-3.5" />
-                                  )}
-                                  <span>Save & Add Event</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div 
-                          key={idx} 
-                          className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-[28px] border border-slate-100 shadow-sm hover:border-emerald-200 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 w-full max-w-full overflow-hidden"
-                        >
-                          <div className="flex items-start gap-3 sm:gap-4 min-w-0 w-full overflow-hidden">
-                            <img src={ev.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=800'} alt="" className="w-12 h-12 rounded-xl object-cover border border-slate-100 shrink-0 mt-0.5" referrerPolicy="no-referrer" />
-                            <div className="min-w-0 space-y-1 flex-1 w-full overflow-hidden">
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                <h5 className="font-bold text-slate-900 text-sm sm:text-base leading-snug break-words">
-                                  {ev.title || 'Untitled Event'}
-                                </h5>
-                                {ev.category && (
-                                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] sm:text-[11px] font-bold rounded-lg border border-emerald-100 whitespace-nowrap self-start">
-                                    {ev.category}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                                {ev.start_date && (
-                                  <span className="flex items-center gap-1">
-                                    <Calendar className="w-3.5 h-3.5 text-emerald-500" />
-                                    {ev.start_date} {ev.start_time ? `• ${ev.start_time}` : ''}
-                                  </span>
-                                )}
-                                {ev.location && (
-                                  <span className="flex items-center gap-1 text-slate-600">
-                                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                                    {ev.location}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                            <button
-                              type="button"
-                              onClick={() => setEditingImportEventIndex(idx)}
-                              className="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border border-slate-200 flex items-center gap-1.5"
-                            >
-                              <Edit2 className="w-3.5 h-3.5 text-slate-500" />
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              disabled={importingSingleEventIndex === idx}
-                              onClick={() => handleImportSingleEvent(ev, idx)}
-                              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
-                            >
-                              {importingSingleEventIndex === idx ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Check className="w-3.5 h-3.5" />
-                              )}
-                              <span>Add Event</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePendingEvent(idx)}
-                              className="p-2 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition-all border border-slate-200"
-                              title="Remove from list"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {(activeTab === 'add_event' || activeTab === 'edit_event') && (
-            <form onSubmit={handleAddEvent} className="bg-white p-5 md:p-8 rounded-[32px] md:rounded-[40px] border border-emerald-100 shadow-xl space-y-6 md:space-y-8 animate-in fade-in zoom-in-95 duration-300">
-              <div className="flex items-center justify-between">
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setActiveTab('all_events');
-                    setEditingEventId(null);
-                  }}
-                  className="flex items-center gap-2 text-slate-400 hover:text-slate-600 font-bold text-xs uppercase tracking-widest transition-all"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Back to List
-                </button>
-                <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">
-                    {editingEventId ? 'Edit Event Mode' : 'New Event Mode'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-col items-center justify-center p-6 bg-emerald-50/30 rounded-[32px] border border-dashed border-emerald-100 gap-4">
-                <div className="relative group">
-                  <div className="w-32 h-32 rounded-full bg-white border-4 border-white shadow-xl overflow-hidden flex items-center justify-center">
-                    {previewUrl ? (
-                      <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center text-slate-300">
-                        <Camera className="w-10 h-10 mb-1" />
-                        <span className="text-[10px] font-semibold uppercase tracking-widest">No Image</span>
-                      </div>
-                    )}
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute bottom-0 right-0 p-3 bg-emerald-500 text-white rounded-full shadow-lg hover:bg-emerald-600 transition-all active:scale-95"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="text-center">
-                  <h4 className="font-semibold font-display text-emerald-600 text-sm uppercase tracking-widest">Event Poster</h4>
-                  <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">Image for the event card</p>
-                </div>
-                <input 
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept="image/*"
-                  className="hidden"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-6">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Event Title</label>
-                  <input 
-                    required
-                    value={newEvent.title}
-                    onChange={e => setNewEvent({...newEvent, title: e.target.value})}
-                    placeholder="Ex: Beach Cleanup Valencia"
-                    className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-display text-sm"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Start Date</label>
-                    <input 
-                      required
-                      type="date"
-                      value={newEvent.start_date}
-                      onChange={e => setNewEvent({...newEvent, start_date: e.target.value})}
-                      className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-display text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center px-1">
-                      <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">End Date (Optional)</label>
-                      {newEvent.end_date && (
-                        <button 
-                          type="button" 
-                          onClick={() => setNewEvent({...newEvent, end_date: ''})}
-                          className="text-[10px] text-brand-blue font-bold uppercase hover:text-brand-blue/80 transition-colors"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <input 
-                      type="date"
-                      value={newEvent.end_date}
-                      onChange={e => setNewEvent({...newEvent, end_date: e.target.value})}
-                      className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-display text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center px-1">
-                      <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Start Time (Optional)</label>
-                      {newEvent.start_time && (
-                        <button 
-                          type="button" 
-                          onClick={() => setNewEvent({...newEvent, start_time: ''})}
-                          className="text-[10px] text-brand-blue font-bold uppercase hover:text-brand-blue/80 transition-colors"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <input 
-                      type="time"
-                      value={newEvent.start_time}
-                      onChange={e => setNewEvent({...newEvent, start_time: e.target.value})}
-                      className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-display text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center px-1">
-                      <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">End Time (Optional)</label>
-                      {newEvent.end_time && (
-                        <button 
-                          type="button" 
-                          onClick={() => setNewEvent({...newEvent, end_time: ''})}
-                          className="text-[10px] text-brand-blue font-bold uppercase hover:text-brand-blue/80 transition-colors"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <input 
-                      type="time"
-                      value={newEvent.end_time}
-                      onChange={e => setNewEvent({...newEvent, end_time: e.target.value})}
-                      className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-display text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Category</label>
-                  <input 
-                    required
-                    value={newEvent.category}
-                    onChange={e => setNewEvent({...newEvent, category: e.target.value})}
-                    placeholder="Community"
-                    className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-display text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Location Address</label>
-                  <AddressAutocomplete 
-                    value={newEvent.location}
-                    onChange={val => setNewEvent({...newEvent, location: val})}
-                    onSelect={(location, lat, lng) => setNewEvent({...newEvent, location, lat, lng})}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-1">Description</label>
-                <textarea 
-                  required
-                  rows={4}
-                  value={newEvent.description}
-                  onChange={e => setNewEvent({...newEvent, description: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-display text-sm resize-none"
-                />
-              </div>
-
-              <button 
-                disabled={isSubmitting}
-                type="submit"
-                className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold uppercase shadow-xl shadow-emerald-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-              >
-                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Calendar className="w-5 h-5" />}
-                {isSubmitting 
-                  ? (editingEventId ? 'Updating Event...' : 'Creating Event...') 
-                  : (editingEventId ? 'Update Event' : 'Create Event')}
-              </button>
-            </form>
-          )}
         </div>
       ) : dashboardCategory === 'testimonies' ? (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -9069,11 +8635,33 @@ function AdminView({
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Article Content (Markdown supported)</label>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
+                      Article Content (Markdown supported)
+                    </label>
+                    <span className="text-[11px] text-slate-400 font-medium">Click any emoji to insert into your article</span>
+                  </div>
+
+                  {/* Emoji Quick Picker Toolbar */}
+                  <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-100/90 rounded-xl border border-slate-200/70">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">Emojis:</span>
+                    {['✨', '📍', '💡', '🎯', '🏡', '🏖️', '🌳', '🥐', '☕', '🍷', '🥘', '🎨', '🎭', '🎶', '🚇', '📋', '🏥', '👨‍👩‍👧', '🐾', '💶', '🎟️', '🔗', '⭐', '🤝'].map(emoji => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setArticleFormContent(prev => (prev ? prev + ' ' + emoji + ' ' : emoji + ' '))}
+                        className="w-7 h-7 flex items-center justify-center hover:bg-white hover:scale-110 active:scale-95 rounded-lg transition-all text-sm shadow-2xs"
+                        title={`Insert ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+
                   <textarea
                     rows={8}
                     required
-                    placeholder="Enter full article text. You can use markdown headers, bullets, and paragraphs..."
+                    placeholder="Enter full article text. You can use markdown headers (#, ##), bullet points (-), and rich emojis..."
                     value={articleFormContent}
                     onChange={(e) => setArticleFormContent(e.target.value)}
                     className="w-full text-xs px-4 py-3 rounded-xl bg-slate-50 border border-slate-150 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-slate-800 font-medium font-sans resize-y"
@@ -11114,7 +10702,7 @@ function HomeView({
                             <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <span className="truncate">
                               {featuredEvent.start_date || featuredEvent.date}
-                              {featuredEvent.end_date && ` to ${featuredEvent.end_date}`}
+                              {featuredEvent.end_date && !isSameDay(featuredEvent.start_date || featuredEvent.date, featuredEvent.end_date) && ` to ${featuredEvent.end_date}`}
                             </span>
                           </div>
                         </div>
@@ -15723,14 +15311,26 @@ DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`);
 
 function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEvents }: { initialEventId?: string | null, onModalClose?: () => void, scrollToTop?: () => void, events?: Event[] }) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId || null);
-  const [events, setEvents] = useState<Event[]>(propEvents && propEvents.length > 0 ? propEvents : (isSupabaseConfigured ? [] : MOCK_EVENTS));
+  const [events, setEvents] = useState<Event[]>(() => {
+    const list = propEvents && propEvents.length > 0 ? propEvents : (isSupabaseConfigured ? [] : MOCK_EVENTS);
+    return list.filter(ev => !isEventExpired(ev));
+  });
   const [loading, setLoading] = useState(!propEvents || propEvents.length === 0);
   const [sharedEventId, setSharedEventId] = useState<string | null>(null);
 
+  // Category filter state
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  // Jane AI Event Search state
+  const [janeQuery, setJaneQuery] = useState('');
+  const [isJaneSearching, setIsJaneSearching] = useState(false);
+  const [janeMatches, setJaneMatches] = useState<Record<string, { score: number; reason: string }> | null>(null);
+  const [janeSummary, setJaneSummary] = useState<string | null>(null);
+  const [janeError, setJaneError] = useState<string | null>(null);
+
   useEffect(() => {
-    // Only fetch if not provided via props or if they're empty and we're configured
     if (propEvents && propEvents.length > 0) {
-      setEvents(propEvents);
+      setEvents(propEvents.filter(ev => !isEventExpired(ev)));
       setLoading(false);
       return;
     }
@@ -15738,11 +15338,14 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
     const loadEvents = async () => {
       try {
         const data = await eventService.getEvents();
-        if (data) {
-          setEvents(data);
+        if (data && data.length > 0) {
+          setEvents(data.filter(ev => !isEventExpired(ev)));
+        } else if (!isSupabaseConfigured) {
+          setEvents(MOCK_EVENTS.filter(ev => !isEventExpired(ev)));
         }
       } catch (err) {
         console.error('Failed to load events:', err);
+        setEvents(MOCK_EVENTS.filter(ev => !isEventExpired(ev)));
       } finally {
         setLoading(false);
       }
@@ -15756,22 +15359,336 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
     }
   }, [initialEventId, events]);
 
+  // Handle Jane AI Event Search
+  const handleJaneSearch = async (queryToSearch?: string) => {
+    const query = (queryToSearch !== undefined ? queryToSearch : janeQuery).trim();
+    if (!query) return;
+
+    setIsJaneSearching(true);
+    setJaneError(null);
+
+    try {
+      const result = await eventService.matchEventsWithJane(query, events);
+      if (result.results && result.results.length > 0) {
+        const matchMap: Record<string, { score: number; reason: string }> = {};
+        result.results.forEach((m) => {
+          if (m.id) {
+            matchMap[String(m.id)] = {
+              score: m.score || 85,
+              reason: m.reason || ''
+            };
+          }
+        });
+        setJaneMatches(matchMap);
+        setJaneSummary(result.summaryMessage || `Found ${result.results.length} curated events matching "${query}".`);
+      } else {
+        // Fallback local matching if AI returned no specific IDs
+        const lowerQ = query.toLowerCase();
+        const localMatchMap: Record<string, { score: number; reason: string }> = {};
+        let count = 0;
+        events.forEach(ev => {
+          const text = `${ev.title} ${ev.category} ${ev.description} ${ev.location}`.toLowerCase();
+          if (text.includes(lowerQ) || lowerQ.split(' ').some(w => w.length > 3 && text.includes(w))) {
+            localMatchMap[String(ev.id)] = {
+              score: 90,
+              reason: `Matches key theme "${query}" based on event category & description.`
+            };
+            count++;
+          }
+        });
+
+        if (count > 0) {
+          setJaneMatches(localMatchMap);
+          setJaneSummary(`Found ${count} events related to "${query}".`);
+        } else {
+          setJaneMatches({});
+          setJaneSummary(`No exact matches for "${query}". Try searching for categories like Jazz, Paella, Tech, or Beach.`);
+        }
+      }
+    } catch (err: any) {
+      console.warn('Jane AI matching fallback:', err);
+      // Client-side smart fallback
+      const lowerQ = query.toLowerCase();
+      const localMatchMap: Record<string, { score: number; reason: string }> = {};
+      let count = 0;
+      events.forEach(ev => {
+        const text = `${ev.title} ${ev.category} ${ev.description} ${ev.location}`.toLowerCase();
+        if (text.includes(lowerQ) || lowerQ.split(' ').some(w => w.length > 3 && text.includes(w))) {
+          localMatchMap[String(ev.id)] = {
+            score: 88,
+            reason: `Matches your search keywords for "${query}".`
+          };
+          count++;
+        }
+      });
+      setJaneMatches(localMatchMap);
+      setJaneSummary(count > 0 ? `Found ${count} matching events for "${query}".` : `No direct event matches found for "${query}".`);
+    } finally {
+      setIsJaneSearching(false);
+    }
+  };
+
+  const handleClearJaneSearch = () => {
+    setJaneQuery('');
+    setJaneMatches(null);
+    setJaneSummary(null);
+    setJaneError(null);
+  };
+
+  // Filtered & sorted events
+  const filteredEvents = useMemo(() => {
+    return events.filter(ev => {
+      // 0. Auto-exclude expired events
+      if (isEventExpired(ev)) return false;
+
+      // 1. Category Filter
+      if (selectedCategory !== 'all') {
+        if (!matchesCategoryFilter(ev.category, selectedCategory)) {
+          return false;
+        }
+      }
+
+      // 2. Jane AI Search Filter
+      if (janeMatches !== null) {
+        return !!janeMatches[String(ev.id)];
+      }
+
+      return true;
+    }).sort((a, b) => {
+      // If Jane search active, sort by Jane match score descending
+      if (janeMatches !== null) {
+        const scoreA = janeMatches[String(a.id)]?.score || 0;
+        const scoreB = janeMatches[String(b.id)]?.score || 0;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+      }
+      return 0;
+    });
+  }, [events, selectedCategory, janeMatches]);
+
+  // Compute category counts
+  const categoryCounts = useMemo(() => {
+    const activeEvents = events.filter(ev => !isEventExpired(ev));
+    const counts: Record<string, number> = { all: activeEvents.length };
+    CATEGORY_LIST.forEach(cat => {
+      counts[cat.id] = activeEvents.filter(ev => matchesCategoryFilter(ev.category, cat.id)).length;
+    });
+    return counts;
+  }, [events]);
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="space-y-1">
-        <h2 className="text-3xl font-bold font-display text-brand-navy tracking-tight">What's Up in Your City</h2>
-        <p className="text-slate-500 text-sm">Discover meetups and cultural events.</p>
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+      {/* Header Section */}
+      <div className="border-b border-slate-100 pb-5">
+        <h2 className="text-2xl sm:text-3xl font-semibold font-display text-slate-800 tracking-tight">
+          What's Up in Your City
+        </h2>
+        <p className="text-slate-500 text-sm sm:text-base max-w-2xl mt-1">
+          Discover verified meetups, concerts, culinary tastings, workshops, and cultural highlights across Valencia.
+        </p>
       </div>
 
+      {/* AI Event Search Bar Card - Discreet Soft Warm Orange Style */}
+      <div className="bg-gradient-to-br from-orange-50/70 via-amber-50/40 to-orange-50/50 rounded-2xl p-4 sm:p-5 border border-orange-100/90 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-xs">
+              <Sparkles className="w-4 h-4 text-orange-500" />
+            </div>
+            <div>
+              <h3 className="text-sm sm:text-base font-semibold text-slate-800">
+                <span className="text-orange-500 font-bold">What</span> are you looking for ?
+              </h3>
+              <p className="text-xs text-slate-500">
+                Find curated events matching your vibe, plans, or interests (e.g. jazz night, paella masterclass, tech meetup...)
+              </p>
+            </div>
+          </div>
+
+          {janeMatches !== null && (
+            <button
+              type="button"
+              onClick={handleClearJaneSearch}
+              className="self-start sm:self-auto px-3 py-1 bg-white hover:bg-orange-50 text-slate-600 hover:text-orange-700 rounded-lg text-xs font-semibold transition-all border border-orange-200/80 shadow-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Search</span>
+            </button>
+          )}
+        </div>
+
+        {/* Input Bar */}
+        <form 
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleJaneSearch();
+          }}
+          className="flex flex-col sm:flex-row gap-2"
+        >
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-orange-400/80 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={janeQuery}
+              onChange={(e) => setJaneQuery(e.target.value)}
+              placeholder="What kind of event are you looking for? (e.g., Live jazz, Paella class, Tech networking...)"
+              className="w-full h-11 pl-10 pr-9 bg-white border border-orange-200/70 rounded-xl text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300/40 focus:border-orange-400 transition-all shadow-xs"
+            />
+            {janeQuery && (
+              <button
+                type="button"
+                onClick={() => setJaneQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={isJaneSearching || !janeQuery.trim()}
+            className="h-11 px-5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-semibold rounded-xl text-xs sm:text-sm transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50 shrink-0 cursor-pointer"
+          >
+            {isJaneSearching ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Searching events...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3.5 h-3.5 text-orange-100" />
+                <span>Search</span>
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* Jane AI Response Summary Banner */}
+        {janeSummary && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-3.5 bg-white/95 rounded-xl border border-orange-200/70 shadow-xs flex items-start gap-2.5 text-slate-800"
+          >
+            <div className="w-6 h-6 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 mt-0.5">
+              <Sparkles className="w-3.5 h-3.5" />
+            </div>
+            <div className="space-y-0.5 flex-1 text-xs">
+              <div className="font-semibold text-slate-800 flex items-center gap-2">
+                <span>Jane's Recommendation</span>
+                <span className="text-[11px] font-normal text-slate-400">({filteredEvents.length} result{filteredEvents.length > 1 ? 's' : ''})</span>
+              </div>
+              <p className="text-slate-600 leading-relaxed">{janeSummary}</p>
+            </div>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Category Filter Chips Bar */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400">Filter by category</h4>
+          {selectedCategory !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('all')}
+              className="text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+            >
+              Reset filter
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar -mx-4 sm:-mx-6 px-4 sm:px-6">
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('all')}
+            className={cn(
+              "px-4 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2 shrink-0 cursor-pointer",
+              selectedCategory === 'all'
+                ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            )}
+          >
+            <span>✨ All Events</span>
+            <span className={cn(
+              "px-2 py-0.5 rounded-full text-[10px] font-extrabold",
+              selectedCategory === 'all' ? "bg-white/20 text-white" : "bg-white text-slate-500"
+            )}>
+              {categoryCounts.all || 0}
+            </span>
+          </button>
+
+          {CATEGORY_LIST.map(cat => {
+            const isSelected = selectedCategory === cat.id;
+            const count = categoryCounts[cat.id] || 0;
+
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCategory(isSelected ? 'all' : cat.id)}
+                className={cn(
+                  "px-4 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2 shrink-0 border cursor-pointer",
+                  isSelected
+                    ? "bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20"
+                    : count > 0
+                      ? "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                      : "bg-slate-50 text-slate-400 border-slate-100 opacity-60"
+                )}
+              >
+                <span>{cat.emoji} {cat.name}</span>
+                <span className={cn(
+                  "px-2 py-0.5 rounded-full text-[10px] font-extrabold",
+                  isSelected ? "bg-white/25 text-white" : "bg-slate-100 text-slate-600"
+                )}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Events Grid or Loading / Empty States */}
       {loading && events.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
-          <Loader2 className="w-10 h-10 text-brand-blue animate-spin" />
-          <p className="text-slate-400 font-medium">Discovering best events...</p>
+          <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+          <p className="text-slate-400 font-medium">Discovering best events in Valencia...</p>
+        </div>
+      ) : filteredEvents.length === 0 ? (
+        <div className="p-12 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 space-y-4">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-white shadow-sm flex items-center justify-center text-slate-400">
+            <Calendar className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-lg font-bold text-slate-800">No matching events found</h4>
+            <p className="text-sm text-slate-500 max-w-md mx-auto">
+              {janeMatches !== null 
+                ? "No events found matching your exact search. Try asking with broader keywords or browse all categories."
+                : "No events are currently scheduled in this category. Check back soon or select another category!"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCategory('all');
+              handleClearJaneSearch();
+            }}
+            className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer"
+          >
+            Show All Events
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto w-full">
-          {events.map(event => {
+          {filteredEvents.map(event => {
             const isExpanded = String(selectedEventId) === String(event.id);
+            const badge = getCategoryBadge(event.category);
+            const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
+            const formattedTime = formatEventTime(event.start_time, event.end_time, event.time);
+            const janeMatchInfo = janeMatches ? janeMatches[String(event.id)] : null;
+
             return (
               <motion.div
                 layout
@@ -15781,8 +15698,8 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                 className={cn(
                   "group relative bg-white rounded-[32px] border-2 transition-all shadow-sm overflow-hidden scroll-mt-28 cursor-pointer",
                   isExpanded
-                    ? "col-span-1 md:col-span-2 lg:col-span-3 border-brand-blue/40 shadow-xl p-6 sm:p-8 md:p-10 ring-1 ring-brand-blue/15"
-                    : "border-slate-100 hover:border-slate-200 p-6 flex flex-col justify-between"
+                    ? "col-span-1 md:col-span-2 lg:col-span-3 border-orange-300 shadow-xl p-6 sm:p-8 md:p-10 ring-2 ring-orange-400/15"
+                    : "border-slate-100 hover:border-orange-200/90 hover:shadow-md p-6 flex flex-col justify-between"
                 )}
                 onClick={() => {
                   if (isExpanded) {
@@ -15793,21 +15710,32 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                   }
                 }}
               >
-                <div className={cn("overflow-hidden relative rounded-2xl bg-slate-50", isExpanded ? "h-64 sm:h-80 mb-6" : "h-40 mb-4")}>
-                  <img src={event.image} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  <div className="absolute top-4 left-4 bg-white/95 backdrop-blur px-3.5 py-2 rounded-xl text-center min-w-[55px] flex flex-col justify-center items-center shadow-md">
-                    <p className="text-xs font-bold text-brand-blue uppercase leading-tight">
-                      {event.start_date || event.date}
-                    </p>
-                    {event.end_date && (
-                      <>
-                        <p className="text-[9px] text-slate-400 font-medium lowercase leading-none my-0.5">to</p>
-                        <p className="text-xs font-bold text-brand-blue uppercase leading-tight">
-                          {event.end_date}
-                        </p>
-                      </>
-                    )}
+                {/* Card Media Header */}
+                <div className={cn("overflow-hidden relative rounded-2xl bg-slate-50", isExpanded ? "h-64 sm:h-80 mb-6" : "h-44 mb-4")}>
+                  <img 
+                    src={event.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=800'} 
+                    alt={event.title} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                    referrerPolicy="no-referrer"
+                  />
+                  
+                  {/* Harmonized Date Badge (Top-Left) */}
+                  <div className="absolute top-3.5 left-3.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl text-center flex items-center gap-1.5 shadow-md border border-orange-100/90 z-10">
+                    <Calendar className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                    <span className="text-xs font-black text-orange-600 uppercase tracking-tight whitespace-nowrap">
+                      {formattedDate}
+                    </span>
                   </div>
+
+                  {/* Verified Badge (Bottom-Left) */}
+                  {event.verified_real && (
+                    <div className="absolute bottom-3.5 left-3.5 bg-slate-900/85 backdrop-blur-md border border-white/20 text-emerald-300 px-2.5 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-lg">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Web Verified</span>
+                    </div>
+                  )}
+
+                  {/* Share button (Top-Right) */}
                   <button 
                     type="button"
                     onClick={async (e) => {
@@ -15823,7 +15751,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                         try {
                           await navigator.share(shareData);
                         } catch (err) {
-                          console.warn('Share sheets failed or cancelled:', err);
+                          console.warn('Share sheet cancelled or failed:', err);
                         }
                       } else {
                         try {
@@ -15835,7 +15763,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                         }
                       }
                     }}
-                    className={`absolute top-4 right-4 p-2.5 rounded-full backdrop-blur-md transition-all duration-300 z-10 shadow-md ${
+                    className={`absolute top-3.5 right-3.5 p-2.5 rounded-full backdrop-blur-md transition-all duration-300 z-10 shadow-md cursor-pointer ${
                       sharedEventId === event.id 
                         ? "bg-emerald-500 text-white scale-110 shadow-emerald-500/20" 
                         : "bg-black/50 hover:bg-black/75 hover:scale-105 text-white"
@@ -15849,6 +15777,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                     )}
                   </button>
 
+                  {/* Close button if expanded */}
                   {isExpanded && (
                     <button
                       type="button"
@@ -15857,44 +15786,108 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                         setSelectedEventId(null);
                         onModalClose?.();
                       }}
-                      className="absolute bottom-4 right-4 p-2.5 bg-white/90 hover:bg-white backdrop-blur-md rounded-full text-slate-700 transition-all shadow-lg active:scale-95 z-10"
+                      className="absolute bottom-3.5 right-3.5 p-2 bg-white/90 hover:bg-white backdrop-blur-md rounded-full text-slate-700 transition-all shadow-lg active:scale-95 z-10 cursor-pointer"
                       title="Close"
                     >
-                      <X className="w-5 h-5" />
+                      <X className="w-4 h-4" />
                     </button>
                   )}
                 </div>
 
+                {/* Content Section */}
                 <div className="space-y-4">
-                  <div className="flex justify-between items-start gap-4">
-                    <h4 className={cn("font-bold font-display text-slate-900", isExpanded ? "text-2xl sm:text-3xl" : "text-lg")}>{event.title}</h4>
-                    <span className="text-[10px] font-bold bg-brand-blue/10 text-brand-blue px-3 py-1 rounded-full shrink-0 uppercase tracking-wider">{event.category}</span>
+                  {/* Category Pill & Jane AI Match badge */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border", badge.bgClass, badge.textClass, badge.borderClass)}>
+                        {badge.emoji} {badge.name}
+                      </span>
+                      {(event.price || event.is_free !== undefined) && (
+                        <span className={cn(
+                          "px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1 shadow-2xs",
+                          event.is_free ? "bg-emerald-50 text-emerald-700 border-emerald-200/90" : "bg-orange-50 text-orange-800 border-orange-200/90"
+                        )}>
+                          <Ticket className="w-2.5 h-2.5 text-orange-600" />
+                          <span>{event.price || (event.is_free ? 'Free' : 'Tickets')}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {janeMatchInfo && (
+                      <span className="px-2.5 py-0.5 bg-orange-50 text-orange-700 border border-orange-200/80 text-[10px] font-bold rounded-full uppercase tracking-wider flex items-center gap-1 shadow-2xs">
+                        <Sparkles className="w-3 h-3 text-orange-500" />
+                        <span>Match {janeMatchInfo.score}%</span>
+                      </span>
+                    )}
                   </div>
 
-                  <div className={cn("flex flex-wrap items-center gap-4 text-xs text-slate-600 font-medium", isExpanded && "text-sm py-2 border-y border-slate-100")}>
-                    {(event.start_time || event.time) && (
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-4 h-4 text-brand-blue" />
-                        <span>{event.start_time || event.time}</span>
-                        {event.end_time && <span>- {event.end_time}</span>}
+                  {/* Title */}
+                  <h4 className={cn("font-bold font-display text-slate-900 leading-snug", isExpanded ? "text-2xl sm:text-3xl" : "text-lg line-clamp-2")}>
+                    {event.title}
+                  </h4>
+
+                  {/* Jane AI Match snippet */}
+                  {janeMatchInfo && janeMatchInfo.reason && !isExpanded && (
+                    <p className="text-xs text-orange-800 bg-orange-50/70 p-2.5 rounded-xl border border-orange-100/90 leading-relaxed font-normal">
+                      ✨ {janeMatchInfo.reason}
+                    </p>
+                  )}
+
+                  {/* Metadata Chips (Date, Time, Location) */}
+                  <div className={cn("flex flex-wrap items-center gap-3 text-xs text-slate-600 font-medium", isExpanded && "text-sm py-2.5 border-y border-slate-100")}>
+                    <div className="flex items-center gap-1.5 font-bold text-orange-600">
+                      <Calendar className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                      <span>{formattedDate}</span>
+                    </div>
+
+                    {formattedTime && (
+                      <div className="flex items-center gap-1.5 text-slate-500">
+                        <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>{formattedTime}</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4 text-brand-blue" />
-                      <span>{event.location}</span>
-                    </div>
+
+                    {event.location && (
+                      <div className="flex items-center gap-1.5 text-slate-600 min-w-0">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{event.location}</span>
+                      </div>
+                    )}
                   </div>
 
+                  {/* Non-expanded card footer */}
                   {!isExpanded && (
-                    <div className="flex justify-between items-center pt-2 border-t border-slate-50">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Click to view details</span>
-                      <span className="text-brand-blue font-bold text-xs flex items-center gap-1 group-hover:gap-2 transition-all">
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                      {(event.ticket_url || (event.sources && event.sources.length > 0)) ? (
+                        <a
+                          href={event.ticket_url || event.sources?.[0]?.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className={cn(
+                            "inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all active:scale-95",
+                            event.is_free
+                              ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
+                              : "text-orange-700 bg-orange-50 hover:bg-orange-100 border-orange-200"
+                          )}
+                        >
+                          <Ticket className="w-3 h-3 text-orange-500" />
+                          <span>{event.is_free ? 'Free RSVP' : 'Buy Tickets'}</span>
+                          <ExternalLink className="w-2.5 h-2.5 ml-0.5 opacity-70" />
+                        </a>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          Tap for details & map
+                        </span>
+                      )}
+                      <span className="text-orange-600 font-bold text-xs flex items-center gap-1 group-hover:gap-2 transition-all">
                         View Details
                         <ArrowRight className="w-3 h-3" />
                       </span>
                     </div>
                   )}
 
+                  {/* Expanded View with Full Markdown & Map */}
                   <AnimatePresence>
                     {isExpanded && (
                       <motion.div
@@ -15905,36 +15898,110 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                         className="overflow-hidden space-y-6 pt-2"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="markdown-body text-slate-600 leading-relaxed text-sm sm:text-base">
+                        {/* Jane Rationale in Expanded View */}
+                        {janeMatchInfo && janeMatchInfo.reason && (
+                          <div className="p-4 bg-orange-50/80 rounded-2xl border border-orange-200/80 space-y-1">
+                            <div className="flex items-center gap-1.5 text-orange-600 font-bold text-xs">
+                              <Sparkles className="w-4 h-4 text-orange-500" />
+                              <span>Why this event matches your search:</span>
+                            </div>
+                            <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-medium">
+                              {janeMatchInfo.reason}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Dedicated Ticket / Booking Banner for Expanded View */}
+                        {(event.ticket_url || event.price || event.is_free !== undefined || (event.sources && event.sources.length > 0)) && (
+                          <div className="p-4 bg-gradient-to-r from-orange-50/90 to-amber-50/80 rounded-2xl border border-orange-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-200 flex items-center justify-center shrink-0">
+                                <Ticket className="w-5 h-5 text-orange-600" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-black uppercase tracking-wider text-orange-900">
+                                    {event.is_free ? 'Free Admission' : 'Admission & Tickets'}
+                                  </span>
+                                  {event.price && (
+                                    <span className="text-xs font-bold text-slate-800 bg-white/90 px-2 py-0.5 rounded-md border border-orange-200 shadow-2xs">
+                                      {event.price}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-600 mt-0.5">
+                                  {(event.ticket_url || event.sources?.[0]?.url)
+                                    ? 'Official online ticketing and booking links available.' 
+                                    : (event.is_free ? '100% Free entry, no ticket purchase required.' : 'Tickets available at venue or official box office.')}
+                                </p>
+                              </div>
+                            </div>
+                            {(event.ticket_url || event.sources?.[0]?.url) && (
+                              <a
+                                href={event.ticket_url || event.sources?.[0]?.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl font-bold text-xs shadow-md shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 shrink-0"
+                              >
+                                <Ticket className="w-3.5 h-3.5" />
+                                <span>{event.is_free ? 'Free RSVP / Registration' : 'Buy Official Tickets'}</span>
+                                <ExternalLink className="w-3 h-3 ml-0.5" />
+                              </a>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Structured Description */}
+                        <div className="markdown-body text-slate-700 leading-relaxed text-sm sm:text-base space-y-3">
                           <SimpleMarkdown>
-                            {event.description || `Join us for ${event.title} at ${event.location}! This is a great opportunity to meet new people and enjoy the local atmosphere.`}
+                            {event.description || `Join us for ${event.title} at ${event.location}! This is a wonderful opportunity to meet community members and enjoy Valencia.`}
                           </SimpleMarkdown>
                         </div>
 
+                        {/* Interactive Google Map */}
                         {event.coordinates && (
                           <div className="space-y-3">
-                            <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Location & Map</h5>
-                            <div className="h-52 w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner">
+                            <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-orange-600" />
+                              <span>Location & Interactive Map</span>
+                            </h5>
+                            <div className="h-56 sm:h-64 w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner">
                               <APIProvider apiKey={GOOGLE_MAPS_KEY}>
                                 <Map
                                   defaultCenter={event.coordinates}
                                   defaultZoom={15}
-                                  gestureHandling="none"
-                                  disableDefaultUI
+                                  gestureHandling="greedy"
                                   mapId={`event_map_${event.id}`}
                                   className="w-full h-full"
                                 >
                                   <AdvancedMarker position={event.coordinates}>
-                                    <Pin background={'#0870B8'} glyphColor={'#FFFFFF'} borderColor={'#0870B8'} />
+                                    <Pin background={'#F97316'} glyphColor={'#FFFFFF'} borderColor={'#EA580C'} />
                                   </AdvancedMarker>
                                 </Map>
                               </APIProvider>
                             </div>
-                            <p className="text-xs text-slate-500 font-medium">{event.location}</p>
+                            <p className="text-xs text-slate-600 font-medium flex items-center gap-1.5">
+                              <MapPin className="w-3 h-3 text-slate-400" />
+                              {event.location}
+                            </p>
                           </div>
                         )}
 
-                        <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                        {/* Actions */}
+                        <div className="pt-3 flex flex-col sm:flex-row gap-3 border-t border-slate-100">
+                          {(event.ticket_url || event.sources?.[0]?.url) && (
+                            <a
+                              href={event.ticket_url || event.sources?.[0]?.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl font-bold text-xs sm:text-sm shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                            >
+                              <Ticket className="w-4 h-4" />
+                              <span>{event.is_free ? 'Free RSVP / Registration' : 'Buy Tickets Online'}</span>
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          )}
+
                           <button 
                             type="button"
                             onClick={() => {
@@ -15944,18 +16011,19 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                               const googleUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&location=${location}`;
                               window.open(googleUrl, '_blank');
                             }}
-                            className="flex-1 py-3.5 bg-brand-blue text-white rounded-2xl font-bold text-xs sm:text-sm shadow-lg shadow-brand-blue/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                            className="flex-1 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-bold text-xs sm:text-sm shadow-lg shadow-slate-900/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
                           >
                             <Calendar className="w-4 h-4" />
-                            Add to Calendar
+                            <span>Add to Google Calendar</span>
                           </button>
+
                           <button
                             type="button"
                             onClick={() => {
                               setSelectedEventId(null);
                               onModalClose?.();
                             }}
-                            className="px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs sm:text-sm transition-all"
+                            className="px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs sm:text-sm transition-all cursor-pointer"
                           >
                             Close
                           </button>

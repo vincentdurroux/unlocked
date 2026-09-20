@@ -79,9 +79,63 @@ export const MOCK_GUIDE_CATEGORIES_DATA = [
     icon_name: 'HomeIcon',
     color: 'bg-orange-500',
     articles: [
-      { id: 'h-1', title: 'Where Should You Live in Valencia?', excerpt: 'Aperçu des principaux quartiers.', content: '...' },
-      { id: 'h-2', title: 'Renting in Valencia Explained', excerpt: 'Comment fonctionne la location.', content: '...' },
-      { id: 'h-3', title: 'Setting Up Your New Home', excerpt: 'Internet, électricité, eau.', content: '...' },
+      { 
+        id: 'h-1', 
+        title: 'Where Should You Live in Valencia?', 
+        excerpt: 'Explore Valencia\'s top neighborhoods from Ruzafa to El Cabanyal.', 
+        content: `🏡 **Finding Your Dream Neighborhood in Valencia!**
+
+Valencia offers an extraordinary quality of life, combining Mediterranean sunshine ☀️, a relaxed pace, rich cultural heritage 🏛️, and bikeable green corridors like the Turia Gardens 🌳.
+
+### ✨ Top Neighborhoods for Expats & Newcomers
+
+- 🥐 **Ruzafa (L'Eixample)**: The creative, bohemian hotspot of Valencia! Filled with vibrant specialty coffee shops ☕, art workshops 🎨, international food markets 🥘, and bustling terraces. Perfect for young professionals and creatives.
+- 🏛️ **El Carmen & Ciutat Vella**: Valencia's historic heart with winding cobblestone streets, authentic tapas bars 🍷, historic city gates (Torres de Serranos), and charming plazas.
+- 🌊 **El Cabanyal & Malvarrosa**: The historic maritime district right by the beach 🏖️. Famous for its colorful tiled facades, seafood restaurants, and relaxed seaside breeze.
+- 🌳 **Benimaclet**: A village-like atmosphere with students, families, independent bookstores 📚, and a very welcoming community vibe.
+
+💡 **Good to know (tips)**:
+- 🚇 **Public Transport**: Metro and Valenbisi stations connect every district in 10-15 minutes.
+- 📋 **Rental tip**: Always check whether agency fees (honorarios) and community charges (gastos de comunidad) are included in the rental price.`
+      },
+      { 
+        id: 'h-2', 
+        title: 'Renting in Valencia Explained', 
+        excerpt: 'Contracts, deposits, fianza, and tenant protections in Spain.', 
+        content: `🔑 **Everything You Need to Know About Renting in Spain**
+
+Renting an apartment in Valencia is relatively straightforward once you know the legal framework and market customs 📝.
+
+### 📋 Key Steps & Essentials
+
+- 💰 **Deposit (Fianza)**: Legally, long-term rentals require **1 month of legal deposit** (fianza legal) paid to the regional property registry (IVAM/Prop). Landlords may request an additional 1-2 months as an extra guarantee (garantía adicional).
+- 📜 **Contract Duration (LAU)**: Under Spanish urban leasing law, primary residence contracts automatically extend up to **5 years** (or 7 if the landlord is a company) at the tenant's option.
+- ⚡ **Utilities**: Water (EMIVASA/Aguas de Valencia) and electricity (Iberdrola/Endesa) are usually transferred into your name or billed directly via IBAN.
+
+💡 **Practical Tips**:
+- 🔍 Inspect the apartment thoroughly and take photos before signing the inventory list.
+- 💶 Prepare a Spanish bank account for easy direct debits (domiciliación bancaria).`
+      },
+      { 
+        id: 'h-3', 
+        title: 'Setting Up Your New Home', 
+        excerpt: 'High-speed fiber internet, electricity, water, and home utilities.', 
+        content: `⚡ **Setting Up Electricity, Water & High-Speed Internet**
+
+Welcome to your new home! Here is how to activate utilities smoothly and quickly 🏠.
+
+### 🌐 High-Speed Fiber Internet
+- Providers like Digi, Movistar, Orange, and Vodafone offer fast fiber (up to 1Gbps) starting from **20€-30€/month** 🚀.
+- Installation is typically completed within 2 to 5 business days.
+
+### 💡 Electricity & Gas
+- Most apartments use electricity for heating, cooling, and cooking. Look for an energy certificate (Certificado de Eficiencia Energética).
+- Standard green tariff providers include Iberdrola, Holaluz, and Octopus Energy 🌿.
+
+### 🚰 Water Services
+- Valencia's municipal water is managed by **Global Omnium / Aguas de Valencia** 💧.
+- Tap water is safe, though many expats prefer carbon block filters for a milder taste.`
+      },
     ]
   },
   {
@@ -91,8 +145,48 @@ export const MOCK_GUIDE_CATEGORIES_DATA = [
     icon_name: 'PaperworkIcon',
     color: 'bg-blue-500',
     articles: [
-      { id: 'p-1', title: 'Empadronamiento Explained', excerpt: 'What is it and how to get it.', content: '...' },
-      { id: 'p-2', title: 'NIE Explained', excerpt: 'Guide to understand and get your NIE.', content: '...' },
+      { 
+        id: 'p-1', 
+        title: 'Empadronamiento Explained', 
+        excerpt: 'What is it, why you need it, and how to register at the Ayuntamiento.', 
+        content: `📑 **What is the Padrón & Why is it Vital?**
+
+The **Empadronamiento** (or simply *Padrón*) is the official municipal population registry at the Town Hall (Ayuntamiento de Valencia) 🏛️.
+
+### 🎯 Why do you need it?
+- 🏥 To access the public healthcare system and get your SIP card.
+- 🆔 To complete your NIE / TIE card application.
+- 🏫 To register children for local public or concertado schools.
+- 🗳️ To obtain Spanish resident discounts for local transport and services.
+
+### 📋 What documents to bring?
+- 🛂 Valid Passport or EU National ID.
+- 🏠 Rental contract (minimum 6 months) or property deed (Escritura).
+- ⚡ Recent utility bill (electricity or water) confirming the address.
+- 📝 Formulaire d'inscription municipal (Hoja Padronal) signed by all occupants.
+
+💡 **Good to know**: Book your *Cita Previa* online on the Ayuntamiento de Valencia portal early in the morning!`
+      },
+      { 
+        id: 'p-2', 
+        title: 'NIE Explained', 
+        excerpt: 'Complete guide to understand and obtain your Spanish NIE number.', 
+        content: `🆔 **Your Essential Guide to the Spanish NIE**
+
+The **NIE** (*Número de Identificación de Extranjero*) is your unique tax identification number in Spain 🇪🇸.
+
+### 🌟 When do you need an NIE?
+- 💼 Working or freelancing (autónomo) in Spain.
+- 🏦 Opening a resident bank account.
+- 🏠 Buying or renting real estate on a long-term lease.
+- 🚗 Buying a car, scooter, or registering a mobile phone plan.
+
+### 📍 How to Apply in Valencia:
+1. Book an appointment (*Cita Previa*) for the Police National station (Extranjería).
+2. Fill out official form **EX-15** (for non-resident NIE) or **EX-18** (for EU citizen registration).
+3. Pay the small administrative fee (**Modelo 790, code 012**) at any bank ATM 💶.
+4. Bring your passport and justification of your economic or professional interest.`
+      },
     ]
   },
   {
@@ -102,9 +196,58 @@ export const MOCK_GUIDE_CATEGORIES_DATA = [
     icon_name: 'TransportIcon',
     color: 'bg-purple-500',
     articles: [
-      { id: 't-1', title: 'Getting Around Valencia Made Easy', excerpt: 'Overview of transport options.', content: '...' },
-      { id: 't-2', title: 'How to Use the Metro & Valenbisi', excerpt: 'Public transport and bikes.', content: '...' },
-      { id: 't-3', title: 'Driving in Spain Explained', excerpt: 'Rules, parking, and permits.', content: '...' },
+      { 
+        id: 't-1', 
+        title: 'Getting Around Valencia Made Easy', 
+        excerpt: 'Overview of Metrovalencia, EMT buses, and bike lanes.', 
+        content: `🚲 **Navigating Valencia: Fast, Flat & Green!**
+
+Valencia is famously flat and bathed in sunlight, making it one of the easiest and most enjoyable cities to navigate in Europe 🌟.
+
+### 🚇 Metrovalencia & Trams
+- 10 modern lines connecting the Airport directly to the city center and the beaches 🏖️.
+- The **SUMA card** lets you combine Metro, EMT buses, and Renfe Cercanías trains with one single affordable fare!
+
+### 🚌 EMT City Buses
+- Modern, air-conditioned buses covering every district with free onboard Wi-Fi.
+- Live arrival times can be checked on the EMT Valencia app 📱.
+
+### 🚲 Valenbisi & Cycling Infrastructure
+- Over **160+ kilometers of dedicated cycle paths**, including the scenic 9-km route through the lush Turia riverbed park 🌳!`
+      },
+      { 
+        id: 't-2', 
+        title: 'How to Use the Metro & Valenbisi', 
+        excerpt: 'Subscriptions, cards, and cycling tips.', 
+        content: `🚴‍♂️ **Mastering Valenbisi & Metrovalencia Like a Local**
+
+Everything you need to cruise the city on two wheels or catch the tram to the beach 🏖️.
+
+### 🚲 Getting Started with Valenbisi:
+- Download the Valenbisi app and choose an annual subscription (approx. **29.21€/year**) 🎟️.
+- The first 30 minutes of every bike ride are completely free!
+- Stations are located every 250 meters throughout the city center.
+
+### 🚇 The SUMA Card System:
+- Purchase a reusable plastic or cardboard SUMA card at any metro station machine.
+- 10-trip tickets (SUMA 10) provide multi-modal transfers within 90 minutes across all buses, trams, and metro lines.`
+      },
+      { 
+        id: 't-3', 
+        title: 'Driving in Spain Explained', 
+        excerpt: 'Rules, parking, ZBE low emission zones, and driving licenses.', 
+        content: `🚗 **Driving in Valencia: Regulations, Parking & Tips**
+
+Thinking about having a car or motorbike in Valencia? Here is what you need to know 🚦.
+
+### 🅿️ Parking Colors
+- **White lines**: Free parking for everyone!
+- **Blue lines (Zona Azul)**: Paid metered parking during business hours (free on Sundays and holidays).
+- **Orange lines (Zona Naranja)**: Resident priority parking with lower fees for locals.
+
+### 🌿 Low Emission Zones (ZBE)
+- Valencia is implementing Low Emission Zones in the city center. Check your vehicle's DGT environmental badge (Etiqueta Ambiental B, C, ECO, or 0 Emissions) 🏷️.`
+      },
     ]
   },
   {
@@ -114,9 +257,48 @@ export const MOCK_GUIDE_CATEGORIES_DATA = [
     icon_name: 'HealthIcon',
     color: 'bg-emerald-500',
     articles: [
-      { id: 'hc-1', title: 'Healthcare in Spain Explained', excerpt: 'How the Spanish system works.', content: '...' },
-      { id: 'hc-2', title: 'Public vs Private Healthcare', excerpt: 'Differences and pros/cons.', content: '...' },
-      { id: 'hc-3', title: 'Finding a Doctor in Valencia', excerpt: 'How to find a doctor.', content: '...' },
+      { 
+        id: 'hc-1', 
+        title: 'Healthcare in Spain Explained', 
+        excerpt: 'How the world-renowned Spanish healthcare system works.', 
+        content: `🏥 **The Spanish Healthcare System Explained**
+
+Spain consistently ranks among the healthiest countries in the world, with top-tier public hospitals and accessible private clinics 🩺.
+
+### 🌟 Public System (CatSalut / Sanidad Valenciana)
+- Funded by social security contributions, offering free doctor consultations, hospital care, and heavily subsidized prescriptions 💊.
+- Accessible once you are registered with Social Security or hold an S1 form (for UK/EU pensioners).
+
+### 🩺 Private Health Insurance
+- Insurers like Sanitas, Adeslas, DKV, and Asisa provide rapid access to specialists, English-speaking doctors, and private hospital rooms 🏨.
+- Essential for Non-Lucrative or Digital Nomad visa holders.`
+      },
+      { 
+        id: 'hc-2', 
+        title: 'Public vs Private Healthcare', 
+        excerpt: 'Differences, costs, and pros/cons of both systems.', 
+        content: `⚖️ **Public vs. Private Healthcare: Which is Right for You?**
+
+Many expats in Valencia choose a hybrid model for maximum peace of mind 🛡️.
+
+- 🏥 **Public Healthcare**: Superb emergency care, comprehensive treatments, and local primary care doctors (Médico de cabecera).
+- 🩺 **Private Insurance**: No waiting lists, direct access to dermatologists, ophthalmologists, and physical therapists without needing a GP referral.
+- 💶 **Costs**: Comprehensive private insurance with zero copay ranges from **45€ to 85€/month** depending on age.`
+      },
+      { 
+        id: 'hc-3', 
+        title: 'Finding a Doctor in Valencia', 
+        excerpt: 'How to register at your local Centro de Salud and find English-speaking GPs.', 
+        content: `👩‍⚕️ **How to Register at Your Local Centro de Salud**
+
+Your local medical center is your first point of contact for healthcare 📍.
+
+### 📋 Steps to get your SIP Card:
+1. Obtain your **Empadronamiento certificate** from the Town Hall.
+2. Bring your **Social Security Number** (Affiliation document).
+3. Visit the **Centro de Salud** assigned to your residential address.
+4. Receive your official **SIP card** (*Sistema de Información Poblacional*) and meet your assigned doctor!`
+      },
     ]
   },
   {
@@ -126,9 +308,39 @@ export const MOCK_GUIDE_CATEGORIES_DATA = [
     icon_name: 'FamilyIcon',
     color: 'bg-pink-500',
     articles: [
-      { id: 'f-1', title: 'Family Life in Valencia', excerpt: 'Install with children.', content: '...' },
-      { id: 'f-2', title: 'The Best Family Activities in Valencia', excerpt: 'Parks, beaches, museums.', content: '...' },
-      { id: 'f-3', title: 'Building Your Community', excerpt: 'Meet other families.', content: '...' },
+      { 
+        id: 'f-1', 
+        title: 'Family Life in Valencia', 
+        excerpt: 'Why Valencia is one of the world\'s most child-friendly cities.', 
+        content: `👨‍👩‍👧 **Raising a Family in Sun-Drenched Valencia!**
+
+Valencia is widely celebrated as a paradise for families: clean air, hundreds of parks, family-centric restaurants, and very safe streets 🌳.
+
+- 🏰 **Gulliver Park**: A massive, fantastical play structure in the Turia gardens where kids can slide down Gulliver's giant limbs!
+- 🐠 **Oceanogràfic**: The largest aquarium in Europe, featuring belugas, sharks, and penguins.
+- 🦁 **Bioparc**: An immersive zoo experience recreating African savannah habitats without cages.`
+      },
+      { 
+        id: 'f-2', 
+        title: 'The Best Family Activities in Valencia', 
+        excerpt: 'Parks, beaches, science museums, and weekend playgrounds.', 
+        content: `🏖️ **Top Weekend Adventures with Kids**
+
+- 🧪 **Ciutat de les Arts i les Ciències**: Interactive science museum with hands-on experiments for all ages.
+- ⛵ **Albufera Natural Park**: Traditional boat rides through freshwater lagoons, followed by an authentic paella lunch in El Palmar 🥘.
+- 🚴 **Turia Gardens**: 9km of traffic-free green space with playgrounds, shaded picnic spots, and skate parks.`
+      },
+      { 
+        id: 'f-3', 
+        title: 'Building Your Community', 
+        excerpt: 'International parent groups, playdates, and bilingual meetups.', 
+        content: `🤝 **Connecting with Other Families in Valencia**
+
+Moving with children is an incredible adventure. Here is how to build your support network quickly:
+
+- 📱 **Valencia Parents & Expats WhatsApp and Facebook Groups**: Great for organizing weekend park meetups and sharing local pediatrician tips.
+- 🎨 **Family Workshops**: Cultural centers like Bombas Gens and CaixaForum host bilingual family art workshops on Saturday mornings!`
+      },
     ]
   },
   {
@@ -138,9 +350,38 @@ export const MOCK_GUIDE_CATEGORIES_DATA = [
     icon_name: 'SchoolsIcon',
     color: 'bg-yellow-500',
     articles: [
-      { id: 's-1', title: 'Choosing a School in Valencia', excerpt: 'School systems available.', content: '...' },
-      { id: 's-2', title: 'Public, Private or International', excerpt: 'Comparison.', content: '...' },
-      { id: 's-3', title: 'School Admissions Explained', excerpt: 'Steps and documents.', content: '...' },
+      { 
+        id: 's-1', 
+        title: 'Choosing a School in Valencia', 
+        excerpt: 'Public, Concertado, Private, and International curricula explained.', 
+        content: `🎒 **Education Options in Valencia: An In-Depth Guide**
+
+Valencia provides a diverse array of schooling options for international and local students alike 📚.
+
+### 🏫 The Three School Types in Spain:
+1. **Colegios Públicos (State Schools)**: 100% state-funded, teaching in Spanish and Valenciano.
+2. **Colegios Concertados (Semi-Private)**: Subsidized private schools with minimal monthly contributions.
+3. **Colegios Internacionales / Privados**: Following British, American, or International Baccalaureate (IB) curricula in English 🇬🇧.`
+      },
+      { 
+        id: 's-2', 
+        title: 'Public, Private or International', 
+        excerpt: 'Comparison of languages, schedules, and tuition costs.', 
+        content: `🌟 **Public vs. International Schools**
+
+- 💬 **Language Immersion**: Public schools are the fastest way for younger children to become fluently trilingual (Spanish, Valenciano, and English).
+- 🎓 **International Schools**: Ideal for high schoolers needing British GCSE/A-Levels or IB diplomas for university entry abroad.
+- 💶 **Fees**: International schools typically range from **500€ to 1,200€/month** including lunch and activities.`
+      },
+      { 
+        id: 's-3', 
+        title: 'School Admissions Explained', 
+        excerpt: 'Admissions calendar, scoring criteria, and paperwork.', 
+        content: `📋 **The School Admissions Process in Valencia**
+
+- 📅 **Application Window**: The official enrollment period (*Admisión Escolar*) usually opens in May for the following September school year.
+- 🎯 **Points System**: Points are awarded based on proximity to your residential address (Empadronamiento), siblings in the school, and family circumstances.`
+      },
     ]
   },
   {
@@ -150,9 +391,36 @@ export const MOCK_GUIDE_CATEGORIES_DATA = [
     icon_name: 'BankingIcon',
     color: 'bg-yellow-500',
     articles: [
-      { id: 'b-1', title: 'Opening a Spanish Bank Account', excerpt: 'Documents required.', content: '...' },
-      { id: 'b-2', title: 'Understanding Spanish Banking', excerpt: 'IBAN, Bizum.', content: '...' },
-      { id: 'b-3', title: 'Managing Your Money in Spain', excerpt: 'Transfers, cards.', content: '...' },
+      { 
+        id: 'b-1', 
+        title: 'Opening a Spanish Bank Account', 
+        excerpt: 'Documents required for resident and non-resident accounts.', 
+        content: `🏦 **Opening a Bank Account in Spain: Easy & Quick!**
+
+A local Spanish IBAN (starting with ES...) makes life much simpler for paying rent, utilities, and gym memberships 💳.
+
+### 📱 Modern & Digital Options:
+- **Neobanks**: N26, Revolut, and Bunq provide Spanish IBANs with instant online verification in 5 minutes ⚡.
+- **Traditional Banks**: Santander, BBVA, and CaixaBank offer full local branch services and mortgage facilities.`
+      },
+      { 
+        id: 'b-2', 
+        title: 'Understanding Spanish Banking', 
+        excerpt: 'IBAN, Bizum, ATM fees, and direct debits.', 
+        content: `📲 **What is Bizum & Why Everyone in Spain Uses It!**
+
+- 💸 **Bizum**: The instant peer-to-peer payment system integrated into all Spanish bank apps. Pay friends, split restaurant bills, or buy groceries with just a phone number!
+- 🏧 **ATM Withdrawals**: Use your bank's own network (e.g. Euro6000, Servired, CaixaBank) to avoid withdrawal commissions.`
+      },
+      { 
+        id: 'b-3', 
+        title: 'Managing Your Money in Spain', 
+        excerpt: 'Currency transfers, tax considerations, and cost of living.', 
+        content: `💶 **Smart Financial Management for Expats**
+
+- 💱 **Foreign Exchange**: Use Wise or OFX for converting USD, GBP, or CAD into Euros with mid-market exchange rates.
+- 🧾 **Beckham Law**: Special tax regime allowing qualifying foreign workers and digital nomads to pay a flat 24% tax rate on Spanish-sourced income.`
+      },
     ]
   },
   {
@@ -162,9 +430,38 @@ export const MOCK_GUIDE_CATEGORIES_DATA = [
     icon_name: 'PetsIcon',
     color: 'bg-red-500',
     articles: [
-      { id: 'pt-1', title: 'Moving to Spain with a Pet', excerpt: 'Documents.', content: '...' },
-      { id: 'pt-2', title: 'Dog-Friendly Valencia', excerpt: 'Parks, beaches.', content: '...' },
-      { id: 'pt-3', title: 'Finding a Vet You Can Trust', excerpt: 'Emergencies.', content: '...' },
+      { 
+        id: 'pt-1', 
+        title: 'Moving to Spain with a Pet', 
+        excerpt: 'Microchips, pet passports, rabies vaccinations, and flights.', 
+        content: `🐾 **Bringing Your Furry Friends to Valencia!**
+
+Spain is a deeply pet-loving country, and Valencia has numerous dog parks and pet-friendly cafes 🐶.
+
+### 📋 Essential Entry Requirements:
+- 💉 **Microchip**: ISO 11784/11785 compliant transponder.
+- 🩺 **Rabies Vaccine**: Administered at least 21 days before travel.
+- 🛂 **European Pet Passport** (or animal health certificate if arriving from outside the EU).`
+      },
+      { 
+        id: 'pt-2', 
+        title: 'Dog-Friendly Valencia', 
+        excerpt: 'Parks, dog beaches, metro rules, and canine etiquette.', 
+        content: `🐕 **Dog-Friendly Spots Across the City**
+
+- 🏖️ **Platja de Pinedo**: Valencia's official dog beach where pups can splash in the Mediterranean waves during summer!
+- 🌳 **Turia Riverbed Park**: Thousands of trees, wide lawns, and dedicated fenced dog agility zones (pipicanes).
+- 🚇 **Metro Rules**: Small dogs in carriers are welcome on Metrovalencia and EMT buses.`
+      },
+      { 
+        id: 'pt-3', 
+        title: 'Finding a Vet You Can Trust', 
+        excerpt: 'Veterinary clinics, emergency hospitals, and pet insurance.', 
+        content: `🏥 **Veterinary Care & Health Tips in Valencia**
+
+- 🦟 **Leishmaniasis Prevention**: Protect your dog with scalibor collars or monthly spot-on treatments against sandflies.
+- 🚨 **24/7 Emergency Clinics**: Excellent animal hospitals like Hospital Veterinario Valencia Sur and IVC Evidensia provide round-the-clock emergency care.`
+      },
     ]
   }
 ];
@@ -190,6 +487,12 @@ export const guideService = {
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
+        // If cached guides still contain legacy placeholder dots '...', refresh with rich articles
+        const hasDummyDots = Array.isArray(parsed) && parsed.some((c: any) => c.articles?.some((a: any) => !a.content || a.content === '...'));
+        if (hasDummyDots) {
+          localStorage.setItem('local_guide_categories', JSON.stringify(MOCK_GUIDE_CATEGORIES_DATA));
+          return sortCategories(MOCK_GUIDE_CATEGORIES_DATA);
+        }
         return sortCategories(parsed);
       } catch (e) {
         console.error("Failed to parse cached guides", e);
