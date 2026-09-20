@@ -15480,7 +15480,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
       {/* Header Section */}
       <div className="border-b border-slate-100 pb-5">
         <h2 className="text-2xl sm:text-3xl font-semibold font-display text-slate-800 tracking-tight">
-          What's Up in Your City
+          <span className="text-orange-500 font-bold">What</span>'s Up in Your City
         </h2>
         <p className="text-slate-500 text-sm sm:text-base max-w-2xl mt-1">
           Discover verified meetups, concerts, culinary tastings, workshops, and cultural highlights across Valencia.
@@ -15495,8 +15495,8 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
               <Sparkles className="w-4 h-4 text-orange-500" />
             </div>
             <div>
-              <h3 className="text-sm sm:text-base font-semibold text-slate-800">
-                <span className="text-orange-500 font-bold">What</span> are you looking for ?
+              <h3 className="text-sm sm:text-base font-bold text-orange-600">
+                Tell Jane what you need
               </h3>
               <p className="text-xs text-slate-500">
                 Find curated events matching your vibe, plans, or interests (e.g. jazz night, paella masterclass, tech meetup...)

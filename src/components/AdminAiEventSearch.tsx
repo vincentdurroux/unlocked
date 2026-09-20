@@ -213,6 +213,9 @@ export function getCategoryWithEmoji(cat: string) {
   if (lower.includes("community") || lower.includes("social")) return "👥 " + cat;
   if (lower.includes("sport") || lower.includes("run")) return "⚽ " + cat;
   if (lower.includes("workshop") || lower.includes("masterclass")) return "🛠️ " + cat;
+  if (lower.includes("out") || lower.includes("nature") || lower.includes("turia") || lower.includes("park")) return "🌳 " + cat;
+  if (lower.includes("fam") || lower.includes("kid")) return "👨‍👩‍👧 " + cat;
+  if (lower.includes("fest") || lower.includes("fair")) return "🌟 " + cat;
   return "🏛️ " + cat;
 }
 

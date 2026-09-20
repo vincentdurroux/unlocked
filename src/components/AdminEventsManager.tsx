@@ -225,6 +225,9 @@ export function AdminEventsManager({
   const getEventTimestamp = (event: AdminEventItem): number => {
     const dateStr = event.start_date || event.date;
     if (!dateStr) return 0;
+    if (/year[- ]round|toute l'ann|permanent/i.test(dateStr)) {
+      return Date.now() + 86400000 * 365;
+    }
     const parsed = Date.parse(dateStr);
     if (!isNaN(parsed)) return parsed;
 
@@ -785,20 +788,30 @@ export function AdminEventsManager({
 
               {/* Category */}
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700">Category *</label>
+                <label className="text-xs font-bold text-slate-700">Categories (Multi-select) *</label>
                 {/* Preset quick pills */}
                 <div className="flex flex-wrap gap-1.5">
                   {COMMON_CATEGORIES.filter(c => c.value !== 'all').map(cat => {
-                    const isSelected = (newEvent.category || '').toLowerCase() === cat.value.toLowerCase();
+                    const currentCats = (newEvent.category || '').split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+                    const isSelected = currentCats.includes(cat.value.toLowerCase());
                     return (
                       <button
                         key={cat.value}
                         type="button"
-                        onClick={() => setNewEvent({ ...newEvent, category: cat.value })}
+                        onClick={() => {
+                          const existing = (newEvent.category || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+                          let updated: string[];
+                          if (existing.some(e => e.toLowerCase() === cat.value.toLowerCase())) {
+                            updated = existing.filter(e => e.toLowerCase() !== cat.value.toLowerCase());
+                          } else {
+                            updated = [...existing, cat.value];
+                          }
+                          setNewEvent({ ...newEvent, category: updated.join(', ') });
+                        }}
                         className={cn(
                           "px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer",
                           isSelected
-                            ? "bg-emerald-500 text-white shadow-sm"
+                            ? "bg-orange-500 text-white shadow-sm"
                             : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                         )}
                       >
@@ -809,10 +822,10 @@ export function AdminEventsManager({
                 </div>
                 <input
                   required
-                  value={newEvent.category}
+                  value={newEvent.category || ''}
                   onChange={e => setNewEvent({ ...newEvent, category: e.target.value })}
-                  placeholder="Or enter custom category..."
-                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 font-medium text-slate-800 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  placeholder="Or enter categories separated by comma (e.g. Art, Outdoor)..."
+                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 font-medium text-slate-800 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                 />
               </div>
 
@@ -825,7 +838,7 @@ export function AdminEventsManager({
                       <button
                         type="button"
                         onClick={() => setQuickDate('today')}
-                        className="text-[10px] text-emerald-600 font-bold hover:underline cursor-pointer"
+                        className="text-[10px] text-orange-600 font-bold hover:underline cursor-pointer"
                       >
                         Today
                       </button>
@@ -833,9 +846,17 @@ export function AdminEventsManager({
                       <button
                         type="button"
                         onClick={() => setQuickDate('weekend')}
-                        className="text-[10px] text-emerald-600 font-bold hover:underline cursor-pointer"
+                        className="text-[10px] text-orange-600 font-bold hover:underline cursor-pointer"
                       >
                         Weekend
+                      </button>
+                      <span className="text-slate-300">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setNewEvent({ ...newEvent, start_date: 'Year Round', end_date: '' })}
+                        className="text-[10px] text-orange-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Year Round
                       </button>
                     </div>
                   </div>

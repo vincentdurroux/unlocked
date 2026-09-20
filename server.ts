@@ -401,19 +401,23 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         end_date: ev.end_date || "",
         time: ev.start_time || ev.time || "",
         location: ev.location || "",
-        description_excerpt: typeof ev.description === 'string' ? ev.description.slice(0, 400) : ""
+        description: ev.description || "",
+        price: ev.price || "",
+        organizer: ev.organizer || "",
+        requirements: ev.requirements || "",
+        tags: ev.tags || ""
       }));
 
       const sysInstruction = `You are Jane, the AI event specialist and local concierge for "Unlocked" in Valencia.
-Your role is to understand the user's natural language request (in English, French, Spanish, or any language) and find the best matching events from the catalog.
+Your role is to understand the user's natural language request (in English, French, Spanish, or any language) and search across the entire event sheet (title, description, category, location, organizer, price, requirements, tags, dates) to find the best matching events from the catalog.
 
 Evaluate each event based on:
 1. Activity/Theme matching: (e.g., "jazz" or "concert" matches Music/Concert events; "kids" or "enfants" or "famille" matches Family/Kids events; "wine" or "tapas" or "gastronomie" matches Food & Wine events; "museum", "art", "peinture" matches Art/Museum events).
 2. Audience / Vibe: (e.g. romantic date, expat social meetup, outdoor chill, learning workshop).
-3. Timing / Date / Location: (e.g., this weekend, evening, Malvarrosa beach, Ruzafa, City of Arts and Sciences).
+3. Timing / Date / Location / Full Details: (e.g., this weekend, evening, Malvarrosa beach, Ruzafa, City of Arts and Sciences, specific keywords anywhere in the event description).
 
 Scoring rules:
-- DIRECT MATCH (70 - 100): The event directly matches the requested topic, vibe, activity, or target audience.
+- DIRECT MATCH (70 - 100): The event directly matches the requested topic, vibe, activity, or target audience based on its full description and details.
 - PARTIAL / RELATED MATCH (20 - 65): The event is in a related or complementary category that the user might also enjoy.
 - UNRELATED (0): The event has nothing to do with what the user is looking for.
 
@@ -426,7 +430,7 @@ Output format:
 
       const ai = getAiClient();
       const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
+        model: "gemini-3.1-flash-lite",
         contents: `User Query: "${query.trim()}"
 
 Available Events:

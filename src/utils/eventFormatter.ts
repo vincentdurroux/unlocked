@@ -38,6 +38,10 @@ export function normalizeSingleDate(dateStr?: string | null): string {
   const trimmed = dateStr.trim();
   if (!trimmed) return '';
 
+  if (/year[- ]round|toute l'ann|permanent/i.test(trimmed)) {
+    return 'YEAR ROUND';
+  }
+
   // 1. Check if ISO or full parseable date: e.g. "2026-10-15" or "2026-10-15T00:00:00"
   if (/^\d{4}-\d{1,2}-\d{1,2}/.test(trimmed)) {
     const parts = trimmed.split(/[-T\s]/);
@@ -408,7 +412,8 @@ export const CATEGORY_LIST: CategoryMeta[] = Object.values(CATEGORY_DEFINITIONS)
  */
 export function matchesCategoryFilter(eventCategory?: string | null, filterKey?: string | null): boolean {
   if (!filterKey || filterKey === 'all' || filterKey === 'All Categories') return true;
-  const eventNorm = normalizeCategoryKey(eventCategory);
+  if (!eventCategory) return false;
   const filterNorm = normalizeCategoryKey(filterKey);
-  return eventNorm.toLowerCase() === filterNorm.toLowerCase();
+  const parts = eventCategory.split(',').map(s => s.trim()).filter(Boolean);
+  return parts.some(part => normalizeCategoryKey(part).toLowerCase() === filterNorm.toLowerCase());
 }
