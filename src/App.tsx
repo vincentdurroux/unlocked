@@ -12225,7 +12225,7 @@ function DirectoryProCardItem({
           {!isExpanded && (
             <div className="pt-2 flex items-center justify-between">
               <span className="text-xs font-bold text-brand-blue flex items-center gap-1.5 group-hover:translate-x-0.5 transition-transform">
-                <span>View contact, map & reviews</span>
+                <span>Tap for contact, map & reviews</span>
                 <ChevronRight className="w-4 h-4" />
               </span>
               {!currentUser && (
@@ -15367,6 +15367,12 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
     setIsJaneSearching(true);
     setJaneError(null);
 
+    const scrollToResults = () => {
+      setTimeout(() => {
+        document.getElementById('events-results-section')?.scrollIntoView({ behavior: 'smooth' });
+      }, 150);
+    };
+
     try {
       const result = await eventService.matchEventsWithJane(query, events);
       if (result.results && result.results.length > 0) {
@@ -15381,6 +15387,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         });
         setJaneMatches(matchMap);
         setJaneSummary(result.summaryMessage || `Found ${result.results.length} curated events matching "${query}".`);
+        scrollToResults();
       } else {
         // Fallback local matching if AI returned no specific IDs
         const lowerQ = query.toLowerCase();
@@ -15400,9 +15407,11 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         if (count > 0) {
           setJaneMatches(localMatchMap);
           setJaneSummary(`Found ${count} events related to "${query}".`);
+          scrollToResults();
         } else {
           setJaneMatches({});
           setJaneSummary(`No exact matches for "${query}". Try searching for categories like Jazz, Paella, Tech, or Beach.`);
+          scrollToResults();
         }
       }
     } catch (err: any) {
@@ -15423,6 +15432,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
       });
       setJaneMatches(localMatchMap);
       setJaneSummary(count > 0 ? `Found ${count} matching events for "${query}".` : `No direct event matches found for "${query}".`);
+      scrollToResults();
     } finally {
       setIsJaneSearching(false);
     }
@@ -15585,7 +15595,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
       </div>
 
       {/* Category Filter Chips Bar */}
-      <div className="space-y-2">
+      <div id="events-results-section" className="space-y-2">
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400">Filter by category</h4>
           {selectedCategory !== 'all' && (
@@ -15696,10 +15706,10 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                 key={event.id}
                 id={`event-card-${event.id}`}
                 className={cn(
-                  "group relative bg-white rounded-[32px] border-2 transition-all shadow-sm overflow-hidden scroll-mt-28 cursor-pointer",
+                  "group relative bg-white rounded-[28px] sm:rounded-[32px] border-2 transition-all shadow-sm overflow-hidden scroll-mt-28 cursor-pointer",
                   isExpanded
-                    ? "col-span-1 md:col-span-2 lg:col-span-3 border-orange-300 shadow-xl p-6 sm:p-8 md:p-10 ring-2 ring-orange-400/15"
-                    : "border-slate-100 hover:border-orange-200/90 hover:shadow-md p-6 flex flex-col justify-between"
+                    ? "col-span-1 md:col-span-2 lg:col-span-3 border-orange-300 shadow-xl p-5 sm:p-8 md:p-10 ring-2 ring-orange-400/15"
+                    : "border-slate-100 hover:border-orange-200/90 hover:shadow-md p-4 sm:p-6 flex flex-col justify-between"
                 )}
                 onClick={() => {
                   if (isExpanded) {
@@ -15711,7 +15721,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                 }}
               >
                 {/* Card Media Header */}
-                <div className={cn("overflow-hidden relative rounded-2xl bg-slate-50", isExpanded ? "h-64 sm:h-80 mb-6" : "h-44 mb-4")}>
+                <div className={cn("overflow-hidden relative rounded-2xl bg-slate-50", isExpanded ? "h-64 sm:h-80 mb-6" : "h-40 sm:h-44 mb-4")}>
                   <img 
                     src={event.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=800'} 
                     alt={event.title} 
