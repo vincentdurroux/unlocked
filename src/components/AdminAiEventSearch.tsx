@@ -219,13 +219,21 @@ export function getCategoryWithEmoji(cat: string) {
   return "🏛️ " + cat;
 }
 
-export function renderFormattedContent(text: string, defaultBoldClass = "font-extrabold text-slate-900 bg-slate-100/80 px-1 py-0.5 rounded") {
+export function renderFormattedContent(text: string, defaultBoldClass = "font-extrabold text-slate-950") {
   if (!text) return null;
 
   const lines = text.split('\n');
   return lines.map((line, lineIdx) => {
-    if (!line.trim()) {
+    let cleanLine = line.trim();
+    if (!cleanLine) {
       return <div key={lineIdx} className="h-1.5" />;
+    }
+
+    // Handle header lines (### Title, ## Title, # Title)
+    let isHeader = false;
+    if (cleanLine.startsWith('#')) {
+      isHeader = true;
+      cleanLine = cleanLine.replace(/^#{1,6}\s*/, '');
     }
 
     const linkRegex = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s]+)/g;
@@ -235,7 +243,7 @@ export function renderFormattedContent(text: string, defaultBoldClass = "font-ex
 
     function parseBoldParts(raw: string): React.ReactNode[] {
       const boldParts: React.ReactNode[] = [];
-      const boldRegex = /\*\*(.*?)\*\*/g;
+      const boldRegex = /(\*\*|__)(.*?)\1/g;
       let bMatch;
       let lastBIndex = 0;
 
@@ -245,7 +253,7 @@ export function renderFormattedContent(text: string, defaultBoldClass = "font-ex
         }
         boldParts.push(
           <strong key={`b-${lineIdx}-${bMatch.index}`} className={defaultBoldClass}>
-            {bMatch[1]}
+            {bMatch[2]}
           </strong>
         );
         lastBIndex = boldRegex.lastIndex;
@@ -256,9 +264,9 @@ export function renderFormattedContent(text: string, defaultBoldClass = "font-ex
       return boldParts;
     }
 
-    while ((match = linkRegex.exec(line)) !== null) {
+    while ((match = linkRegex.exec(cleanLine)) !== null) {
       if (match.index > lastIndex) {
-        parts.push(...parseBoldParts(line.substring(lastIndex, match.index)));
+        parts.push(...parseBoldParts(cleanLine.substring(lastIndex, match.index)));
       }
 
       if (match[1] && match[2]) {

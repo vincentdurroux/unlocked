@@ -507,13 +507,13 @@ function SimpleMarkdown({ children }: { children?: string }) {
 
         // Headers
         if (trimmed.startsWith('#')) {
-          const match = trimmed.match(/^(#{1,6})\s+(.*)$/);
+          const match = trimmed.match(/^(#{1,6})\s*(.*)$/);
           if (match) {
             const level = match[1].length;
-            const text = match[2];
+            const text = match[2].replace(/^#{1,6}\s*/, '');
             const sizeClass = level === 1 ? 'text-xl sm:text-2xl font-bold' : level === 2 ? 'text-lg sm:text-xl font-bold' : 'text-base sm:text-lg font-bold';
             return (
-              <div key={idx} className={`${sizeClass} text-slate-900 pt-3 pb-1`}>
+              <div key={idx} className={`${sizeClass} text-slate-950 pt-3 pb-1`}>
                 {parseInlineMarkdown(text)}
               </div>
             );
@@ -543,7 +543,7 @@ function parseInlineMarkdown(text: string): React.ReactNode {
   let match;
 
   function parseBold(rawText: string): React.ReactNode[] {
-    const boldRegex = /\*\*(.*?)\*\*/g;
+    const boldRegex = /(\*\*|__)(.*?)\1/g;
     const boldParts = [];
     let lastBoldIndex = 0;
     let boldMatch;
@@ -552,7 +552,7 @@ function parseInlineMarkdown(text: string): React.ReactNode {
       if (boldMatch.index > lastBoldIndex) {
         boldParts.push(rawText.substring(lastBoldIndex, boldMatch.index));
       }
-      boldParts.push(<strong key={`bold-${boldMatch.index}`} className="font-bold text-slate-950">{boldMatch[1]}</strong>);
+      boldParts.push(<strong key={`bold-${boldMatch.index}`} className="font-extrabold text-slate-950">{boldMatch[2]}</strong>);
       lastBoldIndex = boldRegex.lastIndex;
     }
 
@@ -15389,16 +15389,60 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         setJaneSummary(result.summaryMessage || `Found ${result.results.length} curated events matching "${query}".`);
         scrollToResults();
       } else {
-        // Fallback local matching if AI returned no specific IDs
-        const lowerQ = query.toLowerCase();
+        // Fallback local smart matching if AI returned no specific IDs
+        const lowerQ = query.toLowerCase().trim();
         const localMatchMap: Record<string, { score: number; reason: string }> = {};
         let count = 0;
+
+        const isEveningSearch = /soir|night|evening|20h|21h|22h/i.test(lowerQ);
+        const isMorningSearch = /matin|morning|9h|10h|11h/i.test(lowerQ);
+        const isWeekendSearch = /week-end|weekend|samedi|dimanche|saturday|sunday/i.test(lowerQ);
+        const isFreeSearch = /gratuit|free/i.test(lowerQ);
+
         events.forEach(ev => {
-          const text = `${ev.title} ${ev.category} ${ev.description} ${ev.location}`.toLowerCase();
-          if (text.includes(lowerQ) || lowerQ.split(' ').some(w => w.length > 3 && text.includes(w))) {
+          const title = (ev.title || '').toLowerCase();
+          const desc = (ev.description || '').toLowerCase();
+          const cat = (ev.category || '').toLowerCase();
+          const loc = (ev.location || '').toLowerCase();
+          const tags = (ev.tags || '').toLowerCase();
+          const time = (ev.start_time || ev.time || '').toLowerCase();
+          const dateStr = (ev.start_date || ev.date || '').toLowerCase();
+          const combined = `${title} ${cat} ${desc} ${loc} ${tags} ${time} ${dateStr}`;
+
+          let score = 0;
+          let matchedReasons: string[] = [];
+
+          if (combined.includes(lowerQ)) {
+            score += 90;
+            matchedReasons.push(`Corresponds directly to "${query}" in title & description`);
+          } else {
+            const keywords = lowerQ.split(/\s+/).filter(w => w.length > 2);
+            const matches = keywords.filter(k => combined.includes(k));
+            if (matches.length > 0) {
+              score += matches.length * 30;
+              matchedReasons.push(`Matches terms: ${matches.join(', ')}`);
+            }
+          }
+
+          if (isEveningSearch && (time.includes('18:') || time.includes('19:') || time.includes('20:') || time.includes('21:') || time.includes('22:') || desc.includes('soir') || desc.includes('night'))) {
+            score += 25;
+            matchedReasons.push('Evening schedule');
+          }
+
+          if (isWeekendSearch && (dateStr.includes('sat') || dateStr.includes('sun') || desc.includes('weekend') || desc.includes('week-end'))) {
+            score += 25;
+            matchedReasons.push('Weekend schedule');
+          }
+
+          if (isFreeSearch && (ev.is_free || desc.includes('gratuit') || desc.includes('free'))) {
+            score += 25;
+            matchedReasons.push('Free event');
+          }
+
+          if (score >= 30) {
             localMatchMap[String(ev.id)] = {
-              score: 90,
-              reason: `Matches key theme "${query}" based on event category & description.`
+              score: Math.min(score, 98),
+              reason: `Jane: ${matchedReasons.join(' • ')}`
             };
             count++;
           }
@@ -15417,15 +15461,16 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
     } catch (err: any) {
       console.warn('Jane AI matching fallback:', err);
       // Client-side smart fallback
-      const lowerQ = query.toLowerCase();
+      const lowerQ = query.toLowerCase().trim();
       const localMatchMap: Record<string, { score: number; reason: string }> = {};
       let count = 0;
+
       events.forEach(ev => {
-        const text = `${ev.title} ${ev.category} ${ev.description} ${ev.location}`.toLowerCase();
-        if (text.includes(lowerQ) || lowerQ.split(' ').some(w => w.length > 3 && text.includes(w))) {
+        const combined = `${ev.title} ${ev.category} ${ev.description} ${ev.location} ${ev.tags} ${ev.start_time} ${ev.start_date}`.toLowerCase();
+        if (combined.includes(lowerQ) || lowerQ.split(/\s+/).some(w => w.length > 2 && combined.includes(w))) {
           localMatchMap[String(ev.id)] = {
-            score: 88,
-            reason: `Matches your search keywords for "${query}".`
+            score: 85,
+            reason: `Matches key details for "${query}" in event description & schedule.`
           };
           count++;
         }

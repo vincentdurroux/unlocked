@@ -393,40 +393,71 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     }
 
     try {
-      const eventListBrief = events.slice(0, 50).map((ev: any) => ({
-        id: String(ev.id),
-        title: ev.title || "",
-        category: ev.category || "",
-        start_date: ev.start_date || ev.date || "",
-        end_date: ev.end_date || "",
-        time: ev.start_time || ev.time || "",
-        location: ev.location || "",
-        description: ev.description || "",
-        price: ev.price || "",
-        organizer: ev.organizer || "",
-        requirements: ev.requirements || "",
-        tags: ev.tags || ""
-      }));
+      const today = new Date();
+      const todayISO = today.toISOString().split('T')[0]; // e.g. "2026-09-20"
+      const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const dayName = daysOfWeek[today.getDay()];
+      const currentDateContext = `Reference Today Date: ${todayISO} (${dayName}). Current Year: ${today.getFullYear()}.`;
 
-      const sysInstruction = `You are Jane, the AI event specialist and local concierge for "Unlocked" in Valencia.
-Your role is to understand the user's natural language request (in English, French, Spanish, or any language) and search across the entire event sheet (title, description, category, location, organizer, price, requirements, tags, dates) to find the best matching events from the catalog.
+      const eventListBrief = events.slice(0, 60).map((ev: any) => {
+        const startDate = ev.start_date || ev.date || "";
+        const endDate = ev.end_date || "";
+        const timeStr = ev.start_time || ev.time || "";
 
-Evaluate each event based on:
-1. Activity/Theme matching: (e.g., "jazz" or "concert" matches Music/Concert events; "kids" or "enfants" or "famille" matches Family/Kids events; "wine" or "tapas" or "gastronomie" matches Food & Wine events; "museum", "art", "peinture" matches Art/Museum events).
-2. Audience / Vibe: (e.g. romantic date, expat social meetup, outdoor chill, learning workshop).
-3. Timing / Date / Location / Full Details: (e.g., this weekend, evening, Malvarrosa beach, Ruzafa, City of Arts and Sciences, specific keywords anywhere in the event description).
+        let dayOfWeekStr = "";
+        let isToday = false;
+        if (startDate) {
+          try {
+            const d = new Date(startDate);
+            if (!isNaN(d.getTime())) {
+              dayOfWeekStr = daysOfWeek[d.getDay()];
+              if (startDate === todayISO) isToday = true;
+            }
+          } catch (e) {}
+        }
 
-Scoring rules:
-- DIRECT MATCH (70 - 100): The event directly matches the requested topic, vibe, activity, or target audience based on its full description and details.
-- PARTIAL / RELATED MATCH (20 - 65): The event is in a related or complementary category that the user might also enjoy.
-- UNRELATED (0): The event has nothing to do with what the user is looking for.
+        return {
+          id: String(ev.id),
+          title: ev.title || "",
+          category: ev.category || "",
+          start_date: startDate,
+          end_date: endDate,
+          day_of_week: dayOfWeekStr,
+          is_today: isToday,
+          schedule_time: timeStr,
+          location: ev.location || "",
+          description: ev.description || "",
+          price: ev.price || "",
+          is_free: !!ev.is_free,
+          organizer: ev.organizer || "",
+          requirements: ev.requirements || "",
+          tags: ev.tags || ""
+        };
+      });
 
-Output format:
-- exactMatchFound: boolean (true if at least one event scores >= 60).
-- summaryMessage: A friendly, concise message from Jane in the language of the user's query (English/French/Spanish):
-  * If matches found: e.g. "Jane a sélectionné 3 événements parfaits pour votre recherche :" or "Jane found 2 great events matching your search:"
-  * If no direct match: e.g. "Jane n'a pas trouvé d'événement exact pour votre demande, mais voici d'autres sorties incontournables à Valence :" or "Jane couldn't find an exact match for your request, but here are some popular upcoming events in Valencia:"
-- results: Array of objects with "id", "score" (0-100), and "reason" (a 1-sentence friendly highlight in the user's language explaining why Jane picked this event).`;
+      const sysInstruction = `You are Jane, the elite AI event concierge for "Unlocked" in Valencia.
+${currentDateContext}
+
+Your mission is to perform deep semantic, contextual, and temporal reasoning to match the user's natural language query (in French, English, Spanish, or any language) against the events catalog.
+
+CRITICAL REASONING & EVALUATION CRITERIA:
+1. DATES, DAYS & SCHEDULES MATCHING:
+   - Carefully evaluate relative and explicit temporal queries: "ce soir" / "tonight" (evening events starting at or after 18:00 / 6pm), "ce matin" / "this morning", "ce week-end" / "this weekend" (Friday evening through Sunday), "aujourd'hui" / "today" (${todayISO}, ${dayName}), "demain" / "tomorrow", "vendredi", "samedi", "dimanche", "en journée", "nuit", "semaine prochaine", "gratuit".
+   - Compare requested dates/times against each event's start_date, end_date, day_of_week, and schedule_time.
+   - If a user asks for "ce soir" or "ce week-end" or a specific day, prioritize events that take place during those exact times/days.
+
+2. DEEP DESCRIPTIVE & CONTEXTUAL REASONING:
+   - Thoroughly read the ENTIRE description, title, category, location, organizer, requirements, and tags of every single event.
+   - Analyze implied vibes, activities, and specific details: e.g. if the user asks for "soirée romantique", "dégustation de vin", "concert intimiste", "sortie en famille", "networking", "yoga outdoor", "cours de cuisine", "musées", "peinture", "paella", "plage", match events whose descriptions or context fit those activities even if the title doesn't contain the exact keyword.
+
+3. SCORING GUIDELINES:
+   - DIRECT MATCH (75 - 100): Event directly matches the requested topic, vibe, activity AND aligns with requested date/schedule constraints or intent.
+   - RELATED / PARTIAL MATCH (45 - 74): Event matches the topic/vibe well, but occurs on a different date or serves as a strong alternative.
+   - UNRELATED (0 - 30): Event does not fit what the user is asking for.
+
+4. OUTPUT REQUIREMENTS:
+   - summaryMessage: A warm, intelligent, 1-2 sentence response from Jane in the language of the user's query explaining what she selected (or if no exact match, offering close alternatives).
+   - results: Array of objects with "id", "score" (0-100), and "reason" (a 1-sentence personalized explanation in the user's language highlighting WHY Jane selected this event, explicitly referencing date, schedule, or key description details).`;
 
       const ai = getAiClient();
       const response = await ai.models.generateContent({
