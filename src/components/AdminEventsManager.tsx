@@ -118,14 +118,18 @@ const VALENCIA_PHOTO_PRESETS = [
 const COMMON_CATEGORIES = [
   { label: 'All Categories', value: 'all' },
   { label: '🎨 Art & Expo', value: 'Art' },
+  { label: '🏛️ Museums & Exhibitions', value: 'Museums' },
   { label: '🎶 Music & Concerts', value: 'Music' },
+  { label: '🌙 Nightlife & Parties', value: 'Nightlife' },
   { label: '🍷 Gastronomy & Wine', value: 'Gastronomy' },
   { label: '🎭 Theatre & Stage', value: 'Theatre' },
-  { label: '🌳 Outdoor & Sports', value: 'Outdoor' },
+  { label: '🌳 Outdoor & Nature', value: 'Outdoor' },
+  { label: '⚽ Sports & Active', value: 'Sports' },
   { label: '💻 Tech & Digital', value: 'Tech' },
   { label: '👥 Community & Social', value: 'Community' },
   { label: '👨‍👩‍👧 Family & Kids', value: 'Family' },
-  { label: '🌟 Festivals & Fairs', value: 'Festival' }
+  { label: '🌟 Festivals & Fairs', value: 'Festival' },
+  { label: '🛠️ Workshops & Classes', value: 'Workshops' }
 ];
 
 interface AdminEventsManagerProps {

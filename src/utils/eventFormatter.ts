@@ -360,6 +360,26 @@ export const CATEGORY_DEFINITIONS: Record<string, CategoryMeta> = {
     bgClass: 'bg-yellow-50',
     textClass: 'text-yellow-700',
     borderClass: 'border-yellow-200'
+  },
+  Museums: {
+    id: 'Museums',
+    name: 'Museums & Exhibitions',
+    emoji: '🏛️',
+    label: '🏛️ Museums & Exhibitions',
+    color: '#8B5CF6',
+    bgClass: 'bg-purple-50',
+    textClass: 'text-purple-700',
+    borderClass: 'border-purple-200'
+  },
+  Nightlife: {
+    id: 'Nightlife',
+    name: 'Nightlife & Parties',
+    emoji: '🌙',
+    label: '🌙 Nightlife & Parties',
+    color: '#EC4899',
+    bgClass: 'bg-pink-50',
+    textClass: 'text-pink-700',
+    borderClass: 'border-pink-200'
   }
 };
 
@@ -370,7 +390,9 @@ export function normalizeCategoryKey(rawCategory?: string | null): string {
   if (!rawCategory) return 'Culture';
   const lower = rawCategory.trim().toLowerCase();
 
-  if (lower.includes('art') || lower.includes('museum') || lower.includes('expo') || lower.includes('peint')) return 'Art';
+  if (lower.includes('museum') || lower.includes('museo') || lower.includes('musee') || lower.includes('exhibition') || lower.includes('galerie') || lower.includes('gallery')) return 'Museums';
+  if (lower.includes('art') || lower.includes('expo') || lower.includes('peint')) return 'Art';
+  if (lower.includes('night') || lower.includes('party') || lower.includes('club') || lower.includes('dj') || lower.includes('soiree') || lower.includes('fiesta')) return 'Nightlife';
   if (lower.includes('music') || lower.includes('concert') || lower.includes('jazz') || lower.includes('symphon')) return 'Music';
   if (lower.includes('theat') || lower.includes('théât') || lower.includes('opera') || lower.includes('spectacle') || lower.includes('danse') || lower.includes('dance')) return 'Theater';
   if (lower.includes('gastro') || lower.includes('food') || lower.includes('wine') || lower.includes('tapas') || lower.includes('culin')) return 'Gastronomy';
