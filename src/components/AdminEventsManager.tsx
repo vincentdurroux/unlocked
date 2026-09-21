@@ -129,7 +129,8 @@ const COMMON_CATEGORIES = [
   { label: '👥 Community', value: 'Community' },
   { label: '👨‍👩‍👧 Family', value: 'Family' },
   { label: '🌟 Festival', value: 'Festival' },
-  { label: '🛠️ Workshops', value: 'Workshops' }
+  { label: '🛠️ Workshops', value: 'Workshops' },
+  { label: '🏛️ Culture', value: 'Culture' }
 ];
 
 interface AdminEventsManagerProps {
@@ -1619,11 +1620,13 @@ export function AdminEventsManager({
                         </div>
                       </button>
 
-                      {/* Category Badge */}
-                      <div className="absolute top-3 right-3">
-                        <span className="px-2.5 py-1 bg-white/95 backdrop-blur-md text-slate-800 font-extrabold text-[10px] uppercase tracking-widest rounded-full shadow-sm">
-                          {getCategoryWithEmoji(event.category || 'Event')}
-                        </span>
+                      {/* Category Badges */}
+                      <div className="absolute top-3 right-3 flex flex-wrap gap-1 justify-end max-w-[70%]">
+                        {(event.category || 'Culture').split(/[,;/]/).map(s => s.trim()).filter(Boolean).map((cat, idx) => (
+                          <span key={idx} className="px-2.5 py-1 bg-white/95 backdrop-blur-md text-slate-800 font-extrabold text-[10px] uppercase tracking-widest rounded-full shadow-sm">
+                            {getCategoryWithEmoji(cat)}
+                          </span>
+                        ))}
                       </div>
 
                       {/* Date Badge */}
@@ -1799,9 +1802,13 @@ export function AdminEventsManager({
                           </div>
                         </td>
                         <td className="p-4 whitespace-nowrap">
-                          <span className="px-2.5 py-1 bg-slate-100 text-slate-800 font-bold text-[10px] rounded-full">
-                            {getCategoryWithEmoji(event.category || 'Event')}
-                          </span>
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {(event.category || 'Culture').split(/[,;/]/).map(s => s.trim()).filter(Boolean).map((cat, idx) => (
+                              <span key={idx} className="px-2 py-0.5 bg-slate-100 text-slate-800 font-bold text-[10px] rounded-full">
+                                {getCategoryWithEmoji(cat)}
+                              </span>
+                            ))}
+                          </div>
                         </td>
                         <td className="p-4 whitespace-nowrap">
                           <div className="space-y-0.5">
@@ -1937,10 +1944,12 @@ export function AdminEventsManager({
                 <X className="w-4 h-4" />
               </button>
 
-              <div className="absolute top-4 left-4">
-                <span className="px-3 py-1 bg-white/95 backdrop-blur-md text-slate-900 font-extrabold text-[10px] uppercase tracking-widest rounded-full shadow-sm">
-                  {getCategoryWithEmoji(previewModalEvent.category || 'Event')}
-                </span>
+              <div className="absolute top-4 left-4 flex flex-wrap gap-1.5 max-w-[75%]">
+                {(previewModalEvent.category || 'Culture').split(/[,;/]/).map(s => s.trim()).filter(Boolean).map((cat, idx) => (
+                  <span key={idx} className="px-3 py-1 bg-white/95 backdrop-blur-md text-slate-900 font-extrabold text-[10px] uppercase tracking-widest rounded-full shadow-sm">
+                    {getCategoryWithEmoji(cat)}
+                  </span>
+                ))}
               </div>
 
               <div className="absolute bottom-4 left-4 right-4 text-white">

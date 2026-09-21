@@ -99,14 +99,19 @@ const SEARCH_CATEGORIES = [
 
 const CATEGORY_OPTIONS = [
   "Art",
-  "Theater",
+  "Museums",
   "Music",
-  "Culture",
-  "Tech",
+  "Nightlife",
   "Gastronomy",
-  "Community",
+  "Theatre",
+  "Outdoor",
   "Sports",
-  "Workshops"
+  "Tech",
+  "Community",
+  "Family",
+  "Festival",
+  "Workshops",
+  "Culture"
 ];
 
 const PRESET_PROMPTS = [
@@ -256,19 +261,23 @@ export function parseDescriptionSections(description: string) {
 
 export function getCategoryWithEmoji(cat: string) {
   if (!cat) return "✨ Culture";
-  const lower = cat.toLowerCase();
-  if (lower.includes("art")) return "🎨 " + cat;
-  if (lower.includes("theater") || lower.includes("theatre")) return "🎭 " + cat;
-  if (lower.includes("music") || lower.includes("concert")) return "🎵 " + cat;
-  if (lower.includes("tech") || lower.includes("digital")) return "💻 " + cat;
-  if (lower.includes("gastro") || lower.includes("food") || lower.includes("wine")) return "🍷 " + cat;
-  if (lower.includes("community") || lower.includes("social")) return "👥 " + cat;
-  if (lower.includes("sport") || lower.includes("run")) return "⚽ " + cat;
-  if (lower.includes("workshop") || lower.includes("masterclass")) return "🛠️ " + cat;
-  if (lower.includes("out") || lower.includes("nature") || lower.includes("turia") || lower.includes("park")) return "🌳 " + cat;
-  if (lower.includes("fam") || lower.includes("kid")) return "👨‍👩‍👧 " + cat;
-  if (lower.includes("fest") || lower.includes("fair")) return "🌟 " + cat;
-  return "🏛️ " + cat;
+  const trimmed = cat.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("art")) return "🎨 " + trimmed;
+  if (lower.includes("museum") || lower.includes("museo")) return "🏛️ " + trimmed;
+  if (lower.includes("theater") || lower.includes("theatre")) return "🎭 " + trimmed;
+  if (lower.includes("music") || lower.includes("concert")) return "🎵 " + trimmed;
+  if (lower.includes("night") || lower.includes("party")) return "🌙 " + trimmed;
+  if (lower.includes("tech") || lower.includes("digital")) return "💻 " + trimmed;
+  if (lower.includes("gastro") || lower.includes("food") || lower.includes("wine")) return "🍷 " + trimmed;
+  if (lower.includes("community") || lower.includes("social")) return "👥 " + trimmed;
+  if (lower.includes("sport") || lower.includes("run")) return "⚽ " + trimmed;
+  if (lower.includes("workshop") || lower.includes("masterclass")) return "🛠️ " + trimmed;
+  if (lower.includes("out") || lower.includes("nature") || lower.includes("turia") || lower.includes("park")) return "🌳 " + trimmed;
+  if (lower.includes("fam") || lower.includes("kid")) return "👨‍👩‍👧 " + trimmed;
+  if (lower.includes("fest") || lower.includes("fair")) return "🌟 " + trimmed;
+  if (lower.includes("cultur")) return "🏛️ " + trimmed;
+  return "🏷️ " + trimmed;
 }
 
 export function renderFormattedContent(text: string, defaultBoldClass = "font-extrabold text-slate-950") {
@@ -1602,8 +1611,12 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                               )}
                             </div>
 
-                            <div className="absolute top-4 right-4 bg-brand-blue/90 backdrop-blur text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md">
-                              {getCategoryWithEmoji(event.category)}
+                            <div className="absolute top-4 right-4 flex flex-wrap gap-1 justify-end max-w-[65%]">
+                              {(event.category || 'Culture').split(/[,;/]/).map(s => s.trim()).filter(Boolean).map((cat, idx) => (
+                                <span key={idx} className="bg-brand-blue/90 backdrop-blur text-white px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md">
+                                  {getCategoryWithEmoji(cat)}
+                                </span>
+                              ))}
                             </div>
 
                             <div className="absolute bottom-4 left-4 bg-slate-900/85 backdrop-blur border border-white/20 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-lg">
@@ -1964,8 +1977,12 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                           </p>
                         </div>
 
-                        <div className="absolute top-3 right-3 bg-slate-900/90 text-white px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                          {getCategoryWithEmoji(event.category)}
+                        <div className="absolute top-3 right-3 flex flex-wrap gap-1 justify-end max-w-[65%]">
+                          {(event.category || 'Culture').split(/[,;/]/).map(s => s.trim()).filter(Boolean).map((cat, idx) => (
+                            <span key={idx} className="bg-slate-900/90 text-white px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                              {getCategoryWithEmoji(cat)}
+                            </span>
+                          ))}
                         </div>
 
                         <div className={`absolute bottom-3 left-3 backdrop-blur px-2.5 py-1 rounded-xl text-[10px] font-bold flex items-center gap-1 shadow-md ${
@@ -2223,9 +2240,13 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                         <h4 className="font-bold font-display text-slate-900 text-base leading-snug">
                           {event.title}
                         </h4>
-                        <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full shrink-0 uppercase tracking-wider">
-                          {event.category}
-                        </span>
+                        <div className="flex flex-wrap gap-1 shrink-0 max-w-[50%] justify-end">
+                          {(event.category || 'Culture').split(/[,;/]/).map(s => s.trim()).filter(Boolean).map((cat, idx) => (
+                            <span key={idx} className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              {getCategoryWithEmoji(cat)}
+                            </span>
+                          ))}
+                        </div>
                       </div>
 
                       {/* Prominent Date & Time Row */}

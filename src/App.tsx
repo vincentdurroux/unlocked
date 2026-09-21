@@ -112,10 +112,11 @@ import { APIProvider, Map, AdvancedMarker, Pin, useMapsLibrary, useMap } from '@
 import { useProfessionals } from './hooks/useProfessionals';
 import { proService } from './services/proService';
 import { eventService, isSameDay } from './services/eventService';
-import { formatEventDate, formatEventTime, getCategoryBadge, matchesCategoryFilter, CATEGORY_LIST, isEventExpired } from './utils/eventFormatter';
+import { formatEventDate, formatEventTime, getCategoryBadge, getCategoryBadges, matchesCategoryFilter, CATEGORY_LIST, isEventExpired } from './utils/eventFormatter';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
+import { LandingEventHighlightsCard } from './components/LandingEventHighlightsCard';
 
 // Custom Tooth Icon matching screenshot
 const ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -881,7 +882,7 @@ interface Professional {
   categories?: string[];
 }
 
-interface Event {
+export interface Event {
   id: string;
   title: string;
   date: string;
@@ -925,6 +926,60 @@ interface Classified {
 const MOCK_PROS: Professional[] = [];
 
 const MOCK_EVENTS: Event[] = [
+  {
+    id: 'sep-1',
+    title: 'Valencia Sunset Tapas & Mediterranean Wine Route',
+    date: 'SEP 25',
+    start_date: 'SEP 25',
+    time: '07:30 PM',
+    start_time: '07:30 PM',
+    end_time: '10:30 PM',
+    location: 'Plaza de la Reina, Ciutat Vella, Valencia',
+    category: 'Gastronomy',
+    image: 'https://images.unsplash.com/photo-1515442261904-6c301f1b008a?auto=format&fit=crop&q=80&w=800',
+    is_free: false,
+    price: '28€ / person',
+    ticket_url: 'https://www.valencia.es/en/cas/agenda',
+    sources: [
+      { title: 'Valencia Culinary Guild', url: 'https://www.valencia.es/en/cas/agenda' }
+    ],
+    description: `**✨ What can you expect?**
+- Guided gastronomic evening through historic Ciutat Vella taverns.
+- Sampling authentic Valencian tapas paired with local DO Utiel-Requena wines.
+- Social expat and local networking in an informal, vibrant atmosphere.
+
+**🎯 Perfect for**
+- Food lovers, newcomers, and wine enthusiasts wanting to discover local bodegas.`,
+    coordinates: { lat: 39.4746, lng: -0.3756 },
+    verified_real: true
+  },
+  {
+    id: 'sep-2',
+    title: 'Ruzafa International Language Exchange & Board Games',
+    date: 'SEP 28',
+    start_date: 'SEP 28',
+    time: '08:00 PM',
+    start_time: '08:00 PM',
+    end_time: '11:00 PM',
+    location: 'Café Berlín, Carrer de Cadis 64, Ruzafa, Valencia',
+    category: 'Community',
+    image: 'https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&q=80&w=800',
+    is_free: true,
+    price: 'Free Admission',
+    ticket_url: 'https://www.meetup.com',
+    sources: [
+      { title: 'Valencia Language Exchange Community', url: 'https://www.meetup.com' }
+    ],
+    description: `**✨ What can you expect?**
+- Meet expats and locals for relaxed conversation tables in English, Spanish, French, and Italian.
+- Casual table board games, craft beers, and tapas in bohemian Ruzafa.
+- Welcoming community atmosphere with table hosts.
+
+**🎯 Perfect for**
+- Expatriates, language learners, and friendly locals.`,
+    coordinates: { lat: 39.4614, lng: -0.3725 },
+    verified_real: true
+  },
   {
     id: '1',
     title: 'Malvarrosa Beach Cleanup & Expat Sunset Drinks',
@@ -8212,7 +8267,10 @@ function AdminView({
                   <span className="p-1.5 bg-emerald-50 text-emerald-500 rounded-xl">
                     <Calendar className="w-4 h-4" />
                   </span>
-                  <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Event of the Week</h4>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Event Highlights (Monthly Carousel)</h4>
+                    <p className="text-[10px] text-slate-400 font-normal">All active events of the month scroll automatically in the landing page Discover card.</p>
+                  </div>
                 </div>
               </div>
 
@@ -10722,91 +10780,12 @@ function HomeView({
             );
           })()}
 
-          {/* Card 2: Event Highlight */}
-          {(() => {
-            const dbHighlightedEvents = events.filter(e => e.is_highlighted === true || (e.is_highlighted as any) === 'true' || (e.is_highlighted as any) === 1);
-            const section2Items = dbHighlightedEvents.length > 0 
-              ? dbHighlightedEvents 
-              : events.filter(e => highlightedEventIds.includes(String(e.id)));
-            if (section2Items.length === 0) return null;
-
-            const activeIndex = sec2Idx % section2Items.length;
-            const featuredEvent = section2Items[activeIndex];
-            
-            return (
-              <div 
-                className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 hover:border-brand-blue/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
-                id="discover-card-event"
-                onClick={() => onNavigate('events', { eventId: featuredEvent.id })}
-              >
-                <div className="relative flex-1">
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.div
-                      key={activeIndex}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{ duration: 0.2 }}
-                      className="space-y-4"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-brand-blue/5 text-brand-blue border border-brand-blue/10 uppercase tracking-widest shrink-0">
-                          <Calendar className="w-3 h-3" /> Event Highlights
-                        </span>
-                      </div>
-
-                      <div className="space-y-3 text-left">
-                        <div className="aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 relative">
-                          <img 
-                            src={featuredEvent.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=400&q=80"} 
-                            alt={featuredEvent.title} 
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            referrerPolicy="no-referrer"
-                          />
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-[13px] leading-snug">{featuredEvent.title}</h4>
-                          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1 font-bold">
-                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span className="truncate">
-                              {featuredEvent.start_date || featuredEvent.date}
-                              {featuredEvent.end_date && !isSameDay(featuredEvent.start_date || featuredEvent.date, featuredEvent.end_date) && ` to ${featuredEvent.end_date}`}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
-
-
-
-
-                {section2Items.length >= 2 && (
-                  <>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSec2Idx((activeIndex - 1 + section2Items.length) % section2Items.length);
-                      }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-brand-blue hover:border-brand-blue/10 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSec2Idx((activeIndex + 1) % section2Items.length);
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-brand-blue hover:border-brand-blue/10 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </>
-                )}
-              </div>
-            );
-          })()}
+          {/* Card 2: Event Highlights of the Month (Automatic & Manual Carousel) */}
+          <LandingEventHighlightsCard
+            events={events}
+            highlightedEventIds={highlightedEventIds}
+            onNavigate={onNavigate}
+          />
 
           {/* Card 3: Guide Highlight */}
           {(() => {
@@ -15392,7 +15371,6 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
   // Keyword Search & Filters states
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'tomorrow' | 'weekend'>('all');
-  const [vibeFilter, setVibeFilter] = useState<'all' | 'expat' | 'outdoor' | 'social' | 'family' | 'culture'>('all');
 
   useEffect(() => {
     if (propEvents && propEvents.length > 0) {
@@ -15437,7 +15415,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
     }
   }, [selectedEventId]);
 
-  const hasActiveFilters = selectedCategory !== 'all' || searchQuery.trim() !== '' || dateFilter !== 'all' || vibeFilter !== 'all';
+  const hasActiveFilters = selectedCategory !== 'all' || searchQuery.trim() !== '' || dateFilter !== 'all';
 
   // Auto scroll down to results section when filters are applied and events match
   useEffect(() => {
@@ -15447,13 +15425,12 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         el.scrollIntoView({ behavior: 'smooth' });
       }
     }
-  }, [selectedCategory, searchQuery, dateFilter, vibeFilter]);
+  }, [selectedCategory, searchQuery, dateFilter]);
 
   const handleResetFilters = () => {
     setSelectedCategory('all');
     setSearchQuery('');
     setDateFilter('all');
-    setVibeFilter('all');
   };
 
   // Filtered & sorted events
@@ -15547,40 +15524,9 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         }
       }
 
-      // 4. Vibe Filter
-      if (vibeFilter !== 'all') {
-        const title = (ev.title || '').toLowerCase();
-        const desc = (ev.description || '').toLowerCase();
-        const cat = (ev.category || '').toLowerCase();
-        const tags = (ev.tags || '').toLowerCase();
-        const combined = `${title} ${cat} ${desc} ${tags}`;
-
-        if (vibeFilter === 'expat') {
-          if (!combined.includes('expat') && !combined.includes('english') && !combined.includes('meetup') && !combined.includes('social') && !combined.includes('networking')) {
-            return false;
-          }
-        } else if (vibeFilter === 'outdoor') {
-          if (!combined.includes('outdoor') && !combined.includes('park') && !combined.includes('plage') && !combined.includes('beach') && !combined.includes('turia') && !combined.includes('jardin')) {
-            return false;
-          }
-        } else if (vibeFilter === 'social') {
-          if (!combined.includes('drink') && !combined.includes('bar') && !combined.includes('social') && !combined.includes('apero') && !combined.includes('tapas') && !combined.includes('party')) {
-            return false;
-          }
-        } else if (vibeFilter === 'family') {
-          if (!combined.includes('family') && !combined.includes('enfant') && !combined.includes('kid') && !combined.includes('famille') && !combined.includes('atelier')) {
-            return false;
-          }
-        } else if (vibeFilter === 'culture') {
-          if (!combined.includes('art') && !combined.includes('museum') && !combined.includes('musée') && !combined.includes('culture') && !combined.includes('exhibition') && !combined.includes('concert')) {
-            return false;
-          }
-        }
-      }
-
       return true;
     });
-  }, [events, selectedCategory, searchQuery, dateFilter, vibeFilter]);
+  }, [events, selectedCategory, searchQuery, dateFilter]);
 
   // Compute category counts
   const categoryCounts = useMemo(() => {
@@ -15655,128 +15601,116 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         </div>
       </div>
 
-      {/* Category Filter Chips Bar */}
-      <div id="events-results-section" className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400">Filter by category</h4>
-          {selectedCategory !== 'all' && (
+      {/* Unified Filters Section: Categories & Dates */}
+      <div id="events-results-section" className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+        {/* Date Filter Row */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-orange-500" />
+              <span>Filter by date</span>
+            </span>
+            {dateFilter !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setDateFilter('all')}
+                className="text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+              >
+                Reset date
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar -mx-1 px-1">
+            {[
+              { id: 'all', label: '📅 Any Day' },
+              { id: 'today', label: '⚡ Today' },
+              { id: 'tomorrow', label: '☀️ Tomorrow' },
+              { id: 'weekend', label: '🎉 This Weekend' }
+            ].map(opt => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setDateFilter(opt.id as any)}
+                className={cn(
+                  "px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap border shrink-0 cursor-pointer",
+                  dateFilter === opt.id
+                    ? "bg-orange-500 border-orange-500 text-white shadow-xs"
+                    : "bg-slate-50 border-slate-200/80 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="h-px bg-slate-100" />
+
+        {/* Category Filter Row */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+              Filter by category
+            </span>
+            {selectedCategory !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategory('all')}
+                className="text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+              >
+                Reset category
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar -mx-1 px-1">
             <button
               type="button"
               onClick={() => setSelectedCategory('all')}
-              className="text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline cursor-pointer"
+              className={cn(
+                "px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2 shrink-0 cursor-pointer border",
+                selectedCategory === 'all'
+                  ? "bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-900/10"
+                  : "bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100 hover:border-slate-300"
+              )}
             >
-              Reset category
+              <span>✨ All Events</span>
+              <span className={cn(
+                "px-2 py-0.5 rounded-full text-[10px] font-extrabold",
+                selectedCategory === 'all' ? "bg-white/20 text-white" : "bg-white text-slate-500 border border-slate-200"
+              )}>
+                {categoryCounts.all || 0}
+              </span>
             </button>
-          )}
-        </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar -mx-4 sm:-mx-6 px-4 sm:px-6">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory('all')}
-            className={cn(
-              "px-4 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2 shrink-0 cursor-pointer",
-              selectedCategory === 'all'
-                ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            )}
-          >
-            <span>✨ All Events</span>
-            <span className={cn(
-              "px-2 py-0.5 rounded-full text-[10px] font-extrabold",
-              selectedCategory === 'all' ? "bg-white/20 text-white" : "bg-white text-slate-500"
-            )}>
-              {categoryCounts.all || 0}
-            </span>
-          </button>
+            {CATEGORY_LIST.map(cat => {
+              const isSelected = selectedCategory === cat.id;
+              const count = categoryCounts[cat.id] || 0;
 
-          {CATEGORY_LIST.map(cat => {
-            const isSelected = selectedCategory === cat.id;
-            const count = categoryCounts[cat.id] || 0;
-
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setSelectedCategory(isSelected ? 'all' : cat.id)}
-                className={cn(
-                  "px-4 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2 shrink-0 border cursor-pointer",
-                  isSelected
-                    ? "bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20"
-                    : count > 0
-                      ? "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                      : "bg-slate-50 text-slate-400 border-slate-100 opacity-60"
-                )}
-              >
-                <span>{cat.emoji} {cat.name}</span>
-                <span className={cn(
-                  "px-2 py-0.5 rounded-full text-[10px] font-extrabold",
-                  isSelected ? "bg-white/25 text-white" : "bg-slate-100 text-slate-600"
-                )}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Additional Interactive Filters Grid */}
-      <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200/60 space-y-4">
-        <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-          <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
-          <span>More Filters</span>
-        </h4>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Date Selector */}
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-orange-500" />
-              <span>When</span>
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-              {[
-                { id: 'all', label: 'Any Day' },
-                { id: 'today', label: 'Today' },
-                { id: 'tomorrow', label: 'Tomorrow' },
-                { id: 'weekend', label: 'This Weekend' }
-              ].map(opt => (
+              return (
                 <button
-                  key={opt.id}
+                  key={cat.id}
                   type="button"
-                  onClick={() => setDateFilter(opt.id as any)}
+                  onClick={() => setSelectedCategory(isSelected ? 'all' : cat.id)}
                   className={cn(
-                    "px-2 py-1.5 text-[11px] font-bold rounded-lg border transition-all text-center cursor-pointer",
-                    dateFilter === opt.id
-                      ? "bg-orange-500 border-orange-500 text-white shadow-xs"
-                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    "px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2 shrink-0 border cursor-pointer",
+                    isSelected
+                      ? "bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20"
+                      : count > 0
+                        ? "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                        : "bg-slate-50 text-slate-400 border-slate-100 opacity-60"
                   )}
                 >
-                  {opt.label}
+                  <span>{cat.emoji} {cat.name}</span>
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-full text-[10px] font-extrabold",
+                    isSelected ? "bg-white/25 text-white" : "bg-slate-100 text-slate-600"
+                  )}>
+                    {count}
+                  </span>
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Atmosphere / Vibe Selector */}
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
-              <Smile className="w-3 h-3 text-sky-500" />
-              <span>Vibe & Experience</span>
-            </label>
-            <select
-              value={vibeFilter}
-              onChange={(e) => setVibeFilter(e.target.value as any)}
-              className="w-full h-9 px-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:border-orange-500 transition-all cursor-pointer"
-            >
-              <option value="all">🌟 All Vibes & Atmospheres</option>
-              <option value="expat">💬 Expat & Social Meetups</option>
-              <option value="outdoor">🌳 Outdoor & Nature Parks</option>
-              <option value="social">🍻 Drinks, Tapas & Parties</option>
-              <option value="family">👨‍👩‍👧 Family & Kids Workshops</option>
-              <option value="culture">🏛️ Arts, Museums & Culture</option>
-            </select>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -15812,7 +15746,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto w-full">
           {filteredEvents.map(event => {
             const isExpanded = String(selectedEventId) === String(event.id);
-            const badge = getCategoryBadge(event.category);
+            const badges = getCategoryBadges(event.category);
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
             const formattedTime = formatEventTime(event.start_time, event.end_time, event.time);
             const janeMatchInfo = null;
@@ -15927,9 +15861,14 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                   {/* Category Pill & Jane AI Match badge */}
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border", badge.bgClass, badge.textClass, badge.borderClass)}>
-                        {badge.emoji} {badge.name}
-                      </span>
+                      {badges.map((badge, idx) => (
+                        <span
+                          key={idx}
+                          className={cn("px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border", badge.bgClass, badge.textClass, badge.borderClass)}
+                        >
+                          {badge.emoji} {badge.name}
+                        </span>
+                      ))}
                       {(event.price || event.is_free !== undefined) && (
                         <span className={cn(
                           "px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1 shadow-2xs",
