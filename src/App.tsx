@@ -1466,6 +1466,73 @@ export default function App() {
     return legacy ? [legacy] : [];
   });
 
+  const [favoriteEventIds, setFavoriteEventIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (currentUser) {
+      if (userProfile?.favorite_event_ids && Array.isArray(userProfile.favorite_event_ids)) {
+        setFavoriteEventIds(userProfile.favorite_event_ids);
+      } else {
+        try {
+          const saved = localStorage.getItem(`unlocked_favorites_event_${currentUser.id}`);
+          if (saved) {
+            setFavoriteEventIds(JSON.parse(saved));
+          } else {
+            // Fallback to legacy non-user-specific if available
+            const legacy = localStorage.getItem('unlocked_favorite_event_ids');
+            if (legacy) {
+              setFavoriteEventIds(JSON.parse(legacy));
+            } else {
+              setFavoriteEventIds([]);
+            }
+          }
+        } catch (_) {
+          setFavoriteEventIds([]);
+        }
+      }
+    } else {
+      setFavoriteEventIds([]);
+    }
+  }, [currentUser, userProfile]);
+
+  useEffect(() => {
+    if (currentUser) {
+      try {
+        localStorage.setItem(`unlocked_favorites_event_${currentUser.id}`, JSON.stringify(favoriteEventIds));
+      } catch (_) {}
+    }
+  }, [favoriteEventIds, currentUser]);
+
+  const toggleFavoriteEvent = async (eventId: string) => {
+    let nextFavorites: string[] = [];
+    setFavoriteEventIds(prev => {
+      if (prev.includes(eventId)) {
+        nextFavorites = prev.filter(id => id !== eventId);
+      } else {
+        nextFavorites = [...prev, eventId];
+      }
+      
+      if (currentUser) {
+        try {
+          localStorage.setItem(`unlocked_favorites_event_${currentUser.id}`, JSON.stringify(nextFavorites));
+        } catch (_) {}
+      }
+      return nextFavorites;
+    });
+
+    if (currentUser) {
+      try {
+        await authService.updateProfile({
+          id: currentUser.id,
+          favorite_event_ids: nextFavorites
+        });
+        setUserProfile(prev => prev ? { ...prev, favorite_event_ids: nextFavorites } : null);
+      } catch (err) {
+        console.error('Error updating favorite events in database:', err);
+      }
+    }
+  };
+
 
   useEffect(() => {
     if (globalAlert) {
@@ -2901,6 +2968,8 @@ export default function App() {
                   onModalClose={() => setInitialEventId(null)}
                   scrollToTop={scrollToTop}
                   events={events}
+                  favoriteEventIds={favoriteEventIds}
+                  onToggleFavoriteEvent={toggleFavoriteEvent}
                 />
               )}
               {activeView === 'guides' && (
@@ -2921,6 +2990,9 @@ export default function App() {
                   allPros={allPros}
                   refetchPros={refetchPros}
                   unreadConversations={unreadConversations}
+                  favoriteEventIds={favoriteEventIds}
+                  onToggleFavoriteEvent={toggleFavoriteEvent}
+                  events={events}
                 />
               )}
               {['privacy-policy', 'user-terms', 'provider-terms', 'community-guidelines', 'cookie-policy'].includes(activeView) && (
@@ -10648,9 +10720,9 @@ function HomeView({
 
             if (!proToShow) return null;
 
-            return (
+             return (
               <div 
-                className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 hover:border-amber-500/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
+                className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 hover:border-brand-blue/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
                 id="discover-card-pro"
                 onClick={() => onNavigate('explore', { proId: proToShow.id })}
               >
@@ -10666,7 +10738,7 @@ function HomeView({
                     >
                       <div className="flex items-center justify-between gap-2 mb-4">
                         {currentItem.type !== 'testimony' && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-600 border border-amber-100 uppercase tracking-widest shrink-0">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-brand-blue/5 text-brand-blue border border-brand-blue/10 uppercase tracking-widest shrink-0">
                             <Star className="w-3 h-3 fill-current" /> Meet a local Pro
                           </span>
                         )}
@@ -10679,27 +10751,27 @@ function HomeView({
                               <img 
                                 src={proToShow.image || "/people.png"} 
                                 alt={proToShow.name} 
-                                className="w-7 h-7 rounded-full object-cover ring-2 ring-amber-50"
+                                className="w-7 h-7 rounded-full object-cover ring-2 ring-blue-50"
                                 referrerPolicy="no-referrer"
                               />
                               <div>
-                                <h4 className="font-bold text-slate-900 group-hover:text-amber-600 transition-colors max-w-[150px] truncate leading-tight uppercase tracking-tight text-[11px]">{proToShow.name}</h4>
+                                <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors max-w-[150px] truncate leading-tight uppercase tracking-tight text-[11px]">{proToShow.name}</h4>
                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">{proToShow.category}</p>
                               </div>
                             </div>
 
-                            <div className="relative bg-amber-50/50 p-5 rounded-3xl border border-brand-yellow/20">
+                            <div className="relative bg-brand-blue/5 p-5 rounded-3xl border border-brand-blue/10">
                               <p className="text-[12px] text-slate-700 leading-relaxed font-medium italic">
                                 "{commentToShow}"
                               </p>
                               <div className="mt-3 flex items-center justify-end gap-2">
-                                <div className="h-[1px] w-4 bg-amber-200" />
-                                <span className="text-[10px] font-black text-amber-600 uppercase tracking-tight">
+                                <div className="h-[1px] w-4 bg-brand-blue/20" />
+                                <span className="text-[10px] font-black text-brand-blue uppercase tracking-tight">
                                   {formatName(authorToShow)}
                                 </span>
                               </div>
                               {/* Decorative bubble tail */}
-                              <div className="absolute -bottom-2 left-6 w-4 h-4 bg-amber-50/50 border-r border-b border-brand-yellow/20 rotate-45" />
+                              <div className="absolute -bottom-2 left-6 w-4 h-4 bg-brand-blue/5 border-r border-b border-brand-blue/10 rotate-45" />
                             </div>
                           </div>
                         ) : (
@@ -10713,7 +10785,7 @@ function HomeView({
                               />
                             </div>
                             <div className="space-y-1 text-center">
-                              <h4 className="font-bold text-slate-900 group-hover:text-amber-600 transition-colors text-base leading-tight">{proToShow.name}</h4>
+                              <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-base leading-tight">{proToShow.name}</h4>
                               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">{proToShow.category}</p>
                               {proToShow.top_qualities && proToShow.top_qualities.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5 pt-1.5 justify-center">
@@ -10761,7 +10833,7 @@ function HomeView({
                         e.stopPropagation();
                         setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-amber-600 hover:border-amber-100 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
@@ -10770,7 +10842,7 @@ function HomeView({
                         e.stopPropagation();
                         setSec1Idx((activeIndex + 1) % section1Items.length);
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-amber-600 hover:border-amber-100 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
@@ -10815,44 +10887,52 @@ function HomeView({
 
             return (
               <div 
-                className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 hover:border-[#00C2A8]/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
+                className="flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-white border border-slate-100 hover:border-[#00C2A8]/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
                 id="discover-card-guide"
-                onClick={() => setSelectedArticle(featuredArticle)}
+                onClick={() => onNavigate('guides', { guideId: featuredArticle.id })}
               >
-                <div className="relative flex-1">
+                <div className="relative flex-1 flex flex-col justify-between h-full">
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div
                       key={activeIndex}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{ duration: 0.2 }}
-                      className="space-y-4"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12 }}
+                      transition={{ duration: 0.25, ease: 'easeOut' }}
+                      className="space-y-4 flex-1 flex flex-col justify-between"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-[#00C2A8]/10 text-[#00C2A8] border border-[#00C2A8]/20 uppercase tracking-widest shrink-0">
-                          <BookOpen className="w-3 h-3" /> Tips of the week
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-3 text-left">
-                        <div className="aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 relative">
-                          <img 
-                            src={featuredArticle.imageUrl || "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=400&q=80"} 
-                            alt={featuredArticle.title} 
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            referrerPolicy="no-referrer"
-                          />
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-[#00C2A8] border border-emerald-150/40 shrink-0 shadow-3xs">
+                            <BookOpen className="w-3.5 h-3.5" /> Tips of the week
+                          </span>
                         </div>
-                        <div>
-                          <h4 className="font-bold text-slate-900 group-hover:text-[#00C2A8] transition-colors text-[13px] leading-snug line-clamp-1">{featuredArticle.title}</h4>
-                          <p className="text-[10px] text-slate-500 leading-snug font-bold line-clamp-2 mt-1">{featuredArticle.excerpt}</p>
-                          {featuredArticle.author?.name && (
-                            <div className="flex items-center gap-1.5 text-[10px] text-[#00C2A8] mt-2 font-bold uppercase tracking-wider">
-                              <User className="w-3.5 h-3.5 text-[#00C2A8]/80 shrink-0" />
-                              <span className="truncate">By {featuredArticle.author.name}</span>
-                            </div>
-                          )}
+                        
+                        <div className="space-y-4 text-left">
+                          <div className="aspect-[16/10] w-full rounded-2xl overflow-hidden bg-slate-50 relative border border-slate-100 shadow-3xs">
+                            <img 
+                              src={featuredArticle.imageUrl || "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=400&q=80"} 
+                              alt={featuredArticle.title} 
+                              className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                          </div>
+                          <div className="space-y-2">
+                            <h4 className="font-extrabold text-slate-900 group-hover:text-[#00C2A8] transition-colors text-base leading-tight tracking-tight line-clamp-2">
+                              {featuredArticle.title}
+                            </h4>
+                            <p className="text-xs text-slate-500 leading-relaxed font-medium line-clamp-2">
+                              {featuredArticle.excerpt}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 flex items-center justify-end border-t border-slate-100/80 mt-auto">
+                        <div className="text-[10px] font-extrabold text-[#00C2A8] uppercase tracking-widest flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                          <span>Read full guide</span>
+                          <span className="text-xs font-black">→</span>
                         </div>
                       </div>
                     </motion.div>
@@ -15356,7 +15436,21 @@ DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`);
 );
 }
 
-function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEvents }: { initialEventId?: string | null, onModalClose?: () => void, scrollToTop?: () => void, events?: Event[] }) {
+function EventsView({ 
+  initialEventId, 
+  onModalClose, 
+  scrollToTop, 
+  events: propEvents,
+  favoriteEventIds = [],
+  onToggleFavoriteEvent
+}: { 
+  initialEventId?: string | null, 
+  onModalClose?: () => void, 
+  scrollToTop?: () => void, 
+  events?: Event[],
+  favoriteEventIds?: string[],
+  onToggleFavoriteEvent?: (eventId: string) => void
+}) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId || null);
   const [events, setEvents] = useState<Event[]>(() => {
     const list = propEvents && propEvents.length > 0 ? propEvents : (isSupabaseConfigured ? [] : MOCK_EVENTS);
@@ -15525,6 +15619,12 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
       }
 
       return true;
+    }).sort((a, b) => {
+      const dateA = a.start_date || a.date || '';
+      const dateB = b.start_date || b.date || '';
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      return dateA.localeCompare(dateB);
     });
   }, [events, selectedCategory, searchQuery, dateFilter]);
 
@@ -15561,9 +15661,6 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
               <h3 className="text-sm sm:text-base font-bold text-slate-800">
                 Search Events in Valencia
               </h3>
-              <p className="text-xs text-slate-500">
-                Find meetups, concerts, culinary classes, and activities by keywords or descriptions
-              </p>
             </div>
           </div>
 
@@ -15797,7 +15894,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                     </div>
                   )}
 
-                  {/* Share button (Top-Right) */}
+                   {/* Share button (Top-Right) */}
                   <button 
                     type="button"
                     onClick={async (e) => {
@@ -15838,6 +15935,26 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                       <ShareIcon className="w-4 h-4" />
                     )}
                   </button>
+
+                  {/* Favorite / Heart Button (to the left of share button) */}
+                  {onToggleFavoriteEvent && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleFavoriteEvent(event.id);
+                      }}
+                      className={cn(
+                        "absolute top-3.5 right-15 p-2.5 rounded-full backdrop-blur-md transition-all duration-300 z-10 shadow-md cursor-pointer",
+                        favoriteEventIds.includes(event.id)
+                          ? "bg-rose-500 text-white scale-110 shadow-rose-500/20 hover:bg-rose-600"
+                          : "bg-black/50 hover:bg-black/75 hover:scale-105 text-white"
+                      )}
+                      title={favoriteEventIds.includes(event.id) ? "Remove from favorite events" : "Add to favorite events"}
+                    >
+                      <Heart className={cn("w-4 h-4", favoriteEventIds.includes(event.id) && "fill-current")} />
+                    </button>
+                  )}
 
                   {/* Close button if expanded */}
                   {isExpanded && (
@@ -16132,6 +16249,169 @@ function TopicIcon(name: string, sizeClass: string = "w-4 h-4") {
   }
 }
 
+function GuideCardItem({
+  article,
+  isExpanded,
+  onToggleExpand
+}: {
+  key?: React.Key;
+  article: any;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+}) {
+  const [shared, setShared] = useState(false);
+
+  const imageSrc = article.imageUrl || "/valencia.jpg";
+  const categoryName = article.categoryTitle || "Valencia Guide";
+
+  return (
+    <div
+      id={`guide-card-${article.id}`}
+      onClick={onToggleExpand}
+      className={`bg-white rounded-3xl border transition-all duration-300 scroll-mt-28 cursor-pointer overflow-hidden ${
+        isExpanded
+          ? "border-[#00C2A8]/40 shadow-xl p-5 sm:p-8 md:p-10 ring-2 ring-[#00C2A8]/10"
+          : "border-slate-100 hover:border-[#00C2A8]/30 shadow-sm hover:shadow-md p-3 sm:p-4"
+      }`}
+    >
+      {!isExpanded ? (
+        /* Collapsed State: Row item */
+        <div className="flex items-center gap-4 group">
+          {article.imageUrl && (
+            <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden shrink-0 relative">
+              <img 
+                src={article.imageUrl} 
+                alt={article.title} 
+                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300" 
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          )}
+          <div className="flex-1 min-w-0 pr-2 space-y-1">
+            {article.categoryTitle && (
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#00C2A8]">{article.categoryTitle}</span>
+            )}
+            <h4 className="font-bold text-slate-950 text-sm sm:text-base line-clamp-2 leading-tight group-hover:text-brand-blue transition-colors">
+              {article.title}
+            </h4>
+            <p className="text-[10px] sm:text-xs text-slate-500 line-clamp-2 mt-0.5 leading-relaxed font-medium">
+              {article.excerpt}
+            </p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-brand-blue transition-colors group-hover:translate-x-0.5" />
+        </div>
+      ) : (
+        /* Expanded State: Full Blog Post Detail inline */
+        <div className="space-y-6" onClick={(e) => e.stopPropagation()}>
+          {/* Header Image and Top Actions */}
+          <div className="relative h-[240px] sm:h-[320px] rounded-2xl overflow-hidden bg-brand-navy">
+            <img 
+              src={imageSrc} 
+              alt={article.title} 
+              className="w-full h-full object-cover absolute inset-0" 
+              referrerPolicy="no-referrer"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/15" />
+            
+            {/* Share and Close actions */}
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+              <button 
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const shareUrl = `${window.location.origin}${window.location.pathname}?guideId=${article.id}`;
+                  const shareData = {
+                    title: article.title,
+                    text: article.excerpt || `Check out this practical guide on Unlocked Valencia: ${article.title}!`,
+                    url: shareUrl
+                  };
+                  
+                  if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+                    try {
+                      await navigator.share(shareData);
+                    } catch (err) {
+                      console.warn('Share sheets failed or cancelled:', err);
+                    }
+                  } else {
+                    try {
+                      await navigator.clipboard.writeText(shareUrl);
+                      setShared(true);
+                      setTimeout(() => setShared(false), 2000);
+                    } catch (err) {
+                      console.error('Failed to copy share link:', err);
+                    }
+                  }
+                }}
+                className={`p-2 backdrop-blur-md rounded-full text-white transition-all shadow-lg active:scale-95 z-20 ${
+                  shared 
+                    ? "bg-emerald-500 hover:bg-emerald-600 scale-105" 
+                    : "bg-white/15 hover:bg-white/25"
+                }`}
+              >
+                {shared ? (
+                  <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+                ) : (
+                  <ShareIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                )}
+              </button>
+
+              <button 
+                onClick={onToggleExpand}
+                className="p-2 bg-white/15 hover:bg-white/25 backdrop-blur-md rounded-full text-white transition-all shadow-lg active:scale-95 z-20"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
+
+            <div className="absolute bottom-6 left-6 right-6 md:bottom-8 md:left-8 md:right-8 text-left">
+              <div className="flex items-center gap-2 mb-2">
+                {categoryName && (
+                  <span className="px-2.5 py-0.5 bg-brand-yellow text-slate-900 text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-brand-yellow/20">
+                    {categoryName}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-lg sm:text-2xl md:text-3xl font-black text-white font-display leading-tight drop-shadow-2xl">
+                {article.title}
+              </h2>
+            </div>
+          </div>
+
+          {/* Guide Article Content */}
+          <div className="max-w-3xl mx-auto space-y-6 text-left pt-2">
+            {/* Excerpt with custom Unlocked attribution */}
+            <div className="pb-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              {article.excerpt && (
+                <p className="text-slate-600 italic text-sm sm:text-base leading-relaxed max-w-xl">
+                  {article.excerpt}
+                </p>
+              )}
+              <span className="text-[10px] sm:text-xs text-brand-blue font-bold uppercase tracking-wider shrink-0 bg-blue-50/50 px-2.5 py-1 rounded-lg border border-blue-100/55">
+                By {article.author?.name || (typeof article.author === 'string' ? article.author : null) || 'MyCityUnlocked'}
+              </span>
+            </div>
+
+            {/* Render full guide text using SimpleMarkdown */}
+            <div className="markdown-body text-slate-700 leading-relaxed text-sm sm:text-base">
+              <SimpleMarkdown isPlain={true}>{article.content}</SimpleMarkdown>
+            </div>
+
+            {/* Bottom Collapse Button */}
+            <div className="pt-6 flex justify-center border-t border-slate-150/40">
+              <button
+                onClick={onToggleExpand}
+                className="px-6 py-2.5 bg-slate-100 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-200 hover:text-slate-700 active:scale-95 transition-all flex items-center gap-2"
+              >
+                <span>Collapse Article</span>
+                <span>↑</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuideId?: string | null, onModalClose?: () => void, scrollToTop?: () => void }) {
   const [articles, setArticles] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -16183,7 +16463,9 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
         
       if (foundArticle) {
         setSelectedArticleId(initialGuideId);
-        setShowArticleModal(true);
+        setTimeout(() => {
+          document.getElementById(`guide-card-${initialGuideId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 150);
       }
     }
   }, [initialGuideId, articles]);
@@ -16278,6 +16560,16 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
                    {filteredArticles.length > 0 ? (
                      <div className="space-y-4">
                        {filteredArticles.map((article: any) => (
+                         <GuideCardItem
+                           key={article.id}
+                           article={article}
+                           isExpanded={String(selectedArticleId) === String(article.id)}
+                           onToggleExpand={() => {
+                             setSelectedArticleId(prev => String(prev) === String(article.id) ? null : article.id);
+                           }}
+                         />
+                       ))}
+                       {[].map((article: any) => (
                          <div 
                            key={article.id} 
                            onClick={() => {
@@ -16448,6 +16740,16 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
             {filteredArticles.length > 0 ? (
               <div className="space-y-4">
                 {filteredArticles.map((article: any) => (
+                  <GuideCardItem
+                    key={article.id}
+                    article={article}
+                    isExpanded={String(selectedArticleId) === String(article.id)}
+                    onToggleExpand={() => {
+                      setSelectedArticleId(prev => String(prev) === String(article.id) ? null : article.id);
+                    }}
+                  />
+                ))}
+                {[].map((article: any) => (
                   <div 
                     key={article.id} 
                     onClick={() => {
@@ -16508,12 +16810,6 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
 
 
 
-      {/* Article Modal */}
-      <ExpertGuideModal 
-        isOpen={showArticleModal} 
-        onClose={handleCloseModal} 
-        article={selectedArticle}
-      />
     </div>
   );
 }
@@ -16794,8 +17090,35 @@ function FeedbackSubPage({ currentUser, onBack }: { currentUser: any, onBack: ()
   );
 }
 
-function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProfileUpdate, onAddPro, allPros, refetchPros, unreadConversations = [] }: { scrollToTop?: () => void, onNavigate?: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, currentUser?: any, userProfile?: Profile | null, onProfileUpdate?: () => void, onAddPro?: () => void, allPros?: any[], refetchPros?: () => void, unreadConversations?: string[] }) {
+function ProfileView({ 
+  scrollToTop, 
+  onNavigate, 
+  currentUser, 
+  userProfile, 
+  onProfileUpdate, 
+  onAddPro, 
+  allPros, 
+  refetchPros, 
+  unreadConversations = [],
+  favoriteEventIds = [],
+  onToggleFavoriteEvent,
+  events = []
+}: { 
+  scrollToTop?: () => void, 
+  onNavigate?: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
+  currentUser?: any, 
+  userProfile?: Profile | null, 
+  onProfileUpdate?: () => void, 
+  onAddPro?: () => void, 
+  allPros?: any[], 
+  refetchPros?: () => void, 
+  unreadConversations?: string[],
+  favoriteEventIds?: string[],
+  onToggleFavoriteEvent?: (id: string) => void,
+  events?: Event[]
+}) {
   const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
+  const [myAccountTab, setMyAccountTab] = useState<'profile' | 'favorites' | 'testimonies' | 'chats'>('favorites');
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const userEmail = currentUser?.email || "";
@@ -16803,6 +17126,7 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
 
   const [editName, setEditName] = useState(userProfile?.full_name || "");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isEditingNameInline, setIsEditingNameInline] = useState(false);
   
   const [selectedDocKey, setSelectedDocKey] = useState<string | null>(null);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
@@ -17203,7 +17527,188 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
       <AnimatePresence>
         {activeSubPage === 'My Account' && (
           <ProfileSubPage key="subpage-my-account" title="My Account" onBack={() => setActiveSubPage(null)}>
-            <div className="space-y-8 max-w-2xl mx-auto pb-10">
+            <div className="space-y-6 max-w-2xl mx-auto pb-10">
+              {/* Profile Card Header Redesign */}
+              <div className="bg-gradient-to-r from-brand-blue/10 via-brand-blue/5 to-slate-50 border border-brand-blue/10 rounded-3xl p-6 relative overflow-hidden flex flex-col sm:flex-row items-center sm:items-start gap-6 shadow-sm">
+                <div className="absolute right-0 top-0 w-32 h-32 bg-brand-blue/5 rounded-full blur-3xl -z-10" />
+                
+                {/* Clickable Avatar to trigger update */}
+                <div 
+                  onClick={handleAvatarClick}
+                  className="relative w-20 h-20 rounded-full bg-white border-4 border-white shadow-md overflow-hidden flex items-center justify-center shrink-0 cursor-pointer group"
+                  title="Click to change avatar logo"
+                >
+                  {userProfile?.avatar_url ? (
+                    <img src={userProfile.avatar_url} alt="" className="w-full h-full object-cover group-hover:opacity-40 transition-opacity" />
+                  ) : (
+                    <User className="w-10 h-10 text-brand-blue group-hover:opacity-40 transition-opacity" />
+                  )}
+                  
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                    {isUpdatingAvatar ? (
+                      <Loader2 className="w-5 h-5 text-white animate-spin" />
+                    ) : (
+                      <Camera className="w-5 h-5 text-white" />
+                    )}
+                  </div>
+                  
+                  {!isUpdatingAvatar && (
+                    <div className="absolute bottom-1 right-1 p-1 bg-white rounded-full shadow-xs border border-slate-100 text-brand-blue">
+                      <Camera className="w-2.5 h-2.5" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-center sm:text-left flex-1 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 justify-center sm:justify-start">
+                    {isEditingNameInline ? (
+                      <div className="flex items-center gap-2 mt-1 mx-auto sm:mx-0">
+                        <input 
+                          type="text" 
+                          value={editName} 
+                          onChange={(e) => setEditName(e.target.value)} 
+                          className="px-3 py-1 bg-white border border-slate-200 focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue rounded-xl text-sm font-semibold text-slate-700 outline-none transition-all shadow-2xs" 
+                          placeholder="Your full name"
+                          autoFocus
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter') {
+                              if (!editName.trim() || isSavingProfile) return;
+                              setIsSavingProfile(true);
+                              try {
+                                await authService.updateProfile({
+                                  id: currentUser.id,
+                                  full_name: editName.trim()
+                                });
+                                onProfileUpdate?.();
+                                setIsEditingNameInline(false);
+                              } catch (err) {
+                                console.error(err);
+                              } finally {
+                                setIsSavingProfile(false);
+                              }
+                            } else if (e.key === 'Escape') {
+                              setIsEditingNameInline(false);
+                            }
+                          }}
+                        />
+                        <button 
+                          disabled={isSavingProfile || !editName.trim()}
+                          onClick={async () => {
+                            if (!currentUser) return;
+                            setIsSavingProfile(true);
+                            try {
+                              await authService.updateProfile({
+                                id: currentUser.id,
+                                  full_name: editName.trim()
+                              });
+                              onProfileUpdate?.();
+                              setIsEditingNameInline(false);
+                            } catch (err) {
+                              console.error('Error saving profile:', err);
+                            } finally {
+                              setIsSavingProfile(false);
+                            }
+                          }}
+                          className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center shrink-0"
+                          title="Save Name"
+                        >
+                          {isSavingProfile ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                        <button 
+                          onClick={() => setIsEditingNameInline(false)}
+                          className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                          title="Cancel"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 justify-center sm:justify-start">
+                        <h3 className="text-xl font-bold font-display text-brand-navy">
+                          {userProfile?.full_name || userEmail.split('@')[0]}
+                        </h3>
+                        <button 
+                          onClick={() => {
+                            setEditName(userProfile?.full_name || "");
+                            setIsEditingNameInline(true);
+                          }}
+                          className="p-1 hover:bg-brand-blue/10 rounded-lg text-slate-400 hover:text-brand-blue transition-all cursor-pointer shrink-0"
+                          title="Edit full name"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                    {isAdmin && (
+                      <span className="inline-flex self-center items-center gap-1 px-2.5 py-0.5 bg-brand-blue text-white text-[9px] font-black uppercase tracking-widest rounded-full">
+                        <ShieldCheck className="w-3 h-3" /> Admin
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs font-semibold text-slate-500 flex items-center justify-center sm:justify-start gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-slate-400" />
+                    {userEmail}
+                  </p>
+                </div>
+              </div>
+
+              {/* Stats & Quick Navigation Row */}
+              <div className="grid grid-cols-3 gap-4">
+                <button 
+                  onClick={() => setMyAccountTab('favorites')}
+                  className={cn(
+                    "p-4 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
+                    myAccountTab === 'favorites' ? "border-rose-300 ring-2 ring-rose-500/5 bg-rose-50/10" : "border-slate-100/90 hover:border-rose-100"
+                  )}
+                >
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'favorites' ? "bg-rose-50 text-rose-500" : "bg-slate-50 text-slate-400")}>
+                    <Heart className={cn("w-4 h-4", myAccountTab === 'favorites' && "fill-rose-500")} />
+                  </div>
+                  <div>
+                    <div className="text-lg font-black text-slate-800 leading-none">{favoriteEventIds.length}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Favorite Events</div>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={() => setMyAccountTab('testimonies')}
+                  className={cn(
+                    "p-4 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
+                    myAccountTab === 'testimonies' ? "border-brand-blue/30 ring-2 ring-brand-blue/5 bg-brand-blue/5" : "border-slate-100/90 hover:border-brand-blue/10"
+                  )}
+                >
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'testimonies' ? "bg-brand-blue/10 text-brand-blue" : "bg-slate-50 text-slate-400")}>
+                    <Star className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-black text-slate-800 leading-none">{myTestimonies.length}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">My Reviews</div>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={() => setMyAccountTab('chats')}
+                  className={cn(
+                    "p-4 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
+                    myAccountTab === 'chats' ? "border-emerald-300 ring-2 ring-emerald-500/5 bg-emerald-50/10" : "border-slate-100/90 hover:border-emerald-100"
+                  )}
+                >
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'chats' ? "bg-emerald-50 text-emerald-500" : "bg-slate-50 text-slate-400")}>
+                    <MessageSquare className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-black text-slate-800 leading-none">{conversations.length}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Chats</div>
+                  </div>
+                </button>
+              </div>
+
+
+              {/* Success/Error Alerts */}
               {msg && (
                 <div className={cn(
                   "p-4 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2",
@@ -17213,363 +17718,397 @@ function ProfileView({ scrollToTop, onNavigate, currentUser, userProfile, onProf
                   <p className="text-sm font-bold tracking-tight">{msg.text}</p>
                 </div>
               )}
-              
-              {/* Profile Details Edit Form */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
-                <div className="flex items-center gap-2 border-b border-slate-50 pb-3">
-                  <User className="w-5 h-5 text-brand-blue" />
-                  <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">Edit Profile Information</h3>
-                </div>
-                
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email Address</label>
-                    <input 
-                      type="text" 
-                      value={userEmail} 
-                      disabled 
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium text-slate-400 cursor-not-allowed" 
-                    />
-                  </div>
-                  
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Full Name</label>
-                    <input 
-                      type="text" 
-                      value={editName} 
-                      onChange={(e) => setEditName(e.target.value)} 
-                      placeholder="Your full name"
-                      className="w-full px-4 py-3 bg-white border border-slate-200 focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue rounded-xl text-sm font-medium text-slate-700 outline-none transition-all" 
-                    />
-                  </div>
-                </div>
 
-                <div className="flex justify-end pt-2">
-                  <button 
-                    onClick={async () => {
-                      if (!currentUser) return;
-                      setIsSavingProfile(true);
-                      setMsg(null);
-                      try {
-                        await authService.updateProfile({
-                          id: currentUser.id,
-                          full_name: editName.trim()
-                        });
-                        onProfileUpdate?.();
-                        setMsg({ type: 'success', text: 'Profile updated successfully!' });
-                        // Clear success message after 3 seconds
-                        setTimeout(() => setMsg(null), 3000);
-                      } catch (err) {
-                        console.error('Error saving profile:', err);
-                        setMsg({ type: 'error', text: 'Could not update profile information.' });
-                      } finally {
-                        setIsSavingProfile(false);
-                      }
-                    }}
-                    disabled={isSavingProfile || !editName.trim()}
-                    className="px-6 py-3 bg-brand-blue text-white font-extrabold text-xs uppercase tracking-wider rounded-xl hover:bg-blue-600 transition-all shadow-md shadow-brand-blue/15 flex items-center gap-2 disabled:opacity-50"
+              {/* Tab Contents */}
+              <AnimatePresence mode="wait">
+                {myAccountTab === 'favorites' && (
+                  <motion.div 
+                    key="tab-favorites"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
                   >
-                    {isSavingProfile ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Changes'
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Testimonials Left */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
-                <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Star className="w-5 h-5 text-brand-yellow fill-brand-yellow" />
-                    <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Testimonials</h3>
-                  </div>
-                  <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full">{myTestimonies.length} Left</span>
-                </div>
-
-                {loadingTestimonies ? (
-                  <div className="py-8 flex justify-center text-slate-400">
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  </div>
-                ) : myTestimonies.length === 0 ? (
-                  <div className="py-8 text-center text-slate-400 italic text-sm">
-                    You have not left any testimonials yet.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {myTestimonies.map((review) => {
-                      const associatedPro = allPros?.find((p) => String(p.id) === String(review.pro_id));
-                      const isEditing = editingTestimonyId === review.id;
-                      const isProcessing = deletingId === review.id;
-                      
-                      return (
-                        <div key={review.id} className={cn(
-                          "p-5 rounded-2xl border transition-all duration-300",
-                          review.status === 'pending' ? "bg-amber-50/30 border-amber-100" : 
-                          review.status === 'refused' ? "bg-rose-50/30 border-rose-100" : "bg-slate-50/55 border-slate-100"
-                        )}>
-                          <div className="flex justify-between items-start gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <p className="font-bold text-slate-800 text-sm truncate">
-                                  {associatedPro ? associatedPro.name : 'Professional'}
-                                </p>
-                                <span className={cn(
-                                  "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md",
-                                  review.status === 'approved' ? "bg-emerald-50 text-emerald-600" : 
-                                  review.status === 'refused' ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600 animate-pulse"
-                                )}>
-                                  {review.status || 'pending'}
-                                </span>
-                              </div>
-                              {associatedPro?.profession && (
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{associatedPro.profession}</p>
-                              )}
-                            </div>
-                            
-                            {!isEditing && (
-                              <div className="flex items-center gap-2">
-                                <button 
-                                  onClick={() => {
-                                    setEditingTestimonyId(review.id);
-                                    setEditTestimonyRating(review.rating);
-                                    setEditTestimonyComment(review.comment);
-                                  }}
-                                  disabled={isProcessing}
-                                  className="h-8 px-3 bg-white text-slate-500 border border-slate-200 rounded-xl hover:text-brand-blue hover:border-brand-blue/30 text-[10px] font-bold uppercase tracking-wide transition-all active:scale-95 flex items-center justify-center disabled:opacity-50"
-                                >
-                                  Edit
-                                </button>
-                                <button 
-                                  onClick={() => setShowConfirmAction(prev => ({ ...prev, [review.id]: 'delete' }))}
-                                  disabled={isProcessing}
-                                  className={cn(
-                                    "h-8 w-8 border rounded-xl transition-all active:scale-95 flex items-center justify-center shrink-0",
-                                    isProcessing ? "bg-slate-50 border-slate-100 text-slate-300" : "bg-white border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-100"
-                                  )}
-                                  title="Delete Review"
-                                >
-                                  {isProcessing ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-
-                          {showConfirmAction[review.id] === 'delete' && (
-                            <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100 flex flex-col gap-3 animate-in fade-in zoom-in-95 my-3">
-                              <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest text-center">Delete this testimonial permanently?</p>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={async () => {
-                                    setDeletingId(review.id);
-                                    try {
-                                      const success = await proService.deleteTestimony(review.id);
-                                      if (success) {
-                                        await fetchMyTestimonies();
-                                        refetchPros?.();
-                                        setMsg({ type: 'success', text: 'Testimonial deleted successfully.' });
-                                      }
-                                    } catch (err) {
-                                      console.error('Delete error:', err);
-                                      setMsg({ type: 'error', text: 'Failed to delete testimonial.' });
-                                    } finally {
-                                      setDeletingId(null);
-                                      setShowConfirmAction(prev => ({ ...prev, [review.id]: null }));
-                                    }
-                                  }}
-                                  disabled={isProcessing}
-                                  className="flex-1 h-9 bg-rose-500 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-rose-600 transition-all disabled:opacity-50"
-                                >
-                                  {isProcessing ? 'Deleting...' : 'Yes, Delete'}
-                                </button>
-                                <button
-                                  onClick={() => setShowConfirmAction(prev => ({ ...prev, [review.id]: null }))}
-                                  disabled={isProcessing}
-                                  className="flex-1 h-9 bg-white text-slate-400 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-slate-100 hover:bg-slate-50 transition-all"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {isEditing ? (
-                            <div className="space-y-3 pt-2 bg-white rounded-xl p-3 border border-slate-200">
-                              <div className="flex items-center gap-1">
-                                <label className="text-xs font-bold text-slate-500 animate-pulse">Rating:</label>
-                                <div className="flex items-center gap-0.5">
-                                  {[1,2,3,4,5].map((s) => (
-                                    <button 
-                                      key={s} 
-                                      onClick={() => setEditTestimonyRating(s)}
-                                      className="p-0.5"
-                                    >
-                                      <Star className={cn("w-4 h-4", s <= editTestimonyRating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200")} />
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <textarea 
-                                value={editTestimonyComment}
-                                onChange={(e) => setEditTestimonyComment(e.target.value)}
-                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-brand-blue/20"
-                                rows={2}
-                              />
-                              <div className="flex justify-end gap-2">
-                                <button 
-                                  onClick={() => setEditingTestimonyId(null)}
-                                  className="px-2.5 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold uppercase rounded-md"
-                                >
-                                  Cancel
-                                </button>
-                                <button 
-                                  onClick={async () => {
-                                    setIsUpdatingTestimony(true);
-                                    try {
-                                      await proService.updateTestimony(review.id, editTestimonyRating, editTestimonyComment);
-                                      setEditingTestimonyId(null);
-                                      await fetchMyTestimonies();
-                                      setMsg({ type: 'success', text: 'Review updated and sent for moderation.' });
-                                    } catch (err) {
-                                      console.error('Error saving testimony changes:', err);
-                                    } finally {
-                                      setIsUpdatingTestimony(false);
-                                    }
-                                  }}
-                                  disabled={isUpdatingTestimony}
-                                  className="px-3 py-1 bg-brand-blue text-white text-[10px] font-bold uppercase tracking-wider rounded-md"
-                                >
-                                  {isUpdatingTestimony ? 'Saving...' : 'Save'}
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="mt-3 space-y-2">
-                              <div className="flex items-center gap-0.5">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star 
-                                    key={i} 
-                                    className={cn(
-                                      "w-3 h-3", 
-                                      i < review.rating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200"
-                                    )} 
-                                  />
-                                ))}
-                              </div>
-                              <p className="text-xs text-slate-600 leading-relaxed italic">
-                                "{review.comment}"
-                              </p>
-                              
-                              {review.status === 'refused' && review.refusal_reason && (
-                                <div className="p-3 bg-rose-50 rounded-xl border border-rose-100 mt-2">
-                                  <div className="flex items-center gap-1.5 mb-1">
-                                    <XCircle className="w-3 h-3 text-rose-500" />
-                                    <span className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Reason for Refusal:</span>
-                                  </div>
-                                  <p className="text-[11px] text-rose-500/80 leading-normal">{review.refusal_reason}</p>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                    <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
+                      <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+                        <div className="flex items-center gap-2">
+                          <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />
+                          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Saved Events</h3>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                        <span className="text-xs font-extrabold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-full">{favoriteEventIds.length} Favorited</span>
+                      </div>
 
-              {/* Private Chats Access */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
-                <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-emerald-500" />
-                    <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">Private Chats</h3>
-                  </div>
-                </div>
-                
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Connect with other community members regarding testimonials and reviews you have posted or discussed in the past.
-                </p>
-
-                <div className="space-y-3">
-                  {loadingConversations ? (
-                    <div className="py-6 flex justify-center text-slate-400">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    </div>
-                  ) : conversations.length === 0 ? (
-                    <div className="p-4 bg-slate-50/60 rounded-2xl border border-slate-100/80 text-center space-y-2">
-                      <p className="text-xs font-bold text-slate-500">No active discussions yet</p>
-                      <p className="text-[11px] text-slate-400 leading-relaxed">Discover pros and read user reviews to start a private chat with their authors!</p>
-                      <button
-                        onClick={() => {
-                          setActiveSubPage(null);
-                          onNavigate?.('explore');
-                        }}
-                        className="px-4 py-1.5 bg-brand-blue text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all hover:bg-blue-600 active:scale-95 mt-1"
-                      >
-                        Explore Pros
-                      </button>
-                    </div>
-                  ) : (
-                    conversations.slice(0, 3).map((conv) => {
-                      const otherName = conv.otherUser?.full_name || 'Community Member';
-                      const displayedName = formatName(otherName);
-                      const otherAvatar = conv.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayedName)}&background=random`;
-                      
-                      return (
-                        <div 
-                          key={conv.id} 
-                          onClick={() => {
-                            if (onNavigate) {
+                      {favoriteEventIds.length === 0 ? (
+                        <div className="py-12 text-center space-y-4">
+                          <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto text-rose-400">
+                            <Heart className="w-8 h-8" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="font-bold text-slate-800">No favorite events yet</p>
+                            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                              Browse upcoming concerts, workshops, and city tours, and click the heart icon to save them here!
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
                               setActiveSubPage(null);
-                              onNavigate('messages', { chat: conv });
-                            }
-                          }}
-                          className="p-4 flex gap-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer transition-all active:scale-[0.98]"
-                        >
-                          <div className="relative flex-shrink-0">
-                            <img src={otherAvatar} alt="" className="w-10 h-10 rounded-full object-cover border border-slate-100" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start">
-                              <h4 className="text-xs font-bold text-slate-800 truncate">{displayedName}</h4>
-                              <span className="text-[9px] text-slate-400">
-                                {conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : ''}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 truncate mt-0.5">Click to view private conversation</p>
-                          </div>
-                          <div className="flex items-center">
-                            <ChevronRight className="w-4 h-4 text-slate-400" />
-                          </div>
+                              onNavigate?.('events');
+                            }}
+                            className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all cursor-pointer active:scale-95"
+                          >
+                            Explore Events
+                          </button>
                         </div>
-                      );
-                    })
-                  )}
-                  {conversations.length > 3 && (
-                    <button
-                      onClick={() => {
-                        setActiveSubPage(null);
-                        onNavigate?.('messages');
-                      }}
-                      className="w-full text-center py-2 text-xs font-bold text-brand-blue hover:text-blue-600 hover:underline transition-all"
-                    >
-                      See all conversations ({conversations.length})
-                    </button>
-                  )}
-                </div>
-              </div>
+                      ) : (
+                        <div className="divide-y divide-slate-100/80">
+                          {events?.filter(ev => favoriteEventIds.includes(ev.id)).map(event => {
+                            const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
+                            return (
+                              <div key={event.id} className="py-4 first:pt-0 last:pb-0 flex items-center gap-4 group">
+                                <img 
+                                  src={event.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=200'} 
+                                  alt="" 
+                                  className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-50 border border-slate-100" 
+                                  referrerPolicy="no-referrer"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-[9px] font-extrabold uppercase tracking-widest text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100/50">
+                                    {event.category || 'Event'}
+                                  </span>
+                                  <h4 className="font-bold text-slate-900 group-hover:text-orange-500 transition-colors text-sm truncate mt-1.5">
+                                    {event.title}
+                                  </h4>
+                                  <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                    <span>{formattedDate}</span>
+                                    {event.location && (
+                                      <>
+                                        <span className="text-slate-300">•</span>
+                                        <span className="truncate max-w-[150px]">{event.location}</span>
+                                      </>
+                                    )}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setActiveSubPage(null);
+                                      onNavigate?.('events', { eventId: event.id });
+                                    }}
+                                    className="px-3.5 py-1.5 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                  >
+                                    View
+                                  </button>
+                                  <button
+                                    onClick={() => onToggleFavoriteEvent?.(event.id)}
+                                    className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                                    title="Remove favorite"
+                                  >
+                                    <Heart className="w-4 h-4 fill-rose-500" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
 
+                {myAccountTab === 'testimonies' && (
+                  <motion.div 
+                    key="tab-testimonies"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                  >
+                    <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
+                      <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+                        <div className="flex items-center gap-2">
+                          <Star className="w-5 h-5 text-brand-yellow fill-brand-yellow" />
+                          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Testimonials</h3>
+                        </div>
+                        <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full">{myTestimonies.length} Left</span>
+                      </div>
 
+                      {loadingTestimonies ? (
+                        <div className="py-8 flex justify-center text-slate-400">
+                          <Loader2 className="w-6 h-6 animate-spin" />
+                        </div>
+                      ) : myTestimonies.length === 0 ? (
+                        <div className="py-8 text-center text-slate-400 italic text-sm">
+                          You have not left any testimonials yet.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {myTestimonies.map((review) => {
+                            const associatedPro = allPros?.find((p) => String(p.id) === String(review.pro_id));
+                            const isEditing = editingTestimonyId === review.id;
+                            const isProcessing = deletingId === review.id;
+                            
+                            return (
+                              <div key={review.id} className={cn(
+                                "p-5 rounded-2xl border transition-all duration-300",
+                                review.status === 'pending' ? "bg-amber-50/30 border-amber-100" : 
+                                review.status === 'refused' ? "bg-rose-50/30 border-rose-100" : "bg-slate-50/55 border-slate-100"
+                              )}>
+                                <div className="flex justify-between items-start gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                      <p className="font-bold text-slate-800 text-sm truncate">
+                                        {associatedPro ? associatedPro.name : 'Professional'}
+                                      </p>
+                                      <span className={cn(
+                                        "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md",
+                                        review.status === 'approved' ? "bg-emerald-50 text-emerald-600" : 
+                                        review.status === 'refused' ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600 animate-pulse"
+                                      )}>
+                                        {review.status || 'pending'}
+                                      </span>
+                                    </div>
+                                    {associatedPro?.profession && (
+                                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{associatedPro.profession}</p>
+                                    )}
+                                  </div>
+                                  
+                                  {!isEditing && (
+                                    <div className="flex items-center gap-2">
+                                      <button 
+                                        onClick={() => {
+                                          setEditingTestimonyId(review.id);
+                                          setEditTestimonyRating(review.rating);
+                                          setEditTestimonyComment(review.comment);
+                                        }}
+                                        disabled={isProcessing}
+                                        className="h-8 px-3 bg-white text-slate-500 border border-slate-200 rounded-xl hover:text-brand-blue hover:border-brand-blue/30 text-[10px] font-bold uppercase tracking-wide transition-all active:scale-95 flex items-center justify-center disabled:opacity-50"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button 
+                                        onClick={() => setShowConfirmAction(prev => ({ ...prev, [review.id]: 'delete' }))}
+                                        disabled={isProcessing}
+                                        className={cn(
+                                          "h-8 w-8 border rounded-xl transition-all active:scale-95 flex items-center justify-center shrink-0",
+                                          isProcessing ? "bg-slate-50 border-slate-100 text-slate-300" : "bg-white border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-100"
+                                        )}
+                                        title="Delete Review"
+                                      >
+                                        {isProcessing ? (
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
 
+                                {showConfirmAction[review.id] === 'delete' && (
+                                  <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100 flex flex-col gap-3 animate-in fade-in zoom-in-95 my-3">
+                                    <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest text-center">Delete this testimonial permanently?</p>
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={async () => {
+                                          setDeletingId(review.id);
+                                          try {
+                                            const success = await proService.deleteTestimony(review.id);
+                                            if (success) {
+                                              await fetchMyTestimonies();
+                                              refetchPros?.();
+                                              setMsg({ type: 'success', text: 'Testimonial deleted successfully.' });
+                                            }
+                                          } catch (err) {
+                                            console.error('Delete error:', err);
+                                            setMsg({ type: 'error', text: 'Failed to delete testimonial.' });
+                                          } finally {
+                                            setDeletingId(null);
+                                            setShowConfirmAction(prev => ({ ...prev, [review.id]: null }));
+                                          }
+                                        }}
+                                        disabled={isProcessing}
+                                        className="flex-1 h-9 bg-rose-500 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-rose-600 transition-all disabled:opacity-50"
+                                      >
+                                        {isProcessing ? 'Deleting...' : 'Yes, Delete'}
+                                      </button>
+                                      <button
+                                        onClick={() => setShowConfirmAction(prev => ({ ...prev, [review.id]: null }))}
+                                        disabled={isProcessing}
+                                        className="flex-1 h-9 bg-white text-slate-400 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-slate-100 hover:bg-slate-50 transition-all"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {isEditing ? (
+                                  <div className="space-y-3 pt-2 bg-white rounded-xl p-3 border border-slate-200">
+                                    <div className="flex items-center gap-1">
+                                      <label className="text-xs font-bold text-slate-500 animate-pulse">Rating:</label>
+                                      <div className="flex items-center gap-0.5">
+                                        {[1,2,3,4,5].map((s) => (
+                                          <button 
+                                            key={s} 
+                                            onClick={() => setEditTestimonyRating(s)}
+                                            className="p-0.5"
+                                          >
+                                            <Star className={cn("w-4 h-4", s <= editTestimonyRating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200")} />
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <textarea 
+                                      value={editTestimonyComment}
+                                      onChange={(e) => setEditTestimonyComment(e.target.value)}
+                                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-brand-blue/20"
+                                      rows={2}
+                                    />
+                                    <div className="flex justify-end gap-2">
+                                      <button 
+                                        onClick={() => setEditingTestimonyId(null)}
+                                        className="px-2.5 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold uppercase rounded-md"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button 
+                                        onClick={async () => {
+                                          setIsUpdatingTestimony(true);
+                                          try {
+                                            await proService.updateTestimony(review.id, editTestimonyRating, editTestimonyComment);
+                                            setEditingTestimonyId(null);
+                                            await fetchMyTestimonies();
+                                            setMsg({ type: 'success', text: 'Review updated and sent for moderation.' });
+                                          } catch (err) {
+                                            console.error('Error saving testimony changes:', err);
+                                          } finally {
+                                            setIsUpdatingTestimony(false);
+                                          }
+                                        }}
+                                        disabled={isUpdatingTestimony}
+                                        className="px-3 py-1 bg-brand-blue text-white text-[10px] font-bold uppercase tracking-wider rounded-md"
+                                      >
+                                        {isUpdatingTestimony ? 'Saving...' : 'Save'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="mt-3 space-y-2">
+                                    <div className="flex items-center gap-0.5">
+                                      {[...Array(5)].map((_, i) => (
+                                        <Star 
+                                          key={i} 
+                                          className={cn(
+                                            "w-3 h-3", 
+                                            i < review.rating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200"
+                                          )} 
+                                        />
+                                      ))}
+                                    </div>
+                                    <p className="text-xs text-slate-600 leading-relaxed italic">
+                                      "{review.comment}"
+                                    </p>
+                                    
+                                    {review.status === 'refused' && review.refusal_reason && (
+                                      <div className="p-3 bg-rose-50 rounded-xl border border-rose-100 mt-2">
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <XCircle className="w-3 h-3 text-rose-500" />
+                                          <span className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Reason for Refusal:</span>
+                                        </div>
+                                        <p className="text-[11px] text-rose-500/80 leading-normal">{review.refusal_reason}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+
+                {myAccountTab === 'chats' && (
+                  <motion.div 
+                    key="tab-chats"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                  >
+                    <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
+                      <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="w-5 h-5 text-emerald-500" />
+                          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">Private Chats</h3>
+                        </div>
+                        <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full">{conversations.length} Active</span>
+                      </div>
+                      
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Connect with other community members regarding testimonials and reviews you have posted or discussed in the past.
+                      </p>
+
+                      <div className="space-y-3">
+                        {loadingConversations ? (
+                          <div className="py-6 flex justify-center text-slate-400">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          </div>
+                        ) : conversations.length === 0 ? (
+                          <div className="p-4 bg-slate-50/60 rounded-2xl border border-slate-100/80 text-center space-y-2">
+                            <p className="text-xs font-bold text-slate-500">No active discussions yet</p>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">Discover pros and read user reviews to start a private chat with their authors!</p>
+                            <button
+                              onClick={() => {
+                                setActiveSubPage(null);
+                                onNavigate?.('explore');
+                              }}
+                              className="px-4 py-1.5 bg-brand-blue text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all hover:bg-blue-600 active:scale-95 mt-1"
+                            >
+                              Explore Pros
+                            </button>
+                          </div>
+                        ) : (
+                          conversations.map((conv) => {
+                            const otherName = conv.otherUser?.full_name || 'Community Member';
+                            const displayedName = formatName(otherName);
+                            const otherAvatar = conv.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayedName)}&background=random`;
+                            
+                            return (
+                              <div 
+                                key={conv.id} 
+                                onClick={() => {
+                                  if (onNavigate) {
+                                    setActiveSubPage(null);
+                                    onNavigate('messages', { chat: conv });
+                                  }
+                                }}
+                                className="p-4 flex gap-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-2xl cursor-pointer transition-all active:scale-[0.98]"
+                              >
+                                <div className="relative flex-shrink-0">
+                                  <img src={otherAvatar} alt="" className="w-10 h-10 rounded-full object-cover border border-slate-100" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex justify-between items-start">
+                                    <h4 className="text-xs font-bold text-slate-800 truncate">{displayedName}</h4>
+                                    <span className="text-[9px] text-slate-400">
+                                      {conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : ''}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 truncate mt-0.5">Click to view private conversation</p>
+                                </div>
+                                <div className="flex items-center">
+                                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </ProfileSubPage>
         )}

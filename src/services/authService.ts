@@ -35,6 +35,7 @@ export interface Profile {
   chat_enabled?: boolean;
   created_at?: string;
   updated_at?: string;
+  favorite_event_ids?: string[];
 }
 
 export const authService = {
@@ -340,9 +341,13 @@ export const authService = {
  *   avatar_url text,
  *   is_admin boolean default false,
  *   chat_enabled boolean default true,
+ *   favorite_event_ids text[] default '{}'::text[] not null,
  *   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
  *   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
  * );
+ * 
+ * -- SQL to add favorite_event_ids to an existing profiles table:
+ * -- alter table public.profiles add column if not exists favorite_event_ids text[] default '{}'::text[] not null;
  * 
  * -- Set up Row Level Security
  * alter table profiles enable row level security;

@@ -107,15 +107,15 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
   // Month label for the active event slide
   const eventMonthLabel = (() => {
-    if (!currentEvent) return 'Événements';
+    if (!currentEvent) return 'Events';
     const d = getEventStartDate(currentEvent);
     if (d) {
       try {
-        const m = new Intl.DateTimeFormat('fr-FR', { month: 'long' }).format(d);
+        const m = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(d);
         return m.charAt(0).toUpperCase() + m.slice(1);
       } catch {}
     }
-    return 'Agenda';
+    return 'Schedule';
   })();
 
   const handleNext = (e: React.MouseEvent) => {
@@ -148,14 +148,14 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       onClick={() => onNavigate('events', { eventId: currentEvent.id })}
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
-      className="flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-white border border-slate-100 hover:border-brand-blue/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
+      className="flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-white border border-slate-100 hover:border-orange-500/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
     >
       <div className="relative flex-1 flex flex-col justify-between">
         {/* Header Badges */}
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-brand-blue/5 text-brand-blue border border-brand-blue/10 uppercase tracking-widest shrink-0">
-              <Calendar className="w-3 h-3 text-brand-blue" />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-orange-50 text-orange-600 border border-orange-200/60 uppercase tracking-widest shrink-0">
+              <Calendar className="w-3 h-3 text-orange-500" />
               <span>Event Highlights</span>
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 border border-amber-500/20 shrink-0">
@@ -199,7 +199,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                       initial={{ width: "0%" }}
                       animate={{ width: isPaused ? undefined : "100%" }}
                       transition={{ duration: isPaused ? 0 : AUTO_SCROLL_SECONDS, ease: "linear" }}
-                      className="h-full bg-brand-blue"
+                      className="h-full bg-orange-500"
                     />
                   </div>
                 )}
@@ -230,7 +230,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
               {/* Event Details */}
               <div className="space-y-1.5 pt-0.5 flex-1 flex flex-col justify-between">
                 <div>
-                  <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-[13px] leading-snug line-clamp-2">
+                  <h4 className="font-bold text-slate-900 group-hover:text-orange-500 transition-colors text-[13px] leading-snug line-clamp-2">
                     {currentEvent.title}
                   </h4>
 
@@ -267,7 +267,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                     className={cn(
                       "h-1.5 rounded-full transition-all cursor-pointer",
                       isActive
-                        ? "w-4 bg-brand-blue"
+                        ? "w-4 bg-orange-500"
                         : "w-1.5 bg-slate-200 hover:bg-slate-300"
                     )}
                   />
@@ -286,7 +286,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                 type="button"
                 onClick={handlePrev}
                 aria-label="Previous event"
-                className="p-1 rounded-full bg-slate-100 text-slate-500 hover:bg-brand-blue hover:text-white transition-all cursor-pointer active:scale-95"
+                className="p-1 rounded-full bg-slate-100 text-slate-500 hover:bg-orange-500 hover:text-white transition-all cursor-pointer active:scale-95"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
@@ -294,7 +294,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                 type="button"
                 onClick={handleNext}
                 aria-label="Next event"
-                className="p-1 rounded-full bg-slate-100 text-slate-500 hover:bg-brand-blue hover:text-white transition-all cursor-pointer active:scale-95"
+                className="p-1 rounded-full bg-slate-100 text-slate-500 hover:bg-orange-500 hover:text-white transition-all cursor-pointer active:scale-95"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
