@@ -86,14 +86,16 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     }
   }, [count, currentIndex]);
 
-  // Automatic scrolling (every 4.5 seconds), pauses on hover
+  // Automatic scrolling (7 seconds per event), pauses on hover
+  const AUTO_SCROLL_SECONDS = 7;
+
   useEffect(() => {
     if (count <= 1 || isPaused) return;
 
     const interval = setInterval(() => {
       setDirection(1);
       setCurrentIndex((prev) => (prev + 1) % count);
-    }, 4500);
+    }, AUTO_SCROLL_SECONDS * 1000);
 
     return () => clearInterval(interval);
   }, [count, isPaused, currentIndex]);
@@ -191,13 +193,13 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
                 {/* Subtle auto-play indicator line */}
                 {count > 1 && (
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-black/10 overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-[2px] bg-black/15 overflow-hidden z-10">
                     <motion.div
                       key={`progress-${currentIndex}-${isPaused}`}
                       initial={{ width: "0%" }}
                       animate={{ width: isPaused ? undefined : "100%" }}
-                      transition={{ duration: isPaused ? 0 : 4.5, ease: "linear" }}
-                      className="h-full bg-brand-blue/80"
+                      transition={{ duration: isPaused ? 0 : AUTO_SCROLL_SECONDS, ease: "linear" }}
+                      className="h-full bg-brand-blue"
                     />
                   </div>
                 )}
