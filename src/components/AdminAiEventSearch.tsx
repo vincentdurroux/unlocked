@@ -31,7 +31,13 @@ import {
   RefreshCw,
   Eye,
   CheckCircle2,
-  Ticket
+  Ticket,
+  Archive,
+  FolderPlus,
+  CheckSquare,
+  Square,
+  Cpu,
+  AlertTriangle
 } from 'lucide-react';
 import { APIProvider, Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 import { eventService, isSameDay } from '../services/eventService';
@@ -80,15 +86,15 @@ const MONTH_OPTIONS = [
 ];
 
 const SEARCH_CATEGORIES = [
-  { id: "All Categories", name: "✨ All Categories", icon: "✨", query: "Top popular events, concerts, exhibitions, and shows in Valencia" },
-  { id: "Art", name: "🎨 Art & Museums", icon: "🎨", query: "Major art museum exhibitions at Bombas Gens, IVAM, CAIXAFORUM, and MuVIM in Valencia" },
-  { id: "Theater", name: "🎭 Theater & Performing Arts", icon: "🎭", query: "Theater plays, opera, dance performances, and musicals at Palau de les Arts, Teatro Principal, and Teatro Olympia in Valencia" },
-  { id: "Music", name: "🎵 Concerts & Live Music", icon: "🎵", query: "High-profile live music concerts, classical symphonies, jazz shows, and music festivals in Valencia" },
-  { id: "Gastronomy", name: "🍷 Gastronomy & Wine Fairs", icon: "🍷", query: "Food festivals, wine tastings, culinary markets, and gastronomy fairs in Valencia" },
-  { id: "Tech", name: "💻 Tech, Business & Innovation", icon: "💻", query: "Tech summits, startup conferences, AI forums, and innovation summits in Valencia" },
-  { id: "Community", name: "👥 Expat & Community Meetups", icon: "👥", query: "Expat networking meetups, community gatherings, cultural exchanges, and social events in Valencia" },
-  { id: "Sports", name: "⚽ Sports & Outdoor", icon: "⚽", query: "Marathons, running races, outdoor fitness events, sports tournaments, and Turia garden activities in Valencia" },
-  { id: "Workshops", name: "🛠️ Workshops & Masterclasses", icon: "🛠️", query: "Creative art workshops, cooking masterclasses, language exchanges, and educational seminars in Valencia" }
+  { id: "All Categories", name: "✨ All", icon: "✨", query: "Top popular events, concerts, exhibitions, and shows in Valencia" },
+  { id: "Art", name: "🎨 Art", icon: "🎨", query: "Major art museum exhibitions at Bombas Gens, IVAM, CAIXAFORUM, and MuVIM in Valencia" },
+  { id: "Theater", name: "🎭 Theater", icon: "🎭", query: "Theater plays, opera, dance performances, and musicals at Palau de les Arts, Teatro Principal, and Teatro Olympia in Valencia" },
+  { id: "Music", name: "🎵 Music", icon: "🎵", query: "High-profile live music concerts, classical symphonies, jazz shows, and music festivals in Valencia" },
+  { id: "Gastronomy", name: "🍷 Gastronomy", icon: "🍷", query: "Food festivals, wine tastings, culinary markets, and gastronomy fairs in Valencia" },
+  { id: "Tech", name: "💻 Tech", icon: "💻", query: "Tech summits, startup conferences, AI forums, and innovation summits in Valencia" },
+  { id: "Community", name: "👥 Community", icon: "👥", query: "Expat networking meetups, community gatherings, cultural exchanges, and social events in Valencia" },
+  { id: "Sports", name: "⚽ Sports", icon: "⚽", query: "Marathons, running races, outdoor fitness events, sports tournaments, and Turia garden activities in Valencia" },
+  { id: "Workshops", name: "🛠️ Workshops", icon: "🛠️", query: "Creative art workshops, cooking masterclasses, language exchanges, and educational seminars in Valencia" }
 ];
 
 const CATEGORY_OPTIONS = [
@@ -245,12 +251,6 @@ export function parseDescriptionSections(description: string) {
     expect = description.trim();
   }
 
-  // Enrich with emojis
-  if (expect) expect = enrichSectionTextWithEmojis(expect, 'expect');
-  if (perfectFor) perfectFor = enrichSectionTextWithEmojis(perfectFor, 'perfectFor');
-  if (goodToKnow) goodToKnow = enrichSectionTextWithEmojis(goodToKnow, 'goodToKnow');
-  if (moreInfo) moreInfo = enrichSectionTextWithEmojis(moreInfo, 'moreInfo');
-
   return { expect, perfectFor, goodToKnow, moreInfo, hasRealSections };
 }
 
@@ -388,7 +388,6 @@ export function SimpleMarkdown({ children }: { children: string }) {
         {parsed.expect && (
           <div className="space-y-1.5 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center gap-1.5 font-bold text-brand-blue text-xs uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5 text-sky-500 shrink-0" />
               <span>✨ What can you expect?</span>
             </div>
             <div className="leading-relaxed text-slate-700 font-normal">
@@ -400,11 +399,18 @@ export function SimpleMarkdown({ children }: { children: string }) {
         {parsed.perfectFor && (
           <div className="space-y-1.5 bg-emerald-50/60 p-3.5 rounded-2xl border border-emerald-200/80 shadow-2xs">
             <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs uppercase tracking-wider">
-              <Compass className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span>🎯 Perfect for</span>
             </div>
-            <div className="leading-relaxed text-emerald-950 font-normal">
-              {renderFormattedContent(parsed.perfectFor, "font-bold text-emerald-950")}
+            <div className="space-y-1.5 leading-relaxed text-emerald-950 font-normal">
+              {parsed.perfectFor.split('\n').map(line => line.trim()).filter(Boolean).map((line, idx) => {
+                const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
+                return (
+                  <div key={idx} className="flex items-start gap-2">
+                    <span className="text-emerald-600 font-extrabold mt-0.5">•</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-bold text-emerald-950")}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -412,7 +418,6 @@ export function SimpleMarkdown({ children }: { children: string }) {
         {parsed.goodToKnow && (
           <div className="space-y-1.5 bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
             <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs uppercase tracking-wider">
-              <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               <span>💡 Good to know (tips)</span>
             </div>
             <div className="leading-relaxed text-amber-950 font-normal">
@@ -424,7 +429,6 @@ export function SimpleMarkdown({ children }: { children: string }) {
         {parsed.moreInfo && (
           <div className="space-y-1.5 bg-sky-50/60 p-3.5 rounded-2xl border border-sky-200/80 shadow-2xs">
             <div className="flex items-center gap-1.5 font-bold text-sky-900 text-xs uppercase tracking-wider">
-              <ExternalLink className="w-3.5 h-3.5 text-sky-600 shrink-0" />
               <span>🔗 More information</span>
             </div>
             <div className="leading-relaxed text-sky-950 font-normal">
@@ -458,7 +462,19 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
   const [savingId, setSavingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [expandedMapId, setExpandedMapId] = useState<string | null>(null);
-  const [hideSavedInDb, setHideSavedInDb] = useState(true);
+  const [hideSavedInDb, setHideSavedInDb] = useState(false);
+
+  // Gemini model selection & quota resilience
+  const [selectedGeminiModel, setSelectedGeminiModel] = useState<string>('auto');
+  const [modelUsedInResults, setModelUsedInResults] = useState<string | null>(null);
+  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
+
+  // Selective repository placement states
+  const [repoStoredIds, setRepoStoredIds] = useState<Record<string, boolean>>({});
+  const [selectedEventIds, setSelectedEventIds] = useState<Record<string, boolean>>({});
+  const [addingToRepoId, setAddingToRepoId] = useState<string | null>(null);
+  const [isBatchAdding, setIsBatchAdding] = useState(false);
+  const [resultsFilter, setResultsFilter] = useState<'all' | 'unadded' | 'in_repo'>('all');
 
   // Repository tab state (ai_discovered_events table)
   const [dbDiscoveredEvents, setDbDiscoveredEvents] = useState<GroundedEvent[]>([]);
@@ -646,10 +662,10 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
   const buildEditedDescription = () => {
     const parts = [];
-    if (editExpect.trim()) parts.push(`### 1. What can you expect?\n${enrichSectionTextWithEmojis(editExpect.trim(), 'expect')}`);
-    if (editPerfectFor.trim()) parts.push(`### 2. Perfect for\n${enrichSectionTextWithEmojis(editPerfectFor.trim(), 'perfectFor')}`);
-    if (editGoodToKnow.trim()) parts.push(`### 3. Good to know (tips)\n${enrichSectionTextWithEmojis(editGoodToKnow.trim(), 'goodToKnow')}`);
-    if (editMoreInfo.trim()) parts.push(`### 4. More information\n${enrichSectionTextWithEmojis(editMoreInfo.trim(), 'moreInfo')}`);
+    if (editExpect.trim()) parts.push(`### 1. What can you expect?\n${editExpect.trim()}`);
+    if (editPerfectFor.trim()) parts.push(`### 2. Perfect for\n${editPerfectFor.trim()}`);
+    if (editGoodToKnow.trim()) parts.push(`### 3. Good to know (tips)\n${editGoodToKnow.trim()}`);
+    if (editMoreInfo.trim()) parts.push(`### 4. More information\n${editMoreInfo.trim()}`);
     return parts.join('\n\n');
   };
 
@@ -738,20 +754,23 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
     setEditingEvent(null);
   };
 
-  const handleSearch = async (queryOverride?: string, monthOverride?: string, categoryOverride?: string) => {
+  const handleSearch = async (queryOverride?: string, monthOverride?: string, categoryOverride?: string, modelOverride?: string) => {
     const q = (queryOverride || aiQuery).trim();
     const m = monthOverride || selectedMonth;
     const cat = categoryOverride !== undefined ? categoryOverride : selectedCategory;
+    const targetModel = modelOverride || selectedGeminiModel;
 
     if (!q) return;
 
     if (queryOverride) setAiQuery(queryOverride);
     if (monthOverride) setSelectedMonth(monthOverride);
     if (categoryOverride !== undefined) setSelectedCategory(categoryOverride);
+    if (modelOverride) setSelectedGeminiModel(modelOverride);
 
     setIsSearching(true);
     setErrorMsg(null);
     setSummary(null);
+    setFallbackNotice(null);
     const catLabel = cat !== 'All Categories' ? ` [Category: ${cat}]` : '';
     setSearchStep(`🔍 Deep searching live web sources for ${m}${catLabel} in Valencia...`);
 
@@ -796,7 +815,8 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
           month: m,
           category: cat,
           location: "Valencia, Spain and surrounding Valencian Community",
-          existingTitles
+          existingTitles,
+          preferredModel: targetModel
         })
       });
 
@@ -811,29 +831,54 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
       const data = await res.json();
       const rawEvents: GroundedEvent[] = data.events || [];
 
-      // Save raw discovered events into dedicated Supabase table `ai_discovered_events`
-      if (rawEvents.length > 0) {
-        await eventService.saveDiscoveredEvents(rawEvents, q, m);
+      // Record model used and fallback status
+      if (data.model_used) {
+        setModelUsedInResults(data.model_used);
+      }
+      if (data.fallback_triggered && data.fallback_reason) {
+        setFallbackNotice(data.fallback_reason);
+      } else {
+        setFallbackNotice(null);
       }
 
-      const updatedSavedState = { ...savedEventIds };
+      // Check which discovered events are ALREADY in the `ai_discovered_events` repository
+      const repoNormMap: Record<string, boolean> = {};
+      aiDiscoveredDbEvents.forEach(e => {
+        if (e.title) repoNormMap[e.title.toLowerCase().replace(/[^\w]/g, '')] = true;
+      });
+
+      // Check which discovered events are ALREADY published in `events`
+      const pubNormMap: Record<string, boolean> = {};
+      dbEvents.forEach(e => {
+        if (e.title) pubNormMap[e.title.toLowerCase().replace(/[^\w]/g, '')] = true;
+      });
+
+      const initialRepoState: Record<string, boolean> = {};
+      const initialSavedState: Record<string, boolean> = {};
+
       rawEvents.forEach(ev => {
         const norm = ev.title.toLowerCase().replace(/[^\w]/g, '');
-        if (existingNormalizedMap[norm]) {
-          updatedSavedState[ev.id] = true;
+        if (repoNormMap[norm]) {
+          initialRepoState[ev.id] = true;
+        }
+        if (pubNormMap[norm]) {
+          initialSavedState[ev.id] = true;
         }
       });
-      setSavedEventIds(updatedSavedState);
 
+      setRepoStoredIds(initialRepoState);
+      setSavedEventIds(initialSavedState);
+      setSelectedEventIds({});
       setDiscoveredEvents(rawEvents);
       setSummary(data.summary || null);
 
       if (!rawEvents || rawEvents.length === 0) {
         setMsg?.({ type: 'error', text: `No new verified real events found for "${q}" in ${m}.` });
       } else {
+        const unstoredCount = rawEvents.filter(ev => !initialRepoState[ev.id]).length;
         setMsg?.({
           type: 'success',
-          text: `Found ${rawEvents.length} events (stored in ai_discovered_events table)!`
+          text: `Found ${rawEvents.length} events (${unstoredCount} pending)! Choose which ones to place in the repository.`
         });
       }
     } catch (err: any) {
@@ -846,6 +891,120 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
       setIsSearching(false);
       setSearchStep("");
     }
+  };
+
+  const handleAddToRepository = async (ev: GroundedEvent) => {
+    setAddingToRepoId(ev.id);
+    try {
+      await eventService.saveDiscoveredEvents([ev], aiQuery, selectedMonth);
+      setRepoStoredIds(prev => ({ ...prev, [ev.id]: true }));
+      setSelectedEventIds(prev => {
+        const next = { ...prev };
+        delete next[ev.id];
+        return next;
+      });
+      await fetchDbRepository();
+      setMsg?.({
+        type: 'success',
+        text: `"${ev.title}" has been placed into the repository!`
+      });
+    } catch (err: any) {
+      console.error('Error adding event to repository:', err);
+      setMsg?.({
+        type: 'error',
+        text: `Failed to add "${ev.title}" to repository.`
+      });
+    } finally {
+      setAddingToRepoId(null);
+    }
+  };
+
+  const handleAddSelectedToRepository = async () => {
+    const selectedList = discoveredEvents.filter(ev => selectedEventIds[ev.id] && !repoStoredIds[ev.id]);
+    if (selectedList.length === 0) return;
+
+    setIsBatchAdding(true);
+    try {
+      await eventService.saveDiscoveredEvents(selectedList, aiQuery, selectedMonth);
+      const newRepoState = { ...repoStoredIds };
+      selectedList.forEach(ev => {
+        newRepoState[ev.id] = true;
+      });
+      setRepoStoredIds(newRepoState);
+      setSelectedEventIds({});
+      await fetchDbRepository();
+      setMsg?.({
+        type: 'success',
+        text: `${selectedList.length} events added to the repository!`
+      });
+    } catch (err: any) {
+      console.error('Error adding selected events to repository:', err);
+      setMsg?.({
+        type: 'error',
+        text: 'Failed to add selected events to repository.'
+      });
+    } finally {
+      setIsBatchAdding(false);
+    }
+  };
+
+  const handleAddAllToRepository = async () => {
+    const unstoredList = discoveredEvents.filter(ev => !repoStoredIds[ev.id]);
+    if (unstoredList.length === 0) return;
+
+    setIsBatchAdding(true);
+    try {
+      await eventService.saveDiscoveredEvents(unstoredList, aiQuery, selectedMonth);
+      const newRepoState = { ...repoStoredIds };
+      unstoredList.forEach(ev => {
+        newRepoState[ev.id] = true;
+      });
+      setRepoStoredIds(newRepoState);
+      setSelectedEventIds({});
+      await fetchDbRepository();
+      setMsg?.({
+        type: 'success',
+        text: `All ${unstoredList.length} events added to the repository!`
+      });
+    } catch (err: any) {
+      console.error('Error adding all events to repository:', err);
+      setMsg?.({
+        type: 'error',
+        text: 'Failed to add all events to repository.'
+      });
+    } finally {
+      setIsBatchAdding(false);
+    }
+  };
+
+  const toggleSelectEvent = (id: string) => {
+    setSelectedEventIds(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const handleSelectAll = () => {
+    const next: Record<string, boolean> = {};
+    discoveredEvents.forEach(ev => {
+      if (!repoStoredIds[ev.id]) {
+        next[ev.id] = true;
+      }
+    });
+    setSelectedEventIds(next);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedEventIds({});
+  };
+
+  const handleDismissDiscoveredEvent = (id: string) => {
+    setDiscoveredEvents(prev => prev.filter(e => e.id !== id));
+    setSelectedEventIds(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   const handleImportToDatabase = async (ev: GroundedEvent) => {
@@ -896,6 +1055,9 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
   };
 
   const handleDeleteDiscovered = async (id: string, title: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${title}" from the AI Discovered repository?`)) {
+      return;
+    }
     try {
       await eventService.deleteDiscoveredEvent(id);
       setDbDiscoveredEvents(prev => prev.filter(item => item.id !== id));
@@ -1003,16 +1165,16 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                 </div>
                 <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-3.5 py-1.5 rounded-full shadow-inner">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Grounded Web Search • Auto-Saves to `ai_discovered_events`</span>
+                  <span>Grounded Web Search • Selective Repository Placement</span>
                 </div>
               </div>
 
               <div>
                 <h3 className="text-2xl sm:text-3xl font-bold font-display text-white tracking-tight">
-                  Discover, Customize & Import Verified Real Events
+                  Discover, Select & Place Verified Real Events
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-3xl leading-relaxed">
-                  Query live web sources across official Valencia venues. Events found are automatically archived in the <span className="font-bold text-sky-300 font-mono">ai_discovered_events</span> Supabase table for review and publication.
+                  Query live web sources across official Valencia venues. Review discovered events and selectively choose which ones to place into your <span className="font-bold text-sky-300 font-mono">ai_discovered_events</span> repository.
                 </p>
               </div>
 
@@ -1090,7 +1252,51 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                     )}
                   </button>
                 </div>
+
+                {/* Gemini Model Selection & Automatic Quota Protection */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-sky-400" />
+                      Modèle IA :
+                    </span>
+                    <div className="relative">
+                      <select
+                        value={selectedGeminiModel}
+                        onChange={(e) => setSelectedGeminiModel(e.target.value)}
+                        className="pl-3 pr-7 py-1.5 bg-white/10 hover:bg-white/15 focus:bg-white/20 text-white rounded-xl border border-white/15 focus:border-brand-blue focus:outline-none transition-all text-xs font-bold appearance-none cursor-pointer"
+                      >
+                        <option value="auto" className="bg-slate-900 text-white font-medium">
+                          ⚡ Auto-Failover (Gemini 3.8 Flash + Basculement auto si quota épuisé)
+                        </option>
+                        <option value="gemini-3.8-flash" className="bg-slate-900 text-white font-medium">
+                          Gemini 3.8 Flash (Recherche approfondie)
+                        </option>
+                        <option value="gemini-3.1-flash-lite" className="bg-slate-900 text-white font-medium">
+                          Gemini 3.1 Flash-Lite (Quota très élevé / Rapide)
+                        </option>
+                        <option value="gemini-flash-latest" className="bg-slate-900 text-white font-medium">
+                          Gemini Flash Latest
+                        </option>
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-300 font-medium">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Protection quotas active (basculement dynamique automatique)</span>
+                  </div>
+                </div>
               </form>
+
+              {/* Fallback Notice Banner if quota hit occurred */}
+              {fallbackNotice && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs font-semibold flex items-center gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>{fallbackNotice}</span>
+                </div>
+              )}
 
               {/* Specific Category Quick Search Bar */}
               <div className="space-y-2 pt-3 border-t border-white/10">
@@ -1154,58 +1360,174 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
           {/* Discovered Events Grid */}
           {discoveredEvents.length > 0 && (() => {
-            const savedCount = discoveredEvents.filter(ev => savedEventIds[ev.id]).length;
-            const visibleEvents = hideSavedInDb
-              ? discoveredEvents.filter(ev => !savedEventIds[ev.id])
-              : discoveredEvents;
+            const repoStoredCount = discoveredEvents.filter(ev => repoStoredIds[ev.id]).length;
+            const unstoredCount = discoveredEvents.filter(ev => !repoStoredIds[ev.id]).length;
+            const selectedCount = Object.keys(selectedEventIds).filter(id => selectedEventIds[id] && !repoStoredIds[id]).length;
+            const isAllSelected = unstoredCount > 0 && selectedCount === unstoredCount;
+
+            const visibleEvents = discoveredEvents.filter(ev => {
+              if (resultsFilter === 'unadded') return !repoStoredIds[ev.id];
+              if (resultsFilter === 'in_repo') return repoStoredIds[ev.id];
+              return true;
+            });
 
             return (
               <div className="space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
                   <div className="space-y-1">
-                    <h3 className="text-xl sm:text-2xl font-bold font-display text-slate-900 flex items-center gap-2.5">
+                    <h3 className="text-xl sm:text-2xl font-bold font-display text-slate-900 flex flex-wrap items-center gap-2.5">
                       <Sparkles className="w-6 h-6 text-brand-blue" />
-                      Verified Events Discovered for {selectedMonth} ({visibleEvents.length})
+                      <span>Verified Events Discovered for {selectedMonth} ({discoveredEvents.length})</span>
+                      {modelUsedInResults && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1 shadow-sm">
+                          <Cpu className="w-3 h-3 text-brand-blue" />
+                          <span>{modelUsedInResults}</span>
+                        </span>
+                      )}
                     </h3>
                     {summary && <p className="text-xs sm:text-sm text-slate-500 font-medium">{summary}</p>}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    {savedCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Filter chips */}
+                    <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
                       <button
                         type="button"
-                        onClick={() => setHideSavedInDb(!hideSavedInDb)}
-                        className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 border ${
-                          hideSavedInDb
-                            ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-                            : "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200"
+                        onClick={() => setResultsFilter('all')}
+                        className={`px-3 py-1 rounded-lg transition-all ${
+                          resultsFilter === 'all'
+                            ? "bg-white text-slate-900 shadow-sm"
+                            : "text-slate-600 hover:text-slate-900"
                         }`}
                       >
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>{hideSavedInDb ? `Hiding ${savedCount} saved in Supabase` : `Showing all ${discoveredEvents.length} (${savedCount} saved)`}</span>
+                        All ({discoveredEvents.length})
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => setResultsFilter('unadded')}
+                        className={`px-3 py-1 rounded-lg transition-all ${
+                          resultsFilter === 'unadded'
+                            ? "bg-amber-500 text-white shadow-sm"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        Pending Choice ({unstoredCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setResultsFilter('in_repo')}
+                        className={`px-3 py-1 rounded-lg transition-all ${
+                          resultsFilter === 'in_repo'
+                            ? "bg-emerald-600 text-white shadow-sm"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        In Repository ({repoStoredCount})
+                      </button>
+                    </div>
 
                     <button
                       type="button"
                       onClick={() => { setDiscoveredEvents([]); setSummary(null); }}
-                      className="text-xs font-bold text-slate-400 hover:text-slate-600 underline uppercase tracking-wider"
+                      className="text-xs font-bold text-slate-400 hover:text-slate-600 underline uppercase tracking-wider ml-2 cursor-pointer"
                     >
                       Clear Results
                     </button>
                   </div>
                 </div>
 
-                {visibleEvents.length === 0 && hideSavedInDb && (
+                {/* Selective Placement Control Banner */}
+                <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl flex flex-wrap items-center justify-between gap-4 shadow-lg border border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+                      <Archive className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-sm text-white">Choose events for the Repository</h4>
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                          {repoStoredCount} in Repository
+                        </span>
+                        {unstoredCount > 0 && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                            {unstoredCount} Pending Choice
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        Select events to place them into your AI Discovered Repository, or add them one by one below.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {unstoredCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={isAllSelected ? handleDeselectAll : handleSelectAll}
+                        className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all border border-white/15 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {isAllSelected ? (
+                          <>
+                            <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Deselect All</span>
+                          </>
+                        ) : (
+                          <>
+                            <Square className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Select All Pending ({unstoredCount})</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {selectedCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleAddSelectedToRepository}
+                        disabled={isBatchAdding}
+                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 shadow-md shadow-emerald-500/25 cursor-pointer disabled:opacity-50"
+                      >
+                        {isBatchAdding ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Adding...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Place Selected in Repository ({selectedCount})</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {unstoredCount > 0 && selectedCount === 0 && (
+                      <button
+                        type="button"
+                        onClick={handleAddAllToRepository}
+                        disabled={isBatchAdding}
+                        className="px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
+                      >
+                        <FolderPlus className="w-3.5 h-3.5" />
+                        <span>Add All ({unstoredCount})</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {visibleEvents.length === 0 && (
                   <div className="p-8 text-center bg-slate-50 rounded-3xl border border-slate-200 space-y-3">
                     <ShieldCheck className="w-10 h-10 text-emerald-500 mx-auto" />
-                    <p className="text-sm font-bold text-slate-800">All discovered events are already saved in your Supabase database!</p>
+                    <p className="text-sm font-bold text-slate-800">
+                      {resultsFilter === 'unadded' ? 'All events are already placed in your repository!' : 'No events match this filter.'}
+                    </p>
                     <button
                       type="button"
-                      onClick={() => setHideSavedInDb(false)}
+                      onClick={() => setResultsFilter('all')}
                       className="px-4 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100"
                     >
-                      Show {savedCount} Previously Saved Events
+                      Show All {discoveredEvents.length} Events
                     </button>
                   </div>
                 )}
@@ -1213,19 +1535,52 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {visibleEvents.map((event) => {
                     const isSaved = savedEventIds[event.id];
-                    const isSaving = savingId === event.id;
+                    const isInRepo = repoStoredIds[event.id];
+                    const isSelected = !!selectedEventIds[event.id];
+                    const isAddingThis = addingToRepoId === event.id;
                     const isMapExpanded = expandedMapId === event.id;
 
                     return (
                       <div
                         key={event.id}
                         className={`bg-white rounded-[32px] border-2 transition-all shadow-sm hover:shadow-xl p-6 sm:p-8 flex flex-col justify-between overflow-hidden relative group ${
-                          isSaved
+                          isInRepo
                             ? "border-emerald-300 bg-emerald-50/10 ring-1 ring-emerald-400/20"
+                            : isSelected
+                            ? "border-sky-400 bg-sky-50/10 ring-2 ring-sky-400/30"
                             : "border-slate-100 hover:border-slate-200"
                         }`}
                       >
-                        <div className="space-y-5">
+                        <div className="space-y-4">
+                          {/* Card Selection & Action Header */}
+                          <div className="flex items-center justify-between gap-2 pb-1">
+                            <label className="flex items-center gap-2.5 cursor-pointer select-none group/chk">
+                              <input
+                                type="checkbox"
+                                checked={isSelected || isInRepo}
+                                disabled={isInRepo}
+                                onChange={() => toggleSelectEvent(event.id)}
+                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer disabled:cursor-not-allowed disabled:opacity-75"
+                              />
+                              <span className={`text-xs font-bold transition-colors ${
+                                isInRepo ? 'text-emerald-700' : isSelected ? 'text-brand-blue font-extrabold' : 'text-slate-700 group-hover/chk:text-slate-900'
+                              }`}>
+                                {isInRepo ? '✓ In Repository' : isSelected ? 'Selected for Repository' : 'Choose for Repository'}
+                              </span>
+                            </label>
+
+                            {!isInRepo && (
+                              <button
+                                type="button"
+                                onClick={() => handleDismissDiscoveredEvent(event.id)}
+                                className="text-slate-400 hover:text-red-500 p-1 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                title="Dismiss / Ignore this event"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+
                           <div className="relative h-52 sm:h-60 rounded-2xl overflow-hidden bg-slate-100 group-hover:scale-[1.01] transition-transform duration-500">
                             <img
                               src={event.image}
@@ -1251,9 +1606,18 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                               {getCategoryWithEmoji(event.category)}
                             </div>
 
-                            <div className="absolute bottom-4 left-4 bg-emerald-950/80 backdrop-blur border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-lg">
-                              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                              <span>Stored in `ai_discovered_events`</span>
+                            <div className="absolute bottom-4 left-4 bg-slate-900/85 backdrop-blur border border-white/20 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-lg">
+                              {isInRepo ? (
+                                <>
+                                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span className="text-emerald-300">In Repository</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                                  <span className="text-amber-200">Pending Choice</span>
+                                </>
+                              )}
                             </div>
                           </div>
 
@@ -1394,44 +1758,57 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                         </div>
 
                         <div className="pt-6 mt-6 border-t border-slate-100 flex flex-col gap-2.5">
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(event)}
-                            className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
-                          >
-                            <Edit3 className="w-4 h-4 text-sky-400" />
-                            <span>Edit Information Before Publish</span>
-                          </button>
+                          {!isInRepo ? (
+                            <button
+                              type="button"
+                              onClick={() => handleAddToRepository(event)}
+                              disabled={isAddingThis}
+                              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-sm shadow-emerald-600/20 active:scale-[0.98] cursor-pointer"
+                            >
+                              {isAddingThis ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <span>Ajout au repository...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="w-4 h-4" />
+                                  <span>+ Placer dans le Repository</span>
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <div className="w-full py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                              <span>✓ Placé dans le Repository</span>
+                            </div>
+                          )}
 
                           <button
                             type="button"
-                            disabled={isSaving || unpublishingId === event.id || unpublishingId === event.title}
-                            onClick={() => isSaved ? handleDeletePublished(event) : handleImportToDatabase(event)}
-                            className={`w-full py-3.5 rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-md ${
-                              isSaved
-                                ? "bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/20 active:scale-[0.98]"
-                                : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20 active:scale-[0.98]"
-                            }`}
+                            onClick={() => {
+                              if (!repoStoredIds[event.id]) {
+                                eventService.saveDiscoveredEvents([event], aiQuery, selectedMonth).then(() => {
+                                  setRepoStoredIds(prev => ({ ...prev, [event.id]: true }));
+                                  fetchDbRepository();
+                                });
+                              }
+                              if (onEditEvent) {
+                                onEditEvent(event as any);
+                              } else {
+                                openEditModal(event);
+                              }
+                            }}
+                            className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] cursor-pointer"
                           >
-                            {isSaving || unpublishingId === event.id || unpublishingId === event.title ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : isSaved ? (
-                              <>
-                                <Trash2 className="w-4 h-4" />
-                                <span>Unpublish (Return to Repo)</span>
-                              </>
-                            ) : (
-                              <>
-                                <Plus className="w-4 h-4" />
-                                <span>Publish Direct to Events</span>
-                              </>
-                            )}
+                            <Edit3 className="w-4 h-4 text-sky-400" />
+                            <span>Edit Information</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => setExpandedMapId(isMapExpanded ? null : event.id)}
-                            className="w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5"
+                            className="w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                           >
                             <MapIcon className="w-3.5 h-3.5 text-brand-blue" />
                             <span>{isMapExpanded ? "Hide Map" : "View Map & Location"}</span>
@@ -1717,36 +2094,12 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
                       <button
                         type="button"
-                        disabled={isSaving || unpublishingId === event.id || unpublishingId === event.title}
-                        onClick={() => isPublished ? handleDeletePublished(event) : handleImportToDatabase(event)}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
-                          isPublished
-                            ? "bg-amber-600 hover:bg-amber-700 text-white shadow-xs"
-                            : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm"
-                        }`}
-                      >
-                        {isSaving || unpublishingId === event.id || unpublishingId === event.title ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : isPublished ? (
-                          <>
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Unpublish</span>
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Publish</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
                         onClick={() => handleDeleteDiscovered(event.id, event.title)}
-                        className="p-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all"
+                        className="flex-1 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5"
                         title="Delete from repository"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </div>
@@ -2127,75 +2480,6 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                   </div>
                 </div>
 
-                {/* Admission & Ticketing Section */}
-                <div className="p-4 bg-orange-50/50 rounded-2xl border border-orange-200/70 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="font-bold text-orange-950 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                      <Ticket className="w-3.5 h-3.5 text-orange-600" />
-                      Admission & Ticket Purchasing
-                    </label>
-                    <div className="flex bg-white p-0.5 rounded-lg border border-orange-200 text-[10px] font-bold">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditIsFree(true);
-                          if (!editPrice || editPrice === '') setEditPrice('Free');
-                        }}
-                        className={`px-2.5 py-0.5 rounded-md transition-all cursor-pointer ${
-                          editIsFree ? "bg-emerald-500 text-white shadow-2xs font-extrabold" : "text-slate-500"
-                        }`}
-                      >
-                        Free Event
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditIsFree(false);
-                          if (editPrice === 'Free') setEditPrice('');
-                        }}
-                        className={`px-2.5 py-0.5 rounded-md transition-all cursor-pointer ${
-                          !editIsFree ? "bg-orange-500 text-white shadow-2xs font-extrabold" : "text-slate-500"
-                        }`}
-                      >
-                        Paid Tickets
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-600 uppercase">Price / Entry Fee</label>
-                      <input
-                        type="text"
-                        value={editPrice}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditPrice(val);
-                          if (val.toLowerCase().includes('free') || val === '0' || val === '0€') {
-                            setEditIsFree(true);
-                          }
-                        }}
-                        placeholder="e.g. 25€ or Free admission"
-                        className="w-full p-2.5 bg-white rounded-xl border border-orange-200/80 font-semibold text-slate-900 text-xs focus:ring-2 focus:ring-orange-400/30 outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-600 uppercase">Ticket Purchase URL</label>
-                      <input
-                        type="url"
-                        value={editTicketUrl}
-                        onChange={(e) => {
-                          setEditTicketUrl(e.target.value);
-                          if (!editWebsiteUrl) setEditWebsiteUrl(e.target.value);
-                        }}
-                        placeholder="https://feverup.com/... or ticketing link"
-                        className="w-full p-2.5 bg-white rounded-xl border border-orange-200/80 font-semibold text-slate-900 text-xs focus:ring-2 focus:ring-orange-400/30 outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-
                 {/* Four Structured Description Sections */}
                 <div className="space-y-4 pt-2 border-t border-slate-100">
                   <div className="flex items-center gap-2">
@@ -2207,18 +2491,9 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
                   <div className="space-y-1.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
                     <div className="flex items-center justify-between gap-2">
-                      <label className="font-bold text-brand-blue text-xs uppercase tracking-wider flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-sky-500" />
+                      <label className="font-bold text-brand-blue text-xs uppercase tracking-wider">
                         1. What can you expect?
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => setEditExpect(prev => enrichSectionTextWithEmojis(prev, 'expect'))}
-                        className="text-[10px] font-bold text-brand-blue bg-white hover:bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-200 transition-colors shadow-2xs cursor-pointer"
-                        title="Automatically add themed emojis to bullet points"
-                      >
-                        ✨ Auto-Enrich Emojis
-                      </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-1 my-1 py-1 px-2 bg-white/70 rounded-lg border border-slate-100">
                       <span className="text-[10px] font-semibold text-slate-400 mr-1">Insert:</span>
@@ -2244,18 +2519,9 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
                   <div className="space-y-1.5 bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100">
                     <div className="flex items-center justify-between gap-2">
-                      <label className="font-bold text-emerald-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                        <Compass className="w-3.5 h-3.5 text-emerald-600" />
+                      <label className="font-bold text-emerald-900 text-xs uppercase tracking-wider">
                         2. Perfect for
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => setEditPerfectFor(prev => enrichSectionTextWithEmojis(prev, 'perfectFor'))}
-                        className="text-[10px] font-bold text-emerald-800 bg-white hover:bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 transition-colors shadow-2xs cursor-pointer"
-                        title="Automatically add audience emojis to bullet points"
-                      >
-                        ✨ Auto-Enrich Emojis
-                      </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-1 my-1 py-1 px-2 bg-white/70 rounded-lg border border-emerald-100/60">
                       <span className="text-[10px] font-semibold text-emerald-700/60 mr-1">Insert:</span>
@@ -2281,18 +2547,9 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
                   <div className="space-y-1.5 bg-amber-50/60 p-4 rounded-2xl border border-amber-200/60">
                     <div className="flex items-center justify-between gap-2">
-                      <label className="font-bold text-amber-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                        <Info className="w-3.5 h-3.5 text-amber-600" />
+                      <label className="font-bold text-amber-900 text-xs uppercase tracking-wider">
                         3. Good to know (tips)
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => setEditGoodToKnow(prev => enrichSectionTextWithEmojis(prev, 'goodToKnow'))}
-                        className="text-[10px] font-bold text-amber-900 bg-white hover:bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 transition-colors shadow-2xs cursor-pointer"
-                        title="Automatically add tip & practical emojis to bullet points"
-                      >
-                        ✨ Auto-Enrich Emojis
-                      </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-1 my-1 py-1 px-2 bg-white/70 rounded-lg border border-amber-100">
                       <span className="text-[10px] font-semibold text-amber-800/60 mr-1">Insert:</span>
@@ -2318,18 +2575,9 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
                   <div className="space-y-1.5 bg-sky-50/50 p-4 rounded-2xl border border-sky-100">
                     <div className="flex items-center justify-between gap-2">
-                      <label className="font-bold text-sky-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                        <ExternalLink className="w-3.5 h-3.5 text-sky-600" />
+                      <label className="font-bold text-sky-900 text-xs uppercase tracking-wider">
                         4. More information
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => setEditMoreInfo(prev => enrichSectionTextWithEmojis(prev, 'moreInfo'))}
-                        className="text-[10px] font-bold text-sky-900 bg-white hover:bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-200 transition-colors shadow-2xs cursor-pointer"
-                        title="Automatically add link and contact emojis"
-                      >
-                        ✨ Auto-Enrich Emojis
-                      </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-1 my-1 py-1 px-2 bg-white/70 rounded-lg border border-sky-100">
                       <span className="text-[10px] font-semibold text-sky-800/60 mr-1">Insert:</span>

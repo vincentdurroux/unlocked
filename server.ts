@@ -76,6 +76,24 @@ function proSpeaksAnyLanguage(pro: any, requestedLanguages: string[]): boolean {
   });
 }
 
+function isQuotaOrRateLimitError(error: any): boolean {
+  if (!error) return false;
+  const status = error.status || error.statusCode || error.code;
+  if (status === 429 || status === 503) return true;
+  const str = `${error.message || ""} ${error.stack || ""} ${JSON.stringify(error)}`.toLowerCase();
+  return (
+    str.includes("429") ||
+    str.includes("quota") ||
+    str.includes("exhausted") ||
+    str.includes("resource_exhausted") ||
+    str.includes("rate limit") ||
+    str.includes("too many requests") ||
+    str.includes("overloaded") ||
+    str.includes("capacity") ||
+    str.includes("resource has been exhausted")
+  );
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -526,9 +544,9 @@ ${JSON.stringify(eventListBrief, null, 2)}`,
     }
   });
 
-  // Agentic AI real-time event discovery endpoint (Perplexity-style, zero-hallucination)
+  // Agentic AI real-time event discovery endpoint (Perplexity-style, zero-hallucination) with multi-model quota fallback
   app.post("/api/search-events", async (req, res) => {
-    const { query, location, month, category, existingTitles } = req.body;
+    const { query, location, month, category, existingTitles, preferredModel } = req.body;
 
     if (!query || typeof query !== "string" || !query.trim()) {
       return res.status(400).json({ error: "The 'query' parameter is required." });
@@ -618,66 +636,121 @@ FOR EACH REAL EVENT FOUND:
 - verified_real: true`;
 
       const ai = getAiClient();
-      const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: `Perform a deep web search for REAL upcoming events in ${searchLocation} for target month/timeframe "${targetMonth}" matching request: "${query}". For every paid event, ensure you find and include the official ticket purchase URL and price details in the description and ticket_url. Return the most famous, popular, or relevant verified events.`,
-        config: {
-          tools: [
-            { googleSearch: {} }
-          ],
-          systemInstruction: sysInstruction,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              summary: { type: Type.STRING, description: "Detailed factual summary of the search results in English" },
-              events: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    start_date: { type: Type.STRING },
-                    end_date: { type: Type.STRING },
-                    start_time: { type: Type.STRING },
-                    end_time: { type: Type.STRING },
-                    location: { type: Type.STRING },
-                    category: { type: Type.STRING },
-                    image: { type: Type.STRING },
-                    is_free: { type: Type.BOOLEAN },
-                    price: { type: Type.STRING },
-                    ticket_url: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    coordinates: {
+
+      // Candidate models for search: primary model with Google Search grounding, followed by resilient fallbacks
+      const defaultChain = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+      const candidateModels: string[] = [];
+      if (preferredModel && preferredModel !== "auto" && typeof preferredModel === "string") {
+        candidateModels.push(preferredModel);
+        defaultChain.forEach(m => {
+          if (m !== preferredModel) candidateModels.push(m);
+        });
+      } else {
+        candidateModels.push(...defaultChain);
+      }
+
+      let response: any = null;
+      let usedModel = candidateModels[0];
+      let fallbackTriggered = false;
+      let fallbackReason: string | null = null;
+      let lastError: any = null;
+
+      for (let i = 0; i < candidateModels.length; i++) {
+        const currentModel = candidateModels[i];
+        try {
+          console.log(`[api/search-events] Attempting search with model: ${currentModel} (attempt ${i + 1}/${candidateModels.length})`);
+          response = await ai.models.generateContent({
+            model: currentModel,
+            contents: `Perform a deep web search for REAL upcoming events in ${searchLocation} for target month/timeframe "${targetMonth}" matching request: "${query}". For every paid event, ensure you find and include the official ticket purchase URL and price details in the description and ticket_url. Return the most famous, popular, or relevant verified events.`,
+            config: {
+              tools: [
+                { googleSearch: {} }
+              ],
+              systemInstruction: sysInstruction,
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  summary: { type: Type.STRING, description: "Detailed factual summary of the search results in English" },
+                  events: {
+                    type: Type.ARRAY,
+                    items: {
                       type: Type.OBJECT,
                       properties: {
-                        lat: { type: Type.NUMBER },
-                        lng: { type: Type.NUMBER }
-                      },
-                      required: ["lat", "lng"]
-                    },
-                    sources: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          title: { type: Type.STRING },
-                          url: { type: Type.STRING }
+                        title: { type: Type.STRING },
+                        start_date: { type: Type.STRING },
+                        end_date: { type: Type.STRING },
+                        start_time: { type: Type.STRING },
+                        end_time: { type: Type.STRING },
+                        location: { type: Type.STRING },
+                        category: { type: Type.STRING },
+                        image: { type: Type.STRING },
+                        is_free: { type: Type.BOOLEAN },
+                        price: { type: Type.STRING },
+                        ticket_url: { type: Type.STRING },
+                        description: { type: Type.STRING },
+                        coordinates: {
+                          type: Type.OBJECT,
+                          properties: {
+                            lat: { type: Type.NUMBER },
+                            lng: { type: Type.NUMBER }
+                          },
+                          required: ["lat", "lng"]
                         },
-                        required: ["title", "url"]
-                      }
-                    },
-                    verified_real: { type: Type.BOOLEAN }
-                  },
-                  required: ["title", "start_date", "location", "category", "description"]
-                }
-              }
-            },
-            required: ["events"]
-          },
-          temperature: 0.1
+                        sources: {
+                          type: Type.ARRAY,
+                          items: {
+                            type: Type.OBJECT,
+                            properties: {
+                              title: { type: Type.STRING },
+                              url: { type: Type.STRING }
+                            },
+                            required: ["title", "url"]
+                          }
+                        },
+                        verified_real: { type: Type.BOOLEAN }
+                      },
+                      required: ["title", "start_date", "location", "category", "description"]
+                    }
+                  }
+                },
+                required: ["events"]
+              },
+              temperature: 0.1
+            }
+          });
+
+          usedModel = currentModel;
+          if (i > 0) {
+            fallbackTriggered = true;
+            fallbackReason = `Basculement automatique effectué car le modèle précédent a rencontré une limite ou un épuisement de quota (${candidateModels[i - 1]} → ${currentModel})`;
+            console.log(`[api/search-events] Fallback succeeded with model: ${currentModel}`);
+          }
+          break; // Succeeded!
+        } catch (err: any) {
+          lastError = err;
+          const errMsg = err?.message || String(err);
+          const isQuota = isQuotaOrRateLimitError(err);
+          console.warn(`[api/search-events] Model ${currentModel} failed (quota/limit: ${isQuota}, error: ${errMsg}).`);
+
+          if (i < candidateModels.length - 1) {
+            const nextModel = candidateModels[i + 1];
+            console.log(`[api/search-events] Automatically trying fallback model: ${nextModel}...`);
+            fallbackTriggered = true;
+            continue;
+          }
         }
-      });
+      }
+
+      if (!response) {
+        console.error("[api/search-events] All candidate models failed:", lastError);
+        const isQuota = isQuotaOrRateLimitError(lastError);
+        return res.status(isQuota ? 429 : 500).json({
+          error: isQuota
+            ? "Les quotas temporaires de Google Gemini sont épuisés pour ce modèle. Veuillez réessayer dans quelques instants ou sélectionner le modèle 'Gemini 3.1 Flash-Lite' dans les options."
+            : (lastError?.message || "Failed to search events at this time.")
+        });
+      }
 
       const parsed = JSON.parse(response.text || "{}");
       const rawEvents = Array.isArray(parsed.events) ? parsed.events : [];
@@ -858,7 +931,10 @@ FOR EACH REAL EVENT FOUND:
       return res.json({
         summary: parsed.summary || `Found ${formattedEvents.length} verified real events in Valencia for ${targetMonth}.`,
         events: formattedEvents,
-        search_groundings: defaultSources
+        search_groundings: defaultSources,
+        model_used: usedModel,
+        fallback_triggered: fallbackTriggered,
+        fallback_reason: fallbackReason
       });
     } catch (error: any) {
       console.error("[api] Event Search AI error:", error);

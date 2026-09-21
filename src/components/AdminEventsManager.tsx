@@ -116,20 +116,20 @@ const VALENCIA_PHOTO_PRESETS = [
 ];
 
 const COMMON_CATEGORIES = [
-  { label: 'All Categories', value: 'all' },
-  { label: '🎨 Art & Expo', value: 'Art' },
-  { label: '🏛️ Museums & Exhibitions', value: 'Museums' },
-  { label: '🎶 Music & Concerts', value: 'Music' },
-  { label: '🌙 Nightlife & Parties', value: 'Nightlife' },
-  { label: '🍷 Gastronomy & Wine', value: 'Gastronomy' },
-  { label: '🎭 Theatre & Stage', value: 'Theatre' },
-  { label: '🌳 Outdoor & Nature', value: 'Outdoor' },
-  { label: '⚽ Sports & Active', value: 'Sports' },
-  { label: '💻 Tech & Digital', value: 'Tech' },
-  { label: '👥 Community & Social', value: 'Community' },
-  { label: '👨‍👩‍👧 Family & Kids', value: 'Family' },
-  { label: '🌟 Festivals & Fairs', value: 'Festival' },
-  { label: '🛠️ Workshops & Classes', value: 'Workshops' }
+  { label: 'All', value: 'all' },
+  { label: '🎨 Art', value: 'Art' },
+  { label: '🏛️ Museums', value: 'Museums' },
+  { label: '🎶 Music', value: 'Music' },
+  { label: '🌙 Nightlife', value: 'Nightlife' },
+  { label: '🍷 Gastronomy', value: 'Gastronomy' },
+  { label: '🎭 Theatre', value: 'Theatre' },
+  { label: '🌳 Outdoor', value: 'Outdoor' },
+  { label: '⚽ Sports', value: 'Sports' },
+  { label: '💻 Tech', value: 'Tech' },
+  { label: '👥 Community', value: 'Community' },
+  { label: '👨‍👩‍👧 Family', value: 'Family' },
+  { label: '🌟 Festival', value: 'Festival' },
+  { label: '🛠️ Workshops', value: 'Workshops' }
 ];
 
 interface AdminEventsManagerProps {
@@ -1052,64 +1052,6 @@ export function AdminEventsManager({
                     </APIProvider>
                   </div>
                 )}
-
-                {/* Tickets & Pricing Section */}
-                <div className="pt-4 border-t border-slate-100 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                      <Ticket className="w-3.5 h-3.5 text-orange-500" />
-                      Admission & Ticket Purchase URL
-                    </label>
-                    <div className="flex bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold">
-                      <button
-                        type="button"
-                        onClick={() => setNewEvent({ ...newEvent, is_free: true, price: newEvent.price && newEvent.price !== 'Free' ? newEvent.price : 'Free' })}
-                        className={cn(
-                          "px-2.5 py-0.5 rounded-md transition-all cursor-pointer",
-                          newEvent.is_free ? "bg-white text-emerald-700 shadow-2xs font-extrabold" : "text-slate-500"
-                        )}
-                      >
-                        Free Event
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setNewEvent({ ...newEvent, is_free: false, price: newEvent.price === 'Free' ? '' : newEvent.price })}
-                        className={cn(
-                          "px-2.5 py-0.5 rounded-md transition-all cursor-pointer",
-                          !newEvent.is_free ? "bg-white text-orange-700 shadow-2xs font-extrabold" : "text-slate-500"
-                        )}
-                      >
-                        Paid Tickets
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600">Price / Entry Fee</label>
-                      <input
-                        value={newEvent.price || ''}
-                        onChange={e => {
-                          const val = e.target.value;
-                          const isFree = val.toLowerCase().includes('free') || val === '0' || val === '0€';
-                          setNewEvent({ ...newEvent, price: val, is_free: isFree ? true : newEvent.is_free });
-                        }}
-                        placeholder="Ex: 25€ / person or Free"
-                        className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 font-medium text-slate-900 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600">Ticket Purchase URL</label>
-                      <input
-                        value={newEvent.ticket_url || ''}
-                        onChange={e => setNewEvent({ ...newEvent, ticket_url: e.target.value })}
-                        placeholder="https://feverup.com/... or https://..."
-                        className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 font-medium text-slate-900 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                      />
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -1252,21 +1194,9 @@ export function AdminEventsManager({
                   {/* Section 1 */}
                   <div className="space-y-1.5 bg-sky-50/40 p-3 rounded-2xl border border-sky-100">
                     <div className="flex items-center justify-between gap-1">
-                      <label className="text-[11px] font-extrabold text-brand-blue uppercase flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 text-sky-500" />
+                      <label className="text-[11px] font-extrabold text-brand-blue uppercase">
                         1. What can you expect?
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const enriched = enrichSectionTextWithEmojis(editExpect, 'expect');
-                          setEditExpect(enriched);
-                          syncStructuredToDescription(enriched, editPerfectFor, editGoodToKnow, editMoreInfo);
-                        }}
-                        className="text-[9px] font-bold text-sky-700 bg-white hover:bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200 cursor-pointer"
-                      >
-                        ✨ Enrich Emojis
-                      </button>
                     </div>
                     <div className="flex flex-wrap gap-1 bg-white/70 p-1 rounded-lg border border-sky-100/60">
                       {['✨', '🎨', '🎶', '🎭', '🍷', '🥘', '🌟', '💃', '💻', '🏃', '🛠️'].map(emoji => (
@@ -1299,21 +1229,9 @@ export function AdminEventsManager({
                   {/* Section 2 */}
                   <div className="space-y-1.5 bg-emerald-50/40 p-3 rounded-2xl border border-emerald-100">
                     <div className="flex items-center justify-between gap-1">
-                      <label className="text-[11px] font-extrabold text-emerald-800 uppercase flex items-center gap-1.5">
-                        <Compass className="w-3 h-3 text-emerald-600" />
+                      <label className="text-[11px] font-extrabold text-emerald-800 uppercase">
                         2. Perfect for
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const enriched = enrichSectionTextWithEmojis(editPerfectFor, 'perfectFor');
-                          setEditPerfectFor(enriched);
-                          syncStructuredToDescription(editExpect, enriched, editGoodToKnow, editMoreInfo);
-                        }}
-                        className="text-[9px] font-bold text-emerald-800 bg-white hover:bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 cursor-pointer"
-                      >
-                        ✨ Enrich Emojis
-                      </button>
                     </div>
                     <div className="flex flex-wrap gap-1 bg-white/70 p-1 rounded-lg border border-emerald-100/60">
                       {['👥', '🎯', '👨‍👩‍👧', '🌍', '🍷', '🎶', '🎨', '💑', '🎓', '🤝'].map(emoji => (
@@ -1346,21 +1264,9 @@ export function AdminEventsManager({
                   {/* Section 3 */}
                   <div className="space-y-1.5 bg-amber-50/40 p-3 rounded-2xl border border-amber-100">
                     <div className="flex items-center justify-between gap-1">
-                      <label className="text-[11px] font-extrabold text-amber-800 uppercase flex items-center gap-1.5">
-                        <Info className="w-3 h-3 text-amber-600" />
+                      <label className="text-[11px] font-extrabold text-amber-800 uppercase">
                         3. Good to know (tips)
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const enriched = enrichSectionTextWithEmojis(editGoodToKnow, 'goodToKnow');
-                          setEditGoodToKnow(enriched);
-                          syncStructuredToDescription(editExpect, editPerfectFor, enriched, editMoreInfo);
-                        }}
-                        className="text-[9px] font-bold text-amber-900 bg-white hover:bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 cursor-pointer"
-                      >
-                        ✨ Enrich Emojis
-                      </button>
                     </div>
                     <div className="flex flex-wrap gap-1 bg-white/70 p-1 rounded-lg border border-amber-100">
                       {['💡', '🎟️', '⏰', '🚇', '🅿️', '💶', '♿', '☀️', '📱'].map(emoji => (
@@ -1393,21 +1299,9 @@ export function AdminEventsManager({
                   {/* Section 4 */}
                   <div className="space-y-1.5 bg-teal-50/40 p-3 rounded-2xl border border-teal-100">
                     <div className="flex items-center justify-between gap-1">
-                      <label className="text-[11px] font-extrabold text-teal-800 uppercase flex items-center gap-1.5">
-                        <ExternalLink className="w-3 h-3 text-teal-600" />
+                      <label className="text-[11px] font-extrabold text-teal-800 uppercase">
                         4. More information (links & tickets)
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const enriched = enrichSectionTextWithEmojis(editMoreInfo, 'moreInfo');
-                          setEditMoreInfo(enriched);
-                          syncStructuredToDescription(editExpect, editPerfectFor, editGoodToKnow, enriched);
-                        }}
-                        className="text-[9px] font-bold text-teal-900 bg-white hover:bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200 cursor-pointer"
-                      >
-                        ✨ Enrich Emojis
-                      </button>
                     </div>
                     <div className="flex flex-wrap gap-1 bg-white/70 p-1 rounded-lg border border-teal-100">
                       {['🔗', '🌐', '🎟️', '📍', '📱', '📧', '📋', '⭐'].map(emoji => (

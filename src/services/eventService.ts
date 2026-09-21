@@ -180,7 +180,64 @@ export const eventService = {
       console.error('Error updating event:', error);
       throw error;
     }
+
+    // Harmonize content with ai_discovered_events table if matching by title
+    try {
+      if (event.title) {
+        await supabase
+          .from('ai_discovered_events')
+          .update({
+            title: event.title,
+            start_date: sDate,
+            end_date: eDate,
+            start_time: event.start_time || event.time || null,
+            end_time: event.end_time || null,
+            location: event.location,
+            category: event.category,
+            image_url: event.image_url || event.image,
+            description: event.description || '',
+            lat: payload.lat,
+            lng: payload.lng,
+            sources: event.sources || [],
+            published_to_events: true
+          })
+          .ilike('title', event.title.trim());
+      }
+    } catch (syncErr) {
+      console.warn('Could not sync update to ai_discovered_events:', syncErr);
+    }
+
     return data;
+  },
+
+  async updateDiscoveredEventByTitle(title: string, event: any) {
+    if (!isSupabaseConfigured || !title) return;
+    try {
+      const sDate = event.start_date || event.date || 'Upcoming';
+      const eDate = event.end_date && !isSameDay(sDate, event.end_date) ? event.end_date : null;
+      const payload = {
+        title: event.title || title,
+        start_date: sDate,
+        end_date: eDate,
+        start_time: event.start_time || event.time || null,
+        end_time: event.end_time || null,
+        location: event.location,
+        category: event.category,
+        image_url: event.image_url || event.image,
+        description: event.description || '',
+        lat: event.coordinates?.lat !== undefined ? event.coordinates.lat : event.lat,
+        lng: event.coordinates?.lng !== undefined ? event.coordinates.lng : event.lng,
+        sources: event.sources || [],
+        published_to_events: true
+      };
+
+      await supabase
+        .from('ai_discovered_events')
+        .update(payload)
+        .ilike('title', title.trim());
+    } catch (err) {
+      console.warn('Error updating discovered event by title:', err);
+    }
   },
 
   async deleteEvent(id?: string, title?: string) {

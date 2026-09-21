@@ -444,7 +444,6 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
         {parsed.expect && (
           <div className="space-y-1.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
             <div className="flex items-center gap-1.5 font-bold text-brand-blue text-xs uppercase tracking-wider">
-              <Sparkles className="w-4 h-4 text-sky-500 shrink-0" />
               <span>✨ What can you expect?</span>
             </div>
             <div className="leading-relaxed text-slate-700 font-normal">
@@ -456,11 +455,18 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
         {parsed.perfectFor && (
           <div className="space-y-1.5 bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/80 shadow-2xs">
             <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs uppercase tracking-wider">
-              <Users className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>🎯 Perfect for</span>
             </div>
-            <div className="leading-relaxed text-emerald-955 font-normal">
-              {renderFormattedContent(parsed.perfectFor, "font-bold text-emerald-950")}
+            <div className="space-y-1.5 leading-relaxed text-emerald-955 font-normal">
+              {parsed.perfectFor.split('\n').map(line => line.trim()).filter(Boolean).map((line, idx) => {
+                const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
+                return (
+                  <div key={idx} className="flex items-start gap-2">
+                    <span className="text-emerald-600 font-extrabold mt-0.5">•</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-bold text-emerald-950")}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -468,7 +474,6 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
         {parsed.goodToKnow && (
           <div className="space-y-1.5 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80 shadow-2xs">
             <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs uppercase tracking-wider">
-              <Info className="w-4 h-4 text-amber-600 shrink-0" />
               <span>💡 Good to know (tips)</span>
             </div>
             <div className="leading-relaxed text-amber-955 font-normal">
@@ -480,7 +485,6 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
         {parsed.moreInfo && (
           <div className="space-y-1.5 bg-sky-50/60 p-4 rounded-2xl border border-sky-200/80 shadow-2xs">
             <div className="flex items-center gap-1.5 font-bold text-sky-900 text-xs uppercase tracking-wider">
-              <ExternalLink className="w-4 h-4 text-sky-600 shrink-0" />
               <span>🔗 More information</span>
             </div>
             <div className="leading-relaxed text-sky-955 font-normal">
@@ -15388,7 +15392,6 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
   // Keyword Search & Filters states
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'tomorrow' | 'weekend'>('all');
-  const [priceFilter, setPriceFilter] = useState<'all' | 'free' | 'paid'>('all');
   const [vibeFilter, setVibeFilter] = useState<'all' | 'expat' | 'outdoor' | 'social' | 'family' | 'culture'>('all');
 
   useEffect(() => {
@@ -15434,7 +15437,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
     }
   }, [selectedEventId]);
 
-  const hasActiveFilters = selectedCategory !== 'all' || searchQuery.trim() !== '' || dateFilter !== 'all' || priceFilter !== 'all' || vibeFilter !== 'all';
+  const hasActiveFilters = selectedCategory !== 'all' || searchQuery.trim() !== '' || dateFilter !== 'all' || vibeFilter !== 'all';
 
   // Auto scroll down to results section when filters are applied and events match
   useEffect(() => {
@@ -15444,13 +15447,12 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         el.scrollIntoView({ behavior: 'smooth' });
       }
     }
-  }, [selectedCategory, searchQuery, dateFilter, priceFilter, vibeFilter]);
+  }, [selectedCategory, searchQuery, dateFilter, vibeFilter]);
 
   const handleResetFilters = () => {
     setSelectedCategory('all');
     setSearchQuery('');
     setDateFilter('all');
-    setPriceFilter('all');
     setVibeFilter('all');
   };
 
@@ -15545,16 +15547,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
         }
       }
 
-      // 4. Price Filter
-      const evPrice = (ev.price || '').toLowerCase();
-      const isFree = !!ev.is_free || evPrice.includes('free') || evPrice.includes('gratuit');
-      if (priceFilter === 'free') {
-        if (!isFree) return false;
-      } else if (priceFilter === 'paid') {
-        if (isFree) return false;
-      }
-
-      // 5. Vibe Filter
+      // 4. Vibe Filter
       if (vibeFilter !== 'all') {
         const title = (ev.title || '').toLowerCase();
         const desc = (ev.description || '').toLowerCase();
@@ -15587,7 +15580,7 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
 
       return true;
     });
-  }, [events, selectedCategory, searchQuery, dateFilter, priceFilter, vibeFilter]);
+  }, [events, selectedCategory, searchQuery, dateFilter, vibeFilter]);
 
   // Compute category counts
   const categoryCounts = useMemo(() => {
@@ -15735,14 +15728,14 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
           <span>More Filters</span>
         </h4>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Date Selector */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
               <Calendar className="w-3 h-3 text-orange-500" />
               <span>When</span>
             </label>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
               {[
                 { id: 'all', label: 'Any Day' },
                 { id: 'today', label: 'Today' },
@@ -15756,35 +15749,6 @@ function EventsView({ initialEventId, onModalClose, scrollToTop, events: propEve
                   className={cn(
                     "px-2 py-1.5 text-[11px] font-bold rounded-lg border transition-all text-center cursor-pointer",
                     dateFilter === opt.id
-                      ? "bg-orange-500 border-orange-500 text-white shadow-xs"
-                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Price Selector */}
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
-              <Euro className="w-3 h-3 text-emerald-500" />
-              <span>Price</span>
-            </label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {[
-                { id: 'all', label: 'All' },
-                { id: 'free', label: 'Free' },
-                { id: 'paid', label: 'Paid' }
-              ].map(opt => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setPriceFilter(opt.id as any)}
-                  className={cn(
-                    "px-2 py-1.5 text-[11px] font-bold rounded-lg border transition-all text-center cursor-pointer",
-                    priceFilter === opt.id
                       ? "bg-orange-500 border-orange-500 text-white shadow-xs"
                       : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
                   )}
