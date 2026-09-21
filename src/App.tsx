@@ -117,7 +117,7 @@ import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
 import { LandingEventHighlightsCard } from './components/LandingEventHighlightsCard';
-import { WeatherWidget } from './components/WeatherWidget';
+import { HeaderWeatherWidget } from './components/HeaderWeatherWidget';
 
 // Custom Tooth Icon matching screenshot
 const ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -2756,14 +2756,13 @@ export default function App() {
           style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
           className="bg-white px-4 md:px-6 pb-2 md:pt-3 md:pb-3 flex justify-between items-center border-b border-slate-100 flex-shrink-0 z-30 relative"
         >
-          <div className="flex items-center lg:flex-1 gap-3">
+          <div className="flex items-center lg:flex-1">
             <div 
               onClick={() => navigateTo('home')}
               className="hover:opacity-80 transition-opacity cursor-pointer flex flex-col items-center md:items-start"
             >
               <Logo className="items-center md:items-start" />
             </div>
-            <WeatherWidget variant="pill" className="hidden sm:inline-flex" />
           </div>
 
           {/* Desktop Navigation Links - Centered */}
@@ -2792,7 +2791,10 @@ export default function App() {
             ))}
           </nav>
           
-          <div className="flex items-center justify-end gap-2 md:gap-6 lg:flex-1">
+          <div className="flex items-center justify-end gap-2 md:gap-4 lg:flex-1">
+            {/* Header Weather Widget */}
+            <HeaderWeatherWidget />
+
             {/* Desktop Profile Link */}
             <div className="hidden lg:flex items-center gap-4 border-r border-slate-100 pr-4 mr-2">
                <button 
@@ -10500,11 +10502,6 @@ function HomeView({
               }}
             />
           </div>
-        </div>
-
-        {/* Live Local Weather Widget */}
-        <div className="mb-6">
-          <WeatherWidget variant="card" />
         </div>
 
         {/* Hero Jane Search Assistant Widget */}
