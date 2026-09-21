@@ -29,22 +29,22 @@ interface WeatherData {
   }>;
 }
 
-// Helper to translate WMO weather codes to icon and English label
+// Helper to translate WMO weather codes to icon and soft warm English label
 function getWeatherDetails(code: number) {
   if (code === 0) {
-    return { icon: Sun, label: 'Sunny', color: 'text-amber-500' };
+    return { icon: Sun, label: 'Sunny', color: 'text-amber-500 fill-amber-300/60' };
   } else if (code >= 1 && code <= 3) {
     return { icon: CloudSun, label: 'Partly Cloudy', color: 'text-sky-500' };
   } else if (code === 45 || code === 48) {
     return { icon: CloudFog, label: 'Foggy', color: 'text-slate-400' };
   } else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
-    return { icon: CloudRain, label: 'Rain', color: 'text-blue-500' };
+    return { icon: CloudRain, label: 'Rainy', color: 'text-blue-500' };
   } else if ((code >= 71 && code <= 77) || code === 85 || code === 86) {
-    return { icon: CloudSnow, label: 'Snow', color: 'text-indigo-300' };
+    return { icon: CloudSnow, label: 'Snowy', color: 'text-indigo-400' };
   } else if (code >= 95 && code <= 99) {
     return { icon: CloudLightning, label: 'Thunderstorm', color: 'text-amber-600' };
   }
-  return { icon: Cloud, label: 'Cloudy', color: 'text-slate-500' };
+  return { icon: Cloud, label: 'Cloudy', color: 'text-slate-400' };
 }
 
 export function HeaderWeatherWidget() {
@@ -137,13 +137,13 @@ export function HeaderWeatherWidget() {
 
   return (
     <div className="relative inline-block text-left z-40" ref={containerRef}>
-      {/* Discrete Header Trigger Button */}
+      {/* Soft Warm Header Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`group flex items-center gap-1.5 h-7 px-2.5 rounded-full border transition-all duration-200 cursor-pointer text-[11px] font-bold select-none shrink-0 ${
           isOpen
-            ? 'bg-amber-50 border-amber-300 text-slate-900 shadow-2xs ring-2 ring-amber-400/20'
-            : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 text-slate-700 hover:text-slate-900 shadow-3xs'
+            ? 'bg-[#FFF9EA] border-[#EAD8B1] text-amber-950 shadow-2xs ring-2 ring-amber-400/15'
+            : 'bg-[#FFFDF7] hover:bg-[#FFF9EA] border-[#F2E8D5] text-slate-800 hover:text-slate-900 shadow-3xs'
         }`}
         title="Valencia Weather"
         aria-label="Valencia Weather"
@@ -159,11 +159,11 @@ export function HeaderWeatherWidget() {
         </span>
 
         <ChevronDown 
-          className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-slate-700' : 'group-hover:text-slate-600'}`} 
+          className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-900' : 'group-hover:text-slate-600'}`} 
         />
       </button>
 
-      {/* Unfolded Minimal Dropdown Panel */}
+      {/* Soft Warm Minimal Dropdown Panel */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -171,15 +171,15 @@ export function HeaderWeatherWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.96 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-white border border-slate-200/90 shadow-xl p-3.5 z-50 text-slate-800"
+            className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-white border border-[#EFE5D5] shadow-xl p-3.5 z-50 text-slate-800"
           >
-            {/* Header / Location */}
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            {/* Soft Warm Header Bar */}
+            <div className="flex items-center justify-between pb-2.5 border-b border-[#F4EDE0]">
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-                <MapPin className="w-3.5 h-3.5 text-brand-blue" />
+                <MapPin className="w-3.5 h-3.5 text-amber-500" />
                 <span>Valencia</span>
               </div>
-              <span className="text-[10px] font-semibold text-slate-400">
+              <span className="text-[10px] font-semibold text-amber-800/80 bg-[#FFF7E8] px-2 py-0.5 rounded-full border border-[#F3E5C8]">
                 {currentDetails.label}
               </span>
             </div>
@@ -197,24 +197,24 @@ export function HeaderWeatherWidget() {
                 </p>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 shrink-0">
+              <div className="p-2.5 rounded-2xl bg-[#FFFBF0] border border-[#F5EAD4] shrink-0">
                 <CurrentIcon className={`w-8 h-8 ${currentDetails.color}`} />
               </div>
             </div>
 
-            {/* Key Metrics */}
-            <div className="grid grid-cols-2 gap-2 py-2 px-2.5 bg-slate-50 rounded-xl border border-slate-100/80 text-xs text-center mb-3">
+            {/* Soft Metrics */}
+            <div className="grid grid-cols-2 gap-2 py-2 px-2.5 bg-[#FAF7F0]/80 rounded-xl border border-[#F0E8D8] text-xs text-center mb-3">
               <div>
                 <span className="text-[10px] text-slate-400 font-medium block">Humidity</span>
-                <span className="font-bold text-slate-800 flex items-center justify-center gap-1">
+                <span className="font-bold text-slate-800 flex items-center justify-center gap-1 mt-0.5">
                   <Droplets className="w-3 h-3 text-sky-500" />
                   {weather.humidity}%
                 </span>
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 font-medium block">Wind</span>
-                <span className="font-bold text-slate-800 flex items-center justify-center gap-1">
-                  <Wind className="w-3 h-3 text-teal-500" />
+                <span className="font-bold text-slate-800 flex items-center justify-center gap-1 mt-0.5">
+                  <Wind className="w-3 h-3 text-teal-600" />
                   {weather.windSpeed} km/h
                 </span>
               </div>
@@ -232,7 +232,7 @@ export function HeaderWeatherWidget() {
                   return (
                     <div 
                       key={i} 
-                      className="p-1.5 rounded-lg bg-slate-50/80 border border-slate-100 flex flex-col items-center text-center"
+                      className="p-1.5 rounded-xl bg-[#FAF8F3] border border-[#F0E6D5] flex flex-col items-center text-center"
                     >
                       <span className="text-[10px] font-bold text-slate-600">{f.day}</span>
                       <IconComp className={`w-3.5 h-3.5 ${details.color} my-1`} />
