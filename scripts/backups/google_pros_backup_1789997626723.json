@@ -1,0 +1,1532 @@
+[
+  {
+    "id": "c8d7e524-840a-4328-963e-e041125d1196",
+    "name": "HELLO ENGLISH SCHOOL",
+    "description": "🇬🇧 English language school.\n🇪🇸 HELLO ENGLISH SCHOOL ofrece servicios de enseñanza de idiomas, clases particulares y apoyo educativo en Valencia y alrededores."
+  },
+  {
+    "id": "9608e1d3-95ed-423d-b426-984dda00f8a1",
+    "name": "Français dynamique",
+    "description": "🇬🇧 French language school.\n🇪🇸 Français dynamique ofrece servicios de enseñanza de idiomas, clases particulares y apoyo educativo en Valencia y alrededores."
+  },
+  {
+    "id": "50d03511-a543-498e-9b7c-41a395b52c20",
+    "name": "Centro de estética en Plaza España, Valencia | Bella Esencia",
+    "description": "🇬🇧 Bella Esencia is a calm, personalized beauty and wellness center in Plaza España, Valencia, offering natural and mineral cosmetic treatments, massages, facials, body treatments, Japanese hair spas, pregnancy care, and wellness rituals. It focuses on conscious, respectful care that helps clients relax, reconnect with themselves, and feel cared for.\n🇪🇸 Centro de estética en Plaza España, Valencia | Bella Esencia ofrece servicios profesionales de estética, belleza y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "fae70da5-957b-429b-9a3a-2feba4a6ed60",
+    "name": "Conservatorio Profesional de Música de Riba Roja de Turia",
+    "description": "🇬🇧 Professional music school.\n🇪🇸 Conservatorio Profesional de Música de Riba Roja de Turia ofrece clases creativas, artísticas y culturales en Valencia y alrededores."
+  },
+  {
+    "id": "d7b2a87e-7a98-49dd-af1b-f0cbb20ca50d",
+    "name": "Clínica Dental Ribadent",
+    "description": "🇬🇧 Dentist and dental implant clinic.\n🇪🇸 Clínica Dental Ribadent ofrece servicios de odontología y salud bucodental en Valencia y alrededores."
+  },
+  {
+    "id": "9593d07b-45d1-4297-b18f-b26948c77da1",
+    "name": "Clinica Cedes",
+    "description": "🇬🇧 Dental clinic.\n🇪🇸 Clinica Cedes ofrece servicios de odontología y salud bucodental en Valencia y alrededores."
+  },
+  {
+    "id": "eea32c67-3363-4079-a7ea-18d3786c7ecf",
+    "name": "Túria canina",
+    "description": "🇬🇧 Dog training and education.\n🇪🇸 Túria canina ofrece servicios de educación y adiestramiento canino en Valencia y alrededores."
+  },
+  {
+    "id": "d705560a-0069-4738-9995-d18f79c62bab",
+    "name": "educacan",
+    "description": "🇬🇧 Dog training service.\n🇪🇸 educacan ofrece servicios de educación y adiestramiento canino en Valencia y alrededores."
+  },
+  {
+    "id": "220ff9a1-ba72-4b65-bf55-e0a184bbf3ad",
+    "name": "Clínica Veterinaria Ribarroja",
+    "description": "🇬🇧 Veterinary clinic and pet care.\n🇪🇸 Clínica Veterinaria Ribarroja ofrece servicios de atención veterinaria y salud animal en Valencia y alrededores."
+  },
+  {
+    "id": "cbbf9374-7c63-43cd-a32b-0838bbc1a6a0",
+    "name": "Ahorra mi Energía",
+    "description": "🇬🇧 Solar photovoltaic and renewable energy solutions.\n🇪🇸 Ahorra mi Energía ofrece soluciones de energía solar y fotovoltaica para hogares y empresas en Valencia y alrededores."
+  },
+  {
+    "id": "6d8bccb5-cbf1-45b0-a016-3454779fbbbe",
+    "name": "Grupo Gestoría Pastor",
+    "description": "🇬🇧 Gestoría Pastor is a Valencia-based consultancy offering comprehensive accounting, tax, employment, financial, legal, insurance, and vehicle-related services to individuals, freelancers, SMEs, and large companies. With more than 90 years in the sector, it provides strategic, personalized advice and handles administrative procedures for clients."
+  },
+  {
+    "id": "66d90499-1542-4c82-97be-74d64441443a",
+    "name": "Alberto Facundo | Arquitecto",
+    "description": "🇬🇧 Architecture, residential design and project services.\n🇪🇸 Alberto Facundo | Arquitecto ofrece servicios de arquitectura, diseño residencial y proyectos de vivienda en Valencia y alrededores."
+  },
+  {
+    "id": "d90ff124-6285-4c14-8c6c-ca978a2b5249",
+    "name": "Aqui tu Reforma Valencia La Eliana",
+    "description": "🇬🇧 Residential renovation and construction services.\n🇪🇸 Aqui tu Reforma Valencia La Eliana ofrece servicios de reformas y construcción residencial en Valencia y alrededores."
+  },
+  {
+    "id": "f2e92183-3264-4f3c-a068-04d4026eaf8c",
+    "name": "Arquitectura La Eliana",
+    "description": "🇬🇧 Architecture, residential design and project services.\n🇪🇸 Arquitectura La Eliana ofrece servicios de arquitectura, diseño residencial y proyectos de vivienda en Valencia y alrededores."
+  },
+  {
+    "id": "510fcb86-c084-40b1-9dab-0a55ae623408",
+    "name": "Naturia Clinica Veterinaria",
+    "description": "🇬🇧 Veterinary clinic.\n🇪🇸 Naturia Clinica Veterinaria ofrece servicios de atención veterinaria y salud animal en Valencia y alrededores."
+  },
+  {
+    "id": "40e39f04-e29e-4688-aadc-dc61a18a04d6",
+    "name": "Eurorepar TALLERES GIMENEZ RIBARROJA, S.L.",
+    "description": "🇬🇧 Vehicle repair and automotive maintenance.\n🇪🇸 Eurorepar TALLERES GIMENEZ RIBARROJA, S.L. ofrece servicios de reparación, mantenimiento y puesta a punto de vehículos en Valencia y alrededores."
+  },
+  {
+    "id": "f14c2f13-a1a7-4b69-96aa-776b27776a7e",
+    "name": "Green Planners - Jardineria Integral",
+    "description": "🇬🇧 Garden maintenance, green spaces and landscaping services.\n🇪🇸 Green Planners - Jardineria Integral ofrece servicios de jardinería, paisajismo y mantenimiento de espacios exteriores en Valencia y alrededores."
+  },
+  {
+    "id": "de45eb22-2d3b-4d9e-9695-ac5015417f53",
+    "name": "FRITEC Valencia",
+    "description": "🇬🇧 Installation, repair and maintenance of air conditioning and climate systems.\n🇪🇸 FRITEC Valencia ofrece servicios de aire acondicionado, calefacción y climatización en Valencia y alrededores."
+  },
+  {
+    "id": "7ac12165-5daf-41d2-870e-b5955ac394b6",
+    "name": "Guillermo Alonso",
+    "description": "🇬🇧 Interior and exterior painting services.\n🇪🇸 Guillermo Alonso ofrece servicios de pintura interior y exterior en Valencia y alrededores."
+  },
+  {
+    "id": "ea01bc33-ea50-417d-8f92-82fb95e1a834",
+    "name": "Limpiezas Cervilim",
+    "description": "🇬🇧 Residential cleaning and property maintenance services.\n🇪🇸 Limpiezas Cervilim ofrece servicios de limpieza doméstica y mantenimiento de propiedades en Valencia y alrededores."
+  },
+  {
+    "id": "3de868b6-e475-4089-8c2b-a62268d4ee99",
+    "name": "Montajes Membrives",
+    "description": "🇬🇧 Electrical installations and repairs for homes and businesses.\n🇪🇸 Montajes Membrives ofrece servicios de instalaciones, mantenimiento y reparación eléctrica en Valencia y alrededores."
+  },
+  {
+    "id": "68540bee-ab34-4484-b22d-9fd1f42c5dc1",
+    "name": "Morant Arquitectura",
+    "description": "🇬🇧 Architecture, residential design and project services.\n🇪🇸 Morant Arquitectura ofrece servicios de arquitectura, diseño residencial y proyectos de vivienda en Valencia y alrededores."
+  },
+  {
+    "id": "31baa1a2-55d8-4a81-9430-b06a50b1f69b",
+    "name": "NC Plagas",
+    "description": "🇬🇧 Pest control, disinfection and rodent/insect treatment services.\n🇪🇸 NC Plagas ofrece servicios de control y tratamiento de plagas en Valencia y alrededores."
+  },
+  {
+    "id": "5b6f7c53-ffc0-4af9-af8b-8d551f5c445e",
+    "name": "NH Reformas y Decoración",
+    "description": "🇬🇧 Residential renovation and construction services.\n🇪🇸 NH Reformas y Decoración ofrece servicios de reformas y construcción residencial en Valencia y alrededores."
+  },
+  {
+    "id": "4945d22b-5835-4042-8da8-88a40363da85",
+    "name": "Clean service valencia",
+    "description": "🇬🇧 Residential cleaning and property maintenance services."
+  },
+  {
+    "id": "edf7d88f-c999-4543-acfb-3d1a918a3254",
+    "name": "Reformas Integrales en Valencia - GETECO",
+    "description": "🇬🇧 GETECO is a business specializing in comprehensive renovations in Valencia. It provides personalized project planning and interior design renovation services.\n🇪🇸 Reformas Integrales en Valencia - GETECO ofrece servicios profesionales de reformas y construcción en Valencia y alrededores."
+  },
+  {
+    "id": "6315de7b-3954-48bb-9547-afd409172fee",
+    "name": "Dental Company Riba-roja de Túria",
+    "description": "🇬🇧 Dental clinic.\n🇪🇸 Dental Company Riba-roja de Túria ofrece servicios de odontología y salud bucodental en Valencia y alrededores."
+  },
+  {
+    "id": "3ef9b5d7-712e-4661-ad33-13b0a47a302c",
+    "name": "PINTOR PINTURAS FABRICIO",
+    "description": "🇬🇧 Interior and exterior painting services.\n🇪🇸 PINTOR PINTURAS FABRICIO ofrece servicios de pintura interior y exterior en Valencia y alrededores."
+  },
+  {
+    "id": "135d2da4-9200-49db-8976-90acfd6ad8d7",
+    "name": "La Seu Catering Y Hosteleria S.L.",
+    "description": "🇬🇧 La Seu Catering Y Hosteleria S.L. provides professional catering / private chefs services in the Valencia area.\n🇪🇸 La Seu Catering Y Hosteleria S.L. ofrece servicios profesionales de catering y servicios gastronómicos para eventos en Valencia y alrededores."
+  },
+  {
+    "id": "79f2f857-9f34-48a9-8ae7-f89d1d52ea42",
+    "name": "Parquetmediterraneo.com",
+    "description": "🇬🇧 Carpentry, joinery and bespoke woodwork.\n🇪🇸 Parquetmediterraneo.com ofrece servicios de carpintería, ebanistería y trabajos de madera a medida en Valencia y alrededores."
+  },
+  {
+    "id": "71320d58-b373-4f1a-8df1-fe5c4e5ee0db",
+    "name": "Ahorra mi Energía",
+    "description": "🇬🇧 Solar photovoltaic and renewable energy solutions.\n\n🇪🇸 Ahorra mi Energía ofrece soluciones de energía solar y fotovoltaica para hogares y empresas en Valencia y alrededores."
+  },
+  {
+    "id": "5be71e7a-45b8-4b1a-84fc-94b9283b436a",
+    "name": "Ivan Oliver Fotografía y Vídeo",
+    "description": "🇬🇧 Photography and video services.\n🇪🇸 Ivan Oliver Fotografía y Vídeo ofrece servicios de fotografía y foto/vídeo en Valencia y alrededores."
+  },
+  {
+    "id": "c3b4fde7-3620-4a5b-a392-a109cbe96703",
+    "name": "TuTecnicoDeElectrodomesticos y Cerrajeria 24h",
+    "description": "🇬🇧 Home appliance repair and technical service.\n🇪🇸 TuTecnicoDeElectrodomesticos y Cerrajeria 24h ofrece servicios de reparación y asistencia técnica de electrodomésticos en Valencia y alrededores."
+  },
+  {
+    "id": "fe73d5d5-ef2c-4bfa-a8d0-da0228f2c1b6",
+    "name": "Valgrass",
+    "description": "🇬🇧 Garden maintenance, green spaces and landscaping services.\n🇪🇸 Valgrass ofrece servicios de jardinería, paisajismo y mantenimiento de espacios exteriores en Valencia y alrededores."
+  },
+  {
+    "id": "987dcab5-eaaf-4e08-a9ed-7b23698707cc",
+    "name": "Aire Mediterraneo Interiorismo",
+    "description": "🇬🇧 Interior design and decoration services.\n\n🇪🇸Servicios de interiorismo y diseño de espacios en Valencia y alrededores."
+  },
+  {
+    "id": "81aa029b-b605-42d1-b854-1952ab432213",
+    "name": "MELY RAMOS hair salon",
+    "description": "🇬🇧 Hair salon in L'Eliana.\n🇪🇸 MELY RAMOS hair salon ofrece servicios de peluquería y barbería en Valencia y alrededores."
+  },
+  {
+    "id": "00810b43-650e-428d-89ec-92234283217c",
+    "name": "Piscinas White - La Eliana",
+    "description": "🇬🇧 Swimming pool installation, maintenance and repairs.\n🇪🇸 Piscinas White - La Eliana ofrece servicios de construcción, mantenimiento y reparación de piscinas en Valencia y alrededores."
+  },
+  {
+    "id": "b8dcfa88-1eb4-45ac-8891-733be6214f06",
+    "name": "SerHogarsystem servicio doméstico",
+    "description": "🇬🇧 Residential cleaning and property maintenance services.\n🇪🇸 SerHogarsystem servicio doméstico ofrece servicios de limpieza doméstica y mantenimiento de propiedades en Valencia y alrededores."
+  },
+  {
+    "id": "d5ed774b-1d76-481d-a90c-4dccda3d3682",
+    "name": "Kelly Ann Hair Salon",
+    "description": "🇬🇧 Hair salon in L'Eliana.\n🇪🇸 Kelly Ann Hair Salon ofrece servicios de peluquería y barbería en Valencia y alrededores."
+  },
+  {
+    "id": "15124568-bf78-4b27-b659-c90cf4de8572",
+    "name": "Lapeludeeva.",
+    "description": "🇬🇧 Hair salon in L'Eliana.\n🇪🇸 Lapeludeeva. ofrece servicios de peluquería y barbería en Valencia y alrededores."
+  },
+  {
+    "id": "5deeddba-5982-40d1-ab1c-39eb90de2794",
+    "name": "KING BARBER",
+    "description": "🇬🇧 Barber shop in L'Eliana.\n🇪🇸 KING BARBER ofrece servicios de peluquería y barbería en Valencia y alrededores."
+  },
+  {
+    "id": "1ca5da3d-32f6-4674-915d-014d21bd6196",
+    "name": "Blend and Rose - Barber Studio",
+    "description": "🇬🇧 Barber studio in L'Eliana.\n🇪🇸 Blend and Rose - Barber Studio ofrece servicios de peluquería y barbería en Valencia y alrededores."
+  },
+  {
+    "id": "f48d50a7-e0d2-441c-ac81-843c51754617",
+    "name": "Centro Powerhouse",
+    "description": "🇬🇧 Pilates studio in L'Eliana.\n🇪🇸 Centro Powerhouse ofrece clases de Pilates y servicios de movimiento y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "b4710ea0-832f-414e-b44d-dee3ea1745b5",
+    "name": "Fusión Pilates y Estética",
+    "description": "🇬🇧 Pilates and wellness studio in L'Eliana.\n🇪🇸 Fusión Pilates y Estética ofrece clases de Pilates y servicios de movimiento y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "d413ab60-edb4-4280-b56b-8185926b0f5f",
+    "name": "ACESTETIC (Accosmetics by Anna Cerezo)",
+    "description": "🇬🇧 Beauty and nail salon in L'Eliana.\n🇪🇸 ACESTETIC (Accosmetics by Anna Cerezo) ofrece servicios de manicura, pedicura y cuidado de uñas en Valencia y alrededores."
+  },
+  {
+    "id": "fda3fdb4-d357-4243-b9c0-65576e832cbc",
+    "name": "Activa Yoga & Pilates",
+    "description": "🇬🇧 Yoga and Pilates studio in La Canyada.\n🇪🇸 Activa Yoga & Pilates ofrece clases de Pilates y servicios de movimiento y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "6c22b992-40c0-4cc5-b9ac-f79103d5ad57",
+    "name": "CH STUDIO",
+    "description": "🇬🇧 Nail salon in L'Eliana.\n🇪🇸 CH STUDIO ofrece servicios de manicura, pedicura y cuidado de uñas en Valencia y alrededores."
+  },
+  {
+    "id": "15f50312-d314-4b37-a25f-b64c3795a308",
+    "name": "Oasis Centro de Estética",
+    "description": "🇬🇧 Beauty and aesthetics centre in L'Eliana.\n🇪🇸 Oasis Centro de Estética ofrece tratamientos de belleza y estética en Valencia y alrededores."
+  },
+  {
+    "id": "4c8d3a05-5232-404e-9308-a8fdf5d0d456",
+    "name": "Maderoterapia y Drenaje Post Operatorio Shem Terapias Alternativas",
+    "description": "🇬🇧 Beauty and wellness centre offering body treatments.\n🇪🇸 Maderoterapia y Drenaje Post Operatorio Shem Terapias Alternativas ofrece tratamientos de belleza, masaje y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "4ad978a5-0d5a-4ffc-abc0-43a3d6e22242",
+    "name": "Carpintería Valentin Caro e Hijos",
+    "description": "🇬🇧 Carpentry, joinery and bespoke woodwork.\n🇪🇸 Ofrece servicios de carpintería, ebanistería y trabajos de madera a medida en Valencia y alrededores."
+  },
+  {
+    "id": "99870605-d90f-4cd7-b6bc-1c6057519dbe",
+    "name": "Lashes in love",
+    "description": "🇬🇧 Beauty salon specialising in lash and beauty services.\n🇪🇸 Lashes in love ofrece tratamientos de belleza y estética en Valencia y alrededores."
+  },
+  {
+    "id": "4d29ef40-ad42-4880-9126-dfb3970d4e65",
+    "name": "Facundo Regalini Quiromasajista",
+    "description": "🇬🇧 Massage and bodywork services in L'Eliana.\n🇪🇸 Facundo Regalini Quiromasajista ofrece servicios de masaje, terapias corporales y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "cf8b6b30-81b9-4f50-a5bf-70def653ce7f",
+    "name": "Ayurveda Lifestyle By Bharat Negi",
+    "description": "🇬🇧 Ayurvedic massage and wellness services in L'Eliana.\n🇪🇸 Ayurveda Lifestyle By Bharat Negi ofrece servicios de masaje, terapias corporales y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "528fb6b2-863f-4214-a60a-f33d6e4830aa",
+    "name": "El Salón de Marta",
+    "description": "🇬🇧 Beauty centre offering massage and wellness treatments.\n🇪🇸 El Salón de Marta ofrece servicios de masaje, terapias corporales y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "575fb448-5102-4235-bb39-0c8b4ff100ce",
+    "name": "Clínica JANDJ Fisioterapia Alto Rendimiento y Osteopatía",
+    "description": "🇬🇧 Physiotherapy and osteopathy clinic in L'Eliana.\n🇪🇸 Clínica JANDJ Fisioterapia Alto Rendimiento y Osteopatía ofrece servicios de fisioterapia y rehabilitación en Valencia y alrededores."
+  },
+  {
+    "id": "a5210390-7e7d-49b4-b7c0-0641b6b58c6d",
+    "name": "Clínica de fisioteràpia L'EliAna",
+    "description": "🇬🇧 Physiotherapy clinic in L'Eliana.\n🇪🇸 Clínica de fisioteràpia L'EliAna ofrece servicios de fisioterapia y rehabilitación en Valencia y alrededores."
+  },
+  {
+    "id": "397d6843-6998-447f-afb5-f3d197abc4b8",
+    "name": "Fisioterapeuta La Eliana Clínica",
+    "description": "🇬🇧 Physiotherapy clinic in L'Eliana.\n🇪🇸 Fisioterapeuta La Eliana Clínica ofrece servicios de fisioterapia y rehabilitación en Valencia y alrededores."
+  },
+  {
+    "id": "b5e89fe5-aa73-4f3e-9326-fb02ad5adc64",
+    "name": "Clínica de fisioterapia Fyrox",
+    "description": "🇬🇧 Physiotherapy clinic in L'Eliana.\n🇪🇸 Clínica de fisioterapia Fyrox ofrece servicios de fisioterapia y rehabilitación en Valencia y alrededores."
+  },
+  {
+    "id": "7fedad5a-32b5-4e12-8817-950c077bfc22",
+    "name": "Rocío González | Fisioterapeuta Suelo Pélvico La Eliana",
+    "description": "🇬🇧 Physiotherapy specialist in pelvic floor care in L'Eliana.\n🇪🇸 Rocío González | Fisioterapeuta Suelo Pélvico La Eliana ofrece servicios de fisioterapia y rehabilitación en Valencia y alrededores."
+  },
+  {
+    "id": "643b9307-6009-4e00-8255-c060faacf883",
+    "name": "Utchi Dojo",
+    "description": "🇬🇧 Yoga and movement studio.\n🇪🇸 Utchi Dojo ofrece clases de yoga y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "1e08c23a-479a-48f6-9d75-f1e855f8bb82",
+    "name": "Pranam Yoga",
+    "description": "🇬🇧 Yoga studio.\n🇪🇸 Pranam Yoga ofrece clases de yoga y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "fb7bccac-3ec3-4f1d-bb1d-2bf6045180e4",
+    "name": "D10 Fitness Center",
+    "description": "🇬🇧 Gym and personal training centre.\n🇪🇸 D10 Fitness Center ofrece servicios de entrenamiento personal, fitness y ejercicio en Valencia y alrededores."
+  },
+  {
+    "id": "ceb750f4-5d53-45ee-b9fe-57f63d79cb49",
+    "name": "VF Entrenador Personal",
+    "description": "🇬🇧 Personal training service.\n🇪🇸 VF Entrenador Personal ofrece servicios de entrenamiento personal, fitness y ejercicio en Valencia y alrededores."
+  },
+  {
+    "id": "77bf9426-0345-4740-9e3e-775d84ec55de",
+    "name": "Fontaneria Hidroturia",
+    "description": "🇬🇧 Residential plumbing, repairs and installations.\n🇪🇸 Fontaneria Hidroturia ofrece servicios de fontanería, instalación, mantenimiento y reparación en Valencia y alrededores."
+  },
+  {
+    "id": "94f3d389-587c-4089-96fc-40edb699d245",
+    "name": "Eliclima",
+    "description": "🇬🇧 Installation, repair and maintenance of air conditioning and climate systems.\n\n🇪🇸 Eliclima ofrece servicios de aire acondicionado, calefacción y climatización en Valencia y alrededores."
+  },
+  {
+    "id": "05365bbb-15af-484f-ab51-f43c995d4ecb",
+    "name": "Viuesport Clinic",
+    "description": "🇬🇧 Fitness and wellness centre.\n🇪🇸 Viuesport Clinic ofrece clases de Pilates y servicios de movimiento y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "af49f112-ccf9-4b09-b2df-0ce70844ab9c",
+    "name": "Reypool Construcción y Mantenimiento de Piscinas Reypool",
+    "description": "🇬🇧 Reypool Swimming pool installation, maintenance and repairs.\n🇪🇸 Reypool ofrece servicios de construcción, mantenimiento y reparación de piscinas en Valencia y alrededores."
+  },
+  {
+    "id": "535dac09-cae3-4bde-a855-5c2e9628f3e6",
+    "name": "Metrocuadrado",
+    "description": "🇬🇧 Kitchen design, interior design and space planning services in Valencia and the surrounding areas.\n🇪🇸 Servicios de diseño de cocinas, interiorismo y planificación de espacios en Valencia y alrededores."
+  },
+  {
+    "id": "8e10f8d0-a8fe-4478-9b63-e374b7360fe8",
+    "name": "Escuela Infantil Angelets",
+    "description": "🇬🇧 Private early-years childcare centre.\n🇪🇸 Escuela Infantil Angelets ofrece servicios de cuidado infantil, babysitting y apoyo familiar en Valencia y alrededores."
+  },
+  {
+    "id": "7242128f-ee2b-45af-bec8-522a1ce23e0d",
+    "name": "Estética Amparo Beneyto Ribarroja",
+    "description": "🇬🇧 Beauty and aesthetic treatments.\n🇪🇸 Estética Amparo Beneyto Ribarroja ofrece servicios de pestañas, cejas y belleza en Valencia y alrededores."
+  },
+  {
+    "id": "9b20b0c2-3b8f-4e6e-bc41-4d5d102bbb56",
+    "name": "Serrallers Kronox La Eliana",
+    "description": "🇬🇧 Locksmith, emergency entry and home security services.\n🇪🇸 Serrallers Kronox La Eliana ofrece servicios de cerrajería, apertura de puertas y seguridad del hogar en Valencia y alrededores."
+  },
+  {
+    "id": "84e887ca-3c4d-4ac6-8dac-837cbeaaf0be",
+    "name": "Tu Clima",
+    "description": "🇬🇧 Installation, repair and maintenance of air conditioning and climate systems.\n\n🇪🇸Servicios de aire acondicionado, calefacción y climatización en Valencia y alrededores."
+  },
+  {
+    "id": "c6e228b5-dfcb-4b5a-82f3-25caf2a0cd02",
+    "name": "Bardana Catering",
+    "description": "🇬🇧 Bardana Catering Valencia provides customized catering and event services for weddings, corporate events, and celebrations. It offers a wide selection of menus and venues, including outdoor spaces, interiors, tents, salons, beaches, mountains, countryside, and city locations.\n🇪🇸 Bardana Catering ofrece servicios profesionales de catering y servicios gastronómicos para eventos en Valencia y alrededores."
+  },
+  {
+    "id": "1d7f84d2-d893-4394-8ef2-241b0b42b82d",
+    "name": "Carbons Broseta",
+    "description": "🇬🇧 Carbons Broseta provides professional firewood supplier services in the Valencia area.\n🇪🇸 Carbons Broseta ofrece servicios profesionales de venta y suministro de leña en Valencia y alrededores."
+  },
+  {
+    "id": "be06a38e-b927-4e1a-9200-266ea15e2d52",
+    "name": "OXÍGENO 4 FIT Y BIENESTAR",
+    "description": "🇬🇧 Fitness and Pilates studio in L'Eliana.\n🇪🇸 OXÍGENO 4 FIT Y BIENESTAR ofrece servicios de entrenamiento personal, fitness y ejercicio en Valencia y alrededores."
+  },
+  {
+    "id": "86c5103b-8830-456f-9bed-1694577fecfc",
+    "name": "Barre By Claudia Mas",
+    "description": "🇬🇧 Pilates and barre studio in L'Eliana.\n🇪🇸 Barre By Claudia Mas ofrece servicios de entrenamiento personal, fitness y ejercicio en Valencia y alrededores."
+  },
+  {
+    "id": "ebb31c4c-61fd-473b-bd0b-e2f9c19f18c3",
+    "name": "Gleam Nails",
+    "description": "🇬🇧 Nail and beauty salon in L'Eliana.\n🇪🇸 Gleam Nails ofrece servicios de manicura, pedicura y cuidado de uñas en Valencia y alrededores."
+  },
+  {
+    "id": "14ffbd70-acd9-46ce-b2fd-e96ec3eb1158",
+    "name": "Beauty Nails & Massage La Eliana",
+    "description": "🇬🇧 Beauty and nail salon in L'Eliana.\n🇪🇸 Beauty Nails & Massage La Eliana ofrece servicios de manicura, pedicura y cuidado de uñas en Valencia y alrededores."
+  },
+  {
+    "id": "08f8b359-c0a8-4ab2-80c9-38e5269bcd49",
+    "name": "Alicia Manzano Uñas y Microblading",
+    "description": "🇬🇧 Nail and beauty specialist in L'Eliana.\n🇪🇸 Alicia Manzano Uñas y Microblading ofrece servicios de manicura, pedicura y cuidado de uñas en Valencia y alrededores."
+  },
+  {
+    "id": "5362d771-82d4-4c1f-adb8-6f85d9b01e66",
+    "name": "ESTETICA SILVANA SUÁREZ BEAUTY",
+    "description": "🇬🇧 Beauty and aesthetics centre in L'Eliana.\n🇪🇸 ESTETICA SILVANA SUÁREZ BEAUTY ofrece tratamientos de belleza y estética en Valencia y alrededores."
+  },
+  {
+    "id": "b6d30173-5b91-47ef-9a97-175bcd8efa49",
+    "name": "Yolanda Mir",
+    "description": "🇬🇧 Beauty salon in L'Eliana.\n🇪🇸 Yolanda Mir ofrece tratamientos de belleza y estética en Valencia y alrededores."
+  },
+  {
+    "id": "bf772600-e0b9-4a9b-8e70-65974661f341",
+    "name": "Training day",
+    "description": "🇬🇧 Gym and personal training centre.\n🇪🇸 Training day ofrece servicios de entrenamiento personal, fitness y ejercicio en Valencia y alrededores."
+  },
+  {
+    "id": "a40ffe31-ef8a-40ec-910f-88c5cbaa87b1",
+    "name": "Panadería Baking Free - Artesana ~ Sin Gluten",
+    "description": "🇬🇧 Panadería Baking Free - Artesana ~ Sin Gluten provides professional baker services in the Valencia area.\n🇪🇸 Panadería Baking Free - Artesana ~ Sin Gluten ofrece servicios profesionales de panadería y productos de panadería y pastelería en Valencia y alrededores."
+  },
+  {
+    "id": "ea52decb-eed6-4b9d-bf08-2037df11f1c5",
+    "name": "Forn València",
+    "description": "🇬🇧 Forn València provides professional baker services in the Valencia area.\n🇪🇸 Forn València ofrece servicios profesionales de panadería y productos de panadería y pastelería en Valencia y alrededores."
+  },
+  {
+    "id": "057ddfa0-139b-4731-a299-b66411b210db",
+    "name": "BALANZÉ",
+    "description": "🇬🇧 Osteopathy and bodywork clinic.\n🇪🇸 BALANZÉ ofrece servicios de osteopatía y terapias corporales en Valencia y alrededores."
+  },
+  {
+    "id": "20021eb0-ab1a-4148-b747-c95b42ac1f43",
+    "name": "Grupo Gestoría Pastor - Gestoría y Asesoría en Valencia",
+    "description": "🇬🇧 Gestoría Pastor is a Valencia-based consultancy offering comprehensive accounting, tax, employment, financial, legal, insurance, and vehicle-related services to individuals, freelancers, SMEs, and large companies. With more than 90 years in the sector, it provides strategic, personalized advice and handles administrative procedures for clients.\n🇪🇸 Grupo Gestoría Pastor - Gestoría y Asesoría en Valencia ofrece servicios profesionales de asesoría fiscal, contable y gestión administrativa en Valencia y alrededores."
+  },
+  {
+    "id": "8fcc605e-1d81-487d-948e-a856f8804aaf",
+    "name": "Jorge Romero Doctor en Quiropráctica",
+    "description": "🇬🇧 Jorge Romero is a Doctor of Chiropractic and Physiotherapy, trained in chiropractic care in Atlanta, USA. He provides personalized chiropractic services in Valencia, Spain.\n🇪🇸 Jorge Romero Doctor en Quiropráctica ofrece servicios profesionales de quiropráctica en Valencia y alrededores."
+  },
+  {
+    "id": "59a1bfde-68de-4a04-96c1-67a8819ec7e1",
+    "name": "Sensepels Centro De Belleza Y Fotodepilación",
+    "description": "🇬🇧 Beauty, hair-removal and aesthetic services.\n🇪🇸 Sensepels Centro De Belleza Y Fotodepilación ofrece servicios de pestañas, cejas y belleza en Valencia y alrededores."
+  },
+  {
+    "id": "24e287a8-166e-401e-adeb-b8a8e4dcb287",
+    "name": "MESTETIC",
+    "description": "🇬🇧 Beauty and aesthetic treatments.\n🇪🇸 MESTETIC ofrece servicios de pestañas, cejas y belleza en Valencia y alrededores."
+  },
+  {
+    "id": "036769ff-61de-40ac-a358-016591af8e6a",
+    "name": "Centro estético avanzado Laura Olcina",
+    "description": "🇬🇧 Centro Estético Laura Olcina is a beauty and wellness center in Valencia specializing in personalized facial, body, and pro-aging treatments. Its qualified professionals use advanced technologies and tailored procedures to improve the health, appearance, and well-being of the skin and body.\n🇪🇸 Centro estético avanzado Laura Olcina ofrece servicios profesionales de estética, belleza y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "812ceb0c-8075-42ef-b60f-8b1f6b481be5",
+    "name": "REFORMAS VALENCIA MyJ",
+    "description": "🇬🇧 REFORMAS VALENCIA MyJ provides professional renovation / construction services in the Valencia area.\n🇪🇸 REFORMAS VALENCIA MyJ ofrece servicios profesionales de reformas y construcción en Valencia y alrededores."
+  },
+  {
+    "id": "a2285787-05c6-4f9b-8e3b-be8bae2a6046",
+    "name": "Cada Rincón de tu Casa - Reformas en Valencia",
+    "description": "🇬🇧 Cada Rincón de tu Casa is a home renovation company in Valencia specializing in partial and comprehensive renovations, including bathrooms and kitchens. They provide personalized design, professional advice, quality materials, and custom furniture in a friendly, family-oriented setting.\n🇪🇸 Cada Rincón de tu Casa - Reformas en Valencia ofrece servicios profesionales de reformas y construcción en Valencia y alrededores."
+  },
+  {
+    "id": "4078d081-4b1b-448d-8d48-6a111edaf244",
+    "name": "reformas LUJAN",
+    "description": "🇬🇧 Reformas Luján is a dynamic home and commercial renovation company with more than 25 years of experience in renovations and decoration. It offers comprehensive home renovations, installations, kitchen and bathroom remodeling, commercial premises renovations, and project estimates by email or in person.\n🇪🇸 reformas LUJAN ofrece servicios profesionales de reformas y construcción en Valencia y alrededores."
+  },
+  {
+    "id": "0a62009e-edfe-438d-8270-2da952d96fdd",
+    "name": "Reformas Claiz",
+    "description": "🇬🇧 Reformas Claiz provides professional renovation / construction services in the Valencia area.\n🇪🇸 Reformas Claiz ofrece servicios profesionales de reformas y construcción en Valencia y alrededores."
+  },
+  {
+    "id": "3751ddfc-40e6-499f-b68c-b23d9e02fd07",
+    "name": "CosmoLab CLínica Médicina Estética",
+    "description": "🇬🇧 CosmoLab CLínica Médicina Estética provides professional beauty & aesthetics services in the Valencia area.\n🇪🇸 CosmoLab CLínica Médicina Estética ofrece servicios profesionales de estética, belleza y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "525a57e4-53d8-4422-8c6b-25717987dcf3",
+    "name": "Osteopatía Wences",
+    "description": "🇬🇧 Osteopathy clinic.\n🇪🇸 Osteopatía Wences ofrece servicios de osteopatía y terapias corporales en Valencia y alrededores."
+  },
+  {
+    "id": "2c409fd0-c16d-436a-8af1-d52a6f58cf1a",
+    "name": "Mimoclinic",
+    "description": "🇬🇧 Physical therapy and osteopathy clinic.\n🇪🇸 Mimoclinic ofrece servicios de fisioterapia y rehabilitación en Valencia y alrededores."
+  },
+  {
+    "id": "ec36bf85-1b46-417c-ac2d-6b094d114838",
+    "name": "Silvia Ribera Fotógrafa",
+    "description": "🇬🇧 Photography studio.\n🇪🇸 Silvia Ribera Fotógrafa ofrece servicios de fotografía y foto/vídeo en Valencia y alrededores."
+  },
+  {
+    "id": "2101aba8-15c5-4558-a86a-a0b3e8ccc23e",
+    "name": "FABIOLA CARREÑO Centro de Estetica",
+    "description": "🇬🇧 FABIOLA CARREÑO is an aesthetic and beauty center in Valencia with an experienced team dedicated to enhancing clients’ beauty and well-being. Services include facial treatments, eyebrow design, lash lifting, waxing and laser hair removal, manicures, and pedicures.\n🇪🇸 FABIOLA CARREÑO Centro de Estetica ofrece servicios profesionales de estética, belleza y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "d8d11ac5-8b85-423f-9a97-7fed23550d32",
+    "name": "Beauty Clinic Valencia",
+    "description": "🇬🇧 Beauty Clinic Valencia is a beauty and wellness center with more than 20 years of experience, offering personalized treatments, professional advice, and ongoing follow-up. Its team provides advanced technology and high-end cosmetics to help clients achieve their beauty goals.\n🇪🇸 Beauty Clinic Valencia ofrece servicios profesionales de estética, belleza y bienestar en Valencia y alrededores."
+  },
+  {
+    "id": "a7ddd6c7-a8d6-4569-8918-4b4c56d70916",
+    "name": "Catering Cinco, S.L.",
+    "description": "🇬🇧 Catering Cinco, S.L. provides professional catering / private chefs services in the Valencia area.\n🇪🇸 Catering Cinco, S.L. ofrece servicios profesionales de catering y servicios gastronómicos para eventos en Valencia y alrededores."
+  },
+  {
+    "id": "1c76cd3c-8adc-4e81-a369-ddcdbb938c44",
+    "name": "Pepe Talens - Estudio fotografía & Eventos",
+    "description": "🇬🇧 Photography and event studio.\n🇪🇸 Pepe Talens - Estudio fotografía & Eventos ofrece servicios de fotografía y foto/vídeo en Valencia y alrededores."
+  },
+  {
+    "id": "0aea7b6b-ebbd-422d-b5e7-619aa93f9f89",
+    "name": "El Hilo Rojo Fotografía",
+    "description": "🇬🇧 Photography services.\n🇪🇸 El Hilo Rojo Fotografía ofrece servicios de fotografía y foto/vídeo en Valencia y alrededores."
+  },
+  {
+    "id": "799d7ba6-186a-4b3b-af14-d25e2b278868",
+    "name": "CLINICA DENTAL TERREN",
+    "description": "🇬🇧 Dental clinic.\n🇪🇸 CLINICA DENTAL TERREN ofrece servicios de odontología y salud bucodental en Valencia y alrededores."
+  },
+  {
+    "id": "a55f6ddf-c9b2-4f7c-9bf8-f1521f587618",
+    "name": "Bosch Car Service Jumicar Rapid",
+    "description": "🇬🇧 Vehicle repair and automotive maintenance.\n🇪🇸 Bosch Car Service Jumicar Rapid ofrece servicios de reparación, mantenimiento y puesta a punto de vehículos en Valencia y alrededores."
+  },
+  {
+    "id": "49aaff3a-7e67-441b-908e-1b042aa9dd4b",
+    "name": "CPD Plagas - Control de Plagas y Termitas",
+    "description": "🇬🇧 Pest control, disinfection and rodent/insect treatment services.\n🇪🇸 CPD Plagas - Control de Plagas y Termitas ofrece servicios de control y tratamiento de plagas en Valencia y alrededores."
+  },
+  {
+    "id": "1e340d06-9f4f-4d81-81ef-76314256c78e",
+    "name": "Autos Sebastiá (Servicio Ford Eliana)",
+    "description": "🇬🇧 Vehicle repair and automotive maintenance.\n🇪🇸 Autos Sebastiá (Servicio Ford Eliana) ofrece servicios de reparación, mantenimiento y puesta a punto de vehículos en Valencia y alrededores."
+  },
+  {
+    "id": "318ab1b8-a1bc-4125-bd9a-bb05d02c3534",
+    "name": "CELAE CM S.L",
+    "description": "🇬🇧 Locksmith, emergency entry and home security services.\n🇪🇸 CELAE CM S.L ofrece servicios de cerrajería, apertura de puertas y seguridad del hogar en Valencia y alrededores."
+  },
+  {
+    "id": "b9f1cd29-a689-47cf-8718-f07916b8aa6f",
+    "name": "Clínica Veterinaria KENIA",
+    "description": "🇬🇧 Veterinary clinic.\n🇪🇸 Clínica Veterinaria KENIA ofrece servicios de atención veterinaria y salud animal en Valencia y alrededores."
+  },
+  {
+    "id": "4bb4918a-8c76-4a68-b363-8f5b6ed56f44",
+    "name": "The English Centre, Ribarroja",
+    "description": "🇬🇧 English language school.\n🇪🇸 The English Centre, Ribarroja ofrece servicios de enseñanza de idiomas, clases particulares y apoyo educativo en Valencia y alrededores."
+  },
+  {
+    "id": "6ba9d735-4d12-4add-8b14-35051b002164",
+    "name": "Academia greenGarden",
+    "description": "🇬🇧 Learning and tutoring centre.\n🇪🇸 Academia greenGarden ofrece servicios de enseñanza de idiomas, clases particulares y apoyo educativo en Valencia y alrededores."
+  },
+  {
+    "id": "2d0f35b0-0173-4124-bef0-b0358f9998e4",
+    "name": "Cocotte Catering",
+    "description": "🇬🇧 Catering and event food service.\n🇪🇸 Cocotte Catering ofrece servicios de catering, chefs privados y gastronomía para eventos en Valencia y alrededores."
+  },
+  {
+    "id": "1987fc42-efbd-4be5-8b79-f5311a54c969",
+    "name": "La cocina de Letizia",
+    "description": "🇬🇧 Batch cooking and catering service.\n🇪🇸 La cocina de Letizia ofrece servicios de catering, chefs privados y gastronomía para eventos en Valencia y alrededores."
+  },
+  {
+    "id": "73e44222-c1ee-4f5b-a58f-e09fb8859c10",
+    "name": "Cerrajeros Fontán ® y Seguridad Fontán ® Grupo C5M",
+    "description": "🇬🇧 Locksmith, emergency entry and home security services.\n🇪🇸 Cerrajeros Fontán ® y Seguridad Fontán ® Grupo C5M ofrece servicios de cerrajería, apertura de puertas y seguridad del hogar en Valencia y alrededores."
+  },
+  {
+    "id": "5a3ecf6d-d8bd-4087-bf94-cbac92f8ab34",
+    "name": "Construcciones y Reformas Genesis",
+    "description": "🇬🇧 Residential renovation and construction services.\n🇪🇸 Construcciones y Reformas Genesis ofrece servicios de reformas y construcción residencial en Valencia y alrededores."
+  },
+  {
+    "id": "2a3fb246-8d9b-4e10-a2cc-655d8ca9c3ba",
+    "name": "Clean service valencia",
+    "description": "🇬🇧 Residential cleaning and property maintenance services.\n🇪🇸 Clean service valencia ofrece servicios de limpieza doméstica y mantenimiento de propiedades en Valencia y alrededores."
+  },
+  {
+    "id": "6b03827a-b12e-4053-92b7-f387711965ff",
+    "name": "Desjoyaux Piscinas Valencia",
+    "description": "🇬🇧 Swimming pool installation, maintenance and repairs.\n🇪🇸 Desjoyaux Piscinas Valencia ofrece servicios de construcción, mantenimiento y reparación de piscinas en Valencia y alrededores."
+  },
+  {
+    "id": "b0ffbee8-305a-4c96-bbc4-7b7c4ca171d2",
+    "name": "EDIFICACIO I URBANISME RIBERA EUR SOLUTEC",
+    "description": "🇬🇧 Residential renovation and construction services.\n🇪🇸 EDIFICACIO I URBANISME RIBERA EUR SOLUTEC ofrece servicios de reformas y construcción residencial en Valencia y alrededores."
+  },
+  {
+    "id": "117259eb-3f69-4483-b985-7756e3090808",
+    "name": "Control de plagas Biochemical",
+    "description": "🇬🇧 Pest control, disinfection and rodent/insect treatment services.\n🇪🇸 Control de plagas Biochemical ofrece servicios de control y tratamiento de plagas en Valencia y alrededores."
+  },
+  {
+    "id": "c80ad973-1e72-4d16-8ef8-c6a56917ab1a",
+    "name": "Energytec",
+    "description": "🇬🇧 Solar photovoltaic and renewable energy solutions.\n🇪🇸 Energytec ofrece soluciones de energía solar y fotovoltaica para hogares y empresas en Valencia y alrededores."
+  },
+  {
+    "id": "19a3cdb6-a56e-4d99-86ff-9c90afc28558",
+    "name": "FATFAT CONSTRUCCIÓN",
+    "description": "🇬🇧 Residential renovation and construction services.\n🇪🇸 FATFAT CONSTRUCCIÓN ofrece servicios de reformas y construcción residencial en Valencia y alrededores."
+  },
+  {
+    "id": "30df37d7-0ca8-419d-b5dc-a38cf1ceb82f",
+    "name": "Peluquería Ultreia",
+    "description": "🇬🇧 Ultreia is a Valencia-based organic hair salon offering healthy, sustainable beauty care for women and men. Its services include natural hair coloring with custom-made mud treatments, barbering, event hairstyles, and organic products designed to care for hair and scalp.\n🇪🇸 Peluquería Ultreia ofrece servicios profesionales de peluquería y cuidado capilar en Valencia y alrededores."
+  },
+  {
+    "id": "c7025127-d7f5-47f4-b0d6-7c2df3e5c249",
+    "name": "Manitas VLC",
+    "description": "🇬🇧 Manitas VLC provides professional handyman services in the Valencia area.\n🇪🇸 Manitas VLC ofrece servicios profesionales de mantenimiento y reparaciones del hogar en Valencia y alrededores."
+  },
+  {
+    "id": "72ea1628-3f65-498e-a8a3-3a677035f907",
+    "name": "Fontanero y Manitas Valencia Edisson Giraldo Soto",
+    "description": "🇬🇧  Fontanero y Manitas Valencia Edisson Giraldo Soto provides professional handyman services in the Valencia area.\n🇪🇸 Fontanero y Manitas Valencia Edisson Giraldo Soto ofrece servicios profesionales de mantenimiento y reparaciones del hogar en Valencia y alrededores."
+  },
+  {
+    "id": "9d5ff485-ff6a-46e5-80b1-bfa378fb9193",
+    "name": "Manitas en Valencia",
+    "description": "🇬🇧 Manitas en Valencia is a home repair and handyman service in Valencia, offering furniture assembly, minor electrical and plumbing work, painting, masonry, window and blind repairs, and more. The company has 30 years of experience and provides service throughout Valencia and surrounding areas.\n🇪🇸 Manitas en valencia ofrece servicios profesionales de mantenimiento y reparaciones del hogar en Valencia y alrededores."
+  },
+  {
+    "id": "c8fb838f-a702-4082-b8a8-5f1c26a08c62",
+    "name": "Club de patinaje Hockeysesion Mislata",
+    "description": "🇬🇧 Club de patinaje Hockeysesion Mislata provides professional hockey services in the Valencia area.\n🇪🇸 Club de patinaje Hockeysesion Mislata ofrece servicios profesionales de hockey y patinaje en Valencia y alrededores."
+  },
+  {
+    "id": "38649952-1ac4-42af-b94a-b2c5afd61936",
+    "name": "CLUB DE PATINATGE VALÈNCIA ROYALS ",
+    "description": "🇬🇧 We are the only ones offering Scooter, Skatepark with Quad and Inline Skating, as well as Inline Skating and Skateboarding classes for children and adults.\n🇪🇸 Somos los únicos en ofrecer clases de Scooter, Skatepark con Quad y Línea, además de Patinaje en Línea y Skate para niños y adultos."
+  },
+  {
+    "id": "6c04b39e-40d7-487c-aa34-4b76dc8e9919",
+    "name": "Los Diablos de Mislata",
+    "description": "🇬🇧 Los Diablos de Mislata is a skating and inline hockey club in Valencia, offering enrollment in skating and/or hockey.\n🇪🇸 Los Diablos de Mislata ofrece servicios profesionales de hockey y patinaje en Valencia y alrededores."
+  },
+  {
+    "id": "3885a182-79f2-4b61-b985-3ac3bd7d3703",
+    "name": "Ideas Interiorismo Exclusivo s.l.u.",
+    "description": "🇬🇧 Ideas Interiorismo Exclusivo s.l.u. provides professional interior design services in the Valencia area.\n🇪🇸 Ideas Interiorismo Exclusivo s.l.u. ofrece servicios profesionales de diseño de interiores en Valencia y alrededores."
+  },
+  {
+    "id": "c1e0d05c-98de-4306-bee0-b5d714dfc896",
+    "name": "MOMA Design",
+    "description": "🇬🇧 Interior design studio and interior designers in Valencia and Alicante.\n🇪🇸 Estudio de interiorismo en Valencia y Alicante ofrece servicios profesionales de diseño de interiores en Valencia y alrededores."
+  },
+  {
+    "id": "94aa1ef1-8f87-4d8c-97d4-49f4eead3271",
+    "name": "Vicente Navarro - Diseño Interior",
+    "description": "🇬🇧 Vicente Navarro provides professional interior design services in the Valencia area.\n🇪🇸 Vicente Navarro ofrece servicios profesionales de diseño de interiores en Valencia y alrededores."
+  },
+  {
+    "id": "33a2ef1d-a56a-4f1d-b55f-c72f80cd28eb",
+    "name": "RUBIO & ROS DESIGN ",
+    "description": "🇬🇧 RUBIO & ROS DESIGN is an architecture and interior design studio whose work is inspired by light, purity, serenity, tradition, and rigorous design. The studio creates carefully crafted spaces where materials, form, and light express dedication, craftsmanship, and meticulous attention to detail.\n🇪🇸 RUBIO & ROS DESIGN | Diseño interiores Valencia · Interioristas · Arquitectura interior | Arquitectos Valencia ofrece servicios profesionales de diseño de interiores en Valencia y alrededores."
+  },
+  {
+    "id": "cc4297e9-f424-44e3-b5e4-f406672f2261",
+    "name": "NDC interiorismo",
+    "description": "🇬🇧 NDC interiorismo provides professional interior design services in the Valencia area.\n🇪🇸 NDC interiorismo ofrece servicios profesionales de diseño de interiores en Valencia y alrededores."
+  },
+  {
+    "id": "3d092571-7290-445e-a588-3ee23a96fa36",
+    "name": "Cocinas Valencia",
+    "description": "🇬🇧 Cocinas Valencia provides professional interior design / kitchens services in the Valencia area.\n🇪🇸 Cocinas Valencia ofrece servicios profesionales de diseño y equipamiento de cocinas en Valencia y alrededores."
+  },
+  {
+    "id": "4a99a934-944f-4b14-b1cf-f80c0d3f8a5b",
+    "name": "Cocina Fácil",
+    "description": "🇬🇧 Cocina Fácil provides professional interior design / kitchens services in the Valencia area.\n🇪🇸 Cocina Fácil ofrece servicios profesionales de diseño y equipamiento de cocinas en Valencia y alrededores."
+  },
+  {
+    "id": "60345039-0b6a-4821-8f5f-bc9b0c86a211",
+    "name": "The Tiny Studio - Newborn Valencia",
+    "description": "🇬🇧 Newborn and maternity photography studio.\n🇪🇸 The Tiny Studio - Newborn Valencia ofrece servicios de fotografía y foto/vídeo en Valencia y alrededores."
+  },
+  {
+    "id": "2ee78df6-5283-41bb-9f45-d722e38e9330",
+    "name": "Pintart. Taller De Dibujo Y Pintura",
+    "description": "🇬🇧 Drawing and painting workshop.\n🇪🇸 Pintart. Taller De Dibujo Y Pintura ofrece clases creativas, artísticas y culturales en Valencia y alrededores."
+  },
+  {
+    "id": "0ccf3f5d-555d-454f-9339-cab3a41928bd",
+    "name": "Arrital Valencia - Cocinas de Diseño",
+    "description": "🇬🇧 Arrital Valencia - Cocinas de Diseño en Valencia provides professional interior design / kitchens services in the Valencia area.\n🇪🇸 Arrital Valencia - Cocinas de Diseño en Valencia ofrece servicios profesionales de diseño y equipamiento de cocinas en Valencia y alrededores."
+  },
+  {
+    "id": "62238f6b-d49e-4ea4-b693-d14ef1d03b67",
+    "name": "Nova Cuina",
+    "description": "🇬🇧 Nova Cuina provides professional interior design / kitchens services in the Valencia area.\n🇪🇸 Nova Cuina ofrece servicios profesionales de diseño y equipamiento de cocinas en Valencia y alrededores."
+  },
+  {
+    "id": "8d99a4c7-912c-46b1-aa86-3d065f653470",
+    "name": "Hortus Paisajistas",
+    "description": "🇬🇧 Garden maintenance, green spaces and landscaping services.\n🇪🇸 Hortus Paisajistas ofrece servicios de jardinería, paisajismo y mantenimiento de espacios exteriores en Valencia y alrededores."
+  },
+  {
+    "id": "74becf9b-94a8-4772-a4ad-0c62b9e6f550",
+    "name": "Instalaciones Eléctricas Vicente Rubio Guardiola",
+    "description": "🇬🇧 Electrical installations and repairs for homes and businesses.\n🇪🇸 Instalaciones Eléctricas Vicente Rubio Guardiola ofrece servicios de instalaciones, mantenimiento y reparación eléctrica en Valencia y alrededores."
+  },
+  {
+    "id": "50745c26-4630-4e34-a079-95a2bb478a2d",
+    "name": "Instalaciones Eléctricas Lucas",
+    "description": "🇬🇧 Electrical installations and repairs for homes and businesses.\n🇪🇸 Instalaciones Eléctricas Lucas ofrece servicios de instalaciones, mantenimiento y reparación eléctrica en Valencia y alrededores."
+  },
+  {
+    "id": "6768d004-44a5-413d-8c29-f57b7f9a58a6",
+    "name": "José Boza Cerrajeros",
+    "description": "🇬🇧 Locksmith, emergency entry and home security services.\n🇪🇸 José Boza Cerrajeros ofrece servicios de cerrajería, apertura de puertas y seguridad del hogar en Valencia y alrededores."
+  },
+  {
+    "id": "a09cac0c-30f4-4f62-80db-d951073755a3",
+    "name": "Residencia canina CENCAVAL",
+    "description": "🇬🇧  Residencia canina Valencia CENCAVAL. provides professional pet boarding & training services in the Valencia area.\n\n🇪🇸 Residencia canina Valencia CENCAVAL. ofrece servicios profesionales de residencia y cuidado de mascotas, además de adiestramiento canino en Valencia y alrededores."
+  },
+  {
+    "id": "d85989d1-ea40-46e4-8550-2db11449b295",
+    "name": "Residencia Canina Vilamarxant",
+    "description": "🇬🇧 Residencia Canina Vilamarxant provides premium dog kennels with heated indoor areas and outdoor terraces for pets’ comfort. Dogs are taken on walks four times a day with dedicated staff.\n🇪🇸 Residencia Canina Vilamarxant ofrece servicios profesionales de residencia y cuidado de mascotas, además de adiestramiento canino en Valencia y alrededores."
+  },
+  {
+    "id": "9451256f-b886-4de2-a759-fdc38ca0ec73",
+    "name": "Residencia canina la Villa ",
+    "description": "🇬🇧 La Villa is a luxury dog hotel offering maximum comfort, safety, and fun for pets, with professional care. It also provides 24-hour veterinary emergencies, training, agility, and dog grooming services.\n\n🇪🇸 Residencia canina la Villa ofrece servicios profesionales de residencia y cuidado de mascotas, además de adiestramiento canino en Valencia y alrededores."
+  },
+  {
+    "id": "4ab7f472-2464-4f4c-9def-65221041e96b",
+    "name": "Belmax Multiservicios SL",
+    "description": "🇬🇧 Belmax Fontanería provides professional plumbing services in Valencia for homes, communities, and businesses, specializing in leaks, blockages, cisterns, faucets, and pipes. The company also coordinates repairs, documentation, photographs, and related trades when needed.\n🇪🇸 Fontanero Valencia ofrece servicios profesionales de fontanería y reparaciones en Valencia y alrededores."
+  },
+  {
+    "id": "d8e8371a-9d58-4546-a252-7327b1c75357",
+    "name": "Bea Pastor",
+    "description": "🇬🇧 Maternity Photography – First Communion Photography - Professional photography services in the Valencia area.\n\n🇪🇸 Fotografía Embarazo - Fotografía de comuniones- Ofrece servicios profesionales de fotografía profesional en Valencia y alrededores."
+  },
+  {
+    "id": "156367d9-02cb-4666-ac06-9b2c3f541a47",
+    "name": "Maribel Server ",
+    "description": "🇬🇧 Maribel Server is a portrait photographer based in Valencia, specializing in personal portfolios, agency test shoots, maternity photography, and professional portraits. She works from her own air-conditioned studio in Malilla and has over 15 years of experience.\n\n🇪🇸 Maribel Server | Fotógrafo en Valencia ofrece servicios profesionales de fotografía profesional en Valencia y alrededores."
+  },
+  {
+    "id": "002fd2af-1ee9-419c-9476-924117d7f927",
+    "name": "Ismael Soler Fisioterapia",
+    "description": "🇬🇧 Ismael Soler is a physiotherapist with over 14 years of experience treating pain, providing personalized care through manual therapy, advanced technology, and therapeutic exercise. His practice focuses on identifying the root cause of each condition and helping patients recover movement and wellbeing.\n🇪🇸 Ismael Soler Fisioterapia | Especialista en dolor muscular y articular en Valencia. ofrece servicios profesionales de fisioterapia y rehabilitación en Valencia y alrededores."
+  },
+  {
+    "id": "32acf4b9-c2c3-4eb9-a0d9-41e6a02044fa",
+    "name": "Club Pilates Gran Vía ",
+    "description": "🇬🇧 Club Pilates is a Pilates studio in Valencia offering classes for all levels, from beginner fundamentals to advanced training. It provides Reformer and specialty classes designed to improve strength, balance, mobility, flexibility, and overall fitness.\n🇪🇸 Club Pilates Gran Vía | Valencia ofrece servicios profesionales de Pilates y entrenamiento en Valencia y alrededores."
+  },
+  {
+    "id": "20e976cb-cb4f-40f3-9028-770826c215af",
+    "name": "Mon Pilates Reformer",
+    "description": "🇬🇧 Mon Pilates Reformer provides professional pilates services in the Valencia area.\n🇪🇸 Mon Pilates Reformer ofrece servicios profesionales de Pilates y entrenamiento en Valencia y alrededores."
+  },
+  {
+    "id": "b0e06863-bb93-47ee-a435-b4687a0d1f9a",
+    "name": "Clínica Sospedra",
+    "description": "🇬🇧 Clínica Sospedra Avenida Aragón was the first Clínica Sospedra clinic opened in Valencia, opening on January 13, 2020. Its 550+ m² facilities include eight physiotherapy rooms, a functional exercise room, rehabilitation, and therapeutic exercise spaces.\n🇪🇸 Clínica de Fisioterapia Sospedra Avenida de Aragón | Ejercicio y Salud Integral ofrece servicios profesionales de fisioterapia y rehabilitación en Valencia y alrededores."
+  },
+  {
+    "id": "42e67b34-ddce-4ea3-9480-f53cdedac1e1",
+    "name": "AD Fisioterapia Valencia",
+    "description": "🇬🇧 AD Fisioterapia Valencia is a multidisciplinary physiotherapy clinic in Valencia offering personalized treatments to address pain, injuries, rehabilitation, and overall wellbeing. Its services include physiotherapy, podiatry, training, nutrition, traumatology, psychology, osteopathy, pelvic-floor therapy, invasive physiotherapy, and advanced techniques such as ultrasound, NESA neuromodulation, and Indiba.\n🇪🇸 AD Fisioterapia Valencia | Clínica de Fisioterapia y Rehabilitación ofrece servicios profesionales de fisioterapia y rehabilitación en Valencia y alrededores."
+  },
+  {
+    "id": "8c7382ce-c995-4166-97f3-31fd2a4ccbe8",
+    "name": "Clinica Gravity",
+    "description": "🇬🇧 Gravity is a clinic offering comprehensive health, injury recovery, and exercise services using the latest technology. Its services include ultrasound, physiotherapy, and rehabilitation.\n🇪🇸 Gravity - Clínica de Fisioterapia en Valencia ofrece servicios profesionales de fisioterapia y rehabilitación en Valencia y alrededores."
+  },
+  {
+    "id": "9beb9efc-7eb7-4390-b5b7-38cbb00c6110",
+    "name": "Karoon Pilates Studio K5",
+    "description": "🇬🇧 Karoon Pilates Studio K5 provides professional pilates services in the Valencia area.\n🇪🇸 Karoon Pilates Studio K5 ofrece servicios profesionales de Pilates y entrenamiento en Valencia y alrededores."
+  },
+  {
+    "id": "196ac2fa-829c-4947-be52-e7db5c391b55",
+    "name": "Pilates Training Studio",
+    "description": "🇬🇧 Pilates Training Studio is a Pilates studio in central Valencia with a highly professional team. It offers a comprehensive Pilates method that works the body as a whole in a calm, peaceful environment with personalized attention.\n🇪🇸 Pilates Training Studio ofrece servicios profesionales de Pilates y entrenamiento en Valencia y alrededores."
+  },
+  {
+    "id": "ad9ec673-0248-4f85-92e8-21c26efed853",
+    "name": "Urban Pilates - Abastos",
+    "description": "🇬🇧 Urban Pilates - Abastos provides professional pilates services in the Valencia area.\n🇪🇸 Urban Pilates - Abastos ofrece servicios profesionales de Pilates y entrenamiento en Valencia y alrededores."
+  },
+  {
+    "id": "0b456b0f-7c21-4b6b-93c9-c438a5a01de8",
+    "name": "Instalaciones Alejandro Cobano",
+    "description": "🇬🇧 Fontanero Valencia Instalaciones Alejandro Cobano is a family-run plumbing company in Valencia with over 35 years of experience. It provides comprehensive plumbing, drain unblocking, heating, and home repair services for individuals, residential communities, and businesses.\n🇪🇸 Fontanero Valencia Instalaciones Alejandro Cobano ofrece servicios profesionales de fontanería y reparaciones en Valencia y alrededores."
+  },
+  {
+    "id": "b1bfc1bd-8494-4a96-afbc-65d1955b273b",
+    "name": "Podoteam",
+    "description": "🇬🇧 Podoteam is a podiatry clinic in Valencia specializing in minimally invasive foot surgery, diagnostic ultrasound, advanced gait biomechanics, and individually designed 3D orthotics. It also provides personalized treatments focused on children’s foot health and development.\n🇪🇸 Podólogo Valencia | Podoteam ofrece servicios profesionales de podología y cuidado de los pies en Valencia y alrededores."
+  },
+  {
+    "id": "4fb8d9bd-5b6d-4877-9257-8ccd520a6cc0",
+    "name": "TuPie Clinica Podólogica Valencia",
+    "description": "🇬🇧 TuPie Clínica Podológica in Valencia provides comprehensive foot care and podiatry services from qualified podologists, using specific protocols for reliable, individualized diagnoses. Its services include customized sports, therapeutic, and accommodative insoles, gait analysis, general podiatry, and podiatric surgery.\n🇪🇸 TuPie | Podólogo Valencia ofrece servicios profesionales de podología y cuidado de los pies en Valencia y alrededores."
+  },
+  {
+    "id": "52cc4644-dc1a-4994-8aa6-774ece9cdf49",
+    "name": "Cristina Escudero Clínica podológica ",
+    "description": "🇬🇧 Cristina Escudero is a podiatry practice in central Valencia offering chiropody, biomechanical analysis, sports assessments, personalized sports insoles, adapted stretching plans, and surgical treatment for foot conditions.\n🇪🇸 Cristina Escudero | Clínica podológica | Podólogo ofrece servicios profesionales de podología y cuidado de los pies en Valencia y alrededores."
+  },
+  {
+    "id": "68fad794-555d-4903-8e20-788f18c4bcc8",
+    "name": "Clinica Podológica Peset",
+    "description": "🇬🇧 Clinica Podológica Peset - Valencia provides professional podiatrist services in the Valencia area.\n🇪🇸 Clinica Podológica Peset - Valencia ofrece servicios profesionales de podología y cuidado de los pies en Valencia y alrededores."
+  },
+  {
+    "id": "d83f59ab-e005-4b24-ac41-98e41823a23c",
+    "name": "Cooks at home",
+    "description": "🇬🇧 Cocinero a Domicilio provides healthy, affordable, homemade meals cooked in customers’ homes across Madrid, Barcelona, Seville, Marbella, Alicante, Valencia, Girona, and Extremadura. In just three hours, its cooks prepare a family menu for the entire week, starting at €15 per hour.\n🇪🇸 Cooks at home ofrece servicios profesionales de catering y servicios gastronómicos para eventos en Valencia y alrededores."
+  },
+  {
+    "id": "dc26a625-fbf2-4136-80de-d208c474e7ed",
+    "name": "PAELLAS EN CASA",
+    "description": "🇬🇧 Paellas en Casa delivers authentic Valencian paellas cooked by expert rice chefs at your home or event. The team works mainly in Mallorca, Ibiza, and Barcelona, offering a complete, professional, and authentic culinary experience.\n🇪🇸 PAELLAS EN CASA ofrece servicios profesionales de catering y servicios gastronómicos para eventos en Valencia y alrededores."
+  },
+  {
+    "id": "12ed925e-87ed-4a58-a88e-9786b1061893",
+    "name": "Paella Chef",
+    "description": "🇬🇧 Paella Chef - Raciones Mercado Central Valencia provides professional catering / private chefs services in the Valencia area.\n🇪🇸 Paella Chef - Raciones Mercado Central Valencia ofrece servicios profesionales de catering y servicios gastronómicos para eventos en Valencia y alrededores."
+  },
+  {
+    "id": "b2c1046d-a611-4a95-9d58-28599bb694ce",
+    "name": "Chef Privado Tom Voigt",
+    "description": "🇬🇧 Private Chef Valencia · Chef Privado Tom Voigt provides professional catering / private chefs services in the Valencia area.\n🇪🇸 Private Chef Valencia · Chef Privado Tom Voigt ofrece servicios profesionales de catering y servicios gastronómicos para eventos en Valencia y alrededores."
+  },
+  {
+    "id": "35c99a05-50f4-4161-88ca-040ff88497b1",
+    "name": "Vivalta Inmobiliaria",
+    "description": "🇬🇧 Vivalta is a real estate agency helping clients sell, buy, and rent homes with comprehensive support, including paperwork, legal matters, financing, and property management. Its team has more than 25 years of experience and provides each client with a dedicated contact person.\n🇪🇸 Vivalta Inmobiliaria ofrece servicios profesionales de servicios inmobiliarios en Valencia y alrededores."
+  },
+  {
+    "id": "12938de4-7cbf-479e-9299-b3624c9f9450",
+    "name": "Dga Fiscalis Gestoria Valencia",
+    "description": "🇬🇧 Fiscalis is a Valencia-based advisory firm specializing in tax, labor, commercial, and accounting services. Since 1990, it has helped freelancers, businesses, and individuals manage their finances, payroll, and administrative procedures.\n🇪🇸 Dga Fiscalis Gestoria Valencia ofrece servicios profesionales de asesoría fiscal, contable y gestión administrativa en Valencia y alrededores."
+  },
+  {
+    "id": "9a042df2-3472-457a-8c20-1df2b13a696c",
+    "name": "Taller Pit Stop N. Peñalver",
+    "description": "🇬🇧 Vehicle repair and automotive maintenance.\n🇪🇸 Taller Pit Stop N. Peñalver ofrece servicios de reparación, mantenimiento y puesta a punto de vehículos en Valencia y alrededores."
+  },
+  {
+    "id": "469f85ab-3178-448f-bd80-ac641d787029",
+    "name": "CALLAGHAN Inmobiliaria",
+    "description": "🇬🇧 Callaghan Inmobiliaria is a Valencia real estate agency helping clients buy, sell, and rent homes. It offers a comprehensive, transparent service with professional property marketing, home staging, technology-assisted viewings, and guidance in finding a new home.\n🇪🇸 CALLAGHAN Inmobiliaria ofrece servicios profesionales de servicios inmobiliarios en Valencia y alrededores."
+  },
+  {
+    "id": "3805a5ac-5a3b-40d5-9939-1ac3a39f5191",
+    "name": "Mejor inmobiliaria Valencia",
+    "description": "🇬🇧 Everlyhome is a real estate agency primarily serving Valencia, with more than 23 years of experience and activity since 2012 in Ayora, Blasco Ibáñez, L'Illa Perduda, and Beteró. It offers property sales, rentals, and purchases, with a focus on personalized, professional, and trustworthy service.\n🇪🇸 Mejor inmobiliaria Valencia ofrece servicios profesionales de servicios inmobiliarios en Valencia y alrededores."
+  },
+  {
+    "id": "966d1d4c-f4c4-4190-a009-fe7fb2276e88",
+    "name": "GALGO REAL ESTATE Valencia",
+    "description": "🇬🇧 GALCO REAL ESTATE agency in Valencia helping clients find their perfect home. Located in central Valencia at Calle Pascual y Genis 10, 2D.\n🇪🇸 GALGO REAL ESTATE Valencia ofrece servicios profesionales de servicios inmobiliarios en Valencia y alrededores."
+  },
+  {
+    "id": "2c3aea9c-b0cc-466b-83e2-f73fe9cf7d72",
+    "name": "Mudanzas Las Artes Valencia",
+    "description": "🇬🇧 Mudanzas Las Artes Valencia provides professional relocation services in the Valencia area.\n🇪🇸 Mudanzas Las Artes Valencia ofrece servicios profesionales de servicios de mudanza y traslado en Valencia y alrededores."
+  },
+  {
+    "id": "ea8f3b3b-cfef-4691-b715-a67e6fd78ad7",
+    "name": "ION Proyectos",
+    "description": "🇬🇧  ION Proyectos designs, installs, maintains, and develops photovoltaic, climate-control, heating, cooling, aerothermal, electrical, gas, and electric-vehicle charging projects. The company also provides energy consulting to help businesses and individuals reduce electricity and gas costs through renewable-energy solutions.\n🇪🇸 ION Proyectos Empresa de climatización y fotovoltaica ofrece servicios profesionales de energía solar y soluciones fotovoltaicas en Valencia y alrededores."
+  },
+  {
+    "id": "4984820a-4a13-4ed5-b628-a0fc3d0eb109",
+    "name": "Evolucion Solar Valencia",
+    "description": "🇬🇧 Evolucion Solar provides solar panel installation and photovoltaic self-consumption solutions for homes, residential communities, and businesses in Valencia. The company also offers electric vehicle charging systems, energy bill optimization, lighting improvements, financing, and assistance with renewable-energy grants and tax benefits.\n🇪🇸 Evolucion Solar Valencia ofrece servicios profesionales de energía solar y soluciones fotovoltaicas en Valencia y alrededores."
+  },
+  {
+    "id": "2447dbd0-d49f-4051-b2d6-99cf798d2d64",
+    "name": "Mudanzas Tortosa",
+    "description": "🇬🇧 Mudanzas Tortosa is a Valencia-based moving company with over 140 years of experience, offering affordable moves, small removals, packing, storage, lift services, and property clearances. They provide safe, professional, and personalized services, including furniture and waste removal.\n🇪🇸 Empresa de mudanzas en Valencia | Mudanzas Tortosa ofrece servicios profesionales de servicios de mudanza y traslado en Valencia y alrededores."
+  },
+  {
+    "id": "fc727141-7ea1-4964-aa54-7403a4f405ba",
+    "name": "Mudanzas Levante",
+    "description": "🇬🇧 Mudanzas Levante is a family-run moving company in Valencia, Spain, founded in 1994. It provides local, national, and international moving services, transport, façade hoisting, office and institutional relocations, furniture assembly, and storage.\n🇪🇸 Mudanzas Levante ofrece servicios profesionales de servicios de mudanza y traslado en Valencia y alrededores."
+  },
+  {
+    "id": "cfbad1e9-b12b-419f-bb5a-13667fd58439",
+    "name": "Solar Fácil",
+    "description": "🇬🇧 Solar Fácil provides professional solar energy services in the Valencia area.\n🇪🇸 Solar Fácil ofrece servicios profesionales de energía solar y soluciones fotovoltaicas en Valencia y alrededores."
+  },
+  {
+    "id": "bf5cdced-b3bc-4651-a4ea-2cfd4a3934bd",
+    "name": "Españolé International House Valencia",
+    "description": "🇬🇧 Españolé International House is a Spanish school for international students located in the heart of Valencia, Spain. It offers practical, communicative Spanish courses in a restored Gothic palace, combining language learning with Spanish culture, traditions, and lifestyle.\n🇪🇸 Españolé International House Valencia- Spanish School ofrece servicios profesionales de enseñanza de idiomas y clases de español en Valencia y alrededores."
+  },
+  {
+    "id": "e4ffab69-57df-4c7a-baea-3b86487ccfcd",
+    "name": "Dameluz Solar",
+    "description": "🇬🇧  Dameluz is an energy company specializing in clean, sustainable, and affordable solutions, including photovoltaic, wind, and aerothermal installations. Its engineers and installers provide energy advice, savings studies, surplus management, and assistance with grants and subsidies for homes and businesses.\n🇪🇸 Dameluz Solar ofrece servicios profesionales de energía solar y soluciones fotovoltaicas en Valencia y alrededores."
+  },
+  {
+    "id": "a08cf9fa-d802-4591-9555-4a650ca6d126",
+    "name": "Costa de Valencia",
+    "description": "🇬🇧 Costa de Valencia, escuela de español provides professional language schools / tutoring services in the Valencia area.\n🇪🇸 Costa de Valencia, escuela de español ofrece servicios profesionales de enseñanza de idiomas y clases de español en Valencia y alrededores."
+  },
+  {
+    "id": "f3974fbc-a864-42f9-86b4-938d7fb74246",
+    "name": "La Garbinada S.L. ",
+    "description": "🇬🇧 La Garbinada Placas Solares provides solar panel installation and maintenance in Valencia and surrounding areas, offering customized photovoltaic self-consumption solutions for homes and businesses. The company also provides financing, warranties, annual inspections, drone inspections, residential and industrial systems, and off-grid installations.\n🇪🇸 La Garbinada S.L. Instalación de paneles solares. Placas solares fotovoltaicas en Valencia. ofrece servicios profesionales de energía solar y soluciones fotovoltaicas en Valencia y alrededores."
+  },
+  {
+    "id": "5d3dde09-97b2-4fc1-a9bf-fbd6bd2084d7",
+    "name": "ELE Aleph ",
+    "description": "🇬🇧 ELE Aleph is a Spanish language school in Valencia, Spain, offering intensive, extensive, and private Spanish courses at the school or online. It provides personal, friendly attention and aims to deliver quality, affordable education through dedicated, qualified teachers.\n🇪🇸 ELE Aleph - Spanish language school ofrece servicios profesionales de enseñanza de idiomas y clases de español en Valencia y alrededores."
+  },
+  {
+    "id": "8e0a4083-dcc4-43ab-b322-2619a90132d2",
+    "name": "Hispania, escola d'espanyol",
+    "description": "🇬🇧 Hispania is a Spanish language school in Valencia offering in-person and online Spanish courses, exam preparation, study programs, accommodations, activities, and internships. Its native, qualified teachers provide flexible, high-quality classes for students of all levels.\n🇪🇸 Hispania, escola d'espanyol ofrece servicios profesionales de enseñanza de idiomas y clases de español en Valencia y alrededores."
+  },
+  {
+    "id": "b3e09b64-ff5a-4aaa-96c5-5ad9839165f7",
+    "name": "Seligra Sastre",
+    "description": "🇬🇧 Seligra Sastre provides professional tailor services in the Valencia area.\n🇪🇸 Seligra Sastre ofrece servicios profesionales de sastrería y confección a medida en Valencia y alrededores."
+  },
+  {
+    "id": "e0a296fe-8819-4e85-bebb-5a9dc5898c67",
+    "name": "Sastrería Diplomática",
+    "description": "🇬🇧 Sastrería Diplomática provides professional tailor services in the Valencia area.\n🇪🇸 Sastrería Diplomática ofrece servicios profesionales de sastrería y confección a medida en Valencia y alrededores."
+  },
+  {
+    "id": "20c6036d-bcca-4024-81f1-7251d96ecd8b",
+    "name": "Sastrería Julio Berzosa",
+    "description": "🇬🇧 Sastrería Julio Berzosa is a Valencia-based tailor specializing in handcrafted bespoke suits, wedding attire, musician uniforms, made-to-measure shirts, and the rental of morning coats. With over 40 years of experience, the business offers personalized service and uses national, Italian, and English fabrics.\n🇪🇸 Sastrería Julio Berzosa ofrece servicios profesionales de sastrería y confección a medida en Valencia y alrededores."
+  },
+  {
+    "id": "80a9962a-0748-4be4-a4db-2f9504d9d8e8",
+    "name": "Martínez Mor - Sastrería a Medida Artesanal",
+    "description": "🇬🇧 Martínez Mor - Sastrería a Medida Artesanal provides professional tailor services in the Valencia area.\n🇪🇸 Martínez Mor - Sastrería a Medida Artesanal ofrece servicios profesionales de sastrería y confección a medida en Valencia y alrededores."
+  },
+  {
+    "id": "120062d8-8c35-4beb-a1f4-b7913cc92fd2",
+    "name": "Carlos Caballero Sastre",
+    "description": "🇬🇧 Carlos Caballero is a master tailor offering exclusive, handcrafted bespoke clothing with limitless personalization. With over 25 years in tailoring, he trained at prestigious schools in Valencia and Madrid and served as head of tailoring at El Corte Inglés before establishing his own private atelier.\n🇪🇸 Carlos Caballero Sastre ofrece servicios profesionales de sastrería y confección a medida en Valencia y alrededores."
+  },
+  {
+    "id": "1bab464f-0ded-4a58-909a-0f4fcfc09973",
+    "name": "Trámites Asesoria y Gestoria SL",
+    "description": "🇬🇧 Trámites Asesoria y Gestoria SL provides professional tax advisor / gestor services in the Valencia area.\n🇪🇸 Trámites Asesoria y Gestoria SL ofrece servicios profesionales de asesoría fiscal, contable y gestión administrativa en Valencia y alrededores."
+  },
+  {
+    "id": "eaa18653-f8fb-40b9-a05e-022fef115626",
+    "name": "Centro Quiropráctico Valencia",
+    "description": "🇬🇧 Salud Quiropráctica is a chiropractic center in Valencia specializing in the evaluation, care, and prevention of mechanical disorders of the spine and musculoskeletal system. Its chiropractors provide individualized clinical assessments and manual care focused on posture, movement, and functional well-being.\n🇪🇸 Centro Quiropráctico Valencia ofrece servicios profesionales de quiropráctica en Valencia y alrededores."
+  },
+  {
+    "id": "9afae53e-3f42-470c-99ee-1cec69b0bff8",
+    "name": "Salsia Restauración - Catering para Bodas en Valencia",
+    "description": "🇬🇧 Salsia is a Valencia-based catering company specializing in weddings and all types of events. It offers Mediterranean cuisine with modern touches, personalized experiences, expert service, and unique venues across the Valencian Community.\n🇪🇸 Salsia Restauración - Catering para Bodas en Valencia ofrece servicios profesionales de catering y servicios gastronómicos para eventos en Valencia y alrededores."
+  },
+  {
+    "id": "272a2c0c-f233-44dd-967a-a24cc6a4921f",
+    "name": "Tardana Events, servicio de catering en Valencia",
+    "description": "🇬🇧 Tardana Events is a young, creative, and passionate catering company in Valencia, specializing in unique events with carefully designed dishes served in one or two bites. With its own production center, it offers tailored services ranging from small office breakfasts to large cocktails and delivery.\n🇪🇸 Tardana Events, servicio de catering en Valencia ofrece servicios profesionales de catering y servicios gastronómicos para eventos en Valencia y alrededores."
+  },
+  {
+    "id": "ab05de0a-cf7e-4386-827b-50d3d991d84b",
+    "name": "Climelectric Aire Acondicionado",
+    "description": "🇬🇧 Climelectric is a Valencian company specializing in air conditioning, heating, boiler, and water-heater services, with more than 20 years of industry experience. It provides installation, maintenance, and repair services for domestic, commercial, and industrial systems throughout Valencia.\n🇪🇸 Climelectric Aire Acondicionado ofrece servicios profesionales de climatización, aire acondicionado y mantenimiento en Valencia y alrededores."
+  },
+  {
+    "id": "45948305-06b7-47ca-afb4-f4ce3d4d35ed",
+    "name": "Climatron",
+    "description": "🇬🇧 Climatron is a Valencia-based climate control company with over 30 years of experience in air conditioning installation, maintenance, and repair. It also provides comprehensive solutions for heating, aerothermal energy, gas, and industrial refrigeration.\n🇪🇸 Climatron ofrece servicios profesionales de climatización, aire acondicionado y mantenimiento en Valencia y alrededores."
+  },
+  {
+    "id": "46df2bc3-26e8-4162-9984-42e028697917",
+    "name": "Chimeneas Legua - Legua Artesanos S.L.",
+    "description": "🇬🇧 Chimeneas Legua - Legua Artesanos S.L. provides professional firewood supplier services in the Valencia area.\n🇪🇸 Chimeneas Legua - Legua Artesanos S.L. ofrece servicios profesionales de venta y suministro de leña en Valencia y alrededores."
+  },
+  {
+    "id": "d716e1f1-2051-4105-ba2b-16af6a53f8f0",
+    "name": "Gestoría en Casa ",
+    "description": "🇬🇧 Gestoría en Casa is an online employment consultancy specializing in Spain’s Special System for Domestic Employees. With over 11 years of experience, it manages hiring, Social Security registrations, payroll, labor changes, and employment terminations, with an assigned consultant from the first day.\n\n🇪🇸 Gestoría en Casa | Gestoría laboral online | Alta empleadas del hogar ofrece servicios profesionales de asesoría fiscal, contable y gestión administrativa en Valencia y alrededores."
+  },
+  {
+    "id": "96683f62-f828-41b8-928a-e048ef09fcad",
+    "name": "GESTORIA DUEÑAS",
+    "description": "🇬🇧 Gestoría Dueñas is a professional administrative consultancy in Valencia, affiliated with the Illustrious College of Administrative Managers of Valencia. It specializes in residence, immigration, nationality, legal procedures, document legalization, and academic qualification recognition for migrants, students, families, and individuals.\n\n🇪🇸 GESTORIA DUEÑAS. ofrece servicios profesionales de asesoría fiscal, contable y gestión administrativa en Valencia y alrededores."
+  },
+  {
+    "id": "c043348c-7680-4cb0-9a7f-025dc1525cbf",
+    "name": "Centro de Psicología Clínica y de la Salud Sara Navarrete",
+    "description": "🇬🇧 Centro de Psicología Clínica y de la Salud de Valencia, directed by psychologist Sara Navarrete, offers in-person and online psychological care for adults, couples, adolescents, and children. Services include emotional dependence and self-esteem treatment, couple therapy, anxiety and fagophobia treatment, clinical neuropsychology, psychological expert reports, and legal psychology.\n🇪🇸 Centro Psicología Clínica y de la Salud de Valencia ofrece servicios profesionales de psicología y servicios terapéuticos en Valencia y alrededores."
+  },
+  {
+    "id": "264715c4-4fab-4783-bd53-f0e5d799e4ba",
+    "name": "Psicólogo Valencia Julio García",
+    "description": "🇬🇧 Psicólogo Valencia Julio García provides professional therapy / psychology services in the Valencia area.\n🇪🇸 Psicólogo Valencia Julio García ofrece servicios profesionales de psicología y servicios terapéuticos en Valencia y alrededores."
+  },
+  {
+    "id": "1fada612-b1d7-450b-93d1-379c0d7ed8f6",
+    "name": "Dr. Marian Roig",
+    "description": "🇬🇧 Consulta de Psicólogos - Dr. Marian Roig provides professional therapy / psychology services in the Valencia area.\n🇪🇸 Consulta de Psicólogos - Dr. Marian Roig ofrece servicios profesionales de psicología y servicios terapéuticos en Valencia y alrededores."
+  },
+  {
+    "id": "62bd52fd-611d-47b1-9dee-d64f582d48a2",
+    "name": "Amparo Calandín Psicólogos",
+    "description": "🇬🇧 Amparo Calandín Psicólogos is a clinical psychology center in Valencia with a team of specialists offering personalized support for adults, children, adolescents, couples, and families. Its approach is based on cognitive-behavioral therapy and the SONRISA Method, with in-person and online consultations.\n🇪🇸 Psicólogos Valencia ofrece servicios profesionales de psicología y servicios terapéuticos en Valencia y alrededores."
+  },
+  {
+    "id": "6f0f7823-fe28-41a6-9639-cc69cfdd0143",
+    "name": "Fontanería Antonio Cerdán",
+    "description": "🇬🇧 Fontanería Antonio Cerdán provides professional plumbing services in the Valencia area.\n🇪🇸 Fontanería Antonio Cerdán ofrece servicios profesionales de fontanería y reparaciones en Valencia y alrededores."
+  },
+  {
+    "id": "c11a443c-8c46-453c-ad50-ac63a6d62891",
+    "name": "VAINSMON SL",
+    "description": "🇬🇧 Vainsmon is a Valencia-based installation company specializing in air conditioning, heating, electrical, plumbing, energy efficiency, and renewable energy systems. Its renewable energy services include wind power, solar photovoltaic, solar thermal, geothermal energy, and biomass.\n🇪🇸 VAINSMON SL ofrece servicios profesionales de climatización, aire acondicionado y mantenimiento en Valencia y alrededores."
+  },
+  {
+    "id": "2d3756b2-d36c-4917-9320-79e770527a2b",
+    "name": "Ismael - Manitas & Carpintería",
+    "description": "🇬🇧 Carpintería general manitas reparaciones Valencia carpintería provides professional handyman services in the Valencia area.\n🇪🇸 Carpintería general manitas reparaciones Valencia carpintería ofrece servicios profesionales de mantenimiento y reparaciones del hogar en Valencia y alrededores."
+  },
+  {
+    "id": "1b8a2425-6812-4967-b9f1-9c5b476300af",
+    "name": "Sánchez Abogados",
+    "description": "🇬🇧 Sánchez Abogados is a law firm with offices in Madrid and Valencia, specializing in international law. It provides tailored legal solutions and advice to individuals and businesses.\n🇪🇸 Sánchez Abogados ofrece servicios profesionales de asesoramiento y servicios jurídicos en Valencia y alrededores."
+  },
+  {
+    "id": "33c8c69c-ccd6-4e17-afff-a38859b8b911",
+    "name": "Aire Clim",
+    "description": "🇬🇧 Aire Clim provides professional air conditioning / hvac services in the Valencia area.\n🇪🇸 Aire Clim ofrece servicios profesionales de climatización, aire acondicionado y mantenimiento en Valencia y alrededores."
+  },
+  {
+    "id": "63ff488e-1beb-4617-b37c-9cd0bfab5444",
+    "name": "Puertas automáticas Lloris Pons S. L.",
+    "description": "🇬🇧 Puertas Lloris, founded in 1975, provides high-quality metal doors and automation solutions in the Valencia area. The company offers installation, maintenance, replacement, and customized sliding, swing, rolling, and sectional doors for businesses, homes, and construction projects.\n🇪🇸 Puertas automáticas Lloris Pons S. L. ofrece servicios profesionales de puertas automáticas y sistemas de automatización en Valencia y alrededores."
+  },
+  {
+    "id": "1a112979-47ea-4a7c-aa72-dd2548b2e7c2",
+    "name": "Farem Puertas Automáticas",
+    "description": "🇬🇧 Farem Puertas Automáticas provides professional automatic doors services in the Valencia area.\n🇪🇸 Farem Puertas Automáticas ofrece servicios profesionales de puertas automáticas y sistemas de automatización en Valencia y alrededores."
+  },
+  {
+    "id": "50dff2df-f146-4491-8ea5-a06127ec83c8",
+    "name": "Valencia Club de Hockey",
+    "description": "🇬🇧 Valencia Club de Hockey is one of Valencia’s historic hockey clubs, bringing together players of all ages and levels. With men’s and women’s teams, youth categories, schools and social teams, the club promotes hockey through sport, teamwork, commitment and inclusion. Based in Valencia, the club welcomes both local and international players and offers a strong sense of community both on and off the pitch.\n🇪🇸 Valencia Club de Hockey es uno de los clubes históricos de hockey de Valencia y reúne a jugadores de todas las edades y niveles. Con equipos masculinos y femeninos, categorías de formación, escuelas y equipos sociales, el club impulsa el hockey a través del deporte, el compañerismo, el compromiso y la inclusión. Con sede en Valencia, acoge tanto a jugadores locales como internacionales y ofrece un fuerte sentido de comunidad dentro y fuera del campo."
+  },
+  {
+    "id": "56d2c8ac-8b7d-488c-a5a2-aa298b711a3d",
+    "name": "Sobre Cocinas",
+    "description": "🇬🇧 Sobre Cocinas provides professional interior design / kitchens services in the Valencia area.\n🇪🇸 Sobre Cocinas ofrece servicios profesionales de diseño y equipamiento de cocinas en Valencia y alrededores."
+  },
+  {
+    "id": "304d1867-6594-422f-a7a9-80ccbcc2d24d",
+    "name": "Walking Dogs Valencia",
+    "description": "🇬🇧 Walking Dogs provides respectful, empathetic dog education and training in Valencia, helping families understand their dogs and build harmonious relationships without punishment. Services include in-home consultations, follow-up sessions, online guidance, and socialization groups.\n🇪🇸 Walking Dogs Valencia ofrece servicios profesionales de educación y adiestramiento canino en Valencia y alrededores."
+  },
+  {
+    "id": "c3d480b8-b97a-4406-8c0b-c26441ec6902",
+    "name": "Fotógrafo Candez Valencia",
+    "description": "🇬🇧 Candez is a professional photographer based in Valencia with over a decade of experience, specializing in maternity, boudoir, fashion, fallera, portrait, corporate, and beauty photography. He offers personalized studio and outdoor sessions designed to capture authentic emotions, unique stories, and the essence of each client.\n🇪🇸 Fotógrafo Candez Valencia ofrece servicios profesionales de fotografía profesional en Valencia y alrededores."
+  },
+  {
+    "id": "e7549337-6bdf-442c-9dbf-21f6b3a667fb",
+    "name": "Podoactiva València",
+    "description": "🇬🇧 Clínica Podoactiva Valencia – Instituto Valenciano del Pie is a specialized podiatry and biomechanics clinic in Valencia offering sports, pediatric, senior, and everyday podiatry services. It provides personalized care, advanced gait and running analysis, custom insoles, chiropody, and surgical treatment for various foot conditions.\n🇪🇸 Podoactiva València - Institut Valencià del Peu ofrece servicios profesionales de podología y cuidado de los pies en Valencia y alrededores."
+  },
+  {
+    "id": "885e7b1f-cef6-4d2b-85da-02891cc53e52",
+    "name": "Tu Ilusión Inmobiliaria",
+    "description": "🇬🇧 Tu Ilusión Inmobiliaria is a real estate agency in Valencia’s Benicalap neighborhood, specializing in helping clients buy and sell properties. It has been highly rated by hundreds of satisfied customers, with an average score of 4.8/5.\n🇪🇸 Tu Ilusión Inmobiliaria ofrece servicios profesionales de servicios inmobiliarios en Valencia y alrededores."
+  },
+  {
+    "id": "94c56a58-62a6-4b01-bf6d-6b0191b5362b",
+    "name": "Manitas soluciones",
+    "description": "🇬🇧 Manitas Cerca is a Valencia-based handyman and renovation service offering custom furniture design and manufacturing, plumbing, carpentry, masonry, plasterwork, tiling, furniture assembly, and comprehensive home and business renovations. They provide fast, professional, and reliable repairs and maintenance with quality materials, fair prices, and guaranteed work.\n🇪🇸 Manitas soluciones ofrece servicios profesionales de mantenimiento y reparaciones del hogar en Valencia y alrededores."
+  },
+  {
+    "id": "f7bc0772-3c8b-4102-b687-466e8510f823",
+    "name": "Understand Valencia ",
+    "description": "🇬🇧 Understand Valencia is an English and Spanish language school located in central Valencia, between the well-known Ruzafa and Cánovas neighborhoods. It offers spacious, bright classes for groups, companies, and individuals, along with a coffee room and virtual gallery.\n🇪🇸 Understand Valencia | Academia de Idiomas en Valencia ofrece servicios profesionales de enseñanza de idiomas y clases de español en Valencia y alrededores."
+  },
+  {
+    "id": "fd7b2d6b-6a7c-4e34-9f55-5317e3a3351e",
+    "name": "VALENCIANA DE MUDANZAS",
+    "description": "🇬🇧 Valenciana de Mudanzas is a moving company in Valencia with more than 20 years of experience providing local, national, and international moving services for individuals, businesses, and offices. Its services include furniture transport, packing, assembly and disassembly, appliance installation, and the relocation of personal belongings.\n🇪🇸 VALENCIANA DE MUDANZAS ofrece servicios profesionales de servicios de mudanza y traslado en Valencia y alrededores."
+  },
+  {
+    "id": "0442f097-c124-455e-bd77-eab8da2f5b4f",
+    "name": "ANGELETS - Cuidado Infantil y Apoyo Escolar",
+    "description": "🇬🇧 Childcare and after-school support.\n🇪🇸 ANGELETS - Cuidado Infantil y Apoyo Escolar ofrece servicios de cuidado infantil, babysitting y apoyo familiar en Valencia y alrededores."
+  },
+  {
+    "id": "7cb7c669-3d90-48e5-be27-e7c32074e765",
+    "name": "Kangurea Valencia",
+    "description": "🇬🇧 Babysitting and childcare service.\n🇪🇸 Kangurea Valencia ofrece servicios de cuidado infantil, babysitting y apoyo familiar en Valencia y alrededores."
+  },
+  {
+    "id": "b2c395ee-64a6-406f-8cbf-1b69be60e487",
+    "name": "Quiropráctica Delassus - Quiropráctico Valencia",
+    "description": "🇬🇧 Quiropráctica Delassus is a chiropractic center in Valencia and Requena that offers a holistic approach to wellbeing. It helps people care for their bodies, improve balance, and discover their potential through chiropractic care.\n🇪🇸 Quiropráctica Delassus - Quiropráctico Valencia ofrece servicios profesionales de quiropráctica en Valencia y alrededores."
+  },
+  {
+    "id": "fa050c2f-bb81-4c7c-b5ae-ae58d50f20b6",
+    "name": "Columnaquiro - Quiropráctico en Valencia - Clínica de la espalda - Dolor de la columna - Centro quiropráctico en Valencia",
+    "description": "🇬🇧 ColumnaQuiro is a chiropractic center in Valencia focused on natural wellbeing through personalized care for the nervous system and spine. Its services include digital evaluations, manual adjustments, and holistic care plans tailored to each patient.\n🇪🇸 Columnaquiro - Quiropráctico en Valencia - Clínica de la espalda - Dolor de la columna - Centro quiropráctico en Valencia ofrece servicios profesionales de quiropráctica en Valencia y alrededores."
+  },
+  {
+    "id": "4c1c816f-d1a0-4349-afb9-dd027f8ca8de",
+    "name": "MYA ASESORES – Asesoría fiscal, contable, financiera y consultoría en Valencia",
+    "description": "🇬🇧 MYA ASESORES – Asesoría fiscal, contable, financiera y consultoría en Valencia provides professional tax advisor / gestor services in the Valencia area.\n🇪🇸 MYA ASESORES – Asesoría fiscal, contable, financiera y consultoría en Valencia ofrece servicios profesionales de asesoría fiscal, contable y gestión administrativa en Valencia y alrededores."
+  },
+  {
+    "id": "3eee5159-e523-4a45-8eca-d4d194530833",
+    "name": "ASESORIA VALENCIA- ASESORIA AVANZA",
+    "description": "🇬🇧 ASESORIA VALENCIA- ASESORIA AVANZA provides professional tax advisor / gestor services in the Valencia area.\n🇪🇸 ASESORIA VALENCIA- ASESORIA AVANZA ofrece servicios profesionales de asesoría fiscal, contable y gestión administrativa en Valencia y alrededores."
+  },
+  {
+    "id": "3905921a-4f5c-45fe-b663-6a3e55a9c14a",
+    "name": "PUERTAS AUTOMATICAS OSCAR TORRES",
+    "description": "🇬🇧 Puertas Automáticas Oscar Torres specializes in the installation, repair, and maintenance of various types of automatic doors. The business also provides personalized advice, preventive and corrective maintenance, and locksmith services including key duplication, door opening, and lock replacement.\n🇪🇸 PUERTAS AUTOMATICAS OSCAR TORRES ofrece servicios profesionales de puertas automáticas y sistemas de automatización en Valencia y alrededores."
+  },
+  {
+    "id": "0cb04ce4-8dc0-4b56-bb07-fdf29881bb51",
+    "name": "Leñas Valencia Levante",
+    "description": "🇬🇧 Leñas Valencia Levante provides professional firewood supplier services in the Valencia area.\n🇪🇸 Leñas Valencia Levante ofrece servicios profesionales de venta y suministro de leña en Valencia y alrededores."
+  },
+  {
+    "id": "557acef9-544c-4da5-94d1-1095bce1b61f",
+    "name": "SmartFrio - Empresa de Aire Acondicionado en Valencia",
+    "description": "🇬🇧 Smart Frio specializes in air conditioning, installation, and reliable maintenance. It offers tailored climate control solutions, including split, ducted, and multi-split systems, as well as equipment sales, repairs, and warranties.\n🇪🇸 SmartFrio - Empresa de Aire Acondicionado en Valencia ofrece servicios profesionales de climatización, aire acondicionado y mantenimiento en Valencia y alrededores."
+  },
+  {
+    "id": "fc105205-90fe-4e62-950f-67485fa4d15f",
+    "name": "Passage à Paris",
+    "description": "🇬🇧 Passage à Paris provides professional baker services in the Valencia area.\n🇪🇸 Passage à Paris ofrece servicios profesionales de panadería y productos de panadería y pastelería en Valencia y alrededores."
+  },
+  {
+    "id": "7d7d0c0b-b3a1-4f5e-8b6c-c6e5c58e6e0e",
+    "name": "Pastisseria Monpla",
+    "description": "🇬🇧 Pastisseria Monpla provides professional baker services in the Valencia area.\n🇪🇸 Pastisseria Monpla ofrece servicios profesionales de panadería y productos de panadería y pastelería en Valencia y alrededores."
+  },
+  {
+    "id": "26441071-30c3-4013-9ad9-5645a24b6fe1",
+    "name": "Forn San Antonio - Mercat Central de València",
+    "description": "🇬🇧 Forn San Antonio - Mercat Central de València provides professional baker services in the Valencia area.\n🇪🇸 Forn San Antonio - Mercat Central de València ofrece servicios profesionales de panadería y productos de panadería y pastelería en Valencia y alrededores."
+  },
+  {
+    "id": "e3e7e112-e3a8-4e2c-8952-13ef4c4e207a",
+    "name": "Auto Spa Valencia - car workshop in Valencia, Quatre Carreres",
+    "description": "🇬🇧 Auto Spa Valencia - car workshop in Valencia, Quatre Carreres provides professional garage / auto repair services in the Valencia area.\n🇪🇸 Auto Spa Valencia - car workshop in Valencia, Quatre Carreres ofrece servicios profesionales de servicios de automoción y reparación de vehículos en Valencia y alrededores."
+  },
+  {
+    "id": "3ac31508-693b-456c-8020-cb42cc7f70da",
+    "name": "Talleres YuriCar Valencia",
+    "description": "🇬🇧 We diagnose and repair vehicle breakdowns of any make, using high-quality, fully compatible parts. We also manage the entire insurance repair process and provide an assessment within 24–48 hours.\n🇪🇸 Talleres YuriCar Valencia ofrece servicios profesionales de servicios de automoción y reparación de vehículos en Valencia y alrededores."
+  },
+  {
+    "id": "0864383f-2d30-4012-aa57-a812921eeaa1",
+    "name": "Taller mecanico 24 horas S.N",
+    "description": "🇬🇧 Taller mecanico 24 horas S.N provides professional garage / auto repair services in the Valencia area.\n🇪🇸 Taller mecanico 24 horas S.N ofrece servicios profesionales de servicios de automoción y reparación de vehículos en Valencia y alrededores."
+  },
+  {
+    "id": "c5a8c0eb-ffda-4b87-8f82-9b8f2bf96da9",
+    "name": "TALLERES PRO CARS VALENCIA",
+    "description": "🇬🇧 TALLERES PRO CARS VALENCIA provides professional garage / auto repair services in the Valencia area.\n🇪🇸 TALLERES PRO CARS VALENCIA ofrece servicios profesionales de servicios de automoción y reparación de vehículos en Valencia y alrededores."
+  },
+  {
+    "id": "3aa3464f-74f6-45d5-bb7c-c7ee4d946fc0",
+    "name": "Ferriemoción: Taller Mecánico en Valencia",
+    "description": "🇬🇧 Ferriemoción is a trusted automotive workshop in Valencia with more than 30 years of experience. Its qualified team provides professional vehicle services and is backed by over a hundred customers.\n🇪🇸 Ferriemoción: Taller Mecánico en Valencia ofrece servicios profesionales de servicios de automoción y reparación de vehículos en Valencia y alrededores."
+  },
+  {
+    "id": "d34fb9ba-4e62-402f-bb34-382bc82427d8",
+    "name": "Puertas Automáticas Levante",
+    "description": "🇬🇧 Puertas Automáticas Levante offers customized automated door solutions, working with materials such as aluminum, PVC, and wood. Its services include custom manufacturing, professional installation, and technical advice.\n🇪🇸 Puertas Automáticas Levante ofrece servicios profesionales de puertas automáticas y sistemas de automatización en Valencia y alrededores."
+  },
+  {
+    "id": "3b8ff6b0-daf5-49ac-8f12-57f743abc93b",
+    "name": "Puertas Automáticas Picini",
+    "description": "🇬🇧 Puertas Automáticas Picini provides installation, maintenance, and emergency repair services for automatic garage, glass, and metal-closing doors in Valencia and the surrounding province. The company offers residential, commercial, industrial, and community solutions, including sectional, sliding, swing, rolling, and overhead doors, along with automation systems and professional technical support.\n🇪🇸 Puertas Automáticas Picini ofrece servicios profesionales de puertas automáticas y sistemas de automatización en Valencia y alrededores."
+  },
+  {
+    "id": "440ed3df-594b-42b2-8356-a13fd49a2ae2",
+    "name": "Clínica dental Valencia | Lucía Gil Raga",
+    "description": "🇬🇧 Clínica dental Valencia | Lucía Gil Raga provides professional dentists services in the Valencia area.\n🇪🇸 Clínica dental Valencia | Lucía Gil Raga ofrece servicios profesionales de odontología y cuidado dental en Valencia y alrededores."
+  },
+  {
+    "id": "70c9ffed-5586-4287-8df5-23be92dfa49b",
+    "name": "Clínica Dental Valencia Sala & Moreno",
+    "description": "🇬🇧 Sala & Moreno Advanced Dental Clinics in Valencia is led by Dr. Antonio Sala and Dr. Carla Moreno, with a team of specialists boasting over 10 years of experience in immediate implantology, invisible orthodontics, and aesthetic dentistry. The clinic provides personalized, minimally invasive treatments using advanced technology and high-quality materials.\n🇪🇸 Clínica Dental Valencia Sala & Moreno ofrece servicios profesionales de odontología y cuidado dental en Valencia y alrededores."
+  },
+  {
+    "id": "c8b4c650-2823-48be-ad20-f75e0ca4cf90",
+    "name": "Clínica Dental Manzanera Valencia",
+    "description": "🇬🇧 Clínica Dental Manzanera is a personalized dental clinic in Valencia with over 30 years of experience, specializing in invisible orthodontics, dental implants, and aesthetic dentistry. Its team offers comprehensive care across dental specialties, using the latest technology and prioritizing patients’ health, smiles, and quality of life.\n🇪🇸 Clínica Dental Manzanera Valencia ofrece servicios profesionales de odontología y cuidado dental en Valencia y alrededores."
+  },
+  {
+    "id": "7a66f30d-169a-4a62-933e-cc2d436aae52",
+    "name": "Clinica Asensio Odontología Avanzada",
+    "description": "🇬🇧 Dental Asensio is an advanced dental clinic in Valencia, Spain, specializing in dental implants, aesthetic dentistry, and invisible orthodontics. Established in 1997, it combines over 30 years of experience with advanced technology, personalized treatment plans, and same-day emergency care.\n🇪🇸 Clinica Asensio Odontología Avanzada ofrece servicios profesionales de odontología y cuidado dental en Valencia y alrededores."
+  },
+  {
+    "id": "3d5543b6-8443-4b8b-9780-cf87c2723e09",
+    "name": "Escuela de Baile Ritmos",
+    "description": "🇬🇧 Escuela de Baile Ritmos provides professional dance school services in the Valencia area.\n🇪🇸 Escuela de Baile Ritmos ofrece servicios profesionales de clases de danza y baile en Valencia y alrededores."
+  },
+  {
+    "id": "7476ca44-9c75-48f4-9516-9385c86da780",
+    "name": "Clases De Baile",
+    "description": "🇬🇧 Academia de Baile Luis Chavez is a dance school in Valencia offering beginner-friendly salsa and bachata classes, wedding dance choreography, private coaching, and training in various Latin and urban dance styles. Founded in 2009, it provides a welcoming, professional environment with classes, events, competitions, and community activities.\n🇪🇸 Clases De Baile ofrece servicios profesionales de clases de danza y baile en Valencia y alrededores."
+  },
+  {
+    "id": "10938dd7-e169-4883-9132-f2562f85eb4a",
+    "name": "Ecuahey \"Escuela De Baile\"",
+    "description": "🇬🇧 Ecuahey \"Escuela De Baile\" provides professional dance school services in the Valencia area.\n🇪🇸 Ecuahey \"Escuela De Baile\" ofrece servicios profesionales de clases de danza y baile en Valencia y alrededores."
+  },
+  {
+    "id": "f4220cd0-15e5-470a-b85c-b86d9dd1cd46",
+    "name": "Rocío Giner. Centro de danza y artes",
+    "description": "🇬🇧 Rocío Giner Dance Center is a Valencia-based dance school offering more than 15 disciplines, including flamenco, Spanish dance, ballet, contemporary dance, urban dance, Latin rhythms, musical theatre, and guitar. It provides quality instruction, flexible schedules, qualified teachers, and comfortable multidisciplinary facilities.\n🇪🇸 Rocío Giner. Centro de danza y artes ofrece servicios profesionales de clases de danza y baile en Valencia y alrededores."
+  },
+  {
+    "id": "01673365-f215-4f63-afbc-808f39121412",
+    "name": "Dance Center Valencia",
+    "description": "🇬🇧 Dance Center Valencia is an urban dance school founded in 2010 under the direction of Verónica Mejía, offering professional training and classes for all levels, including children from age four. It teaches styles such as hip hop, reggaetón, lyrical jazz, K-pop, breakdance, ballet, and commercial dance, as well as private lessons, dance-studio rentals, and dancers for events.\n🇪🇸 Dance Center Valencia ofrece servicios profesionales de clases de danza y baile en Valencia y alrededores."
+  },
+  {
+    "id": "2ec69e87-184e-4067-9cce-8345fa8ee529",
+    "name": "CENTRO QUIROPRÁCTICO WAGNER",
+    "description": "🇬🇧 Chiropractic center in Valencia offering vertebral scanning, chiropractic adjustments, osteopathy, and physiotherapy for back pain, spinal conditions, and related issues. Directed by Pablo Wagner, a chiropractor, osteopath, and physiotherapist with training in physiotherapy, osteopathy, ergonomics, and chiropractic techniques.\n🇪🇸 CENTRO QUIROPRÁCTICO WAGNER ofrece servicios profesionales de quiropráctica en Valencia y alrededores."
+  },
+  {
+    "id": "bf2692cb-7bfb-4732-b627-bd17a38be1bd",
+    "name": "Adiestramiento Valencia (Valencia y Sagunto)",
+    "description": "🇬🇧 Adiestramiento Valencia K9 provides dog training, behavior correction, detector-dog services, professional certification training, and private security training. The business has over 20 years of experience, is approved by the Generalitat, and offers lifelong support for its clients.\n🇪🇸 Adiestramiento Valencia (Valencia y Sagunto) ofrece servicios profesionales de educación y adiestramiento canino en Valencia y alrededores."
+  },
+  {
+    "id": "74386c0b-0bf4-4c94-abd0-a6a3e95c4bf9",
+    "name": "ECANVAL - Educador Canino Valencia - Adiestramiento y excursiones",
+    "description": "🇬🇧 ECANVAL provides in-home dog training, behavior modification, education, and walking services in Valencia, working with dogs and their owners to resolve behavioral issues and improve harmony at home and outdoors. They also organize nature excursions and hiking trips for dogs, including transport, meals, tracking activities, and socialization.\n🇪🇸 ECANVAL - Educador Canino Valencia - Adiestramiento y excursiones ofrece servicios profesionales de educación y adiestramiento canino en Valencia y alrededores."
+  },
+  {
+    "id": "33f41dc9-df0e-4b40-b526-8b95da08606d",
+    "name": "ESPAICAN Centro Canino Valencia",
+    "description": "🇬🇧 Espaican is a Valencia-based dog training and education business specializing in positive-reinforcement training, behavior modification, obedience, potentially dangerous dogs, sports obedience, and substance detection. It also trains owners to build stronger bonds with their dogs and guarantees results when owners actively participate.\n🇪🇸 ESPAICAN Centro Canino Valencia ofrece servicios profesionales de educación y adiestramiento canino en Valencia y alrededores."
+  },
+  {
+    "id": "47b7df7d-d092-4b28-8de2-ecc3e8a70384",
+    "name": "Cuidadora de Perros · Patis Valencia",
+    "description": "🇬🇧 Patis provides personalized dog boarding, daycare, walks, and home visits in Valencia, with over 7 years of experience. Dogs receive loving care in a family home, daily walks, and regular photo and video updates.\n🇪🇸 Cuidadora de Perros · Patis Valencia ofrece servicios profesionales de paseo y cuidado de perros en Valencia y alrededores."
+  },
+  {
+    "id": "4ed2e284-5cdb-43f1-baae-085d154dc6a6",
+    "name": "Autoescuelas EL CID AVAE",
+    "description": "🇬🇧 Autoescuelas EL CID is a driving school with more than 60 years of experience, offering intensive courses, flexible schedules, daily theory classes, and support tailored to each student’s level and availability. It also provides a 24-hour online platform, mobile app, and assistance via Facebook and its website.\n🇪🇸 Autoescuelas EL CID AVAE ofrece servicios profesionales de formación y clases de conducción en Valencia y alrededores."
+  },
+  {
+    "id": "c57b56b8-e46b-45be-b027-effcba4cb8af",
+    "name": "AliCan Paseo de Perros",
+    "description": "🇬🇧 AliCan Paseo de Perros provides professional dog walker services in the Valencia area.\n🇪🇸 AliCan Paseo de Perros ofrece servicios profesionales de paseo y cuidado de perros en Valencia y alrededores."
+  },
+  {
+    "id": "116a0a63-440f-4ca4-8e56-6688138093b4",
+    "name": "Autoescuela Reino de Valencia",
+    "description": "🇬🇧 Autoescuela Reino de Valencia is a driving school with modern, comfortable facilities and an interconnected computer-equipped study room for taking and saving practice tests. With over 10 years of industry experience, it offers personalized attention based on students’ questions and needs.\n🇪🇸 Autoescuela Reino de Valencia ofrece servicios profesionales de formación y clases de conducción en Valencia y alrededores."
+  },
+  {
+    "id": "75df9214-2f40-4457-9a41-d84f3d4bc945",
+    "name": "Autoescuela Valencia Vallbona - Centro de Formación",
+    "description": "🇬🇧 Autoescuelas Vallbona offers driving school services and facilities at Av. Puerto, 241 in Valencia. Contact them at 96 325 71 75 or through their contact email.\n🇪🇸 Autoescuela Valencia Vallbona - Centro de Formación ofrece servicios profesionales de formación y clases de conducción en Valencia y alrededores."
+  },
+  {
+    "id": "fc255a1c-5988-4506-8793-75fad0d0627a",
+    "name": "Autoescuela Plaza",
+    "description": "🇬🇧 Autoescuela Plaza is a driving school in Valencia offering licenses and permits, including CAP training for goods transport. It provides training for drivers of trucks over 3,500 kg in compliance with Spanish regulations.\n🇪🇸 Autoescuela Plaza ofrece servicios profesionales de formación y clases de conducción en Valencia y alrededores."
+  },
+  {
+    "id": "d3e5f435-c2c9-4615-9d80-c86f1a744560",
+    "name": "Adiestramiento EDUCAN en Valencia",
+    "description": "🇬🇧 EDUCAN is a dog training and education business in Valencia with 25 years of experience, offering personalized solutions for puppy education, behavioral problems, wellbeing, and training. Its trainers work with dogs and their owners in their home environment throughout Valencia province.\n🇪🇸 Adiestramiento EDUCAN en Valencia ofrece servicios profesionales de educación y adiestramiento canino en Valencia y alrededores."
+  },
+  {
+    "id": "dd7bfdb0-e47b-4818-8a57-4b05f40e4045",
+    "name": "MR Asesoría Energética",
+    "description": "🇬🇧 MR Asesoría Energética provides professional energy consultant services in the Valencia area.\n🇪🇸 MR Asesoría Energética ofrece servicios profesionales de asesoramiento y gestión energética en Valencia y alrededores."
+  },
+  {
+    "id": "cfaad4b5-5ba9-4650-94a9-c63e956cffad",
+    "name": "Aenergetic - Asesoría Energética e Instalación Placas Solares",
+    "description": "🇬🇧 Aenergetic is an energy consultancy established in 2012 that helps businesses, residential communities, companies, and households reduce their electricity and gas bills. It provides free, thorough energy studies, reviews consumption and costs, and works with multiple energy providers to find the best options.\n🇪🇸 Aenergetic - Asesoría Energética e Instalación Placas Solares ofrece servicios profesionales de asesoramiento y gestión energética en Valencia y alrededores."
+  },
+  {
+    "id": "1f1db5d0-2cfc-41ec-aff8-017ec0d70ecb",
+    "name": "Asesoría Energética Terra Cha",
+    "description": "🇬🇧 Asesoría Energética Terra Cha provides professional energy consultant services in the Valencia area.\n🇪🇸 Asesoría Energética Terra Cha ofrece servicios profesionales de asesoramiento y gestión energética en Valencia y alrededores."
+  },
+  {
+    "id": "311f8ea4-0c3b-4dfe-9388-dc0ead896650",
+    "name": "MG ENERGÍA",
+    "description": "🇬🇧 MG ENERGÍA provides professional energy consultant services in the Valencia area.\n🇪🇸 MG ENERGÍA ofrece servicios profesionales de asesoramiento y gestión energética en Valencia y alrededores."
+  },
+  {
+    "id": "1c777a86-f3ff-4dcb-a4e1-a220f3dbb3f3",
+    "name": "ElectricistaValencia.uno",
+    "description": "🇬🇧 ElectricistaValencia.uno provides professional electrical services in the Valencia area.\n🇪🇸 ElectricistaValencia.uno ofrece servicios profesionales de instalaciones y servicios eléctricos en Valencia y alrededores."
+  },
+  {
+    "id": "7c986dbe-9b9b-44fb-8b61-71e3b1c3000c",
+    "name": "Elecmar electricistas Valencia",
+    "description": "🇬🇧 Elecmar electricistas Valencia provides professional electrical services in the Valencia area.\n🇪🇸 Elecmar electricistas Valencia ofrece servicios profesionales de instalaciones y servicios eléctricos en Valencia y alrededores."
+  },
+  {
+    "id": "95d5f87a-379b-400a-b380-1ff7603a89b0",
+    "name": "Electricista en Valencia | Miguel Ballesteros",
+    "description": "🇬🇧 Miguel Ballesteros is an authorized electrician in Valencia with more than 20 years of professional experience and training accredited by Spain’s Ministry of Industry. The business provides reliable electrical services for homes, businesses, industrial facilities, and residential communities.\n🇪🇸 Electricista en Valencia | Miguel Ballesteros ofrece servicios profesionales de instalaciones y servicios eléctricos en Valencia y alrededores."
+  },
+  {
+    "id": "65516ac5-8b37-409e-b2ad-c7ada193720b",
+    "name": "INSTALACIÓNES ELÉCTRICAS AEG",
+    "description": "🇬🇧 INSTALACIÓNES ELÉCTRICAS AEG provides professional electrical services in the Valencia area.\n🇪🇸 INSTALACIÓNES ELÉCTRICAS AEG ofrece servicios profesionales de instalaciones y servicios eléctricos en Valencia y alrededores."
+  },
+  {
+    "id": "954539ff-72ae-4f02-8325-aa76b9057f8f",
+    "name": "Autoescuelas La Lonja",
+    "description": "🇬🇧 Autoescuelas La Lonja is a driving school in Valencia with 40 years of experience and more than 20,000 trained drivers. It offers affordable, in-person and online courses for a wide range of driving permits, from motorcycles to trucks.\n🇪🇸 Autoescuelas La Lonja ofrece servicios profesionales de formación y clases de conducción en Valencia y alrededores."
+  },
+  {
+    "id": "b62e40bb-5cb5-431c-913b-e9478b923d5e",
+    "name": "Zivah Salón | Peluquería en Valencia",
+    "description": "🇬🇧 Zivah Salón | Peluquería en Valencia provides professional hair salons & barbers services in the Valencia area.\n🇪🇸 Zivah Salón | Peluquería en Valencia ofrece servicios profesionales de peluquería y cuidado capilar en Valencia y alrededores."
+  },
+  {
+    "id": "d2f61a5f-4b44-453d-b727-9c8ee936b85b",
+    "name": "ROHO HAIR & BEAUTY PELUQUERÍA VALENCIA",
+    "description": "🇬🇧 ROHO HAIR & BEAUTY PELUQUERÍA VALENCIA provides professional hair salons & barbers services in the Valencia area.\n🇪🇸 ROHO HAIR & BEAUTY PELUQUERÍA VALENCIA ofrece servicios profesionales de peluquería y cuidado capilar en Valencia y alrededores."
+  },
+  {
+    "id": "6004fd2a-68cb-4684-b323-28baf8c75be6",
+    "name": "Verónica Busó Peluquería",
+    "description": "🇬🇧 Verónica Busó is a professional hairstyling salon in Valencia offering haircuts, color, styling, extensions, and treatments for curly, wavy, straight, and afro hair. The salon also provides comprehensive, personalized style advice to highlight each client’s beauty and personality.\n🇪🇸 Verónica Busó Peluquería ofrece servicios profesionales de peluquería y cuidado capilar en Valencia y alrededores."
+  },
+  {
+    "id": "ed422f48-5c01-4b2c-af1e-659911a3e865",
+    "name": "Desancho Estilistas | Reino de Valencia, 7",
+    "description": "🇬🇧 Desancho Estilistas is a hair salon in Valencia, founded in 2010 by hairstylist Jorge de Sancho to strengthen his personal brand and create a leading salon in the city.\n🇪🇸 Desancho Estilistas | Reino de Valencia, 7 ofrece servicios profesionales de peluquería y cuidado capilar en Valencia y alrededores."
+  },
+  {
+    "id": "bd530a71-0cd4-4414-81c3-beb328f46acc",
+    "name": "Lugarten - Servicio de jardinería en Valencia",
+    "description": "🇬🇧 Lugarten is a Valencia-based gardening company specializing in garden maintenance, pruning, lawn installation, and irrigation systems. Its professional gardeners serve private clients, residential communities, and businesses, providing tailored solutions for outdoor spaces.\n🇪🇸 Lugarten - Servicio de jardinería en Valencia ofrece servicios profesionales de jardinería y mantenimiento de jardines en Valencia y alrededores."
+  },
+  {
+    "id": "69c6035f-e6e3-4f93-9a44-fafe4817730c",
+    "name": "Jardineria Narcís - Jardinero en Valencia",
+    "description": "🇬🇧 Jardineria Narcís - Jardinero en Valencia provides professional gardening / landscaping services in the Valencia area.\n🇪🇸 Jardineria Narcís - Jardinero en Valencia ofrece servicios profesionales de jardinería y mantenimiento de jardines en Valencia y alrededores."
+  },
+  {
+    "id": "74210e4c-1b73-433a-b149-2184bc3c2795",
+    "name": "Plantesdecor. Paisajismo y jardinería. Diseñamos tu jardín en Valencia",
+    "description": "🇬🇧 Plantesdecor is a multidisciplinary landscaping studio in Valencia specializing in the design of gardens and terraces. They create tailored outdoor spaces for private clients, offices, hotels, and restaurants, bringing nature closer to people.\n🇪🇸 Plantesdecor. Paisajismo y jardinería. Diseñamos tu jardín en Valencia ofrece servicios profesionales de jardinería y mantenimiento de jardines en Valencia y alrededores."
+  },
+  {
+    "id": "84b39615-3c9c-42cd-b460-1727119fa51e",
+    "name": "Centre de Jardineria Albogarden",
+    "description": "🇬🇧 Albogarden is a garden center located five minutes from Valencia, specializing in Mediterranean ornamental plants, trees, and gardening supplies. Founded in 1975, it offers a tranquil space where visitors can enjoy a wide range of gardening products and plants.\n🇪🇸 Centre de Jardineria Albogarden ofrece servicios profesionales de jardinería y mantenimiento de jardines en Valencia y alrededores."
+  },
+  {
+    "id": "5847062d-e306-4ac9-a335-764afeef040c",
+    "name": "Cerrajeros Servihogar 24h",
+    "description": "🇬🇧 Cerrajeros Servi Hogar is a locksmith company serving Valencia and the surrounding province, offering 24/7 emergency assistance 365 days a year. Its experienced technicians provide door openings, lock repairs and replacements, security upgrades, and installation of doors, grilles, and shutters.\n🇪🇸 Cerrajeros Servihogar 24h ofrece servicios profesionales de cerrajería y servicios relacionados con llaves y seguridad en Valencia y alrededores."
+  },
+  {
+    "id": "fe207dae-56ab-47fe-98dc-4c20334c29f0",
+    "name": "JB Abogados",
+    "description": "🇬🇧 JB Abogados is a Valencia-based law firm specializing in Spain’s Second Chance Law, insurance claims, banking law, real estate, inheritance, family, civil, and criminal law. Its team of three lawyers has more than 20 years of experience and provides professional, honest, and personalized legal assistance.\n🇪🇸 JB Abogados ofrece servicios profesionales de asesoramiento y servicios jurídicos en Valencia y alrededores."
+  },
+  {
+    "id": "569e76f6-6b22-45b6-9eb1-1f2403aadcaf",
+    "name": "Luis Roca Abogados",
+    "description": "🇬🇧 Luis Roca Abogados is a law firm in Valencia with more than 50 years of experience, founded in 1968 and specializing in civil, criminal, employment, commercial, and administrative law. Its team provides personalized legal advice and representation for individuals, companies, family businesses, SMEs, microenterprises, foundations, and organizations.\n🇪🇸 Luis Roca Abogados ofrece servicios profesionales de asesoramiento y servicios jurídicos en Valencia y alrededores."
+  },
+  {
+    "id": "b969471c-bda5-4012-9a6e-64f69dd31783",
+    "name": "Bufete online",
+    "description": "🇬🇧 Bufete online provides professional lawyer services in the Valencia area.\n🇪🇸 Bufete online ofrece servicios profesionales de asesoramiento y servicios jurídicos en Valencia y alrededores."
+  },
+  {
+    "id": "bd4f8a40-39d3-4510-a97f-7f99962f3108",
+    "name": "Entrellaves Cerrajeros Valencia",
+    "description": "🇬🇧 Entrellaves Cerrajeros Valencia provides professional locksmith services in the Valencia area.\n🇪🇸 Entrellaves Cerrajeros Valencia ofrece servicios profesionales de cerrajería y servicios relacionados con llaves y seguridad en Valencia y alrededores."
+  },
+  {
+    "id": "d5869d22-be0d-46b2-af9b-054c0a0a68e0",
+    "name": "ValenciaKey Cerrajeros 24 Horas",
+    "description": "🇬🇧 ValenciaKey Cerrajeros 24 Horas provides professional locksmith services in the Valencia area.\n🇪🇸 ValenciaKey Cerrajeros 24 Horas ofrece servicios profesionales de cerrajería y servicios relacionados con llaves y seguridad en Valencia y alrededores."
+  },
+  {
+    "id": "4cd81a95-5b6e-43a3-a789-ee67a31f4cc7",
+    "name": "Clar Cerrajeros Valencia 24H",
+    "description": "🇬🇧 CLAR CERRAJEROS VALENCIA 24H is a local locksmith business owned by Sergio, providing professional, affordable, and fast locksmith services in Valencia. Available 24/7, it offers emergency door opening, lock changes, security installations, car key duplication, and smart-lock installation, with response times of under 20 minutes.\n🇪🇸 Clar Cerrajeros Valencia 24H ofrece servicios profesionales de cerrajería y servicios relacionados con llaves y seguridad en Valencia y alrededores."
+  },
+  {
+    "id": "5c327136-93db-47b9-8fe0-5d479f81aa6b",
+    "name": "H&N Reformas y Albañilería",
+    "description": "🇬🇧 H&N Reformas y Albañilería provides professional mason services in the Valencia area.\n🇪🇸 H&N Reformas y Albañilería ofrece servicios profesionales de albañilería y reformas en Valencia y alrededores."
+  },
+  {
+    "id": "71ac7093-c896-460f-b61f-4695d35e7312",
+    "name": "Giménez y Mata Abogados",
+    "description": "🇬🇧 Giménez y Mata Abogados is a Valencia-based law firm offering comprehensive advice in immigration, civil, family, commercial, employment law, and business consultancy. Led by Patricia Mata Meneses, its team includes lawyers, social graduates, and economists.\n🇪🇸 Giménez y Mata Abogados ofrece servicios profesionales de asesoramiento y servicios jurídicos en Valencia y alrededores."
+  },
+  {
+    "id": "4e864a5f-6d74-476d-93b2-cf61754372ec",
+    "name": "Cerrajeros Valencia 24h - Alejandro Volta",
+    "description": "🇬🇧 Cerrajeros Valencia 24H provides fast, professional, and affordable locksmith services throughout Valencia, available 24 hours a day, 365 days a year. Services include door opening, lock replacement, car and safe opening, security door installation, and shutter installation, repair, and motorization.\n🇪🇸 Cerrajeros Valencia 24h - Alejandro Volta ofrece servicios profesionales de cerrajería y servicios relacionados con llaves y seguridad en Valencia y alrededores."
+  },
+  {
+    "id": "1fe32275-d831-4425-b25c-283504160f6a",
+    "name": "NOTARIA Clara Barberá Pichó",
+    "description": "🇬🇧 NOTARIA Clara Barberá Pichó provides professional notary services in the Valencia area.\n🇪🇸 NOTARIA Clara Barberá Pichó ofrece servicios profesionales de servicios notariales en Valencia y alrededores."
+  },
+  {
+    "id": "4bd74dd4-6719-45f0-9a16-2bf662a46bb0",
+    "name": "Albañiles en Valencia",
+    "description": "🇬🇧 Professional team offering masonry, plumbing, electrical, painting, drywall, kitchen furniture assembly, and other services. They carry out complete and partial home renovations tailored to clients’ needs, ideas, and designs.\n🇪🇸 Albañiles en Valencia ofrece servicios profesionales de albañilería y reformas en Valencia y alrededores."
+  },
+  {
+    "id": "9222d52e-26d4-4ee2-8051-3cad40cdc56e",
+    "name": "HipoTips",
+    "description": "🇬🇧 Hipotips is a mortgage broker that negotiates the best mortgage for its clients. It provides professional guidance and support throughout the mortgage and home-buying process.\n🇪🇸 HipoTips ofrece servicios profesionales de asesoramiento e intermediación hipotecaria en Valencia y alrededores."
+  },
+  {
+    "id": "39714af9-5786-45fe-b590-3355ee688da6",
+    "name": "Soluciones Hipotecarias Valencia",
+    "description": "🇬🇧 Soluciones Hipotecarias Valencia is a Valencia-based financial intermediation company founded in 2006, specializing in obtaining mortgages for individuals and offering financial products from leading banks. It is registered as Real Estate Credit Intermediary No. D209 with the Bank of Spain.\n🇪🇸 Soluciones Hipotecarias Valencia ofrece servicios profesionales de asesoramiento e intermediación hipotecaria en Valencia y alrededores."
+  },
+  {
+    "id": "c3559146-74f7-45a5-a8ff-b3e036b61f09",
+    "name": "Operfín: Servicios Financieros",
+    "description": "🇬🇧 Operfín is an independent mortgage broker based in Valencia, Spain, helping clients secure mortgages with favorable terms, including up to 100% financing plus purchase costs. Certified by the Bank of Spain as a real estate credit intermediary, it works with banks nationwide and manages the entire mortgage process.\n🇪🇸 Operfín: Servicios Financieros ofrece servicios profesionales de asesoramiento e intermediación hipotecaria en Valencia y alrededores."
+  },
+  {
+    "id": "4f81526b-f812-4242-8689-e1341a27c05d",
+    "name": "HIPÓPTIMA Servicios Financieros, te conseguimos la mejor hipoteca.",
+    "description": "🇬🇧 HIPÓPTIMA Servicios Financieros provides mortgage advisory services, helping clients obtain the best mortgage available on the market.\n🇪🇸 HIPÓPTIMA Servicios Financieros, te conseguimos la mejor hipoteca. ofrece servicios profesionales de asesoramiento e intermediación hipotecaria en Valencia y alrededores."
+  },
+  {
+    "id": "fafc8120-815a-4990-880f-29aaa160d2fc",
+    "name": "Albañiles y Reformas Valencia | Reformas Made",
+    "description": "🇬🇧 Reformas Made is a professional masonry and renovation company serving Valencia and surrounding areas, specializing in complete renovations for apartments and houses, including bathrooms, kitchens, workplaces, and flooring. They prioritize transparency, honesty, quality, and detailed estimates.\n🇪🇸 Albañiles y Reformas Valencia | Reformas Made ofrece servicios profesionales de albañilería y reformas en Valencia y alrededores."
+  },
+  {
+    "id": "e32fa905-67c7-4e63-bf56-dfef427d9242",
+    "name": "Reformas , Albañileria, impermeabilización en Valencia",
+    "description": "🇬🇧 Expressreformas is a construction, renovation, and general home services company offering masonry, plumbing, electrical, painting, installation, maintenance, furniture assembly, and more. It provides comprehensive, professional, and fast services for residential and commercial projects.\n🇪🇸 Reformas , Albañileria, impermeabilización en Valencia ofrece servicios profesionales de albañilería y reformas en Valencia y alrededores."
+  },
+  {
+    "id": "681c4b25-d7a9-449e-b4c2-d122de67300f",
+    "name": "Aplomados | Construcciones y Reformas",
+    "description": "🇬🇧 Aplomados is a construction and renovation company specializing in custom home construction, residential and commercial renovations, and comprehensive project management. It combines BIM, digital project tracking, Lean Construction, sustainability, and personalized service to deliver precise, efficient, and well-coordinated projects.\n🇪🇸 Aplomados | Construcciones y Reformas ofrece servicios profesionales de albañilería y reformas en Valencia y alrededores."
+  },
+  {
+    "id": "916f9cdc-a736-49f3-84aa-5797325c11cc",
+    "name": "Valentina Fotografias",
+    "description": "🇬🇧 Valentina Fotografías is a photography studio in Valencia specializing in pregnancy, newborn, children’s, family, and communion photography. Valentina captures authentic, emotional images and creates a comfortable, relaxed experience for families.\n🇪🇸 Valentina Fotografias ofrece servicios profesionales de fotografía profesional en Valencia y alrededores."
+  },
+  {
+    "id": "5a9c027d-b64f-461b-ade4-b9d14fcf00f5",
+    "name": "FotoPrix Plaza España",
+    "description": "🇬🇧 A leading photography shop in Valencia, offering a complete range of photographic services, including instant DNI/passport photos, photo printing, film developing, VHS-to-digital conversion, personalized gifts, albums, and home décor. Located at Plaza de España, 5, near the Plaza España metro station.\n🇪🇸 FotoPrix Plaza España ofrece servicios profesionales de fotografía profesional en Valencia y alrededores."
+  },
+  {
+    "id": "42a0d15f-c8b8-4d45-8a4d-db6dd134e32d",
+    "name": "Notaría en Valencia: Luis Calabuig Notario",
+    "description": "🇬🇧 Luis Calabuig de Leyva is a notary in Valencia whose office provides qualified professional services. Services are offered in Spanish, Valencian, English, and French.\n🇪🇸 Notaría en Valencia: Luis Calabuig Notario ofrece servicios profesionales de servicios notariales en Valencia y alrededores."
+  },
+  {
+    "id": "2e1642db-5c26-4b44-8bd3-329f971c7e85",
+    "name": "NOTARÍA CERVERA TAULET",
+    "description": "🇬🇧 NOTARÍA CERVERA TAULET provides professional notary services in the Valencia area.\n🇪🇸 NOTARÍA CERVERA TAULET ofrece servicios profesionales de servicios notariales en Valencia y alrededores."
+  },
+  {
+    "id": "dcd5ccaa-4251-4703-8549-5dc870ac1883",
+    "name": "Notaría de José Manuel Valiente Cabadés en Valencia",
+    "description": "🇬🇧 Notaría Valiente Cabadés offers a full range of notarial services with professional advice. Its highly qualified team is led by José Manuel Valiente Cabadés and provides free consultations.\n🇪🇸 Notaría de José Manuel Valiente Cabadés en Valencia ofrece servicios profesionales de servicios notariales en Valencia y alrededores."
+  },
+  {
+    "id": "caf582e9-f964-4e8d-80fc-c2d2f6569438",
+    "name": "Mudanzas Mudanval",
+    "description": "🇬🇧 Mudanval is a moving company in Valencia offering residential, office, and specialized moving services with its own team and equipment. It provides clear, reviewed quotes, insurance included, careful planning, packing, assembly, furniture lifts, and piano moving.\n🇪🇸 Mudanzas Mudanval ofrece servicios profesionales de servicios de mudanza y traslado en Valencia y alrededores."
+  },
+  {
+    "id": "3374464f-553b-4cb1-b03b-cd713d5d46fd",
+    "name": "APAI PSICOLOGOS",
+    "description": "🇬🇧 APAI Psicólogos is a psychology center in Valencia, founded in 2003, providing professional and personalized support for children, adolescents, adults, couples, and families. Its services include therapy and specialized care for anxiety, eating disorders, neurodivergence, legal psychology, and family mediation.\n🇪🇸 APAI PSICOLOGOS ofrece servicios profesionales de psicología y servicios terapéuticos en Valencia y alrededores."
+  },
+  {
+    "id": "550b6475-1b49-4d14-9052-67e3b2398cd4",
+    "name": "Hipoteken International Mortgages",
+    "description": "🇬🇧 Hipoteken is a licensed mortgage broker specializing in financing for international clients purchasing property in Spain. It works with numerous banks to provide mortgage options and coordinates the entire process online with clients, real estate agents, solicitors, and lenders.\n🇪🇸 Hipoteken International Mortgages ofrece servicios profesionales de asesoramiento e intermediación hipotecaria en Valencia y alrededores."
+  },
+  {
+    "id": "fce1f928-6e91-4b20-8e0a-efa8f2b3dd7d",
+    "name": "Clínica dental Valencia | Clínica Badal",
+    "description": "🇬🇧 Clínica Badal is a family-established dental clinic in Valencia, combining decades of experience with innovation, advanced technology, and multidisciplinary expertise. Its highly qualified team provides specialized dental care with a focus on quality, professionalism, and continuous training.\n🇪🇸 Clínica dental Valencia | Clínica Badal ofrece servicios profesionales de odontología y cuidado dental en Valencia y alrededores."
+  },
+  {
+    "id": "28119a9f-b7a0-4fcf-a5a7-bbb5423c7209",
+    "name": "Leñas Legua",
+    "description": "🇬🇧 Leñas Legua provides professional firewood supplier services in the Valencia area.\n🇪🇸 Leñas Legua ofrece servicios profesionales de venta y suministro de leña en Valencia y alrededores."
+  },
+  {
+    "id": "c90347e2-2145-463c-b786-8dede96fbef8",
+    "name": "Gestoría la de siempre",
+    "description": "🇬🇧 Gestoría Energética La de Siempre is a Valencia-based energy consultancy that provides free energy studies, advice, contract management, and efficiency plans for businesses. It helps clients optimize electricity and gas consumption, tariffs, providers, and renewable energy solutions to reduce costs.\n🇪🇸 Gestoría la de siempre ofrece servicios profesionales de asesoramiento y gestión energética en Valencia y alrededores."
+  },
+  {
+    "id": "cea22cb1-a4fd-4fdc-b0da-95b246da5c0f",
+    "name": "Famival 4, Instalaciones eléctricas en Valencia",
+    "description": "🇬🇧 Famival 4 is an experienced electrical services company in Valencia, specializing in electrical installations, maintenance, repairs, electrical certificates, industrial installations, smart home systems, electric vehicle charging points, and photovoltaic panels. It serves both residential and commercial customers, prioritizing safety, quality, and efficient service.\n🇪🇸 Famival 4, Instalaciones eléctricas en Valencia ofrece servicios profesionales de instalaciones y servicios eléctricos en Valencia y alrededores."
+  }
+]
