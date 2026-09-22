@@ -195,14 +195,17 @@ async function startServer() {
     }
 
     try {
-      // Map professionals list with only relevant fields to stay within token limits and maintain focus
+      const qLower = query.toLowerCase().trim();
+
+      // Pre-filter candidate professionals if directory is large, ensuring ALL matching trade pros (both recommended and google) are included
+      // Map professionals list with only relevant fields
       const proListBrief = professionals.map((p: any) => ({
         id: String(p.id),
         name: p.name,
         company_name: p.company_name || "",
         category: p.category || p.profession || "",
-        categories: p.categories || [],
-        bio: p.bio || p.description || "",
+        categories: p.categories || (typeof p.profession === 'string' ? p.profession.split(',').map((s: string) => s.trim()) : []),
+        bio: (p.bio || p.description || "").slice(0, 300),
         top_qualities: p.top_qualities || [],
         languages: p.languages || [],
         rating: p.rating || 0,
@@ -210,57 +213,49 @@ async function startServer() {
         is_recommended: p.is_recommended ?? true
       }));
 
-      const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals.
-Your purpose is to examine the user's natural language request and return the most relevant matching professionals.
+      const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a community-curated directory of professionals.
+The directory contains BOTH community-recommended professionals (is_recommended: true) AND Google-sourced professionals (is_recommended: false).
+
+YOUR MANDATE: Examine the user's natural language request and return ALL relevant matching professionals found in the provided list. Do NOT arbitrarily limit the results to only 1 or 2 professionals.
 
 Review the list of professionals provided and evaluate BOTH trade/service criteria AND location criteria:
 
-1. QUERY PARSING & SYNONYMS (CRITICAL) - Updated:
+1. QUERY PARSING & SYNONYMS (CRITICAL):
    - Trade / Profession Synonyms & Translations:
+     * "plumber", "plumbing", "plombier", "fontanero", "fontanería", "water leak", "pipe leak", "water pipe", "tuyauterie", "fuite d'eau" ALL match Plumbing services or Handyman/Manitas who do plumbing.
+     * EXCLUSION: Never match wellness, massage, beauty, or lymphatic drainage ("drainage lymphatique", "drenaje linfático", "drainage") with plumbing/plumber requests!
      * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "hair salon", "barber" ALL match "Hairdresser", "Coiffeur", "Beauty & Wellness", or hair care services.
-     * "doctor", "physician", "médecin", "gp" ALL match Doctor/Medical services.
-     * "realtor", "real estate agent", "inmobiliaria" ALL match Real Estate / Property services.
-     * "plumber", "plombier", "fontanero" ALL match Plumbing services.
+     * "doctor", "physician", "médecin", "gp", "médico" ALL match Doctor/Medical services.
+     * "realtor", "real estate agent", "inmobiliaria", "agent immobilier" ALL match Real Estate / Property services.
+     * "electrician", "électricien", "electricista" ALL match Electrician services.
+     * "mason", "masonry", "maçon", "albañil", "albañilería" ALL match Masonry services.
+     * "handyman", "manitas", "bricolage", "repairs" ALL match Handyman services.
      * "I hurt my back", "back pain", "mal de dos" ALL match "Physiotherapist", "Osteopath", or "Chiropractor".
-     * Treat language translations (English, French, Spanish) and word variations (e.g., "hair dresser" vs "hairdresser") as EXACT trade matches!
+     * Treat language translations (English, French, Spanish) and word variations as EXACT trade matches!
    - Location Matching:
-     * "Valencia area", "in Valencia", "around Valencia", "Valencia city" matches professionals located in Valencia or Valencia metropolitan/province towns (e.g. Valencia, La Eliana, Torrent, Paterna, etc.).
+     * "Valencia area", "in Valencia", "around Valencia", "Valencia city" matches professionals located in Valencia or Valencia metropolitan/province towns (e.g. Valencia, La Eliana, Torrent, Paterna, Burjassot, etc.).
 
-2. SCORING & MATCHING RULES:
-   - DIRECT MATCH (Score 70-100): The professional matches BOTH requested trade/service (including synonyms/translations) AND requested location/area (or if no location was specified).
-     * Example: "hair dresser in valencia area" + hairdresser in Valencia => DIRECT MATCH (Score 80-100).
-   - ADJACENT / ALTERNATIVE MATCH (Score 15-45): The professional offers a closely related trade (e.g. general beauty salon for a hairdresser request), OR matches the trade in a neighboring distant town.
-   - UNRELATED OR WRONG LOCATION (Score 0): The professional has a completely unrelated trade OR is in a totally different distant city/country when a specific city was requested.
+2. COMPREHENSIVE MATCHING & SCORING:
+   - DIRECT MATCH (Score 70-100): The professional matches the requested trade/service (including synonyms/translations) and location (or no location specified).
+   - ADJACENT / ALTERNATIVE MATCH (Score 20-50): Closely related trade (e.g., handyman who does repairs for a plumbing request), or neighboring town.
+   - UNRELATED (Score 0): Do not include in results or score 0.
+   - IMPORTANT: Return ALL professionals in the list who match the trade (Score > 0). Do not cut off or omit Google pros (is_recommended: false) when they match the trade.
 
-3. "exactMatchFound" & "summaryMessage" RULES:
-   - CRITICAL: If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), you MUST set "exactMatchFound" to true, and set "summaryMessage" to null!
-   - Set "exactMatchFound" to false ONLY if NO professional in the directory directly matches both trade and location.
-   - If "exactMatchFound" is false:
-     * If there ARE alternative/adjacent professionals returned with score > 0:
-       - With specific trade and location (e.g. "plumber in La Eliana"): "We couldn't find a [trade] in [location] in our directory. Jane found some alternative options, but they may not meet all your criteria."
-       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory. Jane found some alternative options, but they may not meet all your criteria."
-     * If NO professionals match at all (all professionals have score 0):
-       - With specific trade and location: "We couldn't find a [trade] in [location] in our directory."
-       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory."
+3. PRIORITIZATION:
+   - Professionals with "is_recommended: true" are community-vetted and should receive higher scores (e.g., 85-100) or be ranked above Google-sourced pros (is_recommended: false, scored 70-80).
+   - Both recommended and non-recommended matching professionals MUST be returned in the results array so the user has access to all available pros.
 
-4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).
- 
-5. PRIORITIZATION (CRITICAL):
-   - Professionals with "is_recommended: true" are community-vetted and MUST be prioritized over those with "is_recommended: false".
-   - If multiple professionals match the user's query well, those with "is_recommended: true" should receive a score bonus or be ranked higher than those with "is_recommended: false".
-   - A non-recommended professional should only have a higher score than a recommended one if they are a significantly better match for the specific trade or location requested.
+4. "exactMatchFound" & "summaryMessage" RULES:
+   - If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), you MUST set "exactMatchFound" to true, and set "summaryMessage" to null!
+   - Set "exactMatchFound" to false ONLY if NO professional in the directory matches the trade.
+   - If "exactMatchFound" is false and alternative pros exist: explain in the user's language that exact matches weren't found but alternatives were provided.
+
+5. Under "reasonUrlExcerpt" for each professional, provide a single clear sentence explaining why they matched (trade, specialty, location).
 
 6. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
-   - Check if the user's query requests a specific spoken language (e.g. "qui parle français", "parlant français", "francophone", "french speaking", "speaking english", "anglais", "habla español", "spanish", "deutsch", "allemand", etc.).
-   - If a language is requested:
-     * FIRST PRIORITY: Check each professional's "languages" list for that language (handling translations like French/Français, English/Anglais, Spanish/Español, etc.).
-     * EXCLUSION RULE (CRITICAL): If AT LEAST ONE matching professional speaks the requested language:
-       - You MUST ONLY return professionals who speak that language (give them positive scores 70-100).
-       - You MUST give score: 0 to ANY professional who does NOT speak that language! (Do NOT include or suggest non-speakers when at least 1 speaker exists).
-       - Set exactMatchFound to true (if score >= 60).
-     * ONLY if NO professional in the directory speaks the requested language:
-       - You may return alternative professionals in that trade with lower scores (score 20-45).
-       - Set exactMatchFound to false, and in "summaryMessage" explain in the user's query language that no professional speaking that language was found for this service.`;
+   - If the user's query explicitly requests a specific spoken language (e.g. "qui parle français", "french speaking", "habla español", etc.):
+     * If matching professionals speak that language: ONLY return professionals who speak that language (give them score 75-100).
+     * If no professional speaks that language: return other matching pros with lower scores and explain in summaryMessage.`;
 
       const response = await getAiClient().models.generateContent({
         model: "gemini-3.1-flash-lite",
