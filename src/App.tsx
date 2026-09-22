@@ -10541,8 +10541,8 @@ function HomeView({
       {/* Welcome & Search Group */}
       <div className="space-y-0">
         {/* Welcome & Illustration Section */}
-        <div className="flex flex-col md:flex-row items-center md:items-end justify-between gap-10 md:gap-16 pt-4 mb-0">
-          <div className="space-y-6 md:space-y-8 flex flex-col items-center md:items-start text-center md:text-left max-w-xl pb-8 md:pb-10">
+        <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 md:gap-16 pt-4 mb-0">
+          <div className="space-y-1.5 md:space-y-8 flex flex-col items-start text-left max-w-xl pb-4 md:pb-10 pl-1 sm:pl-2 md:pl-0">
             <div className="flex items-center gap-3">
               <h2 className="text-[28px] md:text-[30px] lg:text-[38px] font-semibold font-display text-brand-navy leading-tight">
                 {currentUser ? (userProfile?.full_name ? `Hello ${userProfile.full_name.split(' ')[0]}, 👋` : 'Hello, 👋') : 'Hello Guest, 👋'}
@@ -10562,14 +10562,14 @@ function HomeView({
               )}
             </div>
 
-            <div className="space-y-4 md:space-y-6">
+            <div className="space-y-0 md:space-y-6">
               <h1 className="hidden md:block text-xl md:text-xl lg:text-2xl font-bold text-brand-navy leading-snug">
                 Looking for trusted <br className="hidden md:block" /> local recommendations?
               </h1>
               <p className="hidden md:block text-slate-500 text-base md:text-base lg:text-lg leading-relaxed font-medium">
                 From reliable pros to local events and visitor tips, you're in the right place.
               </p>
-              <p className="text-brand-blue font-bold italic text-base md:text-base lg:text-lg transition-colors hover:text-brand-navy cursor-default">
+              <p className="text-brand-blue font-bold italic text-sm sm:text-base md:text-base lg:text-lg transition-colors hover:text-brand-navy cursor-default -mt-0.5 md:mt-0">
                 Discover better, belong faster.
               </p>
             </div>
