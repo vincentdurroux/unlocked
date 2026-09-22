@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { searchService } from './searchService';
 
 export interface SupabaseEvent {
   id: string;
@@ -469,7 +470,22 @@ export const eventService = {
         throw new Error(errData.error || `Server error (${response.status})`);
       }
 
-      return await response.json();
+      const data = await response.json();
+
+      // Log search in the background using Supabase
+      try {
+        const resultsCount = Array.isArray(data?.results) ? data.results.length : 0;
+        supabase.auth.getSession().then(({ data: authData }) => {
+          const userId = authData?.session?.user?.id;
+          searchService.saveSearch(query, 'jane_event', resultsCount, userId);
+        }).catch(() => {
+          searchService.saveSearch(query, 'jane_event', resultsCount, null);
+        });
+      } catch (logErr) {
+        console.warn("Could not background log Jane event search:", logErr);
+      }
+
+      return data;
     } catch (err: any) {
       console.error('Error during Jane event matching:', err);
       throw err;

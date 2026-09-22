@@ -124,6 +124,52 @@ async function startServer() {
     return aiClient;
   };
 
+  // Highly robust Gemini content generator with fallback and exponential backoff retry mechanism
+  const generateContentWithFallback = async (
+    params: {
+      contents: any;
+      config?: any;
+    },
+    customModels?: string[]
+  ): Promise<any> => {
+    const models = customModels || ["gemini-3.8-flash", "gemini-flash-latest"];
+    let lastError: any = null;
+
+    for (const modelName of models) {
+      let attempt = 0;
+      const maxAttempts = 3;
+      let delay = 1000; // start with 1 second delay
+
+      while (attempt < maxAttempts) {
+        try {
+          console.log(`[ai] Attempting content generation with model: ${modelName} (attempt ${attempt + 1}/${maxAttempts})`);
+          const response = await getAiClient().models.generateContent({
+            ...params,
+            model: modelName,
+          });
+          return response;
+        } catch (err: any) {
+          lastError = err;
+          attempt++;
+          const errMsg = err?.message || String(err);
+          console.warn(`[ai] Model ${modelName} attempt ${attempt} failed: ${errMsg}`);
+
+          const isTransient = isQuotaOrRateLimitError(err);
+          if (isTransient && attempt < maxAttempts) {
+            console.log(`[ai] Transient error on ${modelName}. Retrying in ${delay}ms...`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            delay *= 2; // exponential backoff
+          } else {
+            // Not transient or exhausted attempts, move to the next fallback model
+            break;
+          }
+        }
+      }
+    }
+
+    throw lastError;
+  };
+
   // Lazily initialize Resend to prevent the server from crashing on boot if the API key is missing
   let resendInstance: Resend | null = null;
   const getResendInstance = (): Resend => {
@@ -257,8 +303,7 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
      * If matching professionals speak that language: ONLY return professionals who speak that language (give them score 75-100).
      * If no professional speaks that language: return other matching pros with lower scores and explain in summaryMessage.`;
 
-      const response = await getAiClient().models.generateContent({
-        model: "gemini-3.1-flash-lite",
+      const response = await generateContentWithFallback({
         contents: `User Query: "${query}"
 
 Professionals:
@@ -382,8 +427,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
 
     try {
       const locationContext = `${city}, ${region || ''}, ${country || ''}`;
-      const response = await getAiClient().models.generateContent({
-        model: "gemini-flash-latest",
+      const response = await generateContentWithFallback({
         contents: `Target: Identify the nearest major metropolitan city for "${locationContext}". 
         Rules: 
         1. Return ONLY the name of the major city.
@@ -475,9 +519,7 @@ CRITICAL REASONING & EVALUATION CRITERIA:
    - summaryMessage: A warm, intelligent, 1-2 sentence response from Jane in the language of the user's query explaining what she selected (or if no exact match, offering close alternatives).
    - results: Array of objects with "id", "score" (0-100), and "reason" (a 1-sentence personalized explanation in the user's language highlighting WHY Jane selected this event, explicitly referencing date, schedule, or key description details).`;
 
-      const ai = getAiClient();
-      const response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-lite",
+      const response = await generateContentWithFallback({
         contents: `User Query: "${query.trim()}"
 
 Available Events:

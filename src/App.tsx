@@ -117,6 +117,7 @@ import { eventService, isSameDay } from './services/eventService';
 import { formatEventDate, formatEventTime, getCategoryBadge, getCategoryBadges, matchesCategoryFilter, CATEGORY_LIST, isEventExpired } from './utils/eventFormatter';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
+import { searchService } from './services/searchService';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
 import { LandingEventHighlightsCard } from './components/LandingEventHighlightsCard';
 import { HeaderWeatherWidget } from './components/HeaderWeatherWidget';
@@ -8919,7 +8920,7 @@ function AdminView({
                   {/* Emoji Quick Picker Toolbar */}
                   <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-100/90 rounded-xl border border-slate-200/70">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">Emojis:</span>
-                    {['✨', '📍', '💡', '🎯', '🏡', '🏖️', '🌳', '🥐', '☕', '🍷', '🥘', '🎨', '🎭', '🎶', '🚇', '📋', '🏥', '👨‍👩‍👧', '🐾', '💶', '🎟️', '🔗', '⭐', '🤝'].map(emoji => (
+                    {['✨', '📍', '💡', '🎯', '🏡', '🏖️', '🌳', '������', '☕', '🍷', '🥘', '🎨', '🎭', '🎶', '🚇', '📋', '🏥', '👨‍👩‍👧', '🐾', '💶', '🎟️', '🔗', '⭐', '🤝'].map(emoji => (
                       <button
                         key={emoji}
                         type="button"
@@ -12867,28 +12868,72 @@ function ExploreView({
       setAiResults(resultsDict);
       setAiExactMatch(exactMatch);
       setAiSummaryMessage(summaryMsg);
+
+      // Save user search in Supabase (Jane professional search)
+      searchService.saveSearch(
+        trimmed,
+        'jane_pro',
+        rawResults.length,
+        currentUser?.id
+      ).catch(err => console.warn("Failed to background-log Jane pro search:", err));
     } catch (err: any) {
-      console.error("[Search] AI matching error:", err);
-      const errMsg = err.message || "";
-      const errorLower = errMsg.toLowerCase();
-      if (
-        errorLower.includes("quota") || 
-        errorLower.includes("limit") || 
-        errorLower.includes("exhausted") || 
-        errorLower.includes("429") || 
-        errorLower.includes("too many requests") ||
-        errorLower.includes("sollicitée") ||
-        errorLower.includes("busy") ||
-        errorLower.includes("rate limit")
-      ) {
-        setAiError("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
-      } else {
-        setAiError(err.message || "Connection error with the AI service.");
-      }
-      // Fallback: clear AI results
-      setAiResults(null);
-      setAiExactMatch(true);
-      setAiSummaryMessage(null);
+      console.warn("[Search] AI matching error, activating standard keyword fallback:", err);
+      // No error message displayed to the user
+      setAiError(null);
+
+      // Build fallback keyword matches from allPros
+      const searchWords = trimmed.toLowerCase()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, " ")
+        .split(/\s+/)
+        .filter(w => w.length > 1);
+
+      const fallbackDict: { [key: string]: { score: number; reason: string } } = {};
+      let matchedCount = 0;
+
+      (allPros || []).forEach((pro: any) => {
+        if (!pro) return;
+        const searchableText = [
+          pro.name,
+          pro.category,
+          pro.specialty,
+          pro.company_name,
+          pro.description,
+          pro.city,
+          Array.isArray(pro.categories) ? pro.categories.join(' ') : '',
+          Array.isArray(pro.subcategories) ? pro.subcategories.join(' ') : ''
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        let score = 0;
+        if (searchWords.length === 0) {
+          score = 50; // default base score
+        } else {
+          // Count word overlaps
+          const matches = searchWords.filter(w => searchableText.includes(w));
+          if (matches.length > 0) {
+            score = Math.min(65 + (matches.length * 10), 95);
+          }
+        }
+
+        if (score > 0) {
+          fallbackDict[String(pro.id)] = {
+            score,
+            reason: "Correspondance trouvée dans l'annuaire par mot-clé."
+          };
+          matchedCount++;
+        }
+      });
+
+      setAiResults(fallbackDict);
+      setAiExactMatch(matchedCount > 0);
+      setAiSummaryMessage(`Jane a sélectionné les meilleurs professionnels correspondant à votre recherche "${trimmed}".`);
+
+      // Save user search in Supabase (Jane professional search fallback)
+      searchService.saveSearch(
+        trimmed,
+        'jane_pro',
+        matchedCount,
+        currentUser?.id
+      ).catch(e => console.warn("Failed to background-log Jane fallback pro search:", e));
     } finally {
       setAiLoading(false);
       setIsSearching(false);
@@ -12914,7 +12959,8 @@ function ExploreView({
     if (initialSearch !== null && initialSearch !== undefined) {
       setSearch(initialSearch);
       setDeferredSearch(initialSearch);
-      if (initialSearch.trim() && searchMode === 'ai') {
+      if (initialSearch.trim()) {
+        setSearchMode('ai');
         handleSearchSubmit(initialSearch);
       }
     }

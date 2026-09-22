@@ -39,6 +39,7 @@ import {
 } from 'recharts';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { cn } from '../lib/utils';
+import { searchService } from '../services/searchService';
 
 export interface UserProfileItem {
   id: string;
@@ -87,6 +88,8 @@ export const AdminAnalytics: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [hasCreatedAtColumn, setHasCreatedAtColumn] = useState<boolean>(true);
   const [copiedSql, setCopiedSql] = useState<boolean>(false);
+  const [searches, setSearches] = useState<any[]>([]);
+  const [copiedSearchSql, setCopiedSearchSql] = useState<boolean>(false);
 
   // Raw data from Supabase
   const [profiles, setProfiles] = useState<UserProfileItem[]>([]);
@@ -205,6 +208,14 @@ export const AdminAnalytics: React.FC = () => {
         usersWithFavoritesCount,
       });
 
+      // 4. Fetch Jane search logs (hybrid: Supabase + LocalStorage fallback)
+      try {
+        const recentSearches = await searchService.getAllRecentSearches();
+        setSearches(recentSearches);
+      } catch (searchErr) {
+        console.warn('[AdminAnalytics] Failed to query searches:', searchErr);
+      }
+
       setLastRefreshedAt(new Date());
     } catch (err: any) {
       console.error('[AdminAnalytics] Fetch failed:', err);
@@ -299,6 +310,20 @@ export const AdminAnalytics: React.FC = () => {
 
     return list.sort((a, b) => b.count - a.count).slice(0, 5);
   }, [profiles]);
+
+  // Top popular queries made to Jane
+  const topQueries = useMemo(() => {
+    const counts: Record<string, number> = {};
+    searches.forEach(s => {
+      const q = (s.query || '').trim().toLowerCase();
+      if (!q) return;
+      counts[q] = (counts[q] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([query, count]) => ({ query, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [searches]);
 
   // Filtered & searched users table
   const filteredUsers = useMemo(() => {
@@ -1009,6 +1034,155 @@ export const AdminAnalytics: React.FC = () => {
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Jane AI Assistant Search History Dashboard Card */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden mt-6">
+        <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 font-display flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-brand-blue animate-pulse" />
+              Jane AI Assistant Searches
+              <span className="text-xs font-semibold px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full">
+                {searches.length} logged
+              </span>
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Analyze the queries and intents of your users interacting with Assistant Jane
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const sqlText = `create table user_searches (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete set null,
+  query text not null,
+  search_type text not null, -- 'jane_pro', 'jane_event'
+  results_count integer default 0,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table user_searches enable row level security;
+
+create policy "Allow anyone to insert searches" on user_searches for insert with check (true);
+create policy "Allow users to read their own searches" on user_searches for select using (
+  auth.uid() = user_id or (select is_admin from public.profiles where id = auth.uid()) = true
+);`;
+                navigator.clipboard.writeText(sqlText);
+                setCopiedSearchSql(true);
+                setTimeout(() => setCopiedSearchSql(false), 2000);
+              }}
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+            >
+              {copiedSearchSql ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  SQL Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy Supabase Table SQL
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {searches.length === 0 ? (
+          <div className="p-12 text-center space-y-4">
+            <div className="w-12 h-12 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mx-auto">
+              <Search className="w-5 h-5 text-slate-400" />
+            </div>
+            <div className="max-w-md mx-auto space-y-2">
+              <h4 className="text-sm font-bold text-slate-800">No searches recorded yet</h4>
+              <p className="text-xs text-slate-400">
+                To enable search logging, please make sure the <code className="font-mono bg-slate-100 px-1 py-0.5 rounded">user_searches</code> table is created in your Supabase database using the SQL button above.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="p-6 space-y-6">
+            {/* Top Queries Summary */}
+            {topQueries.length > 0 && (
+              <div className="space-y-2.5">
+                <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">Top Popular Requests to Jane</h4>
+                <div className="flex flex-wrap gap-2">
+                  {topQueries.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-2xl text-xs font-semibold text-slate-700">
+                      <span className="font-bold text-brand-blue">#{idx + 1}</span>
+                      <span className="italic">"{item.query}"</span>
+                      <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                        {item.count} {item.count === 1 ? 'time' : 'times'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Searches Log Table */}
+            <div className="border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                      <th className="py-3 px-4">User</th>
+                      <th className="py-3 px-4">Search Query</th>
+                      <th className="py-3 px-4">Type</th>
+                      <th className="py-3 px-4 text-center">Results Found</th>
+                      <th className="py-3 px-4 text-right">Date & Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs text-slate-600">
+                    {searches.slice(0, 25).map((record) => {
+                      const userProfile = profiles.find(p => p.id === record.user_id);
+                      const userDisplay = userProfile
+                        ? `${userProfile.full_name || userProfile.email}`
+                        : record.user_id
+                        ? 'Authenticated User'
+                        : 'Guest / Anonymous';
+
+                      return (
+                        <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-3.5 px-4 font-semibold text-slate-700">
+                            {userDisplay}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-xs italic text-slate-800">
+                            "{record.query}"
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className={cn(
+                              "px-2.5 py-0.5 rounded-full text-[10px] font-bold",
+                              record.search_type === 'jane_event'
+                                ? "bg-purple-100 text-purple-700"
+                                : "bg-blue-100 text-blue-700"
+                            )}>
+                              {record.search_type === 'jane_event' ? 'Jane Event' : 'Jane Pro'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-bold">
+                            {record.results_count ?? 0}
+                          </td>
+                          <td className="py-3.5 px-4 text-right text-slate-400 font-mono text-[10px]">
+                            {new Date(record.created_at).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
