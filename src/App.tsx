@@ -12950,12 +12950,6 @@ function ExploreView({
 
   // Secure auto-scrolling to results once Jane has finished sorting and rendering the list
   useEffect(() => {
-    if (aiResults && !aiLoading) {
-      scrollToResults();
-    }
-  }, [aiResults, aiLoading]);
-
-  useEffect(() => {
     if (initialSearch !== null && initialSearch !== undefined) {
       setSearch(initialSearch);
       setDeferredSearch(initialSearch);
@@ -13288,6 +13282,20 @@ function ExploreView({
         return (b.rating || 0) - (a.rating || 0);
       })
     : [];
+
+  // General auto-scroll to search results whenever any filter or search query is active and results are displayed
+  useEffect(() => {
+    const hasActiveFilter = (typeof deferredSearch === 'string' && deferredSearch.trim() !== '') || 
+                            aiResults !== null || 
+                            selectedCategory !== 'All' || 
+                            selectedLanguage !== 'All' || 
+                            maxDistance !== 'All' || 
+                            minRating > 0;
+                            
+    if (hasActiveFilter && filteredPros.length > 0 && !aiLoading) {
+      scrollToResults();
+    }
+  }, [deferredSearch, aiResults, selectedCategory, selectedLanguage, maxDistance, minRating, filteredPros.length, aiLoading]);
 
   return (
     <div className="p-4 md:p-12 pt-20 md:pt-24 space-y-16 pb-32 max-w-7xl mx-auto">
