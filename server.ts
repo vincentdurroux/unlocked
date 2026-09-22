@@ -640,8 +640,8 @@ FOR EACH REAL EVENT FOUND:
 
       const ai = getAiClient();
 
-      // Candidate models for search: primary model with Google Search grounding, followed by resilient fallbacks
-      const defaultChain = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+      // Candidate models for search: primary model with Google Search grounding, followed by resilient fallbacks (excluding 3.1 flash lite)
+      const defaultChain = ["gemini-3.8-flash", "gemini-flash-latest"];
       const candidateModels: string[] = [];
       if (preferredModel && preferredModel !== "auto" && typeof preferredModel === "string") {
         candidateModels.push(preferredModel);
