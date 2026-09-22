@@ -12877,63 +12877,104 @@ function ExploreView({
         currentUser?.id
       ).catch(err => console.warn("Failed to background-log Jane pro search:", err));
     } catch (err: any) {
-      console.warn("[Search] AI matching error, activating standard keyword fallback:", err);
-      // No error message displayed to the user
-      setAiError(null);
+      console.error("[Search] AI matching error:", err);
+      const errMsg = err.message || "";
+      const errorLower = errMsg.toLowerCase();
+      
+      const isQuotaError = 
+        errorLower.includes("quota") || 
+        errorLower.includes("limit") || 
+        errorLower.includes("exhausted") || 
+        errorLower.includes("429") || 
+        errorLower.includes("too many requests") ||
+        errorLower.includes("sollicitée") ||
+        errorLower.includes("busy") ||
+        errorLower.includes("rate limit");
 
-      // Build fallback keyword matches from allPros
-      const searchWords = trimmed.toLowerCase()
-        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, " ")
-        .split(/\s+/)
-        .filter(w => w.length > 1);
+      if (isQuotaError) {
+        // AI is busy, try a smart English keyword/category fallback
+        const searchLower = trimmed.toLowerCase();
+        
+        // 1. Keyword fallback
+        const keywordMatches = (allPros || []).filter(pro => {
+          if (!pro) return false;
+          const name = (pro.name || "").toLowerCase();
+          const company = (pro.company_name || "").toLowerCase();
+          const bio = (pro.bio || "").toLowerCase();
+          const cats = [
+            ...(Array.isArray(pro.categories) ? pro.categories : []),
+            ...(typeof pro.category === 'string' ? pro.category.split(',') : [])
+          ].map(c => String(c).toLowerCase());
 
-      const fallbackDict: { [key: string]: { score: number; reason: string } } = {};
-      let matchedCount = 0;
+          return name.includes(searchLower) || 
+                 company.includes(searchLower) || 
+                 bio.includes(searchLower) ||
+                 cats.some(c => c.includes(searchLower));
+        });
 
-      (allPros || []).forEach((pro: any) => {
-        if (!pro) return;
-        const searchableText = [
-          pro.name,
-          pro.category,
-          pro.specialty,
-          pro.company_name,
-          pro.description,
-          pro.city,
-          Array.isArray(pro.categories) ? pro.categories.join(' ') : '',
-          Array.isArray(pro.subcategories) ? pro.subcategories.join(' ') : ''
-        ].filter(Boolean).join(' ').toLowerCase();
-
-        let score = 0;
-        if (searchWords.length === 0) {
-          score = 50; // default base score
+        if (keywordMatches.length > 0) {
+          const results: Record<string, { score: number; reason: string }> = {};
+          keywordMatches.forEach(p => {
+            results[String(p.id)] = { 
+              score: 90, 
+              reason: "Matched via keywords (Jane is busy)" 
+            };
+          });
+          setAiResults(results);
+          setAiExactMatch(false);
+          setAiSummaryMessage(`Jane is currently at capacity, but I found ${keywordMatches.length} professional${keywordMatches.length > 1 ? 's' : ''} matching your keywords. Here are the results.`);
+          setAiError(null);
         } else {
-          // Count word overlaps
-          const matches = searchWords.filter(w => searchableText.includes(w));
-          if (matches.length > 0) {
-            score = Math.min(65 + (matches.length * 10), 95);
+          // 2. Category fallback (try to match query words to professional categories)
+          const queryWords = searchLower.split(/\s+/).filter(w => w.length > 2);
+          
+          // Find specific categories to suggest
+          const suggestedCats = allProfessions.filter(cat => 
+            queryWords.some(word => cat.toLowerCase().includes(word)) || 
+            searchLower.includes(cat.toLowerCase())
+          );
+
+          const categoryMatches = (allPros || []).filter(pro => {
+            if (!pro) return false;
+            const cats = [
+              ...(Array.isArray(pro.categories) ? pro.categories : []),
+              ...(typeof pro.category === 'string' ? pro.category.split(',') : [])
+            ].map(c => String(c).toLowerCase());
+            
+            return queryWords.some(word => cats.some(c => c.includes(word)));
+          });
+
+          if (categoryMatches.length > 0) {
+            const results: Record<string, { score: number; reason: string }> = {};
+            categoryMatches.forEach(p => {
+              results[String(p.id)] = { 
+                score: 75, 
+                reason: "Matched via related categories (Jane is busy)" 
+              };
+            });
+            setAiResults(results);
+            setAiExactMatch(false);
+            
+            let msg = "Jane is currently at capacity and no exact keyword matches were found.";
+            if (suggestedCats.length > 0) {
+              msg += ` However, you might find what you need by searching these categories: ${suggestedCats.slice(0, 3).join(", ")}.`;
+            } else {
+              msg += " I've suggested some professionals in related categories below.";
+            }
+            setAiSummaryMessage(msg);
+            setAiError(null);
+          } else {
+            // Ultimate fallback
+            setAiError("Jane is currently at capacity. Please try a different search or use the category filters above.");
+            setAiResults(null);
           }
         }
-
-        if (score > 0) {
-          fallbackDict[String(pro.id)] = {
-            score,
-            reason: "Correspondance trouvée dans l'annuaire par mot-clé."
-          };
-          matchedCount++;
-        }
-      });
-
-      setAiResults(fallbackDict);
-      setAiExactMatch(matchedCount > 0);
-      setAiSummaryMessage(`Jane a sélectionné les meilleurs professionnels correspondant à votre recherche "${trimmed}".`);
-
-      // Save user search in Supabase (Jane professional search fallback)
-      searchService.saveSearch(
-        trimmed,
-        'jane_pro',
-        matchedCount,
-        currentUser?.id
-      ).catch(e => console.warn("Failed to background-log Jane fallback pro search:", e));
+      } else {
+        setAiError(err.message || "Connection error with the AI service.");
+        setAiResults(null);
+        setAiExactMatch(true);
+        setAiSummaryMessage(null);
+      }
     } finally {
       setAiLoading(false);
       setIsSearching(false);
@@ -12949,6 +12990,12 @@ function ExploreView({
   }, []);
 
   // Secure auto-scrolling to results once Jane has finished sorting and rendering the list
+  useEffect(() => {
+    if (aiResults && !aiLoading) {
+      scrollToResults();
+    }
+  }, [aiResults, aiLoading]);
+
   useEffect(() => {
     if (initialSearch !== null && initialSearch !== undefined) {
       setSearch(initialSearch);
@@ -13282,20 +13329,6 @@ function ExploreView({
         return (b.rating || 0) - (a.rating || 0);
       })
     : [];
-
-  // General auto-scroll to search results whenever any filter or search query is active and results are displayed
-  useEffect(() => {
-    const hasActiveFilter = (typeof deferredSearch === 'string' && deferredSearch.trim() !== '') || 
-                            aiResults !== null || 
-                            selectedCategory !== 'All' || 
-                            selectedLanguage !== 'All' || 
-                            maxDistance !== 'All' || 
-                            minRating > 0;
-                            
-    if (hasActiveFilter && filteredPros.length > 0 && !aiLoading) {
-      scrollToResults();
-    }
-  }, [deferredSearch, aiResults, selectedCategory, selectedLanguage, maxDistance, minRating, filteredPros.length, aiLoading]);
 
   return (
     <div className="p-4 md:p-12 pt-20 md:pt-24 space-y-16 pb-32 max-w-7xl mx-auto">
