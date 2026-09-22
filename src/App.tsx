@@ -1383,7 +1383,7 @@ export default function App() {
       initial = 'update-password';
     } else if (hasDeepLinkQuery) {
       if (searchParams.has('eventId')) initial = 'events';
-      else if (searchParams.has('proId')) initial = 'explore';
+      else if (searchParams.has('proId')) initial = 'home';
       else if (searchParams.has('guideId')) initial = 'guides';
     } else if (cleanHash && validViews.includes(cleanHash as View)) {
       initial = cleanHash as View;
@@ -1682,7 +1682,7 @@ export default function App() {
       setActiveView('events');
     } else if (proId) {
       setInitialProId(proId);
-      setActiveView('explore');
+      setActiveView('home');
     } else if (guideId) {
       setInitialGuideId(guideId);
       setActiveView('guides');
@@ -3009,6 +3009,8 @@ export default function App() {
                   onContactAdmin={handleContactAdmin}
                   favoriteProIds={favoriteProIds}
                   onToggleFavoritePro={toggleFavoritePro}
+                  initialProId={initialProId}
+                  onModalClose={() => setInitialProId(null)}
                 />
               </motion.div>
               <motion.div 
@@ -10471,7 +10473,9 @@ function HomeView({
   announcement,
   onContactAdmin,
   favoriteProIds = [],
-  onToggleFavoritePro
+  onToggleFavoritePro,
+  initialProId,
+  onModalClose
 }: { 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   allPros: Professional[], 
@@ -10500,7 +10504,9 @@ function HomeView({
   },
   onContactAdmin?: () => void,
   favoriteProIds?: string[],
-  onToggleFavoritePro?: (proId: string | number) => void
+  onToggleFavoritePro?: (proId: string | number) => void,
+  initialProId?: string | null,
+  onModalClose?: () => void
 }) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [localSearch, setLocalSearch] = useState('');
@@ -10513,12 +10519,31 @@ function HomeView({
   const [sec3Idx, setSec3Idx] = useState(0);
   const [sec4Idx, setSec4Idx] = useState(0);
 
-  const [expandedLandingProId, setExpandedLandingProId] = useState<string | null>(null);
+  const [expandedLandingProId, setExpandedLandingProId] = useState<string | null>(() => {
+    return initialProId ? String(initialProId) : null;
+  });
 
   const expandedLandingPro = useMemo(() => {
     if (!expandedLandingProId || !allPros) return null;
     return allPros.find(p => String(p.id) === String(expandedLandingProId)) || null;
   }, [expandedLandingProId, allPros]);
+
+  // Handle deep link pro expansion directly on landing page
+  useEffect(() => {
+    if (initialProId && allPros && allPros.length > 0) {
+      const targetPro = allPros.find(p => String(p.id) === String(initialProId));
+      if (targetPro) {
+        setExpandedLandingProId(String(initialProId));
+        setTimeout(() => {
+          const element = document.getElementById('landing-expanded-pro-section');
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }, 300);
+        onModalClose?.();
+      }
+    }
+  }, [initialProId, allPros, onModalClose]);
 
   const [selectedArticle, setSelectedArticle] = useState<any | null>(null);
 
@@ -13008,12 +13033,21 @@ function ExploreView({
 
   useEffect(() => {
     if (initialProId) {
+      // Clear any search filter so the target pro is guaranteed to be in the filtered list
+      if (search || deferredSearch || aiResults !== null || selectedCategory !== 'All') {
+        setSearch('');
+        setDeferredSearch('');
+        setAiResults(null);
+        setSelectedCategory('All');
+      }
       const pro = allPros.find(p => String(p.id) === String(initialProId));
       if (pro) {
         setExpandedProId(String(pro.id));
         setTimeout(() => {
           scrollToPro(pro);
         }, 200);
+        // Clear initialProId from parent so tab switching back and forth works correctly
+        onModalClose?.();
       }
     }
   }, [initialProId, allPros]);
@@ -17333,6 +17367,7 @@ function ProfileView({
   const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
   const [myAccountTab, setMyAccountTab] = useState<'profile' | 'favorites' | 'testimonies' | 'chats'>('favorites');
   const [favSubTab, setFavSubTab] = useState<'pros' | 'events'>('pros');
+  const [expandedFavProId, setExpandedFavProId] = useState<string | null>(null);
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const userEmail = currentUser?.email || "";
@@ -18018,54 +18053,83 @@ function ProfileView({
                             <div className="divide-y divide-slate-100/80">
                               {allPros
                                 .filter(pro => favoriteProIds.includes(String(pro.id)))
-                                .map(pro => (
-                                  <div key={pro.id} className="py-4 first:pt-0 last:pb-0 flex items-center gap-4 group">
-                                    <div className="w-14 h-14 rounded-2xl bg-slate-100 overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center">
-                                      {pro.image ? (
-                                        <img src={pro.image} alt={pro.name} className="w-full h-full object-cover" />
-                                      ) : (
-                                        <User className="w-6 h-6 text-slate-300" />
-                                      )}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-brand-blue bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
-                                          {pro.category || 'Professional'}
-                                        </span>
-                                        {pro.rating && (
-                                          <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5">
-                                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                            {pro.rating}
-                                          </span>
-                                        )}
+                                .map(pro => {
+                                  const isExpanded = expandedFavProId === String(pro.id);
+                                  return (
+                                    <div key={pro.id} className="py-4 first:pt-0 last:pb-0 flex flex-col gap-3 group">
+                                      <div className="flex items-center gap-4">
+                                        <div className="w-14 h-14 rounded-2xl bg-slate-100 overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center">
+                                          {pro.image ? (
+                                            <img src={pro.image} alt={pro.name} className="w-full h-full object-cover" />
+                                          ) : (
+                                            <User className="w-6 h-6 text-slate-300" />
+                                          )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[9px] font-extrabold uppercase tracking-widest text-brand-blue bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
+                                              {pro.category || 'Professional'}
+                                            </span>
+                                            {typeof pro.rating === 'number' && pro.rating > 0 ? (
+                                              <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5">
+                                                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                                {pro.rating}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-sm truncate mt-1">
+                                            {pro.name}
+                                          </h4>
+                                          {pro.company_name && (
+                                            <p className="text-xs text-slate-500 font-medium truncate">{pro.company_name}</p>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={() => {
+                                              setExpandedFavProId(isExpanded ? null : String(pro.id));
+                                            }}
+                                            className={cn(
+                                              "px-3.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer border",
+                                              isExpanded 
+                                                ? "bg-brand-blue border-brand-blue text-white hover:bg-blue-600 shadow-sm"
+                                                : "bg-white border-brand-blue/40 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue"
+                                            )}
+                                          >
+                                            {isExpanded ? 'Close' : 'View'}
+                                          </button>
+                                          <button
+                                            onClick={() => onToggleFavoritePro?.(pro.id)}
+                                            className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
+                                            title="Remove favorite"
+                                          >
+                                            <Heart className="w-4 h-4 fill-rose-500" />
+                                          </button>
+                                        </div>
                                       </div>
-                                      <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-sm truncate mt-1">
-                                        {pro.name}
-                                      </h4>
-                                      {pro.company_name && (
-                                        <p className="text-xs text-slate-500 font-medium truncate">{pro.company_name}</p>
+
+                                      {/* Inline Expanded Professional Card */}
+                                      {isExpanded && (
+                                        <div className="mt-1 border border-slate-100 rounded-3xl overflow-hidden shadow-xs bg-slate-50/5 p-1">
+                                          <DirectoryProCardItem
+                                            pro={pro}
+                                            index={0}
+                                            isExpanded={true}
+                                            onToggleExpand={() => setExpandedFavProId(null)}
+                                            currentUser={currentUser}
+                                            userProfile={userProfile}
+                                            onNavigate={onNavigate}
+                                            onProUpdate={refetchPros}
+                                            userLocation={null}
+                                            hasRealLocation={false}
+                                            favoriteProIds={favoriteProIds}
+                                            onToggleFavoritePro={onToggleFavoritePro}
+                                          />
+                                        </div>
                                       )}
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => {
-                                          setActiveSubPage(null);
-                                          onNavigate?.('explore', { proId: String(pro.id) });
-                                        }}
-                                        className="px-3.5 py-1.5 bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-brand-blue text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
-                                      >
-                                        View
-                                      </button>
-                                      <button
-                                        onClick={() => onToggleFavoritePro?.(pro.id)}
-                                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
-                                        title="Remove favorite"
-                                      >
-                                        <Heart className="w-4 h-4 fill-rose-500" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                             </div>
                           )}
                         </div>
