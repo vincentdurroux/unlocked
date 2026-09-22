@@ -3775,91 +3775,67 @@ export default function App() {
           )}
         </AnimatePresence>
         <AnimatePresence>
-          {initialProId && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[110] overflow-y-auto overscroll-contain touch-pan-y"
-              onClick={() => setInitialProId(null)}
-            >
-              <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 md:p-8">
-                <motion.div 
-                  initial={{ scale: 0.95, opacity: 0, y: 15 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  exit={{ scale: 0.95, opacity: 0, y: 15 }}
-                  className="w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl relative border border-slate-100"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* Header with Close Button */}
-                  <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-brand-blue animate-pulse" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Shared Professional Details</span>
+          {initialProId && (() => {
+            const sharedPro = allPros.find(p => String(p.id) === String(initialProId));
+            if (!sharedPro) return null;
+            return (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[110] overflow-y-auto overscroll-contain touch-pan-y"
+                onClick={() => setInitialProId(null)}
+              >
+                <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 md:p-8">
+                  <motion.div 
+                    initial={{ scale: 0.95, opacity: 0, y: 15 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.95, opacity: 0, y: 15 }}
+                    className="w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl relative border border-slate-100"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Header with Close Button */}
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-brand-blue animate-pulse" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Shared Professional Details</span>
+                      </div>
+                      <button 
+                        onClick={() => setInitialProId(null)}
+                        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                        title="Close details"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => setInitialProId(null)}
-                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
-                      title="Close details"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
 
-                  {/* Content: DirectoryProCardItem */}
-                  <div className="p-4 sm:p-6 max-h-[80vh] overflow-y-auto overscroll-contain scrollbar-thin">
-                    {(() => {
-                      const sharedPro = allPros.find(p => String(p.id) === String(initialProId));
-                      if (sharedPro) {
-                        return (
-                          <DirectoryProCardItem
-                            pro={sharedPro}
-                            index={0}
-                            isExpanded={true}
-                            onToggleExpand={() => setInitialProId(null)}
-                            currentUser={currentUser}
-                            userProfile={userProfile}
-                            blockedUsers={blockedUsers}
-                            usersWhoBlockedMe={usersWhoBlockedMe}
-                            onNavigate={(view, params) => {
-                              setInitialProId(null);
-                              handleNavigate(view, params);
-                            }}
-                            onProUpdate={refetchPros}
-                            userLocation={null}
-                            hasRealLocation={false}
-                            favoriteProIds={favoriteProIds}
-                            onToggleFavoritePro={toggleFavoritePro}
-                          />
-                        );
-                      }
-                      if (prosLoading) {
-                        return (
-                          <div className="py-20 flex flex-col items-center justify-center gap-4">
-                            <div className="w-10 h-10 border-4 border-brand-blue/20 border-t-brand-blue rounded-full animate-spin" />
-                            <p className="text-slate-500 font-medium text-sm">Loading professional details...</p>
-                          </div>
-                        );
-                      }
-                      return (
-                        <div className="py-16 text-center space-y-4">
-                          <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto ring-1 ring-slate-100">
-                            <Search className="w-6 h-6 text-slate-400" />
-                          </div>
-                          <div className="space-y-1">
-                            <h3 className="font-bold text-slate-900 text-base">Professional Not Found</h3>
-                            <p className="text-slate-500 text-xs max-w-sm mx-auto">
-                              We couldn't find a professional matching this shared link. They may have updated their profile or deactivated their account.
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </motion.div>
-              </div>
-            </motion.div>
-          )}
+                    {/* Content: DirectoryProCardItem */}
+                    <div className="p-4 sm:p-6 max-h-[80vh] overflow-y-auto overscroll-contain scrollbar-thin">
+                      <DirectoryProCardItem
+                        pro={sharedPro}
+                        index={0}
+                        isExpanded={true}
+                        onToggleExpand={() => setInitialProId(null)}
+                        currentUser={currentUser}
+                        userProfile={userProfile}
+                        blockedUsers={blockedUsers}
+                        usersWhoBlockedMe={usersWhoBlockedMe}
+                        onNavigate={(view, params) => {
+                          setInitialProId(null);
+                          handleNavigate(view, params);
+                        }}
+                        onProUpdate={refetchPros}
+                        userLocation={null}
+                        hasRealLocation={false}
+                        favoriteProIds={favoriteProIds}
+                        onToggleFavoritePro={toggleFavoritePro}
+                      />
+                    </div>
+                  </motion.div>
+                </div>
+              </motion.div>
+            );
+          })()}
         </AnimatePresence>
       {activeView !== 'login' && <SEOFooter onNavigate={handleNavigate} />}
       </main>
@@ -10615,7 +10591,22 @@ function HomeView({
     return allPros.find(p => String(p.id) === String(expandedLandingProId)) || null;
   }, [expandedLandingProId, allPros]);
 
-  // Handle deep link pro expansion directly on landing page removed in favor of the beautiful global root modal
+  // Handle deep link pro expansion directly on landing page
+  useEffect(() => {
+    if (initialProId && allPros && allPros.length > 0) {
+      const targetPro = allPros.find(p => String(p.id) === String(initialProId));
+      if (targetPro) {
+        setExpandedLandingProId(String(initialProId));
+        setTimeout(() => {
+          const element = document.getElementById('landing-expanded-pro-section');
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }, 300);
+        onModalClose?.();
+      }
+    }
+  }, [initialProId, allPros, onModalClose]);
 
   const [selectedArticle, setSelectedArticle] = useState<any | null>(null);
 
