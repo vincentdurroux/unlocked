@@ -87,6 +87,7 @@ const MONTH_OPTIONS = [
 
 const SEARCH_CATEGORIES = [
   { id: "All Categories", name: "✨ All", icon: "✨", query: "Top popular events, concerts, exhibitions, and shows in Valencia" },
+  { id: "Expat", name: "🌍 Expats & Community", icon: "🌍", query: "Expat meetups, international networking, language exchanges, and social events in Valencia" },
   { id: "Art", name: "🎨 Art", icon: "🎨", query: "Major art museum exhibitions at Bombas Gens, IVAM, CAIXAFORUM, and MuVIM in Valencia" },
   { id: "Theater", name: "🎭 Theater", icon: "🎭", query: "Theater plays, opera, dance performances, and musicals at Palau de les Arts, Teatro Principal, and Teatro Olympia in Valencia" },
   { id: "Music", name: "🎵 Music", icon: "🎵", query: "High-profile live music concerts, classical symphonies, jazz shows, and music festivals in Valencia" },
@@ -108,6 +109,7 @@ const CATEGORY_OPTIONS = [
   "Sports",
   "Tech",
   "Community",
+  "Expat",
   "Family",
   "Festival",
   "Workshops",
@@ -463,6 +465,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
   const [aiQuery, setAiQuery] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('October 2026');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [isExpatFocus, setIsExpatFocus] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchStep, setSearchStep] = useState('');
   const [discoveredEvents, setDiscoveredEvents] = useState<GroundedEvent[]>([]);
@@ -763,11 +766,12 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
     setEditingEvent(null);
   };
 
-  const handleSearch = async (queryOverride?: string, monthOverride?: string, categoryOverride?: string, modelOverride?: string) => {
+  const handleSearch = async (queryOverride?: string, monthOverride?: string, categoryOverride?: string, modelOverride?: string, expatOverride?: boolean) => {
     const q = (queryOverride || aiQuery).trim();
     const m = monthOverride || selectedMonth;
     const cat = categoryOverride !== undefined ? categoryOverride : selectedCategory;
     const targetModel = modelOverride || selectedGeminiModel;
+    const targetExpatFocus = expatOverride !== undefined ? expatOverride : isExpatFocus;
 
     if (!q) return;
 
@@ -775,13 +779,15 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
     if (monthOverride) setSelectedMonth(monthOverride);
     if (categoryOverride !== undefined) setSelectedCategory(categoryOverride);
     if (modelOverride) setSelectedGeminiModel(modelOverride);
+    if (expatOverride !== undefined) setIsExpatFocus(expatOverride);
 
     setIsSearching(true);
     setErrorMsg(null);
     setSummary(null);
     setFallbackNotice(null);
     const catLabel = cat !== 'All Categories' ? ` [Category: ${cat}]` : '';
-    setSearchStep(`🔍 Deep searching live web sources for ${m}${catLabel} in Valencia...`);
+    const expatLabel = targetExpatFocus ? ' [🌍 Expat Focus]' : '';
+    setSearchStep(`🔍 Deep searching live web sources for ${m}${catLabel}${expatLabel} in Valencia...`);
 
     const timer1 = setTimeout(() => {
       setSearchStep("⚡ Querying Palau de les Arts, IVAM, Teatro Principal & official cultural portals...");
@@ -823,6 +829,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
           query: q,
           month: m,
           category: cat,
+          expatFocus: targetExpatFocus,
           location: "Valencia, Spain and surrounding Valencian Community",
           existingTitles,
           preferredModel: targetModel
@@ -1262,34 +1269,57 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                   </button>
                 </div>
 
-                {/* Gemini Model Selection & Automatic Quota Protection */}
+                {/* Gemini Model Selection, Expat Community Focus & Quota Protection */}
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-slate-300 font-semibold flex items-center gap-1.5">
-                      <Cpu className="w-3.5 h-3.5 text-sky-400" />
-                      Modèle IA :
-                    </span>
-                    <div className="relative">
-                      <select
-                        value={selectedGeminiModel}
-                        onChange={(e) => setSelectedGeminiModel(e.target.value)}
-                        className="pl-3 pr-7 py-1.5 bg-white/10 hover:bg-white/15 focus:bg-white/20 text-white rounded-xl border border-white/15 focus:border-brand-blue focus:outline-none transition-all text-xs font-bold appearance-none cursor-pointer"
-                      >
-                        <option value="auto" className="bg-slate-900 text-white font-medium">
-                          ⚡ Auto-Failover (Gemini 3.8 Flash + Basculement auto si quota épuisé)
-                        </option>
-                        <option value="gemini-3.8-flash" className="bg-slate-900 text-white font-medium">
-                          Gemini 3.8 Flash (Recherche approfondie)
-                        </option>
-                        <option value="gemini-3.1-flash-lite" className="bg-slate-900 text-white font-medium">
-                          Gemini 3.1 Flash-Lite (Quota très élevé / Rapide)
-                        </option>
-                        <option value="gemini-flash-latest" className="bg-slate-900 text-white font-medium">
-                          Gemini Flash Latest
-                        </option>
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Model selector */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+                        <Cpu className="w-3.5 h-3.5 text-sky-400" />
+                        Modèle IA :
+                      </span>
+                      <div className="relative">
+                        <select
+                          value={selectedGeminiModel}
+                          onChange={(e) => setSelectedGeminiModel(e.target.value)}
+                          className="pl-3 pr-7 py-1.5 bg-white/10 hover:bg-white/15 focus:bg-white/20 text-white rounded-xl border border-white/15 focus:border-brand-blue focus:outline-none transition-all text-xs font-bold appearance-none cursor-pointer"
+                        >
+                          <option value="auto" className="bg-slate-900 text-white font-medium">
+                            ⚡ Auto-Failover (Gemini 3.8 Flash + Basculement auto si quota épuisé)
+                          </option>
+                          <option value="gemini-3.8-flash" className="bg-slate-900 text-white font-medium">
+                            Gemini 3.8 Flash (Recherche approfondie)
+                          </option>
+                          <option value="gemini-3.1-flash-lite" className="bg-slate-900 text-white font-medium">
+                            Gemini 3.1 Flash-Lite (Quota très élevé / Rapide)
+                          </option>
+                          <option value="gemini-flash-latest" className="bg-slate-900 text-white font-medium">
+                            Gemini Flash Latest
+                          </option>
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
                     </div>
+
+                    {/* Expat Focus Toggle Switch */}
+                    <button
+                      type="button"
+                      onClick={() => setIsExpatFocus(!isExpatFocus)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+                        isExpatFocus
+                          ? "bg-gradient-to-r from-teal-500 to-emerald-500 text-white border-teal-300 shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/40"
+                          : "bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white border-white/15"
+                      }`}
+                      title="Activer la recherche ciblée pour la communauté des expats, nomades et résidents internationaux"
+                    >
+                      <Globe className={`w-3.5 h-3.5 ${isExpatFocus ? 'text-white animate-pulse' : 'text-teal-400'}`} />
+                      <span>Focus Expats & Inter</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] uppercase tracking-wider font-mono font-extrabold ${
+                        isExpatFocus ? "bg-white text-emerald-700" : "bg-white/15 text-slate-300"
+                      }`}>
+                        {isExpatFocus ? "ACTIF" : "OFF"}
+                      </span>
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-1.5 text-[11px] text-emerald-300 font-medium">
@@ -1387,6 +1417,12 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                     <h3 className="text-xl sm:text-2xl font-bold font-display text-slate-900 flex flex-wrap items-center gap-2.5">
                       <Sparkles className="w-6 h-6 text-brand-blue" />
                       <span>Verified Events Discovered for {selectedMonth} ({discoveredEvents.length})</span>
+                      {isExpatFocus && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1 shadow-sm">
+                          <Globe className="w-3 h-3 text-teal-600" />
+                          <span>Focus Expats</span>
+                        </span>
+                      )}
                       {modelUsedInResults && (
                         <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1 shadow-sm">
                           <Cpu className="w-3 h-3 text-brand-blue" />

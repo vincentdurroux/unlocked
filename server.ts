@@ -544,7 +544,7 @@ ${JSON.stringify(eventListBrief, null, 2)}`,
 
   // Agentic AI real-time event discovery endpoint (Perplexity-style, zero-hallucination) with multi-model quota fallback
   app.post("/api/search-events", async (req, res) => {
-    const { query, location, month, category, existingTitles, preferredModel } = req.body;
+    const { query, location, month, category, expatFocus, existingTitles, preferredModel } = req.body;
 
     if (!query || typeof query !== "string" || !query.trim()) {
       return res.status(400).json({ error: "The 'query' parameter is required." });
@@ -553,9 +553,20 @@ ${JSON.stringify(eventListBrief, null, 2)}`,
     const searchLocation = location || "Valencia, Spain and surrounding Valencian Community (Ruzafa, El Carmen, Marina, Ciutat de les Arts i les Ciències, Palau de les Arts, IVAM, La Rambleta, Alboraya, El Saler, Sagunto)";
     const targetMonth = month && month !== "All Months / Upcoming" ? month : "upcoming months";
     const targetCategory = category && category !== "All Categories" ? category : null;
+    const isExpatFocus = Boolean(expatFocus);
 
     const categoryDirective = targetCategory
       ? `\n\nSTRICT CATEGORY TARGETING DIRECTIVE:\nFocus specifically on finding events that strictly belong to the category "${targetCategory}". Ensure every returned event is relevant to this category.`
+      : '';
+
+    const expatDirective = isExpatFocus
+      ? `\n\n🌍 SPECIAL EXPAT & INTERNATIONAL COMMUNITY FOCUS DIRECTIVE (CRITICAL):
+The user has activated the "Expat / International Community Focus" option.
+Prioritize events tailored for international residents, expats, digital nomads, and English/multilingual speakers in Valencia:
+- Expat meetups, international networking events, language exchanges (intercambios de idiomas), international quiz nights, and newcomer welcome gatherings.
+- Multilingual cultural shows, English-friendly / international theater or stand-up comedy, international music acts, indie festivals, open-air international markets, creative art/pottery workshops, and gastronomy/wine tastings.
+- Outdoor sports/runs, Turia group fitness, social dinners, and tech/startup networking meetups.
+- In the "description" section under "**🎯 Perfect for**", highlight expat-specific appeal (e.g. 🌍 **Expats & Newcomers in Valencia**, 🗣️ **English & Multilingual Speakers**, 🤝 **International Community & Networking**).`
       : '';
 
     const exclusionList = Array.isArray(existingTitles) && existingTitles.length > 0
@@ -567,13 +578,13 @@ ${JSON.stringify(eventListBrief, null, 2)}`,
 
 CRITICAL ZERO-HALLUCINATION & FACTUALITY DIRECTIVES:
 1. NEVER INVENT OR FABRICATE ANY EVENT, DATE, VENUE, ORGANIZER, ARTIST, OR TICKET DETAILS.
-2. Every single returned event MUST be strictly grounded in real-time Google Search web results for real events happening in Valencia during the requested timeframe: ${targetMonth}.${categoryDirective}
+2. Every single returned event MUST be strictly grounded in real-time Google Search web results for real events happening in Valencia during the requested timeframe: ${targetMonth}.${categoryDirective}${expatDirective}
 3. Conduct a DEEP AND THOROUGH SEARCH. Search for popular, famous, major, and culturally relevant events across key venues in Valencia, including:
    - Performing Arts & Opera: Palau de les Arts Reina Sofía, Teatro Principal, Teatro Olympia, La Rambleta, Sala Off
    - Classical & Music: Palau de la Música, Plaza de Toros, Marina de Valencia, Ciutat de les Arts i les Ciències
    - Museums & Exhibitions: IVAM, Bombas Gens, CAIXAFORUM Valencia, MuVIM, Centro del Carmen (CCCC), Museo de Bellas Artes
    - Fairs & Innovation: Feria Valencia, Veles e Vents, Roig Arena / Fonteta
-   - Gastronomy, Outdoor & Expat Meetups: Jardines del Real / Viveros, Jardín del Turia, Mercado de Colón, Ruzafa & El Carmen galleries
+   - Gastronomy, Outdoor & Expat Meetups: Jardines del Real / Viveros, Jardín del Turia, Mercado de Colón, Ruzafa & El Carmen galleries, international pubs, language cafés
 4. Aim to discover 8 to 12 top verified real events matching the user request for ${targetMonth}.
 5. If no verified real event is found for a specific query, return an empty array [] in "events" and explain in "summary" in clear English.${exclusionList}
 
