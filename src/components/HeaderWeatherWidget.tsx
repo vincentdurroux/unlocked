@@ -137,29 +137,25 @@ export function HeaderWeatherWidget() {
 
   return (
     <div className="relative inline-block text-left z-40" ref={containerRef}>
-      {/* Soft Warm Header Trigger Button */}
+      {/* Seamless Clean Header Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`group flex items-center gap-1.5 h-7 px-2.5 rounded-full border transition-all duration-200 cursor-pointer text-[11px] font-bold select-none shrink-0 ${
-          isOpen
-            ? 'bg-[#FFF9EA] border-[#EAD8B1] text-amber-950 shadow-2xs ring-2 ring-amber-400/15'
-            : 'bg-[#FFFDF7] hover:bg-[#FFF9EA] border-[#F2E8D5] text-slate-800 hover:text-slate-900 shadow-3xs'
-        }`}
+        className="group flex items-center gap-2 py-1 px-2 rounded-lg transition-all duration-200 cursor-pointer text-xs sm:text-sm font-extrabold select-none shrink-0 text-slate-800 hover:text-slate-950 hover:bg-slate-50/80"
         title="Valencia Weather"
         aria-label="Valencia Weather"
       >
-        <CurrentIcon className={`w-3.5 h-3.5 ${currentDetails.color} shrink-0 transition-transform group-hover:scale-110`} />
+        <CurrentIcon className={`w-4.5 h-4.5 sm:w-5 sm:h-5 ${currentDetails.color} shrink-0 transition-transform group-hover:scale-110`} />
         
-        <span className="font-extrabold text-slate-800 tracking-tight">
+        <span className="font-black text-slate-900 tracking-tight text-xs sm:text-sm">
           {weather.temp}°C
         </span>
 
-        <span className="font-semibold text-slate-500 hidden sm:inline">
+        <span className="font-bold text-slate-600 hidden sm:inline text-xs sm:text-sm">
           Valencia
         </span>
 
         <ChevronDown 
-          className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-900' : 'group-hover:text-slate-600'}`} 
+          className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-900' : 'group-hover:text-slate-600'}`} 
         />
       </button>
 
