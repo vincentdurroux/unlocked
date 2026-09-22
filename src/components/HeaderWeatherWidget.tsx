@@ -140,22 +140,24 @@ export function HeaderWeatherWidget() {
       {/* Seamless Clean Header Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="group flex items-center gap-2 py-1 px-2 rounded-lg transition-all duration-200 cursor-pointer text-xs sm:text-sm font-extrabold select-none shrink-0 text-slate-800 hover:text-slate-950 hover:bg-slate-50/80"
+        className="group flex items-center gap-1.5 py-1 px-2.5 rounded-xl transition-all duration-200 cursor-pointer select-none shrink-0 text-slate-800 hover:text-slate-950 hover:bg-slate-100/70"
         title="Valencia Weather"
         aria-label="Valencia Weather"
       >
-        <CurrentIcon className={`w-4.5 h-4.5 sm:w-5 sm:h-5 ${currentDetails.color} shrink-0 transition-transform group-hover:scale-110`} />
-        
-        <span className="font-black text-slate-900 tracking-tight text-xs sm:text-sm">
-          {weather.temp}°C
-        </span>
-
-        <span className="font-bold text-slate-600 hidden sm:inline text-xs sm:text-sm">
-          Valencia
-        </span>
+        <div className="flex flex-col items-center leading-tight">
+          <div className="flex items-center gap-1.5">
+            <CurrentIcon className={`w-4.5 h-4.5 sm:w-5 sm:h-5 ${currentDetails.color} shrink-0 transition-transform group-hover:scale-110`} />
+            <span className="font-black text-slate-900 tracking-tight text-sm sm:text-base">
+              {weather.temp}°C
+            </span>
+          </div>
+          <span className="font-extrabold text-slate-600 text-[10px] sm:text-[11px] tracking-tight -mt-0.5">
+            Valencia
+          </span>
+        </div>
 
         <ChevronDown 
-          className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-900' : 'group-hover:text-slate-600'}`} 
+          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-900' : 'group-hover:text-slate-600'}`} 
         />
       </button>
 
