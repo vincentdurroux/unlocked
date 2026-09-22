@@ -36,6 +36,7 @@ export interface Profile {
   created_at?: string;
   updated_at?: string;
   favorite_event_ids?: string[];
+  favorite_pro_ids?: string[];
 }
 
 export const authService = {

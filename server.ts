@@ -83,6 +83,9 @@ function isQuotaOrRateLimitError(error: any): boolean {
   const str = `${error.message || ""} ${error.stack || ""} ${JSON.stringify(error)}`.toLowerCase();
   return (
     str.includes("429") ||
+    str.includes("503") ||
+    str.includes("unavailable") ||
+    str.includes("high demand") ||
     str.includes("quota") ||
     str.includes("exhausted") ||
     str.includes("resource_exhausted") ||
@@ -183,8 +186,8 @@ async function startServer() {
     }
   });
 
-  // AI-powered pro matching endpoint
-  app.post("/api/ai-search", async (req, res) => {
+  // AI-powered pro matching endpoint (supports both /api/search and /api/ai-search)
+  app.post(["/api/search", "/api/ai-search"], async (req, res) => {
     const { query, professionals } = req.body;
 
     if (!query || !query.trim() || !professionals || !Array.isArray(professionals)) {

@@ -618,7 +618,6 @@ import { documentService } from './services/documentService';
 import { guideService, MOCK_GUIDE_CATEGORIES_DATA } from './services/guide_service';
 import { feedbackService } from './services/feedbackService';
 import { emailService } from './services/emailService';
-import { GoogleGenAI, Type } from "@google/genai";
 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
@@ -1468,6 +1467,7 @@ export default function App() {
   });
 
   const [favoriteEventIds, setFavoriteEventIds] = useState<string[]>([]);
+  const [favoriteProIds, setFavoriteProIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (currentUser) {
@@ -1491,8 +1491,39 @@ export default function App() {
           setFavoriteEventIds([]);
         }
       }
+
+      if (userProfile?.favorite_pro_ids && Array.isArray(userProfile.favorite_pro_ids)) {
+        setFavoriteProIds(userProfile.favorite_pro_ids.map(String));
+      } else {
+        try {
+          const saved = localStorage.getItem(`unlocked_favorites_pro_${currentUser.id}`);
+          if (saved) {
+            setFavoriteProIds(JSON.parse(saved));
+          } else {
+            const legacy = localStorage.getItem('unlocked_favorite_pro_ids');
+            if (legacy) {
+              setFavoriteProIds(JSON.parse(legacy));
+            } else {
+              setFavoriteProIds([]);
+            }
+          }
+        } catch (_) {
+          setFavoriteProIds([]);
+        }
+      }
     } else {
-      setFavoriteEventIds([]);
+      try {
+        const legacyEvents = localStorage.getItem('unlocked_favorite_event_ids');
+        if (legacyEvents) setFavoriteEventIds(JSON.parse(legacyEvents));
+        else setFavoriteEventIds([]);
+
+        const legacyPros = localStorage.getItem('unlocked_favorite_pro_ids');
+        if (legacyPros) setFavoriteProIds(JSON.parse(legacyPros));
+        else setFavoriteProIds([]);
+      } catch (_) {
+        setFavoriteEventIds([]);
+        setFavoriteProIds([]);
+      }
     }
   }, [currentUser, userProfile]);
 
@@ -1501,8 +1532,24 @@ export default function App() {
       try {
         localStorage.setItem(`unlocked_favorites_event_${currentUser.id}`, JSON.stringify(favoriteEventIds));
       } catch (_) {}
+    } else {
+      try {
+        localStorage.setItem('unlocked_favorite_event_ids', JSON.stringify(favoriteEventIds));
+      } catch (_) {}
     }
   }, [favoriteEventIds, currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      try {
+        localStorage.setItem(`unlocked_favorites_pro_${currentUser.id}`, JSON.stringify(favoriteProIds));
+      } catch (_) {}
+    } else {
+      try {
+        localStorage.setItem('unlocked_favorite_pro_ids', JSON.stringify(favoriteProIds));
+      } catch (_) {}
+    }
+  }, [favoriteProIds, currentUser]);
 
   const toggleFavoriteEvent = async (eventId: string) => {
     let nextFavorites: string[] = [];
@@ -1517,6 +1564,10 @@ export default function App() {
         try {
           localStorage.setItem(`unlocked_favorites_event_${currentUser.id}`, JSON.stringify(nextFavorites));
         } catch (_) {}
+      } else {
+        try {
+          localStorage.setItem('unlocked_favorite_event_ids', JSON.stringify(nextFavorites));
+        } catch (_) {}
       }
       return nextFavorites;
     });
@@ -1530,6 +1581,41 @@ export default function App() {
         setUserProfile(prev => prev ? { ...prev, favorite_event_ids: nextFavorites } : null);
       } catch (err) {
         console.error('Error updating favorite events in database:', err);
+      }
+    }
+  };
+
+  const toggleFavoritePro = async (proId: string | number) => {
+    const strId = String(proId);
+    let nextFavorites: string[] = [];
+    setFavoriteProIds(prev => {
+      if (prev.includes(strId)) {
+        nextFavorites = prev.filter(id => id !== strId);
+      } else {
+        nextFavorites = [...prev, strId];
+      }
+
+      if (currentUser) {
+        try {
+          localStorage.setItem(`unlocked_favorites_pro_${currentUser.id}`, JSON.stringify(nextFavorites));
+        } catch (_) {}
+      } else {
+        try {
+          localStorage.setItem('unlocked_favorite_pro_ids', JSON.stringify(nextFavorites));
+        } catch (_) {}
+      }
+      return nextFavorites;
+    });
+
+    if (currentUser) {
+      try {
+        await authService.updateProfile({
+          id: currentUser.id,
+          favorite_pro_ids: nextFavorites
+        });
+        setUserProfile(prev => prev ? { ...prev, favorite_pro_ids: nextFavorites } : null);
+      } catch (err) {
+        console.error('Error updating favorite pros in database:', err);
       }
     }
   };
@@ -2072,34 +2158,7 @@ export default function App() {
           }
         }
       } catch (srvErr) {
-        console.warn("[City Normalization] Server endpoint failed, attempting fallback:", srvErr);
-      }
-
-      // If server failed (e.g. Vercel 404), attempt client-side fallback if an API key is available
-      const localKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
-      if (localKey) {
-        try {
-          const ai = new GoogleGenAI({ apiKey: localKey });
-          const locationContext = `${city}, ${region || ''}, ${country || ''}`;
-          
-          const response = await ai.models.generateContent({
-            model: "gemini-flash-latest",
-            contents: `Target: Identify the nearest major metropolitan city for "${locationContext}". 
-            Rules: 
-            1. Return ONLY the name of the major city.
-            2. No punctuation, no sentences.
-            3. If the location is already a major city, return its name.
-            4. Example: "La Eliana, Valencian Community, Spain" -> "Valencia".`,
-          });
-          
-          const result = response.text?.trim();
-          if (result) {
-            localStorage.setItem(cacheKey, result);
-            return result;
-          }
-        } catch (clientErr) {
-          console.error("[City Normalization] Client-side fallback failed:", clientErr);
-        }
+        console.warn("[City Normalization] Server endpoint failed, using default:", srvErr);
       }
 
       // Default return
@@ -2940,6 +2999,8 @@ export default function App() {
                   highlightedTestimoniesIds={highlightedTestimoniesIds}
                   allArticles={allArticles}
                   onContactAdmin={handleContactAdmin}
+                  favoriteProIds={favoriteProIds}
+                  onToggleFavoritePro={toggleFavoritePro}
                 />
               </motion.div>
               <motion.div 
@@ -2963,6 +3024,8 @@ export default function App() {
                     currentUser={currentUser}
                     userProfile={userProfile}
                     isActive={activeView === 'explore'}
+                    favoriteProIds={favoriteProIds}
+                    onToggleFavoritePro={toggleFavoritePro}
                   />
                 )}
               </motion.div>
@@ -2996,6 +3059,8 @@ export default function App() {
                   unreadConversations={unreadConversations}
                   favoriteEventIds={favoriteEventIds}
                   onToggleFavoriteEvent={toggleFavoriteEvent}
+                  favoriteProIds={favoriteProIds}
+                  onToggleFavoritePro={toggleFavoritePro}
                   events={events}
                 />
               )}
@@ -10381,7 +10446,9 @@ function HomeView({
   highlightedTestimoniesIds = [],
   allArticles = [],
   announcement,
-  onContactAdmin
+  onContactAdmin,
+  favoriteProIds = [],
+  onToggleFavoritePro
 }: { 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   allPros: Professional[], 
@@ -10408,7 +10475,9 @@ function HomeView({
     cta_text?: string;
     cta_type?: string;
   },
-  onContactAdmin?: () => void
+  onContactAdmin?: () => void,
+  favoriteProIds?: string[],
+  onToggleFavoritePro?: (proId: string | number) => void
 }) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [localSearch, setLocalSearch] = useState('');
@@ -10421,7 +10490,13 @@ function HomeView({
   const [sec3Idx, setSec3Idx] = useState(0);
   const [sec4Idx, setSec4Idx] = useState(0);
 
-  const [selectedPro, setSelectedPro] = useState<Professional | null>(null);
+  const [expandedLandingProId, setExpandedLandingProId] = useState<string | null>(null);
+
+  const expandedLandingPro = useMemo(() => {
+    if (!expandedLandingProId || !allPros) return null;
+    return allPros.find(p => String(p.id) === String(expandedLandingProId)) || null;
+  }, [expandedLandingProId, allPros]);
+
   const [selectedArticle, setSelectedArticle] = useState<any | null>(null);
 
   const [discoverTestimonies, setDiscoverTestimonies] = useState<any[]>([]);
@@ -10669,7 +10744,7 @@ function HomeView({
             Discover on Unlocked
           </h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 grid-flow-row-dense">
           {/* Card 1: Top Rated Pro / Testimonial */}
           {(() => {
             const dbHighlightedPros = allPros.filter(p => p.is_highlighted === true || (p.is_highlighted as any) === 'true' || (p.is_highlighted as any) === 1);
@@ -10724,11 +10799,26 @@ function HomeView({
 
             if (!proToShow) return null;
 
-             return (
+            const isCardProExpanded = expandedLandingProId === String(proToShow.id);
+
+            return (
               <div 
-                className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 hover:border-brand-blue/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
+                className={cn(
+                  "flex flex-col justify-between p-6 rounded-3xl bg-white border transition-all duration-300 cursor-pointer group relative overflow-hidden h-full",
+                  isCardProExpanded
+                    ? "border-brand-blue ring-2 ring-brand-blue/30 shadow-md bg-blue-50/15"
+                    : "border-slate-100 hover:border-brand-blue/30 shadow-sm hover:shadow-md hover:-translate-y-1"
+                )}
                 id="discover-card-pro"
-                onClick={() => onNavigate('explore', { proId: proToShow.id })}
+                onClick={() => {
+                  const targetId = String(proToShow.id);
+                  setExpandedLandingProId(prev => (prev === targetId ? null : targetId));
+                  if (expandedLandingProId !== targetId) {
+                    setTimeout(() => {
+                      document.getElementById('landing-expanded-pro-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 120);
+                  }
+                }}
               >
                 <div className="relative flex-1">
                   <AnimatePresence mode="wait" initial={false}>
@@ -10855,6 +10945,39 @@ function HomeView({
               </div>
             );
           })()}
+
+          {/* Detailed Pro Card: Opens directly under the 'Meet a local pro' card */}
+          {expandedLandingPro && (
+            <motion.div
+              key={`landing-expanded-pro-${expandedLandingPro.id}`}
+              id="landing-expanded-pro-section"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              className="col-span-1 md:col-span-2 lg:col-span-4 w-full scroll-mt-28"
+            >
+              <DirectoryProCardItem
+                key={expandedLandingPro.id}
+                pro={expandedLandingPro}
+                index={0}
+                isExpanded={true}
+                onToggleExpand={() => {
+                  setExpandedLandingProId(null);
+                }}
+                currentUser={currentUser}
+                userProfile={userProfile}
+                blockedUsers={blockedUsers}
+                usersWhoBlockedMe={usersWhoBlockedMe}
+                onNavigate={onNavigate}
+                onProUpdate={onProUpdate}
+                userLocation={null}
+                hasRealLocation={false}
+                favoriteProIds={favoriteProIds}
+                onToggleFavoritePro={onToggleFavoritePro}
+              />
+            </motion.div>
+          )}
 
           {/* Card 2: Event Highlights of the Month (Automatic & Manual Carousel) */}
           <LandingEventHighlightsCard
@@ -11013,22 +11136,6 @@ function HomeView({
           </div>
         </div>
       </div>
-
-      {/* Detail Modals on HomeView */}
-      <AnimatePresence>
-        {selectedPro && (
-          <ProfessionalDetailView
-            pro={selectedPro}
-            onClose={() => setSelectedPro(null)}
-            onNavigate={onNavigate}
-            onProUpdate={onProUpdate}
-            currentUser={currentUser}
-            userProfile={userProfile}
-            blockedUsers={blockedUsers}
-            usersWhoBlockedMe={usersWhoBlockedMe}
-          />
-        )}
-      </AnimatePresence>
 
       <ExpertGuideModal
         isOpen={!!selectedArticle}
@@ -11707,7 +11814,9 @@ function DirectoryProCardItem({
   onProUpdate,
   aiResult,
   userLocation,
-  hasRealLocation
+  hasRealLocation,
+  favoriteProIds = [],
+  onToggleFavoritePro
 }: {
   key?: React.Key;
   pro: Professional;
@@ -11723,6 +11832,8 @@ function DirectoryProCardItem({
   aiResult?: { score: number; reason: string };
   userLocation: { lat: number; lng: number } | null;
   hasRealLocation: boolean;
+  favoriteProIds?: string[];
+  onToggleFavoritePro?: (proId: string | number) => void;
 }) {
   const [localReviews, setLocalReviews] = useState<any[]>([]);
   const [reviewCarouselIndex, setReviewCarouselIndex] = useState(0);
@@ -11929,14 +12040,34 @@ function DirectoryProCardItem({
         onToggleExpand();
       }}
     >
-      {/* Number Badge to match map pins */}
-      <div className={cn(
-        "absolute top-4 right-4 sm:top-6 sm:right-6 w-7 h-7 sm:w-8 sm:h-8 text-white rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-black shadow-lg z-10 transition-transform group-hover:scale-110 shrink-0",
-        pro.is_recommended !== false 
-          ? "bg-brand-blue shadow-brand-blue/20"
-          : "bg-slate-400 shadow-slate-400/20"
-      )}>
-        {index + 1}
+      {/* Top right actions: Favorite Heart & Number Badge */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-1.5 z-10">
+        {onToggleFavoritePro && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavoritePro(pro.id);
+            }}
+            className={cn(
+              "w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-sm active:scale-90",
+              favoriteProIds.includes(String(pro.id))
+                ? "bg-rose-50 text-rose-500 hover:bg-rose-100 ring-1 ring-rose-200"
+                : "bg-white/90 text-slate-400 hover:text-rose-500 hover:bg-rose-50 ring-1 ring-slate-200/80"
+            )}
+            title={favoriteProIds.includes(String(pro.id)) ? "Remove from favorite pros" : "Save pro to favorites"}
+          >
+            <Heart className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4", favoriteProIds.includes(String(pro.id)) && "fill-rose-500")} />
+          </button>
+        )}
+        <div className={cn(
+          "w-7 h-7 sm:w-8 sm:h-8 text-white rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-black shadow-lg transition-transform group-hover:scale-110 shrink-0",
+          pro.is_recommended !== false 
+            ? "bg-brand-blue shadow-brand-blue/20"
+            : "bg-slate-400 shadow-slate-400/20"
+        )}>
+          {index + 1}
+        </div>
       </div>
 
       {/* AI Match Score Badge (Fixed Position) */}
@@ -12372,7 +12503,22 @@ function DirectoryProCardItem({
   );
 }
 
-function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModalClose, scrollToTop, onProUpdate, currentUser, userProfile, blockedUsers = [], usersWhoBlockedMe = [], isActive = false }: { 
+function ExploreView({ 
+  allPros, 
+  onNavigate, 
+  initialProId, 
+  initialSearch, 
+  onModalClose, 
+  scrollToTop, 
+  onProUpdate, 
+  currentUser, 
+  userProfile, 
+  blockedUsers = [], 
+  usersWhoBlockedMe = [], 
+  isActive = false,
+  favoriteProIds = [],
+  onToggleFavoritePro
+}: { 
   allPros: Professional[], 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   initialProId?: string | null, 
@@ -12384,7 +12530,9 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
   userProfile?: any,
   blockedUsers?: string[],
   usersWhoBlockedMe?: string[],
-  isActive?: boolean
+  isActive?: boolean,
+  favoriteProIds?: string[],
+  onToggleFavoritePro?: (proId: string | number) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState(initialSearch || '');
@@ -12477,150 +12625,27 @@ function ExploreView({ allPros, onNavigate, initialProId, initialSearch, onModal
     setDeferredSearch(trimmed);
 
     try {
-      let data = null;
-      let serverFailed = false;
+      const response = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: trimmed, professionals: allPros }),
+      });
 
-      try {
-        const response = await fetch("/api/ai-search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: trimmed, professionals: allPros }),
-        });
-        
-        if (response.status === 404 || response.status === 405) {
-          serverFailed = true;
-        } else if (!response.ok) {
-          if (response.status === 429) {
-            throw new Error("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
-          }
-          try {
-            const errJson = await response.json();
-            if (errJson && errJson.error) {
-              throw new Error(errJson.error);
-            }
-          } catch (e: any) {
-            if (e.message && (e.message.includes("Jane is very busy") || e.message.includes("Jane est très sollicitée"))) {
-              throw e;
-            }
-          }
-          throw new Error("Sorry, an error occurred during AI search.");
-        } else {
-          data = await response.json();
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
         }
-      } catch (fetchErr) {
-        console.warn("[Search] Server search failed or is unavailable, attempting client fallback:", fetchErr);
-        serverFailed = true;
+        let errorMsg = "Sorry, an error occurred during AI search.";
+        try {
+          const errJson = await response.json();
+          if (errJson && errJson.error) {
+            errorMsg = errJson.error;
+          }
+        } catch (_) {}
+        throw new Error(errorMsg);
       }
 
-      if (serverFailed) {
-        // Fallback to client-side search using the client-side API key
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || '';
-        if (!apiKey) {
-          throw new Error("The server AI search service is busy or unavailable (Error 404). To use client-side AI search (e.g., on Vercel), please configure the VITE_GEMINI_API_KEY environment variable in your Vercel project settings.");
-        }
-
-        const ai = new GoogleGenAI({ apiKey });
-        
-        const proListBrief = allPros.map((p: any) => ({
-          id: String(p.id),
-          name: p.name,
-          company_name: p.company_name || "",
-          category: p.category || p.profession || "",
-          categories: p.categories || [],
-          bio: p.bio || p.description || "",
-          top_qualities: p.top_qualities || [],
-          languages: p.languages || [],
-          rating: p.rating || 0,
-          location: p.location || ""
-        }));
-
-        const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals.
-Your purpose is to examine the user's natural language request and return the most relevant matching professionals.
-
-Review the list of professionals provided and evaluate BOTH trade/service criteria AND location criteria:
-
-1. QUERY PARSING & SYNONYMS (CRITICAL):
-   - Trade / Profession Synonyms & Translations:
-     * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "hair salon", "barber" ALL match "Hairdresser", "Coiffeur", "Beauty & Wellness", or hair care services.
-     * "doctor", "physician", "médecin", "gp" ALL match Doctor/Medical services.
-     * "realtor", "real estate agent", "inmobiliaria" ALL match Real Estate / Property services.
-     * "plumber", "plombier", "fontanero" ALL match Plumbing services.
-     * Treat language translations (English, French, Spanish) and word variations (e.g., "hair dresser" vs "hairdresser") as EXACT trade matches!
-   - Location Matching:
-     * "Valencia area", "in Valencia", "around Valencia", "Valencia city" matches professionals located in Valencia or Valencia metropolitan/province towns (e.g. Valencia, La Eliana, Torrent, Paterna, etc.).
-
-2. SCORING & MATCHING RULES:
-   - DIRECT MATCH (Score 70-100): The professional matches BOTH requested trade/service (including synonyms/translations) AND requested location/area (or if no location was specified).
-     * Example: "hair dresser in valencia area" + hairdresser in Valencia => DIRECT MATCH (Score 80-100).
-   - ADJACENT / ALTERNATIVE MATCH (Score 15-45): The professional offers a closely related trade (e.g. general beauty salon for a hairdresser request), OR matches the trade in a neighboring distant town.
-   - UNRELATED OR WRONG LOCATION (Score 0): The professional has a completely unrelated trade OR is in a totally different distant city/country when a specific city was requested.
-
-3. "exactMatchFound" & "summaryMessage" RULES:
-   - CRITICAL: If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), you MUST set "exactMatchFound" to true, and set "summaryMessage" to null!
-   - Set "exactMatchFound" to false ONLY if NO professional in the directory directly matches both trade and location.
-   - If "exactMatchFound" is false:
-     * If there ARE alternative/adjacent professionals returned with score > 0:
-       - With specific trade and location (e.g. "plumber in La Eliana"): "We couldn't find a [trade] in [location] in our directory. Jane found some alternative options, but they may not meet all your criteria."
-       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory. Jane found some alternative options, but they may not meet all your criteria."
-     * If NO professionals match at all (all professionals have score 0):
-       - With specific trade and location: "We couldn't find a [trade] in [location] in our directory."
-       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory."
-
-4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).
- 
-5. PRIORITIZATION (CRITICAL):
-   - Professionals with "is_recommended: true" are community-vetted and MUST be prioritized over those with "is_recommended: false".
-   - If multiple professionals match the user's query well, those with "is_recommended: true" should receive a score bonus or be ranked higher than those with "is_recommended: false".
-   - A non-recommended professional should only have a higher score than a recommended one if they are a significantly better match for the specific trade or location requested.
-
-6. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
-   - Check if the user's query requests a specific spoken language (e.g. "qui parle français", "parlant français", "francophone", "french speaking", "speaking english", "anglais", "habla español", "spanish", "deutsch", "allemand", etc.).
-   - If a language is requested:
-     * FIRST PRIORITY: Check each professional's "languages" list for that language (handling translations like French/Français, English/Anglais, Spanish/Español, etc.).
-     * EXCLUSION RULE (CRITICAL): If AT LEAST ONE matching professional speaks the requested language:
-       - You MUST ONLY return professionals who speak that language (give them positive scores 70-100).
-       - You MUST give score: 0 to ANY professional who does NOT speak that language! (Do NOT include or suggest non-speakers when at least 1 speaker exists).
-       - Set exactMatchFound to true (if score >= 60).
-     * ONLY if NO professional in the directory speaks the requested language:
-       - You may return alternative professionals in that trade with lower scores (score 20-45).
-       - Set exactMatchFound to false, and in "summaryMessage" explain in the user's query language that no professional speaking that language was found for this service.`;
-
-        const response = await ai.models.generateContent({
-          model: "gemini-flash-latest",
-          contents: `User Query: "${trimmed}"
-
-Professionals:
-${JSON.stringify(proListBrief, null, 2)}`,
-          config: {
-            systemInstruction: sysInstruction,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
-                summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
-                results: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING, description: "The professional's ID as a string" },
-                      score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                      reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
-                    },
-                    required: ["id", "score", "reasonUrlExcerpt"]
-                  }
-                }
-              },
-              required: ["exactMatchFound", "results"]
-            },
-            temperature: 0.1
-          }
-        });
-
-        const parsedContent = JSON.parse(response.text || "{}");
-        data = parsedContent;
-      }
+      const data = await response.json();
 
       if (!data) {
         throw new Error("Could not retrieve search results.");
@@ -13472,6 +13497,8 @@ ${JSON.stringify(proListBrief, null, 2)}`,
                       aiResult={aiResults ? aiResults[String(pro.id)] : undefined}
                       userLocation={userLocation}
                       hasRealLocation={hasRealLocation}
+                      favoriteProIds={favoriteProIds}
+                      onToggleFavoritePro={onToggleFavoritePro}
                     />
                   );
                 })
@@ -14543,7 +14570,9 @@ function ProfessionalDetailView({
   currentUser, 
   userProfile,
   blockedUsers = [],
-  usersWhoBlockedMe = []
+  usersWhoBlockedMe = [],
+  favoriteProIds = [],
+  onToggleFavoritePro
 }: { 
   pro: Professional, 
   onClose: () => void, 
@@ -14552,7 +14581,9 @@ function ProfessionalDetailView({
   currentUser?: any, 
   userProfile?: any,
   blockedUsers?: string[],
-  usersWhoBlockedMe?: string[]
+  usersWhoBlockedMe?: string[],
+  favoriteProIds?: string[],
+  onToggleFavoritePro?: (id: string | number) => void
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAdmin = proService.isAdmin(currentUser?.email || "") || userProfile?.is_admin;
@@ -14777,6 +14808,24 @@ function ProfessionalDetailView({
         >
         {/* Top-right action buttons */}
         <div className="absolute top-4 right-4 md:top-6 md:right-7 flex items-center gap-2 z-20">
+          {onToggleFavoritePro && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavoritePro(pro.id);
+              }}
+              className={cn(
+                "p-2 rounded-full border shadow-2xs transition-all active:scale-95 flex items-center justify-center shrink-0 cursor-pointer",
+                favoriteProIds.includes(String(pro.id))
+                  ? "bg-rose-50 border-rose-200 text-rose-500"
+                  : "bg-white border-slate-200 text-slate-400 hover:text-rose-500 hover:bg-rose-50/50"
+              )}
+              title={favoriteProIds.includes(String(pro.id)) ? "Remove from favorite pros" : "Save pro to favorites"}
+            >
+              <Heart className={cn("w-4 h-4", favoriteProIds.includes(String(pro.id)) && "fill-rose-500")} />
+            </button>
+          )}
           {isAdmin && (
             <button 
               type="button"
@@ -17101,11 +17150,13 @@ function ProfileView({
   userProfile, 
   onProfileUpdate, 
   onAddPro, 
-  allPros, 
+  allPros = [], 
   refetchPros, 
   unreadConversations = [],
   favoriteEventIds = [],
   onToggleFavoriteEvent,
+  favoriteProIds = [],
+  onToggleFavoritePro,
   events = []
 }: { 
   scrollToTop?: () => void, 
@@ -17119,10 +17170,13 @@ function ProfileView({
   unreadConversations?: string[],
   favoriteEventIds?: string[],
   onToggleFavoriteEvent?: (id: string) => void,
+  favoriteProIds?: string[],
+  onToggleFavoritePro?: (id: string | number) => void,
   events?: Event[]
 }) {
   const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
   const [myAccountTab, setMyAccountTab] = useState<'profile' | 'favorites' | 'testimonies' | 'chats'>('favorites');
+  const [favSubTab, setFavSubTab] = useState<'pros' | 'events'>('pros');
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const userEmail = currentUser?.email || "";
@@ -17673,8 +17727,8 @@ function ProfileView({
                     <Heart className={cn("w-4 h-4", myAccountTab === 'favorites' && "fill-rose-500")} />
                   </div>
                   <div>
-                    <div className="text-lg font-black text-slate-800 leading-none">{favoriteEventIds.length}</div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Favorite Events</div>
+                    <div className="text-lg font-black text-slate-800 leading-none">{favoriteProIds.length + favoriteEventIds.length}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Favorites</div>
                   </div>
                 </button>
 
@@ -17734,86 +17788,207 @@ function ProfileView({
                     className="space-y-4"
                   >
                     <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
-                      <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+                      {/* Header and Sub-tabs */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-50 pb-4">
                         <div className="flex items-center gap-2">
                           <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />
-                          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Saved Events</h3>
+                          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Favorites</h3>
                         </div>
-                        <span className="text-xs font-extrabold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-full">{favoriteEventIds.length} Favorited</span>
-                      </div>
 
-                      {favoriteEventIds.length === 0 ? (
-                        <div className="py-12 text-center space-y-4">
-                          <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto text-rose-400">
-                            <Heart className="w-8 h-8" />
-                          </div>
-                          <div className="space-y-1">
-                            <p className="font-bold text-slate-800">No favorite events yet</p>
-                            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                              Browse upcoming concerts, workshops, and city tours, and click the heart icon to save them here!
-                            </p>
-                          </div>
+                        {/* Sub-tab pills */}
+                        <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl self-start sm:self-auto">
                           <button
-                            onClick={() => {
-                              setActiveSubPage(null);
-                              onNavigate?.('events');
-                            }}
-                            className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all cursor-pointer active:scale-95"
+                            type="button"
+                            onClick={() => setFavSubTab('pros')}
+                            className={cn(
+                              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                              favSubTab === 'pros'
+                                ? "bg-white text-slate-900 shadow-2xs font-extrabold"
+                                : "text-slate-500 hover:text-slate-800"
+                            )}
                           >
-                            Explore Events
+                            <User className="w-3.5 h-3.5 text-brand-blue" />
+                            <span>Professionals</span>
+                            <span className={cn(
+                              "text-[10px] px-1.5 py-0.2 rounded-full",
+                              favSubTab === 'pros' ? "bg-blue-50 text-brand-blue" : "bg-slate-200/60 text-slate-600"
+                            )}>{favoriteProIds.length}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFavSubTab('events')}
+                            className={cn(
+                              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                              favSubTab === 'events'
+                                ? "bg-white text-slate-900 shadow-2xs font-extrabold"
+                                : "text-slate-500 hover:text-slate-800"
+                            )}
+                          >
+                            <Calendar className="w-3.5 h-3.5 text-orange-500" />
+                            <span>Events</span>
+                            <span className={cn(
+                              "text-[10px] px-1.5 py-0.2 rounded-full",
+                              favSubTab === 'events' ? "bg-orange-50 text-orange-600" : "bg-slate-200/60 text-slate-600"
+                            )}>{favoriteEventIds.length}</span>
                           </button>
                         </div>
-                      ) : (
-                        <div className="divide-y divide-slate-100/80">
-                          {events?.filter(ev => favoriteEventIds.includes(ev.id)).map(event => {
-                            const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
-                            return (
-                              <div key={event.id} className="py-4 first:pt-0 last:pb-0 flex items-center gap-4 group">
-                                <img 
-                                  src={event.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=200'} 
-                                  alt="" 
-                                  className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-50 border border-slate-100" 
-                                  referrerPolicy="no-referrer"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <span className="text-[9px] font-extrabold uppercase tracking-widest text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100/50">
-                                    {event.category || 'Event'}
-                                  </span>
-                                  <h4 className="font-bold text-slate-900 group-hover:text-orange-500 transition-colors text-sm truncate mt-1.5">
-                                    {event.title}
-                                  </h4>
-                                  <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                                    <span>{formattedDate}</span>
-                                    {event.location && (
-                                      <>
-                                        <span className="text-slate-300">•</span>
-                                        <span className="truncate max-w-[150px]">{event.location}</span>
-                                      </>
-                                    )}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => {
-                                      setActiveSubPage(null);
-                                      onNavigate?.('events', { eventId: event.id });
-                                    }}
-                                    className="px-3.5 py-1.5 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
-                                  >
-                                    View
-                                  </button>
-                                  <button
-                                    onClick={() => onToggleFavoriteEvent?.(event.id)}
-                                    className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-                                    title="Remove favorite"
-                                  >
-                                    <Heart className="w-4 h-4 fill-rose-500" />
-                                  </button>
-                                </div>
+                      </div>
+
+                      {/* Content depending on favSubTab */}
+                      {favSubTab === 'pros' ? (
+                        <div>
+                          {favoriteProIds.length === 0 ? (
+                            <div className="py-12 text-center space-y-4">
+                              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto text-rose-400">
+                                <Heart className="w-8 h-8" />
                               </div>
-                            );
-                          })}
+                              <div className="space-y-1">
+                                <p className="font-bold text-slate-800">No favorite professionals saved yet</p>
+                                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                                  Browse verified local service providers, handymen, tutors, and tax advisors in Valencia and save your top recommendations here!
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setActiveSubPage(null);
+                                  onNavigate?.('explore');
+                                }}
+                                className="px-5 py-2.5 bg-brand-blue hover:bg-blue-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all cursor-pointer active:scale-95"
+                              >
+                                Explore Directory
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-slate-100/80">
+                              {allPros
+                                .filter(pro => favoriteProIds.includes(String(pro.id)))
+                                .map(pro => (
+                                  <div key={pro.id} className="py-4 first:pt-0 last:pb-0 flex items-center gap-4 group">
+                                    <div className="w-14 h-14 rounded-2xl bg-slate-100 overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center">
+                                      {pro.image ? (
+                                        <img src={pro.image} alt={pro.name} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <User className="w-6 h-6 text-slate-300" />
+                                      )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-brand-blue bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
+                                          {pro.category || 'Professional'}
+                                        </span>
+                                        {pro.rating && (
+                                          <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5">
+                                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                            {pro.rating}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-sm truncate mt-1">
+                                        {pro.name}
+                                      </h4>
+                                      {pro.company_name && (
+                                        <p className="text-xs text-slate-500 font-medium truncate">{pro.company_name}</p>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => {
+                                          setActiveSubPage(null);
+                                          onNavigate?.('explore', { proId: String(pro.id) });
+                                        }}
+                                        className="px-3.5 py-1.5 bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-brand-blue text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                      >
+                                        View
+                                      </button>
+                                      <button
+                                        onClick={() => onToggleFavoritePro?.(pro.id)}
+                                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
+                                        title="Remove favorite"
+                                      >
+                                        <Heart className="w-4 h-4 fill-rose-500" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          {favoriteEventIds.length === 0 ? (
+                            <div className="py-12 text-center space-y-4">
+                              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto text-rose-400">
+                                <Heart className="w-8 h-8" />
+                              </div>
+                              <div className="space-y-1">
+                                <p className="font-bold text-slate-800">No favorite events yet</p>
+                                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                                  Browse upcoming concerts, workshops, and city tours, and click the heart icon to save them here!
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setActiveSubPage(null);
+                                  onNavigate?.('events');
+                                }}
+                                className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all cursor-pointer active:scale-95"
+                              >
+                                Explore Events
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-slate-100/80">
+                              {events?.filter(ev => favoriteEventIds.includes(ev.id)).map(event => {
+                                const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
+                                return (
+                                  <div key={event.id} className="py-4 first:pt-0 last:pb-0 flex items-center gap-4 group">
+                                    <img 
+                                      src={event.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=200'} 
+                                      alt="" 
+                                      className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-50 border border-slate-100" 
+                                      referrerPolicy="no-referrer"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-[9px] font-extrabold uppercase tracking-widest text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100/50">
+                                        {event.category || 'Event'}
+                                      </span>
+                                      <h4 className="font-bold text-slate-900 group-hover:text-orange-500 transition-colors text-sm truncate mt-1.5">
+                                        {event.title}
+                                      </h4>
+                                      <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                        <span>{formattedDate}</span>
+                                        {event.location && (
+                                          <>
+                                            <span className="text-slate-300">•</span>
+                                            <span className="truncate max-w-[150px]">{event.location}</span>
+                                          </>
+                                        )}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => {
+                                          setActiveSubPage(null);
+                                          onNavigate?.('events', { eventId: event.id });
+                                        }}
+                                        className="px-3.5 py-1.5 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                      >
+                                        View
+                                      </button>
+                                      <button
+                                        onClick={() => onToggleFavoriteEvent?.(event.id)}
+                                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
+                                        title="Remove favorite"
+                                      >
+                                        <Heart className="w-4 h-4 fill-rose-500" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
