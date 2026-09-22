@@ -12060,8 +12060,49 @@ function DirectoryProCardItem({
         onToggleExpand();
       }}
     >
-      {/* Top right actions: Favorite Heart & Number Badge */}
+      {/* Top right actions: Favorite Heart, Share Button & Number Badge */}
       <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-1.5 z-10">
+        <button
+          type="button"
+          onClick={async (e) => {
+            e.stopPropagation();
+            const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
+            const shareData = {
+              title: pro.name,
+              text: pro.company_name || `Check out this professional on Unlocked Valencia: ${pro.name}!`,
+              url: shareUrl
+            };
+            
+            if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+              try {
+                await navigator.share(shareData);
+              } catch (err) {
+                console.warn('Share sheets failed or cancelled:', err);
+              }
+            } else {
+              try {
+                await navigator.clipboard.writeText(shareUrl);
+                setShared(true);
+                setTimeout(() => setShared(false), 2000);
+              } catch (err) {
+                console.error('Failed to copy share link:', err);
+              }
+            }
+          }}
+          className={cn(
+            "w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-sm active:scale-90",
+            shared
+              ? "bg-emerald-500 text-white ring-1 ring-emerald-500 scale-105"
+              : "bg-white/90 text-slate-400 hover:text-brand-blue hover:bg-blue-50 ring-1 ring-slate-200/80"
+          )}
+          title={shared ? "Link copied!" : "Share pro profile"}
+        >
+          {shared ? (
+            <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          ) : (
+            <ShareIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          )}
+        </button>
         {onToggleFavoritePro && (
           <button
             type="button"
@@ -12278,18 +12319,67 @@ function DirectoryProCardItem({
                       <Info className="w-3.5 h-3.5 text-brand-blue" />
                       <span>Detailed Information</span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleExpand();
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200/80 transition-all active:scale-95 shrink-0"
-                      title="Collapse details"
-                    >
-                      <ChevronUp className="w-4 h-4 text-slate-500" />
-                      <span>Collapse</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
+                          const shareData = {
+                            title: pro.name,
+                            text: pro.company_name || `Check out this professional on Unlocked Valencia: ${pro.name}!`,
+                            url: shareUrl
+                          };
+                          
+                          if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+                            try {
+                              await navigator.share(shareData);
+                            } catch (err) {
+                              console.warn('Share sheets failed or cancelled:', err);
+                            }
+                          } else {
+                            try {
+                              await navigator.clipboard.writeText(shareUrl);
+                              setShared(true);
+                              setTimeout(() => setShared(false), 2000);
+                            } catch (err) {
+                              console.error('Failed to copy share link:', err);
+                            }
+                          }
+                        }}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 shrink-0 cursor-pointer",
+                          shared
+                            ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
+                            : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80"
+                        )}
+                        title={shared ? "Link copied!" : "Share this professional"}
+                      >
+                        {shared ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Link copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <ShareIcon className="w-3.5 h-3.5 text-slate-600" />
+                            <span>Share</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleExpand();
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200/80 transition-all active:scale-95 shrink-0"
+                        title="Collapse details"
+                      >
+                        <ChevronUp className="w-4 h-4 text-slate-500" />
+                        <span>Collapse</span>
+                      </button>
+                    </div>
                   </div>
               {/* Direct Contact & Location Map Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/80 rounded-3xl p-6 border border-slate-200/80 relative overflow-hidden">
@@ -12485,7 +12575,53 @@ function DirectoryProCardItem({
                     )}
                   </div>
                 )}
-                <div className="pt-4 flex justify-center">
+                <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
+                      const shareData = {
+                        title: pro.name,
+                        text: pro.company_name || `Check out this professional on Unlocked Valencia: ${pro.name}!`,
+                        url: shareUrl
+                      };
+                      
+                      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+                        try {
+                          await navigator.share(shareData);
+                        } catch (err) {
+                          console.warn('Share sheets failed or cancelled:', err);
+                        }
+                      } else {
+                        try {
+                          await navigator.clipboard.writeText(shareUrl);
+                          setShared(true);
+                          setTimeout(() => setShared(false), 2000);
+                        } catch (err) {
+                          console.error('Failed to copy share link:', err);
+                        }
+                      }
+                    }}
+                    className={cn(
+                      "px-5 py-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xs border cursor-pointer",
+                      shared
+                        ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
+                        : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
+                    )}
+                  >
+                    {shared ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Link copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShareIcon className="w-4 h-4 text-slate-600" />
+                        <span>Share pro profile</span>
+                      </>
+                    )}
+                  </button>
                   <button
                     type="button"
                     onClick={(e) => {
