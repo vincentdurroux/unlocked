@@ -91,16 +91,23 @@ body,
   -webkit-user-select: none;
 }
 
-/* Enable momentum scrolling and prevent gesture freezes on mobile */
+/* Enable momentum scrolling and prevent WebKit GPU compositing / blank tile bugs on iOS and desktop */
 .overflow-y-auto {
-  -webkit-overflow-scrolling: touch !important;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
+  -webkit-overflow-scrolling: touch;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 .overflow-x-auto {
-  -webkit-overflow-scrolling: touch !important;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
+  -webkit-overflow-scrolling: touch;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Ensure main scrollable views and motion transitions paint reliably without dropping GPU render layers */
+main {
+  -webkit-overflow-scrolling: touch;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 /* Allow text selection in specific areas if needed, but default to none for native feel */

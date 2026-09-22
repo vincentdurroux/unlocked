@@ -2775,7 +2775,13 @@ export default function App() {
   useEffect(() => {
     if (mainRef.current) {
       // Scroll to top immediately when switching activeView
-      mainRef.current.scrollTo(0, 0);
+      mainRef.current.scrollTop = 0;
+      // Force repaint to prevent WebKit GPU blank tile bug
+      requestAnimationFrame(() => {
+        if (mainRef.current) {
+          mainRef.current.scrollTop = 0;
+        }
+      });
     }
   }, [activeView]);
 
