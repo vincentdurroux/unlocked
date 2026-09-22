@@ -3774,69 +3774,6 @@ export default function App() {
             />
           )}
         </AnimatePresence>
-        <AnimatePresence>
-          {initialProId && (() => {
-            const sharedPro = allPros.find(p => String(p.id) === String(initialProId));
-            if (!sharedPro) return null;
-            return (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[110] overflow-y-auto overscroll-contain touch-pan-y"
-                onClick={() => setInitialProId(null)}
-              >
-                <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 md:p-8">
-                  <motion.div 
-                    initial={{ scale: 0.95, opacity: 0, y: 15 }}
-                    animate={{ scale: 1, opacity: 1, y: 0 }}
-                    exit={{ scale: 0.95, opacity: 0, y: 15 }}
-                    className="w-full max-w-2xl bg-white rounded-3xl overflow-hidden shadow-2xl relative border border-slate-100"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* Header with Close Button */}
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                      <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-brand-blue animate-pulse" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Shared Professional Details</span>
-                      </div>
-                      <button 
-                        onClick={() => setInitialProId(null)}
-                        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
-                        title="Close details"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    {/* Content: DirectoryProCardItem */}
-                    <div className="p-4 sm:p-6 max-h-[80vh] overflow-y-auto overscroll-contain scrollbar-thin">
-                      <DirectoryProCardItem
-                        pro={sharedPro}
-                        index={0}
-                        isExpanded={true}
-                        onToggleExpand={() => setInitialProId(null)}
-                        currentUser={currentUser}
-                        userProfile={userProfile}
-                        blockedUsers={blockedUsers}
-                        usersWhoBlockedMe={usersWhoBlockedMe}
-                        onNavigate={(view, params) => {
-                          setInitialProId(null);
-                          handleNavigate(view, params);
-                        }}
-                        onProUpdate={refetchPros}
-                        userLocation={null}
-                        hasRealLocation={false}
-                        favoriteProIds={favoriteProIds}
-                        onToggleFavoritePro={toggleFavoritePro}
-                      />
-                    </div>
-                  </motion.div>
-                </div>
-              </motion.div>
-            );
-          })()}
-        </AnimatePresence>
       {activeView !== 'login' && <SEOFooter onNavigate={handleNavigate} />}
       </main>
 
@@ -13093,6 +13030,27 @@ function ExploreView({
       }
     }, 120);
   };
+
+  useEffect(() => {
+    if (initialProId) {
+      // Clear any search filter so the target pro is guaranteed to be in the filtered list
+      if (search || deferredSearch || aiResults !== null || selectedCategory !== 'All') {
+        setSearch('');
+        setDeferredSearch('');
+        setAiResults(null);
+        setSelectedCategory('All');
+      }
+      const pro = allPros.find(p => String(p.id) === String(initialProId));
+      if (pro) {
+        setExpandedProId(String(pro.id));
+        setTimeout(() => {
+          scrollToPro(pro);
+        }, 200);
+        // Clear initialProId from parent so tab switching back and forth works correctly
+        onModalClose?.();
+      }
+    }
+  }, [initialProId, allPros]);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(() => {
     try {
       const saved = localStorage.getItem('unlocked_user_location');
