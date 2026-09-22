@@ -1383,7 +1383,7 @@ export default function App() {
       initial = 'update-password';
     } else if (hasDeepLinkQuery) {
       if (searchParams.has('eventId')) initial = 'events';
-      else if (searchParams.has('proId')) initial = 'home';
+      else if (searchParams.has('proId')) initial = 'explore';
       else if (searchParams.has('guideId')) initial = 'guides';
     } else if (cleanHash && validViews.includes(cleanHash as View)) {
       initial = cleanHash as View;
@@ -1682,7 +1682,7 @@ export default function App() {
       setActiveView('events');
     } else if (proId) {
       setInitialProId(proId);
-      setActiveView('home');
+      setActiveView('explore');
     } else if (guideId) {
       setInitialGuideId(guideId);
       setActiveView('guides');
@@ -3009,8 +3009,6 @@ export default function App() {
                   onContactAdmin={handleContactAdmin}
                   favoriteProIds={favoriteProIds}
                   onToggleFavoritePro={toggleFavoritePro}
-                  initialProId={initialProId}
-                  onModalClose={() => setInitialProId(null)}
                 />
               </motion.div>
               <motion.div 
@@ -10473,9 +10471,7 @@ function HomeView({
   announcement,
   onContactAdmin,
   favoriteProIds = [],
-  onToggleFavoritePro,
-  initialProId,
-  onModalClose
+  onToggleFavoritePro
 }: { 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   allPros: Professional[], 
@@ -10504,9 +10500,7 @@ function HomeView({
   },
   onContactAdmin?: () => void,
   favoriteProIds?: string[],
-  onToggleFavoritePro?: (proId: string | number) => void,
-  initialProId?: string | null,
-  onModalClose?: () => void
+  onToggleFavoritePro?: (proId: string | number) => void
 }) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [localSearch, setLocalSearch] = useState('');
@@ -10519,31 +10513,12 @@ function HomeView({
   const [sec3Idx, setSec3Idx] = useState(0);
   const [sec4Idx, setSec4Idx] = useState(0);
 
-  const [expandedLandingProId, setExpandedLandingProId] = useState<string | null>(() => {
-    return initialProId ? String(initialProId) : null;
-  });
+  const [expandedLandingProId, setExpandedLandingProId] = useState<string | null>(null);
 
   const expandedLandingPro = useMemo(() => {
     if (!expandedLandingProId || !allPros) return null;
     return allPros.find(p => String(p.id) === String(expandedLandingProId)) || null;
   }, [expandedLandingProId, allPros]);
-
-  // Handle deep link pro expansion directly on landing page
-  useEffect(() => {
-    if (initialProId && allPros && allPros.length > 0) {
-      const targetPro = allPros.find(p => String(p.id) === String(initialProId));
-      if (targetPro) {
-        setExpandedLandingProId(String(initialProId));
-        setTimeout(() => {
-          const element = document.getElementById('landing-expanded-pro-section');
-          if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          }
-        }, 300);
-        onModalClose?.();
-      }
-    }
-  }, [initialProId, allPros, onModalClose]);
 
   const [selectedArticle, setSelectedArticle] = useState<any | null>(null);
 
@@ -18090,10 +18065,10 @@ function ProfileView({
                                               setExpandedFavProId(isExpanded ? null : String(pro.id));
                                             }}
                                             className={cn(
-                                              "px-3.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer border",
+                                              "px-3.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer",
                                               isExpanded 
-                                                ? "bg-brand-blue border-brand-blue text-white hover:bg-blue-600 shadow-sm"
-                                                : "bg-white border-brand-blue/40 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue"
+                                                ? "bg-brand-blue text-white hover:bg-blue-600 shadow-sm"
+                                                : "bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-brand-blue"
                                             )}
                                           >
                                             {isExpanded ? 'Close' : 'View'}
