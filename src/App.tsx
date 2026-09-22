@@ -12880,8 +12880,7 @@ function ExploreView({
       console.error("[Search] AI matching error:", err);
       const errMsg = err.message || "";
       const errorLower = errMsg.toLowerCase();
-      
-      const isQuotaError = 
+      if (
         errorLower.includes("quota") || 
         errorLower.includes("limit") || 
         errorLower.includes("exhausted") || 
@@ -12889,92 +12888,16 @@ function ExploreView({
         errorLower.includes("too many requests") ||
         errorLower.includes("sollicitée") ||
         errorLower.includes("busy") ||
-        errorLower.includes("rate limit");
-
-      if (isQuotaError) {
-        // AI is busy, try a smart English keyword/category fallback
-        const searchLower = trimmed.toLowerCase();
-        
-        // 1. Keyword fallback
-        const keywordMatches = (allPros || []).filter(pro => {
-          if (!pro) return false;
-          const name = (pro.name || "").toLowerCase();
-          const company = (pro.company_name || "").toLowerCase();
-          const bio = (pro.bio || "").toLowerCase();
-          const cats = [
-            ...(Array.isArray(pro.categories) ? pro.categories : []),
-            ...(typeof pro.category === 'string' ? pro.category.split(',') : [])
-          ].map(c => String(c).toLowerCase());
-
-          return name.includes(searchLower) || 
-                 company.includes(searchLower) || 
-                 bio.includes(searchLower) ||
-                 cats.some(c => c.includes(searchLower));
-        });
-
-        if (keywordMatches.length > 0) {
-          const results: Record<string, { score: number; reason: string }> = {};
-          keywordMatches.forEach(p => {
-            results[String(p.id)] = { 
-              score: 90, 
-              reason: "Matched via keywords (Jane is busy)" 
-            };
-          });
-          setAiResults(results);
-          setAiExactMatch(false);
-          setAiSummaryMessage(`Jane is currently at capacity, but I found ${keywordMatches.length} professional${keywordMatches.length > 1 ? 's' : ''} matching your keywords. Here are the results.`);
-          setAiError(null);
-        } else {
-          // 2. Category fallback (try to match query words to professional categories)
-          const queryWords = searchLower.split(/\s+/).filter(w => w.length > 2);
-          
-          // Find specific categories to suggest
-          const suggestedCats = allProfessions.filter(cat => 
-            queryWords.some(word => cat.toLowerCase().includes(word)) || 
-            searchLower.includes(cat.toLowerCase())
-          );
-
-          const categoryMatches = (allPros || []).filter(pro => {
-            if (!pro) return false;
-            const cats = [
-              ...(Array.isArray(pro.categories) ? pro.categories : []),
-              ...(typeof pro.category === 'string' ? pro.category.split(',') : [])
-            ].map(c => String(c).toLowerCase());
-            
-            return queryWords.some(word => cats.some(c => c.includes(word)));
-          });
-
-          if (categoryMatches.length > 0) {
-            const results: Record<string, { score: number; reason: string }> = {};
-            categoryMatches.forEach(p => {
-              results[String(p.id)] = { 
-                score: 75, 
-                reason: "Matched via related categories (Jane is busy)" 
-              };
-            });
-            setAiResults(results);
-            setAiExactMatch(false);
-            
-            let msg = "Jane is currently at capacity and no exact keyword matches were found.";
-            if (suggestedCats.length > 0) {
-              msg += ` However, you might find what you need by searching these categories: ${suggestedCats.slice(0, 3).join(", ")}.`;
-            } else {
-              msg += " I've suggested some professionals in related categories below.";
-            }
-            setAiSummaryMessage(msg);
-            setAiError(null);
-          } else {
-            // Ultimate fallback
-            setAiError("Jane is currently at capacity. Please try a different search or use the category filters above.");
-            setAiResults(null);
-          }
-        }
+        errorLower.includes("rate limit")
+      ) {
+        setAiError("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
       } else {
         setAiError(err.message || "Connection error with the AI service.");
-        setAiResults(null);
-        setAiExactMatch(true);
-        setAiSummaryMessage(null);
       }
+      // Fallback: clear AI results
+      setAiResults(null);
+      setAiExactMatch(true);
+      setAiSummaryMessage(null);
     } finally {
       setAiLoading(false);
       setIsSearching(false);
