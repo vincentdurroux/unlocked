@@ -4,6 +4,7 @@ import { parseProfessionalCSV, rowToPro, detectColumnMappings, parseEventCSV, de
 import { Logo } from './components/Logo';
 import { AdminAiEventSearch, getCategoryWithEmoji, parseDescriptionSections, renderFormattedContent } from './components/AdminAiEventSearch';
 import { AdminEventsManager } from './components/AdminEventsManager';
+import { AdminAnalytics } from './components/AdminAnalytics';
 import { 
   Home, 
   Search, 
@@ -100,7 +101,8 @@ import {
   UserCheck,
   ThumbsUp,
   ExternalLink,
-  Ticket
+  Ticket,
+  BarChart3
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
@@ -4686,7 +4688,7 @@ function AdminView({
 }) {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dashboardCategory, setDashboardCategory] = useState<'pros' | 'events' | 'testimonies' | 'reported_users' | 'highlights' | 'guides' | 'announcements'>('pros');
+  const [dashboardCategory, setDashboardCategory] = useState<'pros' | 'events' | 'testimonies' | 'reported_users' | 'highlights' | 'guides' | 'announcements' | 'analytics'>('pros');
   const [activeTab, setActiveTab ] = useState<'recommendations' | 'add_pro' | 'edit_pro' | 'add_event' | 'edit_event' | 'all_events' | 'completed' | 'refused' | 'import_csv'>('recommendations');
   const [activeRecId, setActiveRecId] = useState<string | null>(null);
   const [editingProId, setEditingProId] = useState<string | null>(null);
@@ -6082,11 +6084,12 @@ function AdminView({
               dashboardCategory === 'highlights' ? 'Select which pro, event, article, and testimonial are highlighted on the Landing Page.' :
               dashboardCategory === 'guides' ? 'Manage articles, educational tips, and local expat guides.' :
               dashboardCategory === 'announcements' ? 'Publish and manage community announcements & IT updates.' :
+              dashboardCategory === 'analytics' ? 'Community analytics, new user sign-ups, and Supabase database metrics.' :
               'Moderate client reviews and testimonies.'}
            </h3>
         </div>
 
-        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-7 bg-slate-100/80 p-1.5 rounded-[22px] w-full border border-slate-200/50 gap-1.5">
+        <div className="grid grid-cols-2 xs:grid-cols-4 sm:grid-cols-4 md:grid-cols-8 bg-slate-100/80 p-1.5 rounded-[22px] w-full border border-slate-200/50 gap-1.5">
           <button 
             onClick={() => {
               setDashboardCategory('pros');
@@ -6174,7 +6177,19 @@ function AdminView({
             )}
           >
             <Megaphone className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span className="truncate">Announcements</span>
+            <span className="truncate">Announce</span>
+          </button>
+          <button 
+            onClick={() => {
+              setDashboardCategory('analytics');
+            }}
+            className={cn(
+              "px-1 py-3 rounded-[18px] text-[9px] sm:text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2",
+              dashboardCategory === 'analytics' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/50"
+            )}
+          >
+            <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="truncate">Analytics</span>
           </button>
         </div>
       </div>
@@ -9424,6 +9439,8 @@ function AdminView({
             </div>
           )}
         </div>
+      ) : dashboardCategory === 'analytics' ? (
+        <AdminAnalytics />
       ) : null}
 
       {/* Delete Confirmation Modal */}
