@@ -10563,10 +10563,10 @@ function HomeView({
             </div>
 
             <div className="space-y-4 md:space-y-6">
-              <h1 className="text-xl md:text-xl lg:text-2xl font-bold text-brand-navy leading-snug">
+              <h1 className="hidden md:block text-xl md:text-xl lg:text-2xl font-bold text-brand-navy leading-snug">
                 Looking for trusted <br className="hidden md:block" /> local recommendations?
               </h1>
-              <p className="text-slate-500 text-base md:text-base lg:text-lg leading-relaxed font-medium">
+              <p className="hidden md:block text-slate-500 text-base md:text-base lg:text-lg leading-relaxed font-medium">
                 From reliable pros to local events and visitor tips, you're in the right place.
               </p>
               <p className="text-brand-blue font-bold italic text-base md:text-base lg:text-lg transition-colors hover:text-brand-navy cursor-default">
@@ -10607,7 +10607,7 @@ function HomeView({
           <div className="text-left space-y-1">
             <h3 className="text-base md:text-xl font-bold text-brand-navy tracking-tight flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-brand-blue" />
-              <span className="text-brand-blue">What</span> are you looking for?
+              <span><span className="text-brand-blue">Find</span> a recommended pro with Jane</span>
             </h3>
             <p className="text-slate-500 text-xs md:text-sm leading-relaxed">
               Jane, your AI assistant, is here to help you find the right pro.
@@ -10620,11 +10620,8 @@ function HomeView({
               <div className="flex items-start gap-3">
                 <Sparkles className="w-4 h-4 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div className="flex-1 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-[10px] sm:text-[11px] font-extrabold text-brand-blue uppercase tracking-wider">
-                      Tell Jane what you need...
-                    </label>
-                    {janeSearch && (
+                  {janeSearch && (
+                    <div className="flex items-center justify-end">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -10636,8 +10633,8 @@ function HomeView({
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                   <textarea 
                     ref={janeInputRef}
                     rows={2}
