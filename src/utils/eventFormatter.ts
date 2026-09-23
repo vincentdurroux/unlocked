@@ -310,6 +310,50 @@ export function isEventInCurrentMonth(
 }
 
 /**
+ * Checks whether an event takes place in the current or next calendar month.
+ */
+export function isEventInCurrentOrNextMonth(
+  event: { start_date?: string | null; end_date?: string | null; date?: string | null },
+  referenceDate = new Date()
+): boolean {
+  if (isEventExpired(event, referenceDate)) return false;
+
+  const currentYear = referenceDate.getFullYear();
+  const currentMonth = referenceDate.getMonth(); // 0-indexed
+
+  // Next month calculation
+  const nextMonthDate = new Date(currentYear, currentMonth + 1, 1);
+  const targetYear = nextMonthDate.getFullYear();
+  const targetMonth = nextMonthDate.getMonth();
+
+  const s = getEventStartDate(event, currentYear);
+  const e = getEventEndDate(event, currentYear) || s;
+
+  // Range from start of current month to end of next month
+  const rangeStart = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
+  const rangeEnd = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+
+  if (s && e) {
+    return s.getTime() <= rangeEnd.getTime() && e.getTime() >= rangeStart.getTime();
+  }
+
+  // Fallback string matching
+  const padCurrentMonth = String(currentMonth + 1).padStart(2, '0');
+  const padNextMonth = String(targetMonth + 1).padStart(2, '0');
+  const raw = `${event.start_date || ''} ${event.end_date || ''} ${event.date || ''}`;
+  if (
+    raw.includes(`${currentYear}-${padCurrentMonth}`) || 
+    raw.includes(`${padCurrentMonth}/${currentYear}`) ||
+    raw.includes(`${targetYear}-${padNextMonth}`) || 
+    raw.includes(`${padNextMonth}/${targetYear}`)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Returns true if an event is completely in the past (expired).
  * An event is expired only if its end date is strictly before today (00:00:00).
  */

@@ -243,6 +243,24 @@ export function normalizeCategoryName(cat: string): string {
   return trimmed;
 }
 
+/**
+ * Safely extracts a clean UUID or numeric ID from raw query/share parameters,
+ * stripping any trailing promotional text, spaces, or newlines introduced by share sheets.
+ */
+export function extractCleanId(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const decoded = decodeURIComponent(raw).trim();
+  // 1. Check if contains a UUID
+  const uuidMatch = decoded.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  if (uuidMatch) return uuidMatch[0];
+  // 2. Check if starts with numeric ID
+  const numMatch = decoded.match(/^\d+/);
+  if (numMatch) return numMatch[0];
+  // 3. Fallback: take the first token before whitespace or newline
+  const token = decoded.split(/[\s\r\n]+/)[0];
+  return token || null;
+}
+
 const NOTIFICATION_ICONS = [
   { 
     id: 'dentist', 
@@ -1362,8 +1380,21 @@ export default function App() {
     const hash = window.location.hash;
     const cleanHash = hash.replace('#', '').split('?')[0]; // Remove hash symbol and query params
     const pathname = window.location.pathname.replace(/^\/|\/$/g, ''); // Remove leading/trailing slashes
+    let hashSearch = '';
+    if (window.location.hash.includes('?')) {
+      hashSearch = window.location.hash.substring(window.location.hash.indexOf('?'));
+    }
     const searchParams = new URLSearchParams(window.location.search);
-    const hasDeepLinkQuery = searchParams.has('eventId') || searchParams.has('proId') || searchParams.has('guideId');
+    const hashParams = new URLSearchParams(hashSearch);
+
+    const rawEventId = searchParams.get('eventId') || hashParams.get('eventId');
+    const cleanEventId = extractCleanId(rawEventId);
+    const rawProId = searchParams.get('proId') || hashParams.get('proId');
+    const cleanProId = extractCleanId(rawProId);
+    const rawGuideId = searchParams.get('guideId') || hashParams.get('guideId');
+    const cleanGuideId = extractCleanId(rawGuideId);
+
+    const hasDeepLinkQuery = Boolean(cleanEventId || cleanProId || cleanGuideId);
 
     const validViews: View[] = [
       'home', 'explore', 'events', 'guides', 'profile', 'community', 'marketplace', 
@@ -1383,9 +1414,9 @@ export default function App() {
     } else if (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
       initial = 'update-password';
     } else if (hasDeepLinkQuery) {
-      if (searchParams.has('eventId')) initial = 'events';
-      else if (searchParams.has('proId')) initial = 'explore';
-      else if (searchParams.has('guideId')) initial = 'guides';
+      if (cleanEventId) initial = 'events';
+      else if (cleanProId) initial = 'explore';
+      else if (cleanGuideId) initial = 'guides';
     } else if (cleanHash && validViews.includes(cleanHash as View)) {
       initial = cleanHash as View;
     } else if (pathname && validViews.includes(pathname as View)) {
@@ -1416,9 +1447,33 @@ export default function App() {
   }, [activeView]);
   const [previousView, setPreviousView] = useState<View>('home');
   const [authLoading, setAuthLoading] = useState(true);
-  const [initialEventId, setInitialEventId] = useState<string | null>(() => localStorage.getItem('unlocked_initial_event_id'));
-  const [initialProId, setInitialProId] = useState<string | null>(() => localStorage.getItem('unlocked_initial_pro_id'));
-  const [initialGuideId, setInitialGuideId] = useState<string | null>(() => localStorage.getItem('unlocked_initial_guide_id'));
+  const [initialEventId, setInitialEventId] = useState<string | null>(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const hp = window.location.hash.includes('?') ? new URLSearchParams(window.location.hash.substring(window.location.hash.indexOf('?'))) : null;
+      const clean = extractCleanId(p.get('eventId') || hp?.get('eventId'));
+      if (clean) return clean;
+    } catch (_) {}
+    return localStorage.getItem('unlocked_initial_event_id');
+  });
+  const [initialProId, setInitialProId] = useState<string | null>(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const hp = window.location.hash.includes('?') ? new URLSearchParams(window.location.hash.substring(window.location.hash.indexOf('?'))) : null;
+      const clean = extractCleanId(p.get('proId') || hp?.get('proId'));
+      if (clean) return clean;
+    } catch (_) {}
+    return localStorage.getItem('unlocked_initial_pro_id');
+  });
+  const [initialGuideId, setInitialGuideId] = useState<string | null>(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const hp = window.location.hash.includes('?') ? new URLSearchParams(window.location.hash.substring(window.location.hash.indexOf('?'))) : null;
+      const clean = extractCleanId(p.get('guideId') || hp?.get('guideId'));
+      if (clean) return clean;
+    } catch (_) {}
+    return localStorage.getItem('unlocked_initial_guide_id');
+  });
   const [initialChat, setInitialChat] = useState<any | null>(() => {
     try {
       const saved = localStorage.getItem('unlocked_initial_chat');
@@ -1674,18 +1729,21 @@ export default function App() {
     }
     const hashParams = new URLSearchParams(hashSearch);
 
-    const eventId = params.get('eventId') || hashParams.get('eventId');
-    const proId = params.get('proId') || hashParams.get('proId');
-    const guideId = params.get('guideId') || hashParams.get('guideId');
+    const rawEventId = params.get('eventId') || hashParams.get('eventId');
+    const cleanEventId = extractCleanId(rawEventId);
+    const rawProId = params.get('proId') || hashParams.get('proId');
+    const cleanProId = extractCleanId(rawProId);
+    const rawGuideId = params.get('guideId') || hashParams.get('guideId');
+    const cleanGuideId = extractCleanId(rawGuideId);
 
-    if (eventId) {
-      setInitialEventId(eventId);
+    if (cleanEventId) {
+      setInitialEventId(cleanEventId);
       setActiveView('events');
-    } else if (proId) {
-      setInitialProId(proId);
+    } else if (cleanProId) {
+      setInitialProId(cleanProId);
       setActiveView('explore');
-    } else if (guideId) {
-      setInitialGuideId(guideId);
+    } else if (cleanGuideId) {
+      setInitialGuideId(cleanGuideId);
       setActiveView('guides');
     }
   }, []);
@@ -2505,9 +2563,21 @@ export default function App() {
       }
     }
 
-    if (params?.eventId) setInitialEventId(params.eventId);
-    if (params?.proId) setInitialProId(params.proId);
-    if (params?.guideId) setInitialGuideId(params.guideId);
+    if (params?.eventId) {
+      setInitialEventId(params.eventId);
+    } else {
+      setInitialEventId(null);
+    }
+    if (params?.proId) {
+      setInitialProId(params.proId);
+    } else {
+      setInitialProId(null);
+    }
+    if (params?.guideId) {
+      setInitialGuideId(params.guideId);
+    } else {
+      setInitialGuideId(null);
+    }
     if (params?.searchQuery) setInitialSearch(params.searchQuery);
     if (params?.chat) setInitialChat(params.chat);
     navigateTo(finalView);
@@ -2550,6 +2620,15 @@ export default function App() {
     }
     if (view !== activeView) {
       setPreviousView(activeView);
+    }
+    if (view !== 'events') {
+      setInitialEventId(null);
+    }
+    if (view !== 'guides') {
+      setInitialGuideId(null);
+    }
+    if (view !== 'explore') {
+      setInitialProId(null);
     }
     const currentIndex = mainNavIds.indexOf(activeView);
     const newIndex = mainNavIds.indexOf(view);
@@ -8920,7 +8999,7 @@ function AdminView({
                   {/* Emoji Quick Picker Toolbar */}
                   <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-100/90 rounded-xl border border-slate-200/70">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">Emojis:</span>
-                    {['✨', '📍', '💡', '🎯', '🏡', '🏖️', '🌳', '������', '☕', '🍷', '🥘', '🎨', '🎭', '🎶', '🚇', '📋', '🏥', '👨‍👩‍👧', '🐾', '💶', '🎟️', '🔗', '⭐', '🤝'].map(emoji => (
+                    {['✨', '📍', '💡', '🎯', '🏡', '🏖️', '🌳', '🥐', '☕', '🍷', '🥘', '🎨', '🎭', '🎶', '🚇', '📋', '🏥', '👨‍👩‍👧', '🐾', '💶', '🎟️', '🔗', '⭐', '🤝'].map(emoji => (
                       <button
                         key={emoji}
                         type="button"
@@ -11651,6 +11730,12 @@ function MapCenterController({ center, resetTrigger }: { center: { lat: number; 
         lastResetRef.current = resetTrigger;
       }
       map.panTo(center);
+      if (typeof map.getZoom === 'function') {
+        const currentZoom = map.getZoom() || 13;
+        if (currentZoom < 14) {
+          map.setZoom(14);
+        }
+      }
     }
   }, [map, center, resetTrigger]);
 
@@ -12070,7 +12155,6 @@ function DirectoryProCardItem({
             const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
             const shareData = {
               title: pro.name,
-              text: pro.company_name || `Check out this professional on Unlocked Valencia: ${pro.name}!`,
               url: shareUrl
             };
             
@@ -12328,7 +12412,6 @@ function DirectoryProCardItem({
                           const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
                           const shareData = {
                             title: pro.name,
-                            text: pro.company_name || `Check out this professional on Unlocked Valencia: ${pro.name}!`,
                             url: shareUrl
                           };
                           
@@ -12584,7 +12667,6 @@ function DirectoryProCardItem({
                       const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
                       const shareData = {
                         title: pro.name,
-                        text: pro.company_name || `Check out this professional on Unlocked Valencia: ${pro.name}!`,
                         url: shareUrl
                       };
                       
@@ -12734,7 +12816,7 @@ function ExploreView({
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiQuery, setAiQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<'standard' | 'ai'>('ai');
+  const [searchMode, setSearchMode] = useState<'standard' | 'ai'>(() => initialProId ? 'standard' : 'ai');
 
   useEffect(() => {
     // If the input gets cleared, instantly reset all AI search filters
@@ -12931,7 +13013,20 @@ function ExploreView({
   }, [initialSearch]);
 
 
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => {
+    if (initialProId && allPros && allPros.length > 0) {
+      const cleanId = extractCleanId(String(initialProId));
+      const found = allPros.find(p => String(p.id) === cleanId);
+      if (found) {
+        const cats = [
+          ...(Array.isArray(found.categories) ? found.categories : []),
+          ...(typeof found.category === 'string' ? found.category.split(',') : [])
+        ].map(c => normalizeCategoryName(String(c))).filter(Boolean);
+        if (cats.length > 0) return cats[0];
+      }
+    }
+    return 'All';
+  });
 
   const scrollToResults = () => {
     setTimeout(() => {
@@ -12955,13 +13050,8 @@ function ExploreView({
 
   const [selectedLanguage, setSelectedLanguage] = useState('All');
   const [minRating, setMinRating] = useState(0);
-  const [expandedProId, setExpandedProId] = useState<string | number | null>(() => {
-    if (initialProId && allPros && allPros.length > 0) {
-      const found = allPros.find(p => String(p.id) === String(initialProId));
-      return found ? String(found.id) : null;
-    }
-    return null;
-  });
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [expandedProId, setExpandedProId] = useState<string | number | null>(null);
 
   const allProfessions = useMemo(() => {
     const list = new Set<string>();
@@ -12990,48 +13080,72 @@ function ExploreView({
     return allProfessions.filter(cat => typeof cat === 'string' && cat.toLowerCase().includes(query));
   }, [allProfessions, search, searchMode]);
 
-  const scrollToPro = (pro: Professional) => {
-    setExpandedProId(String(pro.id));
+  const scrollToPro = (pro: Professional, expand: boolean = false) => {
+    if (expand) {
+      setExpandedProId(String(pro.id));
+    }
+    if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
+      setMapCenter({ lat: pro.coordinates.lat, lng: pro.coordinates.lng });
+      setMapCenterTrigger((prev) => prev + 1);
+    }
     setTimeout(() => {
       const element = document.getElementById(`pro-card-${pro.id}`);
       const mainContainer = document.querySelector('main');
-      if (element && mainContainer) {
-        const containerRect = mainContainer.getBoundingClientRect();
-        const targetRect = element.getBoundingClientRect();
-        const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
-        
-        const targetScrollTop = offset - (containerRect.height / 2) + (targetRect.height / 2);
-        mainContainer.scrollTo({
-          top: Math.max(0, targetScrollTop),
-          behavior: 'smooth'
-        });
-        window.scrollTo(0, 0);
+      if (element) {
+        if (mainContainer && mainContainer.scrollHeight > mainContainer.clientHeight) {
+          const containerRect = mainContainer.getBoundingClientRect();
+          const targetRect = element.getBoundingClientRect();
+          const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
+          const targetScrollTop = offset - (containerRect.height / 2) + (targetRect.height / 2);
+          mainContainer.scrollTo({
+            top: Math.max(0, targetScrollTop),
+            behavior: 'smooth'
+          });
+        } else {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
 
         // Add a temporary highlight effect
         element.classList.add('ring-4', 'ring-brand-blue/40', 'scale-[1.01]', 'z-20');
         setTimeout(() => {
           element.classList.remove('ring-4', 'ring-brand-blue/40', 'scale-[1.01]', 'z-20');
-        }, 2000);
+        }, 2500);
       }
-    }, 120);
+    }, 150);
   };
 
   useEffect(() => {
-    if (initialProId) {
-      // Clear any search filter so the target pro is guaranteed to be in the filtered list
-      if (search || deferredSearch || aiResults !== null || selectedCategory !== 'All') {
+    if (initialProId && allPros && allPros.length > 0) {
+      const cleanId = extractCleanId(String(initialProId));
+      if (!cleanId) return;
+      const pro = allPros.find(p => String(p.id) === cleanId);
+      if (pro) {
+        // 1. Find pro's category and select it
+        const proCats = [
+          ...(Array.isArray(pro.categories) ? pro.categories : []),
+          ...(typeof pro.category === 'string' ? pro.category.split(',') : [])
+        ].map(c => normalizeCategoryName(String(c))).filter(Boolean);
+
+        const targetCat = proCats.length > 0 ? proCats[0] : 'All';
+        setSelectedCategory(targetCat);
+        setSearchMode('standard');
         setSearch('');
         setDeferredSearch('');
         setAiResults(null);
-        setSelectedCategory('All');
-      }
-      const pro = allPros.find(p => String(p.id) === String(initialProId));
-      if (pro) {
-        setExpandedProId(String(pro.id));
+
+        // 2. Center map on this pro if coordinates exist
+        if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
+          setMapCenter({ lat: pro.coordinates.lat, lng: pro.coordinates.lng });
+          setMapCenterTrigger(prev => prev + 1);
+        }
+
+        // 3. Keep card non-opened and center view on it
+        setExpandedProId(null);
         setTimeout(() => {
-          scrollToPro(pro);
-        }, 200);
-        // Clear initialProId from parent so tab switching back and forth works correctly
+          scrollToPro(pro, false);
+        }, 250);
+
+        // Clear initialProId from parent so subsequent navigations are clean
         onModalClose?.();
       }
     }
@@ -13564,7 +13678,7 @@ function ExploreView({
                <ProMap 
                  pros={filteredPros} 
                  onSelectPro={(pro) => scrollToPro(pro)} 
-                 center={userLocation || { lat: 39.4699, lng: -0.3763 }} 
+                 center={mapCenter || userLocation || { lat: 39.4699, lng: -0.3763 }} 
                  resetTrigger={mapCenterTrigger}
                />
             </motion.div>
@@ -15023,7 +15137,6 @@ function ProfessionalDetailView({
               const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
               const shareData = {
                 title: pro.name,
-                text: pro.company_name || `Check out this verified professional on Unlocked Valencia: ${pro.name}!`,
                 url: shareUrl
               };
               

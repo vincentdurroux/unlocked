@@ -6,6 +6,7 @@ import {
   formatEventDate, 
   getCategoryBadges, 
   isEventInCurrentMonth, 
+  isEventInCurrentOrNextMonth,
   isEventExpired, 
   getEventStartDate 
 } from '../utils/eventFormatter';
@@ -42,35 +43,10 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
     const sortedActive = sortChronologically(active);
 
-    // 2. Events in the current calendar month
-    const thisMonthEvents = sortedActive.filter(e => isEventInCurrentMonth(e));
-
-    // If current calendar month has 2 or more events, display all of them
-    if (thisMonthEvents.length >= 2) {
-      return thisMonthEvents;
-    }
-
-    // If current calendar month has only 1 event, complement with upcoming events so it's not a single event
-    if (thisMonthEvents.length === 1) {
-      const remaining = sortedActive.filter(e => e.id !== thisMonthEvents[0].id);
-      return [...thisMonthEvents, ...remaining.slice(0, 5)];
-    }
-
-    // If 0 events in current calendar month:
-    // Look at the month of the first upcoming event (e.g. next month)
-    const firstEventDate = getEventStartDate(sortedActive[0]);
-    if (firstEventDate) {
-      const targetMonth = firstEventDate.getMonth();
-      const targetYear = firstEventDate.getFullYear();
-      
-      const targetMonthEvents = sortedActive.filter(e => {
-        const s = getEventStartDate(e, targetYear);
-        return s && s.getMonth() === targetMonth && s.getFullYear() === targetYear;
-      });
-
-      if (targetMonthEvents.length >= 2) {
-        return targetMonthEvents;
-      }
+    // 2. Events in the current calendar month and next calendar month
+    const currentAndNextEvents = sortedActive.filter(e => isEventInCurrentOrNextMonth(e));
+    if (currentAndNextEvents.length > 0) {
+      return currentAndNextEvents;
     }
 
     // Fallback: take all active upcoming events (up to 8)

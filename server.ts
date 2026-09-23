@@ -132,7 +132,7 @@ async function startServer() {
     },
     customModels?: string[]
   ): Promise<any> => {
-    const models = customModels || ["gemini-3.8-flash", "gemini-flash-latest"];
+    const models = customModels || ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"];
     let lastError: any = null;
 
     for (const modelName of models) {
@@ -242,10 +242,32 @@ async function startServer() {
 
     try {
       const qLower = query.toLowerCase().trim();
+      const queryWords = qLower.split(/\s+/).filter(w => w.length > 2);
 
-      // Pre-filter candidate professionals if directory is large, ensuring ALL matching trade pros (both recommended and google) are included
-      // Map professionals list with only relevant fields
-      const proListBrief = professionals.map((p: any) => ({
+      // FAST PRE-FILTERING: To improve speed and reduce token cost, we pre-filter the directory
+      // to find candidates that have ANY keyword match in their name, category, or bio.
+      // This significantly improves "Jane's" accuracy by providing a cleaner context to the AI.
+      let candidates = professionals.filter((p: any) => {
+        const name = (p.name || "").toLowerCase();
+        const cat = (p.category || p.profession || "").toLowerCase();
+        const cats = (p.categories || []).map((c: any) => String(c).toLowerCase());
+        const bio = (p.bio || p.description || "").toLowerCase();
+        const combined = `${name} ${cat} ${cats.join(" ")} ${bio}`;
+
+        // Match if query words or the whole query exists in the combined string
+        return queryWords.some(word => combined.includes(word)) || combined.includes(qLower);
+      });
+
+      // If pre-filtering was too aggressive (0 results), fall back to a larger pool or all
+      if (candidates.length === 0) {
+        candidates = professionals.slice(0, 50); // Fallback to first 50 if no keyword match
+      } else if (candidates.length > 50) {
+        // If still too many, prioritize recommended ones
+        candidates = candidates.sort((a: any, b: any) => (b.is_recommended ? 1 : 0) - (a.is_recommended ? 1 : 0)).slice(0, 50);
+      }
+
+      // Map candidates list with only relevant fields
+      const proListBrief = candidates.map((p: any) => ({
         id: String(p.id),
         name: p.name,
         company_name: p.company_name || "",
@@ -333,7 +355,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           },
           temperature: 0.1
         }
-      });
+      }, ["gemini-1.5-flash"]);
 
       const parsedData = JSON.parse(response.text || "{}");
       let results: any[] = [];
@@ -453,13 +475,35 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     }
 
     try {
+      const qLower = query.toLowerCase().trim();
+      const queryWords = qLower.split(/\s+/).filter(w => w.length > 2);
+
+      // FAST PRE-FILTERING for events
+      let candidates = events.filter((ev: any) => {
+        const title = (ev.title || "").toLowerCase();
+        const cat = (ev.category || "").toLowerCase();
+        const desc = (ev.description || "").toLowerCase();
+        const loc = (ev.location || "").toLowerCase();
+        const combined = `${title} ${cat} ${desc} ${loc}`;
+
+        return queryWords.some(word => combined.includes(word)) || combined.includes(qLower);
+      });
+
+      // If pre-filtering was too aggressive, fallback to a slice or sample
+      if (candidates.length === 0) {
+        candidates = events.slice(0, 60);
+      } else if (candidates.length > 60) {
+        // Limit to 60 for context window efficiency, but now they are *relevant* 60
+        candidates = candidates.slice(0, 60);
+      }
+
       const today = new Date();
       const todayISO = today.toISOString().split('T')[0]; // e.g. "2026-09-20"
       const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
       const dayName = daysOfWeek[today.getDay()];
       const currentDateContext = `Reference Today Date: ${todayISO} (${dayName}). Current Year: ${today.getFullYear()}.`;
 
-      const eventListBrief = events.slice(0, 60).map((ev: any) => {
+      const eventListBrief = candidates.map((ev: any) => {
         const startDate = ev.start_date || ev.date || "";
         const endDate = ev.end_date || "";
         const timeStr = ev.start_time || ev.time || "";
@@ -689,7 +733,7 @@ FOR EACH REAL EVENT FOUND:
       const ai = getAiClient();
 
       // Candidate models for search: primary model with Google Search grounding, followed by resilient fallbacks (excluding 3.1 flash lite)
-      const defaultChain = ["gemini-3.8-flash", "gemini-flash-latest"];
+      const defaultChain = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"];
       const candidateModels: string[] = [];
       if (preferredModel && preferredModel !== "auto" && typeof preferredModel === "string") {
         candidateModels.push(preferredModel);
