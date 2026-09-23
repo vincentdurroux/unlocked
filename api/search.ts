@@ -107,106 +107,162 @@ export async function processSearch(query: string, professionals: any[]) {
     },
   });
 
+  // Compact pro representation to keep prompt tokens well below free-tier TPM limits
+  // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
   const proListBrief = professionals.map((p: any) => ({
     id: String(p.id),
     name: p.name,
     company_name: p.company_name || "",
     category: p.category || p.profession || "",
-    categories: p.categories || [],
-    bio: p.bio || p.description || "",
-    top_qualities: p.top_qualities || [],
+    categories: p.categories || (typeof p.profession === "string" ? p.profession.split(",").map((s: string) => s.trim()) : []),
+    bio: (p.bio || p.description || "").slice(0, 180),
+    top_qualities: (p.top_qualities || []).slice(0, 3),
     languages: p.languages || [],
-    rating: p.rating || 0,
     location: p.location || "",
     is_recommended: p.is_recommended ?? true
   }));
 
-  const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a premier community-curated directory of recommended local professionals.
-Your purpose is to examine the user's natural language request and return the most relevant matching professionals.
+  const sysInstruction = `You are an expert matching AI assistant ("Jane") for "Unlocked" - a community-curated directory of verified local professionals in Valencia, Spain.
+Your purpose is to deeply understand the user's natural language request and match ALL relevant professionals from the directory.
 
-Review the list of professionals provided and evaluate BOTH trade/service criteria AND location criteria:
+EVALUATION CRITERIA:
 
-1. QUERY PARSING & SYNONYMS (CRITICAL):
-   - Trade / Profession Synonyms & Translations:
-     * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "hair salon", "barber" ALL match "Hairdresser", "Coiffeur", "Beauty & Wellness", or hair care services.
-     * "doctor", "physician", "médecin", "gp" ALL match Doctor/Medical services.
-     * "realtor", "real estate agent", "inmobiliaria" ALL match Real Estate / Property services.
-     * "plumber", "plombier", "fontanero" ALL match Plumbing services.
-     * "I hurt my back", "back pain", "mal de dos" ALL match "Physiotherapist", "Osteopath", or "Chiropractor".
-     * Treat language translations (English, French, Spanish) and word variations (e.g., "hair dresser" vs "hairdresser") as EXACT trade matches!
+1. STRICT RULE ON REVIEWS & RATINGS (CRITICAL):
+   - Reviews left by users, review counts, or ratings MUST NEVER bring more match points or higher match scores.
+   - The match score evaluates PURELY the objective professional relevance between the user's need/symptom/trade/location/language and what the professional does.
+   - A professional with zero reviews or newly added must receive the exact same match score as any other professional if their specialty matches the user's request.
+
+2. SYMPTOM, NEED & MULTI-DISCIPLINE MATCHING (CRITICAL):
+   When the user expresses a symptom, physical issue, project, or general need (rather than naming a single job title):
+   - You MUST identify and include ALL relevant professions/trades in the directory that can legitimately address that issue.
+   - For MUSCULOSKELETAL / BACK / BODY PAIN ("I hurt my back", "mal de dos", "back pain", "sciatica", "neck pain", "hernia", "muscle soreness"):
+     * Do NOT arbitrarily limit results to only Chiropractors!
+     * You MUST match and return ALL relevant health disciplines present in the directory:
+       - Physiotherapists (Physiotherapy, Kinésithérapeute, Fisioterapia)
+       - Osteopaths (Osteopathy, Ostéopathe)
+       - Chiropractors (Chiropractic, Chiropracteur)
+       - General Practitioners / Doctors / Sports Medicine (Doctor, Physician, Médecin, Médico)
+       - Medical Acupuncture / Therapeutic Massage specialists (if applicable to pain recovery)
+     * All of these disciplines qualify as DIRECT HIGH MATCHES (Score 75-95).
+   - For STRESS / MENTAL WELLNESS ("feeling anxious", "burnout", "mental health"):
+     * Match Psychologists, Therapists, Counselors, Life Coaches, and Mind-Body practitioners.
+   - For HOME LEAKS & RENOVATIONS ("water leak", "fuite d'eau", "renovating bathroom", "kitchen work"):
+     * Match Plumbers, Handymen/Manitas, Electricians, Masons, Tile specialists, or General Contractors. (Never match wellness or lymphatic drainage with water plumbing).
+   - For MOVING & RELOCATION ("moving to Valencia", "déménagement"):
+     * Match Movers, Real Estate Agents, Relocation Gestors/Specialists, Handymen.
+   - For LEGAL & BUSINESS CREATION ("starting a business", "autonomo", "taxes", "visa"):
+     * Match Lawyers (Abogados/Avocats), Gestors/Gestorías, Tax Advisors, Accountants (Comptables).
+   - For DENTAL PAIN / TEETH:
+     * Match Dentists, Orthodontists, Oral Surgeons.
+
+2. QUERY PARSING, SYNONYMS & TRANSLATIONS:
+   - Always recognize synonyms and translations across English, French, Spanish, and Catalan:
+     * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "barber" ALL match Hairdresser/Barber/Beauty.
+     * "doctor", "physician", "médecin", "gp", "médico" ALL match Medical/Doctor services.
+     * "realtor", "real estate agent", "inmobiliaria", "agent immobilier" ALL match Real Estate.
+     * "plumber", "plombier", "fontanero" ALL match Plumbing.
    - Location Matching:
-     * "Valencia area", "in Valencia", "around Valencia", "Valencia city" matches professionals located in Valencia or Valencia metropolitan/province towns (e.g. Valencia, La Eliana, Torrent, Paterna, etc.).
+     * "Valencia", "in Valencia", "around Valencia", "Valencia area" matches Valencia city and its metropolitan area (Ruzafa, Carmen, Campanar, Alboraya, Paterna, Torrent, La Eliana, Betera, etc.).
 
-2. SCORING & MATCHING RULES:
-   - DIRECT MATCH (Score 70-100): The professional matches BOTH requested trade/service (including synonyms/translations) AND requested location/area (or if no location was specified).
-     * Example: "hair dresser in valencia area" + hairdresser in Valencia => DIRECT MATCH (Score 80-100).
-   - ADJACENT / ALTERNATIVE MATCH (Score 15-45): The professional offers a closely related trade (e.g. general beauty salon for a hairdresser request), OR matches the trade in a neighboring distant town.
-   - UNRELATED OR WRONG LOCATION (Score 0): The professional has a completely unrelated trade OR is in a totally different distant city/country when a specific city was requested.
+3. COMPREHENSIVE RESULTS:
+   - Return ALL qualifying professionals in the provided directory whose skills match the need.
+   - Do NOT stop after 1 or 2 entries if more matching professionals are available.
+   - DIRECT MATCH (Score 70-100): Matches requested trade/discipline and location.
+   - ADJACENT / ALTERNATIVE (Score 20-50): Neighboring service or town.
+   - UNRELATED (Score 0): Omit or score 0.
 
-3. "exactMatchFound" & "summaryMessage" RULES:
-   - CRITICAL: If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), you MUST set "exactMatchFound" to true, and set "summaryMessage" to null!
-   - Set "exactMatchFound" to false ONLY if NO professional in the directory directly matches both trade and location.
-   - If "exactMatchFound" is false:
-     * If there ARE alternative/adjacent professionals returned with score > 0:
-       - With specific trade and location (e.g. "plumber in La Eliana"): "We couldn't find a [trade] in [location] in our directory. Jane found some alternative options, but they may not meet all your criteria."
-       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory. Jane found some alternative options, but they may not meet all your criteria."
-     * If NO professionals match at all (all professionals have score 0):
-       - With specific trade and location: "We couldn't find a [trade] in [location] in our directory."
-       - Without specific location: "We couldn't find an exact match for '[user request]' in our directory."
+4. PRIORITIZATION:
+   - Community-vetted professionals (is_recommended: true) should receive a slight score boost (e.g. 85-95) over Google-sourced listings (is_recommended: false, scored 70-80).
+   - Both recommended and non-recommended pros must be returned if they match.
 
-4. Under "reasonUrlExcerpt" for each professional with score > 0, write a single concise sentence in ENGLISH clarifying why they matched (mentioning their trade and location).
- 
-5. PRIORITIZATION (CRITICAL):
-   - Professionals with "is_recommended: true" are community-vetted and MUST be prioritized over those with "is_recommended: false".
-   - If multiple professionals match the user's query well, those with "is_recommended: true" should receive a score bonus or be ranked higher than those with "is_recommended: false".
-   - A non-recommended professional should only have a higher score than a recommended one if they are a significantly better match for the specific trade or location requested.
+5. "exactMatchFound" & "summaryMessage":
+   - If at least one professional has score >= 60: set "exactMatchFound" to true, and "summaryMessage" to null!
+   - Set "exactMatchFound" to false ONLY if no professional matches the request. In that case, explain briefly in the user's query language what was found.
 
-6. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
-   - Check if the user's query requests a specific spoken language (e.g. "qui parle français", "parlant français", "francophone", "french speaking", "speaking english", "anglais", "habla español", "spanish", "deutsch", "allemand", etc.).
-   - If a language is requested:
-     * FIRST PRIORITY: Check each professional's "languages" list for that language (handling translations like French/Français, English/Anglais, Spanish/Español, etc.).
-     * EXCLUSION RULE (CRITICAL): If AT LEAST ONE matching professional speaks the requested language:
-       - You MUST ONLY return professionals who speak that language (give them positive scores 70-100).
-       - You MUST give score: 0 to ANY professional who does NOT speak that language! (Do NOT include or suggest non-speakers when at least 1 speaker exists).
-       - Set exactMatchFound to true (if score >= 60).
-     * ONLY if NO professional in the directory speaks the requested language:
-       - You may return alternative professionals in that trade with lower scores (score 20-45).
-       - Set exactMatchFound to false, and in "summaryMessage" explain in the user's query language that no professional speaking that language was found for this service.`;
+6. Under "reasonUrlExcerpt" for each matched professional, write a concise sentence explaining why they are recommended for this specific problem (e.g. "Physiotherapist specialized in spine rehabilitation and back pain", "Osteopath offering gentle postural realignment").
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3.1-flash-lite",
-    contents: `User Query: "${query}"
+7. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
+   - If the query explicitly asks for a language (e.g. "qui parle français", "french speaking", "habla español", etc.):
+     * If matching pros speak that language, ONLY return those who speak it (score 75-100) and omit non-speakers.
+     * If none speak it, return other matching pros with lower scores and explain in summaryMessage.`;
+
+  // Resilient multi-model fallback chain with exponential backoff:
+  // 1. gemini-3.1-flash-lite: Highest daily request limit (1,000-1,500 RPD) & lowest latency
+  // 2. gemini-flash-latest: Independent daily quota pool
+  // 3. gemini-3.8-flash: Third independent quota pool
+  const candidateModels = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+  let lastError: any = null;
+  let responseText = "";
+
+  for (const modelName of candidateModels) {
+    let attempts = 0;
+    const maxAttempts = 2;
+    let delayMs = 1000;
+
+    while (attempts < maxAttempts) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: `User Query: "${query}"
 
 Professionals:
-${JSON.stringify(proListBrief, null, 2)}`,
-    config: {
-      systemInstruction: sysInstruction,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
-          summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
-          results: {
-            type: Type.ARRAY,
-            items: {
+${JSON.stringify(proListBrief)}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: "application/json",
+            responseSchema: {
               type: Type.OBJECT,
               properties: {
-                id: { type: Type.STRING, description: "The professional's ID as a string" },
-                score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service/symptom, false if not." },
+                summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
+                results: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING, description: "The professional's ID as a string" },
+                      score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
+                      reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                    },
+                    required: ["id", "score", "reasonUrlExcerpt"]
+                  }
+                }
               },
-              required: ["id", "score", "reasonUrlExcerpt"]
-            }
+              required: ["exactMatchFound", "results"]
+            },
+            temperature: 0.1
           }
-        },
-        required: ["exactMatchFound", "results"]
-      },
-      temperature: 0.1
-    }
-  });
+        });
 
-  const parsedData = JSON.parse(response.text || "{}");
+        if (response && response.text) {
+          responseText = response.text;
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        attempts++;
+        const isQuota = isQuotaOrRateLimitError(err);
+        console.warn(`[api/search] Model ${modelName} attempt ${attempts} failed (quota: ${isQuota}):`, err?.message || err);
+
+        if (isQuota && attempts < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          delayMs *= 2;
+        } else {
+          break; // Try next fallback model
+        }
+      }
+    }
+
+    if (responseText) {
+      break; // Successfully generated content
+    }
+  }
+
+  if (!responseText) {
+    throw lastError || new Error("All AI matching models failed to generate a response.");
+  }
+
+  const parsedData = JSON.parse(responseText || "{}");
   let results: any[] = [];
   let exactMatchFound = true;
   let summaryMessage: string | null = null;

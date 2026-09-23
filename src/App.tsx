@@ -12862,12 +12862,29 @@ function ExploreView({
     setAiError(null);
     setAiQuery(trimmed);
     setDeferredSearch(trimmed);
+    // Ensure all disciplines matched by Jane (physio, osteo, doctor, etc.) can be displayed
+    setSelectedCategory('All');
+
+    // Create a compact payload to avoid sending large images/reviews over the wire and blowing Gemini token limits
+    // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
+    const compactPros = (allPros || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      company_name: p.company_name || "",
+      category: p.category || p.profession || "",
+      categories: p.categories || (typeof p.profession === 'string' ? p.profession.split(',').map((s: string) => s.trim()) : []),
+      bio: (p.bio || p.description || "").slice(0, 180),
+      top_qualities: (p.top_qualities || []).slice(0, 3),
+      languages: p.languages || [],
+      location: p.location || "",
+      is_recommended: p.is_recommended ?? true
+    }));
 
     try {
       const response = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: trimmed, professionals: allPros }),
+        body: JSON.stringify({ query: trimmed, professionals: compactPros }),
       });
 
       if (!response.ok) {

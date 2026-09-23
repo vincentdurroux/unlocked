@@ -124,6 +124,29 @@ async function startServer() {
     return aiClient;
   };
 
+  // In-memory query cache for AI matching to save 100% of tokens and quota on identical or repeated queries
+  const aiSearchCache = new Map<string, { data: any; timestamp: number }>();
+  const AI_CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours cache TTL
+  const MAX_CACHE_ENTRIES = 300;
+
+  const getCachedSearch = (key: string): any | null => {
+    const entry = aiSearchCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.timestamp > AI_CACHE_TTL_MS) {
+      aiSearchCache.delete(key);
+      return null;
+    }
+    return entry.data;
+  };
+
+  const setCachedSearch = (key: string, data: any) => {
+    if (aiSearchCache.size >= MAX_CACHE_ENTRIES) {
+      const oldestKey = aiSearchCache.keys().next().value;
+      if (oldestKey) aiSearchCache.delete(oldestKey);
+    }
+    aiSearchCache.set(key, { data, timestamp: Date.now() });
+  };
+
   // Highly robust Gemini content generator with fallback and exponential backoff retry mechanism
   const generateContentWithFallback = async (
     params: {
@@ -132,7 +155,9 @@ async function startServer() {
     },
     customModels?: string[]
   ): Promise<any> => {
-    const models = customModels || ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"];
+    // Priority: gemini-3.1-flash-lite (highest RPD limit, lowest token footprint)
+    // Fallbacks: gemini-flash-latest, gemini-3.8-flash (separate quota buckets)
+    const models = customModels || ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
     let lastError: any = null;
 
     for (const modelName of models) {
@@ -242,85 +267,92 @@ async function startServer() {
 
     try {
       const qLower = query.toLowerCase().trim();
-      const queryWords = qLower.split(/\s+/).filter(w => w.length > 2);
 
-      // FAST PRE-FILTERING: To improve speed and reduce token cost, we pre-filter the directory
-      // to find candidates that have ANY keyword match in their name, category, or bio.
-      // This significantly improves "Jane's" accuracy by providing a cleaner context to the AI.
-      let candidates = professionals.filter((p: any) => {
-        const name = (p.name || "").toLowerCase();
-        const cat = (p.category || p.profession || "").toLowerCase();
-        const cats = (p.categories || []).map((c: any) => String(c).toLowerCase());
-        const bio = (p.bio || p.description || "").toLowerCase();
-        const combined = `${name} ${cat} ${cats.join(" ")} ${bio}`;
-
-        // Match if query words or the whole query exists in the combined string
-        return queryWords.some(word => combined.includes(word)) || combined.includes(qLower);
-      });
-
-      // If pre-filtering was too aggressive (0 results), fall back to a larger pool or all
-      if (candidates.length === 0) {
-        candidates = professionals.slice(0, 50); // Fallback to first 50 if no keyword match
-      } else if (candidates.length > 50) {
-        // If still too many, prioritize recommended ones
-        candidates = candidates.sort((a: any, b: any) => (b.is_recommended ? 1 : 0) - (a.is_recommended ? 1 : 0)).slice(0, 50);
+      // Check cache first to save 100% of tokens and quota on repeated or frequent searches
+      const cacheKey = `${qLower}__${professionals.length}`;
+      const cached = getCachedSearch(cacheKey);
+      if (cached) {
+        console.log(`[ai] Returning cached Jane search result for: "${qLower}"`);
+        return res.json(cached);
       }
 
-      // Map candidates list with only relevant fields
-      const proListBrief = candidates.map((p: any) => ({
+      // Compact pro representation to keep prompt tokens well below free-tier TPM limits
+      // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
+      const proListBrief = professionals.map((p: any) => ({
         id: String(p.id),
         name: p.name,
         company_name: p.company_name || "",
         category: p.category || p.profession || "",
         categories: p.categories || (typeof p.profession === 'string' ? p.profession.split(',').map((s: string) => s.trim()) : []),
-        bio: (p.bio || p.description || "").slice(0, 300),
-        top_qualities: p.top_qualities || [],
+        bio: (p.bio || p.description || "").slice(0, 160),
+        top_qualities: (p.top_qualities || []).slice(0, 3),
         languages: p.languages || [],
-        rating: p.rating || 0,
         location: p.location || "",
         is_recommended: p.is_recommended ?? true
       }));
 
-      const sysInstruction = `You are an expert matching AI assistant for "Unlocked" - a community-curated directory of professionals.
+      const sysInstruction = `You are an expert matching AI assistant ("Jane") for "Unlocked" - a community-curated directory of verified local professionals in Valencia, Spain.
 The directory contains BOTH community-recommended professionals (is_recommended: true) AND Google-sourced professionals (is_recommended: false).
 
-YOUR MANDATE: Examine the user's natural language request and return ALL relevant matching professionals found in the provided list. Do NOT arbitrarily limit the results to only 1 or 2 professionals.
+YOUR MANDATE: Examine the user's natural language request and return ALL relevant matching professionals found in the provided list. Do NOT arbitrarily limit results to only 1 or 2 professionals or only a single trade.
 
-Review the list of professionals provided and evaluate BOTH trade/service criteria AND location criteria:
+EVALUATION CRITERIA:
 
-1. QUERY PARSING & SYNONYMS (CRITICAL):
-   - Trade / Profession Synonyms & Translations:
-     * "plumber", "plumbing", "plombier", "fontanero", "fontanería", "water leak", "pipe leak", "water pipe", "tuyauterie", "fuite d'eau" ALL match Plumbing services or Handyman/Manitas who do plumbing.
-     * EXCLUSION: Never match wellness, massage, beauty, or lymphatic drainage ("drainage lymphatique", "drenaje linfático", "drainage") with plumbing/plumber requests!
-     * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "hair salon", "barber" ALL match "Hairdresser", "Coiffeur", "Beauty & Wellness", or hair care services.
-     * "doctor", "physician", "médecin", "gp", "médico" ALL match Doctor/Medical services.
-     * "realtor", "real estate agent", "inmobiliaria", "agent immobilier" ALL match Real Estate / Property services.
-     * "electrician", "électricien", "electricista" ALL match Electrician services.
-     * "mason", "masonry", "maçon", "albañil", "albañilería" ALL match Masonry services.
-     * "handyman", "manitas", "bricolage", "repairs" ALL match Handyman services.
-     * "I hurt my back", "back pain", "mal de dos" ALL match "Physiotherapist", "Osteopath", or "Chiropractor".
-     * Treat language translations (English, French, Spanish) and word variations as EXACT trade matches!
+1. STRICT RULE ON REVIEWS & RATINGS (CRITICAL):
+   - Reviews left by users, review counts, or ratings MUST NEVER bring more match points or higher match scores.
+   - The match score evaluates PURELY the objective professional relevance between the user's need/symptom/trade/location/language and what the professional does.
+   - A professional with zero reviews or newly added must receive the exact same match score as any other professional if their specialty matches the user's request.
+
+2. SYMPTOM, NEED & MULTI-DISCIPLINE MATCHING (CRITICAL):
+   When the user expresses a symptom, physical issue, project, or general need (rather than naming a single job title):
+   - You MUST identify and include ALL relevant professions/trades in the directory that can legitimately address that issue.
+   - For MUSCULOSKELETAL / BACK / BODY PAIN ("I hurt my back", "mal de dos", "back pain", "sciatica", "neck pain", "hernia", "muscle soreness"):
+     * Do NOT arbitrarily limit results to only Chiropractors!
+     * You MUST match and return ALL relevant health disciplines present in the directory:
+       - Physiotherapists (Physiotherapy, Kinésithérapeute, Fisioterapia)
+       - Osteopaths (Osteopathy, Ostéopathe)
+       - Chiropractors (Chiropractic, Chiropracteur)
+       - General Practitioners / Doctors / Sports Medicine (Doctor, Physician, Médecin, Médico)
+       - Medical Acupuncture / Therapeutic Massage specialists (if applicable to pain recovery)
+     * All of these disciplines qualify as DIRECT HIGH MATCHES (Score 75-95).
+   - For STRESS / MENTAL WELLNESS ("feeling anxious", "burnout", "mental health"):
+     * Match Psychologists, Therapists, Counselors, Life Coaches, and Mind-Body practitioners.
+   - For HOME LEAKS & RENOVATIONS ("water leak", "fuite d'eau", "renovating bathroom", "kitchen work"):
+     * Match Plumbers, Handymen/Manitas, Electricians, Masons, Tile specialists, or General Contractors. (Never match wellness or lymphatic drainage with water plumbing).
+   - For MOVING & RELOCATION ("moving to Valencia", "déménagement"):
+     * Match Movers, Real Estate Agents, Relocation Gestors/Specialists, Handymen.
+   - For LEGAL & BUSINESS CREATION ("starting a business", "autonomo", "taxes", "visa"):
+     * Match Lawyers (Abogados/Avocats), Gestors/Gestorías, Tax Advisors, Accountants (Comptables).
+   - For DENTAL PAIN / TEETH:
+     * Match Dentists, Orthodontists, Oral Surgeons.
+
+2. QUERY PARSING, SYNONYMS & TRANSLATIONS:
+   - Always recognize synonyms and translations across English, French, Spanish, and Catalan:
+     * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "barber" ALL match Hairdresser/Barber/Beauty.
+     * "doctor", "physician", "médecin", "gp", "médico" ALL match Medical/Doctor services.
+     * "realtor", "real estate agent", "inmobiliaria", "agent immobilier" ALL match Real Estate.
+     * "plumber", "plombier", "fontanero" ALL match Plumbing.
    - Location Matching:
-     * "Valencia area", "in Valencia", "around Valencia", "Valencia city" matches professionals located in Valencia or Valencia metropolitan/province towns (e.g. Valencia, La Eliana, Torrent, Paterna, Burjassot, etc.).
+     * "Valencia", "in Valencia", "around Valencia", "Valencia area" matches Valencia city and its metropolitan area (Ruzafa, Carmen, Campanar, Alboraya, Paterna, Torrent, La Eliana, Betera, etc.).
 
-2. COMPREHENSIVE MATCHING & SCORING:
-   - DIRECT MATCH (Score 70-100): The professional matches the requested trade/service (including synonyms/translations) and location (or no location specified).
-   - ADJACENT / ALTERNATIVE MATCH (Score 20-50): Closely related trade (e.g., handyman who does repairs for a plumbing request), or neighboring town.
+3. COMPREHENSIVE MATCHING & SCORING:
+   - DIRECT MATCH (Score 70-100): Matches requested trade/service/discipline and location (or no location specified).
+   - ADJACENT / ALTERNATIVE MATCH (Score 20-50): Closely related trade, or neighboring town.
    - UNRELATED (Score 0): Do not include in results or score 0.
-   - IMPORTANT: Return ALL professionals in the list who match the trade (Score > 0). Do not cut off or omit Google pros (is_recommended: false) when they match the trade.
+   - IMPORTANT: Return ALL professionals in the list who match the trade/symptom (Score > 0). Do not cut off or omit Google pros (is_recommended: false) when they match the trade.
 
-3. PRIORITIZATION:
-   - Professionals with "is_recommended: true" are community-vetted and should receive higher scores (e.g., 85-100) or be ranked above Google-sourced pros (is_recommended: false, scored 70-80).
+4. PRIORITIZATION:
+   - Professionals with "is_recommended: true" are community-vetted and should receive higher scores (e.g., 85-95) or be ranked above Google-sourced pros (is_recommended: false, scored 70-80).
    - Both recommended and non-recommended matching professionals MUST be returned in the results array so the user has access to all available pros.
 
-4. "exactMatchFound" & "summaryMessage" RULES:
+5. "exactMatchFound" & "summaryMessage" RULES:
    - If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), you MUST set "exactMatchFound" to true, and set "summaryMessage" to null!
    - Set "exactMatchFound" to false ONLY if NO professional in the directory matches the trade.
    - If "exactMatchFound" is false and alternative pros exist: explain in the user's language that exact matches weren't found but alternatives were provided.
 
-5. Under "reasonUrlExcerpt" for each professional, provide a single clear sentence explaining why they matched (trade, specialty, location).
+6. Under "reasonUrlExcerpt" for each professional, provide a single clear sentence explaining why they matched (trade, specialty, location, or symptom solution).
 
-6. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
+7. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
    - If the user's query explicitly requests a specific spoken language (e.g. "qui parle français", "french speaking", "habla español", etc.):
      * If matching professionals speak that language: ONLY return professionals who speak that language (give them score 75-100).
      * If no professional speaks that language: return other matching pros with lower scores and explain in summaryMessage.`;
@@ -329,7 +361,7 @@ Review the list of professionals provided and evaluate BOTH trade/service criter
         contents: `User Query: "${query}"
 
 Professionals:
-${JSON.stringify(proListBrief, null, 2)}`,
+${JSON.stringify(proListBrief)}`,
         config: {
           systemInstruction: sysInstruction,
           responseMimeType: "application/json",
@@ -355,7 +387,7 @@ ${JSON.stringify(proListBrief, null, 2)}`,
           },
           temperature: 0.1
         }
-      }, ["gemini-1.5-flash"]);
+      });
 
       const parsedData = JSON.parse(response.text || "{}");
       let results: any[] = [];
@@ -421,7 +453,10 @@ ${JSON.stringify(proListBrief, null, 2)}`,
         exactMatchFound = false;
       }
 
-      return res.json({ exactMatchFound, summaryMessage, results });
+      const responsePayload = { exactMatchFound, summaryMessage, results };
+      setCachedSearch(cacheKey, responsePayload);
+
+      return res.json(responsePayload);
     } catch (error: any) {
       console.error("[api] Gemini AI Search matching error:", error);
       const errorMsg = error.message || "";
@@ -475,35 +510,13 @@ ${JSON.stringify(proListBrief, null, 2)}`,
     }
 
     try {
-      const qLower = query.toLowerCase().trim();
-      const queryWords = qLower.split(/\s+/).filter(w => w.length > 2);
-
-      // FAST PRE-FILTERING for events
-      let candidates = events.filter((ev: any) => {
-        const title = (ev.title || "").toLowerCase();
-        const cat = (ev.category || "").toLowerCase();
-        const desc = (ev.description || "").toLowerCase();
-        const loc = (ev.location || "").toLowerCase();
-        const combined = `${title} ${cat} ${desc} ${loc}`;
-
-        return queryWords.some(word => combined.includes(word)) || combined.includes(qLower);
-      });
-
-      // If pre-filtering was too aggressive, fallback to a slice or sample
-      if (candidates.length === 0) {
-        candidates = events.slice(0, 60);
-      } else if (candidates.length > 60) {
-        // Limit to 60 for context window efficiency, but now they are *relevant* 60
-        candidates = candidates.slice(0, 60);
-      }
-
       const today = new Date();
       const todayISO = today.toISOString().split('T')[0]; // e.g. "2026-09-20"
       const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
       const dayName = daysOfWeek[today.getDay()];
       const currentDateContext = `Reference Today Date: ${todayISO} (${dayName}). Current Year: ${today.getFullYear()}.`;
 
-      const eventListBrief = candidates.map((ev: any) => {
+      const eventListBrief = events.slice(0, 60).map((ev: any) => {
         const startDate = ev.start_date || ev.date || "";
         const endDate = ev.end_date || "";
         const timeStr = ev.start_time || ev.time || "";
@@ -733,7 +746,7 @@ FOR EACH REAL EVENT FOUND:
       const ai = getAiClient();
 
       // Candidate models for search: primary model with Google Search grounding, followed by resilient fallbacks (excluding 3.1 flash lite)
-      const defaultChain = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"];
+      const defaultChain = ["gemini-3.8-flash", "gemini-flash-latest"];
       const candidateModels: string[] = [];
       if (preferredModel && preferredModel !== "auto" && typeof preferredModel === "string") {
         candidateModels.push(preferredModel);
