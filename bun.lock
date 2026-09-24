@@ -20,6 +20,7 @@
         "papaparse": "^5.7.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
+        "react-onesignal": "^3.5.6",
         "recharts": "^3.10.1",
         "resend": "^6.12.4",
         "tailwind-merge": "^3.5.0",
@@ -708,6 +709,8 @@
     "react-dom": ["react-dom@19.2.4", "", { "dependencies": { "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.2.4" } }, "sha512-AXJdLo8kgMbimY95O2aKQqsz2iWi9jMgKJhRBAxECE4IFxfcazB2LmzloIoibJI3C12IlY20+KFaLv+71bUJeQ=="],
 
     "react-is": ["react-is@19.3.0", "", {}, "sha512-UpMYezM4v5/18F28aC66AEsjXIgE02kyEMH6yLdgLXu/UTfa1Ntwck/nNLrbqJsEXW7gPb0coNO9FQse9WTovA=="],
+
+    "react-onesignal": ["react-onesignal@3.5.6", "", {}, "sha512-QlvuWilG8n86GMaYG7a7DSzyLrZIsbM6PFW2XrDI68AYV50axUF5RCzWIqEGfNc1COa/QiDlz7wGkpuiKBayoQ=="],
 
     "react-redux": ["react-redux@9.3.0", "", { "dependencies": { "@types/use-sync-external-store": "^0.0.6", "use-sync-external-store": "^1.4.0" }, "peerDependencies": { "@types/react": "^18.2.25 || ^19", "react": "^18.0 || ^19", "redux": "^5.0.0" }, "optionalPeers": ["@types/react", "redux"] }, "sha512-KQopgqFo/p/fgmAs5qz6p5RWaNAzq40WAu7fJIXnQpYxFPbJYtsJPWvGeF2rOBaY/kEuV77AVsX8TsQzKm+A/g=="],
 

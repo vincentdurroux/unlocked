@@ -30,6 +30,7 @@ import {
   Filter,
   Languages,
   ArrowRight,
+  ArrowUpDown,
   Clock,
   Euro,
   Heart,
@@ -42,9 +43,11 @@ import {
   UserPlus,
   HelpCircle,
   Info,
+  LogIn,
   LogOut,
   ShoppingBag,
   Tag,
+  Package,
   Camera,
   RotateCcw,
   Loader2,
@@ -102,7 +105,10 @@ import {
   ThumbsUp,
   ExternalLink,
   Ticket,
-  BarChart3
+  BarChart3,
+  Compass,
+  Music,
+  Recycle
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
@@ -118,9 +124,13 @@ import { formatEventDate, formatEventTime, getCategoryBadge, getCategoryBadges, 
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { searchService } from './services/searchService';
+import { pushNotificationService } from './services/pushNotificationService';
+import { oneSignalService } from './services/oneSignalService';
+import { PushNotificationPrompt } from './components/PushNotificationPrompt';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
 import { LandingEventHighlightsCard } from './components/LandingEventHighlightsCard';
 import { HeaderWeatherWidget } from './components/HeaderWeatherWidget';
+import { RotatingCylinderWord } from './components/RotatingCylinderWord';
 
 // Custom Tooth Icon matching screenshot
 const ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -1526,6 +1536,7 @@ export default function App() {
 
   const [favoriteEventIds, setFavoriteEventIds] = useState<string[]>([]);
   const [favoriteProIds, setFavoriteProIds] = useState<string[]>([]);
+  const [favoriteAdIds, setFavoriteAdIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (currentUser) {
@@ -1569,6 +1580,26 @@ export default function App() {
           setFavoriteProIds([]);
         }
       }
+
+      if (userProfile?.favorite_ad_ids && Array.isArray(userProfile.favorite_ad_ids)) {
+        setFavoriteAdIds(userProfile.favorite_ad_ids.map(String));
+      } else {
+        try {
+          const saved = localStorage.getItem(`unlocked_favorites_ad_${currentUser.id}`);
+          if (saved) {
+            setFavoriteAdIds(JSON.parse(saved));
+          } else {
+            const legacy = localStorage.getItem('unlocked_marketplace_saved');
+            if (legacy) {
+              setFavoriteAdIds(JSON.parse(legacy));
+            } else {
+              setFavoriteAdIds([]);
+            }
+          }
+        } catch (_) {
+          setFavoriteAdIds([]);
+        }
+      }
     } else {
       try {
         const legacyEvents = localStorage.getItem('unlocked_favorite_event_ids');
@@ -1578,9 +1609,14 @@ export default function App() {
         const legacyPros = localStorage.getItem('unlocked_favorite_pro_ids');
         if (legacyPros) setFavoriteProIds(JSON.parse(legacyPros));
         else setFavoriteProIds([]);
+
+        const legacyAds = localStorage.getItem('unlocked_marketplace_saved');
+        if (legacyAds) setFavoriteAdIds(JSON.parse(legacyAds));
+        else setFavoriteAdIds([]);
       } catch (_) {
         setFavoriteEventIds([]);
         setFavoriteProIds([]);
+        setFavoriteAdIds([]);
       }
     }
   }, [currentUser, userProfile]);
@@ -1608,6 +1644,18 @@ export default function App() {
       } catch (_) {}
     }
   }, [favoriteProIds, currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      try {
+        localStorage.setItem(`unlocked_favorites_ad_${currentUser.id}`, JSON.stringify(favoriteAdIds));
+      } catch (_) {}
+    } else {
+      try {
+        localStorage.setItem('unlocked_marketplace_saved', JSON.stringify(favoriteAdIds));
+      } catch (_) {}
+    }
+  }, [favoriteAdIds, currentUser]);
 
   const toggleFavoriteEvent = async (eventId: string) => {
     let nextFavorites: string[] = [];
@@ -1674,6 +1722,41 @@ export default function App() {
         setUserProfile(prev => prev ? { ...prev, favorite_pro_ids: nextFavorites } : null);
       } catch (err) {
         console.error('Error updating favorite pros in database:', err);
+      }
+    }
+  };
+
+  const toggleFavoriteAd = async (adId: string | number) => {
+    const strId = String(adId);
+    let nextFavorites: string[] = [];
+    setFavoriteAdIds(prev => {
+      if (prev.includes(strId)) {
+        nextFavorites = prev.filter(id => id !== strId);
+      } else {
+        nextFavorites = [...prev, strId];
+      }
+
+      if (currentUser) {
+        try {
+          localStorage.setItem(`unlocked_favorites_ad_${currentUser.id}`, JSON.stringify(nextFavorites));
+        } catch (_) {}
+      } else {
+        try {
+          localStorage.setItem('unlocked_marketplace_saved', JSON.stringify(nextFavorites));
+        } catch (_) {}
+      }
+      return nextFavorites;
+    });
+
+    if (currentUser) {
+      try {
+        await authService.updateProfile({
+          id: currentUser.id,
+          favorite_ad_ids: nextFavorites
+        });
+        setUserProfile(prev => prev ? { ...prev, favorite_ad_ids: nextFavorites } : null);
+      } catch (err) {
+        console.error('Error updating favorite ads in database:', err);
       }
     }
   };
@@ -2292,15 +2375,19 @@ export default function App() {
   // Form states for Ad
   const [adTitle, setAdTitle] = useState('');
   const [adPrice, setAdPrice] = useState('');
-  const [adCategory, setAdCategory] = useState('Vehicles');
+  const [adCategory, setAdCategory] = useState('School & Kids');
   const [adCondition, setAdCondition] = useState('Good');
   const [adLocation, setAdLocation] = useState('');
+  const [adLocationPrecision, setAdLocationPrecision] = useState<'approximate' | 'exact'>('approximate');
+  const [adExactAddress, setAdExactAddress] = useState('');
   const [adDescription, setAdDescription] = useState('');
   const [adHousingType, setAdHousingType] = useState<'Rent' | 'Sale'>('Rent');
   const [adFuelType, setAdFuelType] = useState('Petrol');
   const [adPropertyType, setAdPropertyType] = useState('Apartment');
   const [adContractType, setAdContractType] = useState('Full-time');
   const [adSize, setAdSize] = useState('M');
+  const [adPhone, setAdPhone] = useState('');
+  const [adError, setAdError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -2425,19 +2512,33 @@ export default function App() {
     if (!adTitle || (isPriceRequired && !adPrice)) return;
     
     setIsUploading(true);
+    setAdError(null);
     try {
+      const sellerDisplayName = userProfile?.full_name || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Community Member';
+      const sellerAvatar = userProfile?.avatar_url || currentUser?.user_metadata?.avatar_url || undefined;
+
+      const finalLocation = adLocationPrecision === 'exact' && adExactAddress.trim()
+        ? (adLocation ? `${adLocation} · ${adExactAddress.trim()}` : adExactAddress.trim())
+        : (adLocation || 'Valencia');
+
       await marketplaceService.createAd({
         title: adTitle,
         price: adPrice,
         category: adCategory,
         condition: adCondition,
-        location: adLocation,
+        location: finalLocation,
+        location_precision: adLocationPrecision,
+        exact_address: adExactAddress.trim() || undefined,
         description: adDescription,
         type: adCategory === 'Real Estate' ? adHousingType : undefined,
         fuel_type: adCategory === 'Vehicles' ? adFuelType : undefined,
         property_type: adCategory === 'Real Estate' ? adPropertyType : undefined,
         contract_type: adCategory === 'Jobs' ? adContractType : undefined,
         size: adCategory === 'Clothing' ? adSize : undefined,
+        seller_phone: adPhone.trim() || undefined,
+        seller_name: sellerDisplayName,
+        seller_image: sellerAvatar,
+        user_id: currentUser?.id || undefined,
         image_url: uploadedImageUrls[0] || '',
         images: uploadedImageUrls
       });
@@ -2445,22 +2546,27 @@ export default function App() {
       // Reset form
       setAdTitle('');
       setAdPrice('');
-      setAdCategory('Vehicles');
+      setAdCategory('School & Kids');
       setAdCondition('Good');
       setAdLocation('');
+      setAdLocationPrecision('approximate');
+      setAdExactAddress('');
       setAdDescription('');
       setAdHousingType('Rent');
       setAdFuelType('Petrol');
       setAdPropertyType('Apartment');
       setAdContractType('Full-time');
       setAdSize('M');
+      setAdPhone('');
+      setAdError(null);
       setUploadedImageUrls([]);
       setShowAddAd(false);
       
       // Refresh list
       fetchAds();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error posting ad:', error);
+      setAdError(error?.message || 'Failed to post ad. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -2589,7 +2695,7 @@ export default function App() {
     { id: 'explore', label: 'Find Pro', icon: Search },
     { id: 'events', label: 'Events', icon: Calendar },
     { id: 'guides', label: 'Guides', icon: BookOpen },
-    { id: 'marketplace', label: 'Market', icon: ShoppingBag },
+    { id: 'marketplace', label: 'Thrift', icon: Shirt },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 
@@ -3149,7 +3255,13 @@ export default function App() {
                   onToggleFavoriteEvent={toggleFavoriteEvent}
                   favoriteProIds={favoriteProIds}
                   onToggleFavoritePro={toggleFavoritePro}
+                  favoriteAdIds={favoriteAdIds}
+                  onToggleFavoriteAd={toggleFavoriteAd}
+                  allAds={ads}
                   events={events}
+                  onOpenCreateAd={() => setShowAddAd(true)}
+                  onSelectAd={(ad) => setSelectedAd(ad)}
+                  onAdDeleted={() => fetchAds()}
                 />
               )}
               {['privacy-policy', 'user-terms', 'provider-terms', 'community-guidelines', 'cookie-policy'].includes(activeView) && (
@@ -3254,10 +3366,20 @@ export default function App() {
               )}
               {activeView === 'marketplace' && (
                 <MarketplaceView 
-                  onAddAd={() => setShowAddAd(true)} 
+                  onAddAd={() => {
+                    if (!currentUser) {
+                      handleNavigate('login');
+                      return;
+                    }
+                    setShowAddAd(true);
+                  }} 
                   ads={ads} 
                   onSelectAd={setSelectedAd} 
                   scrollToTop={scrollToTop}
+                  currentUser={currentUser}
+                  onNavigate={handleNavigate}
+                  favoriteAdIds={favoriteAdIds}
+                  onToggleFavoriteAd={toggleFavoriteAd}
                 />
               )}
               {/* MessagesView moved to modal */}
@@ -3569,29 +3691,75 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 15 }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="bg-white w-full max-w-lg rounded-[32px] p-6 sm:p-8 space-y-6 relative shadow-2xl my-auto"
+                  className="bg-white w-full max-w-xl rounded-[32px] p-6 sm:p-8 space-y-6 relative shadow-2xl my-auto border border-slate-100"
                   onClick={e => e.stopPropagation()}
                 >
-                <button 
-                  onClick={() => setShowAddAd(false)}
-                  className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 transition-colors z-10"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold font-display text-brand-navy">Post a New Ad</h2>
-                    <span className="text-xs font-medium text-slate-400">{uploadedImageUrls.length}/3 photos</span>
+                {/* Modal Header */}
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200/80 shrink-0">
+                      <Tag className="w-5 h-5 stroke-[2.2]" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold font-display text-slate-900 leading-tight">Post an Ad</h2>
+                      <p className="text-xs text-slate-500">Valencia Thrift · Buy, sell & pass on second-hand items</p>
+                    </div>
                   </div>
-                  <p className="text-slate-500 text-sm">Share what you're selling or looking for.</p>
+                  <button 
+                    type="button"
+                    onClick={() => setShowAddAd(false)}
+                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 rounded-full transition-colors cursor-pointer"
+                    aria-label="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="space-y-6">
+
+                {!currentUser ? (
+                  <div className="py-8 text-center space-y-4">
+                    <div className="w-16 h-16 rounded-3xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-200">
+                      <Lock className="w-8 h-8" />
+                    </div>
+                    <div className="max-w-sm mx-auto space-y-1.5">
+                      <h3 className="text-lg font-bold text-slate-900">Sign in to post an ad</h3>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        You need to be signed in with your MyCityUnlocked account to list items and connect with local buyers.
+                      </p>
+                    </div>
+                    <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAddAd(false);
+                          handleNavigate('login');
+                        }}
+                        className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <LogIn className="w-4 h-4" />
+                        <span>Sign In / Register</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddAd(false)}
+                        className="w-full sm:w-auto px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                <div className="space-y-5">
                   {/* Photo Section */}
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     <div className="flex justify-between items-center">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Photos</label>
-                      <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                        {uploadedImageUrls.length}/3
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Photos <span className="text-slate-400 font-normal normal-case">(optional, up to 3)</span>
+                      </label>
+                      <span className={cn(
+                        "text-[11px] font-bold px-2.5 py-0.5 rounded-full transition-colors",
+                        uploadedImageUrls.length > 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-500"
+                      )}>
+                        {uploadedImageUrls.length}/3 photos
                       </span>
                     </div>
                     <input 
@@ -3604,31 +3772,34 @@ export default function App() {
                     />
                     <div className="grid grid-cols-3 gap-3">
                       {uploadedImageUrls.map((url, index) => (
-                        <div key={index} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-100 shadow-sm group">
+                        <div key={index} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 shadow-2xs group">
                           <img src={url} alt={`Preview ${index}`} className="w-full h-full object-cover" />
                           <button 
+                            type="button"
                             onClick={() => setUploadedImageUrls(prev => prev.filter((_, i) => i !== index))}
-                            className="absolute top-1.5 right-1.5 p-1.5 bg-white/90 backdrop-blur text-red-500 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute top-1.5 right-1.5 p-1.5 bg-white/90 backdrop-blur text-red-500 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            title="Remove photo"
                           >
-                            <X className="w-3 h-3" />
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       ))}
                       {uploadedImageUrls.length < 3 && (
                         <button 
+                          type="button"
                           onClick={() => !isUploading && fileInputRef.current?.click()}
                           disabled={isUploading}
                           className={cn(
-                            "aspect-square bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 gap-1.5 cursor-pointer hover:bg-slate-100 hover:border-brand-blue/20 hover:text-brand-blue transition-all active:scale-95",
+                            "aspect-square bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-500 gap-1.5 cursor-pointer hover:bg-emerald-50/50 hover:border-emerald-300 hover:text-emerald-700 transition-all active:scale-95",
                             isUploading && "opacity-50 cursor-wait"
                           )}
                         >
                           {isUploading ? (
-                            <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+                            <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
                           ) : (
                             <>
-                              <Camera className="w-6 h-6" />
-                              <span className="text-[10px] font-bold">Add Photo</span>
+                              <Camera className="w-6 h-6 text-emerald-600" />
+                              <span className="text-[11px] font-bold">Add Photo</span>
                             </>
                           )}
                         </button>
@@ -3637,208 +3808,453 @@ export default function App() {
                   </div>
 
                   {/* Basic Info */}
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Basic Information</label>
-                    <div className="space-y-3">
+                  <div className="space-y-3.5">
+                    {/* Title */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Listing Title <span className="text-emerald-600">*</span>
+                      </label>
                       <div className="relative">
-                        <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
                         <input 
                           type="text" 
-                          placeholder="What are you listing?" 
+                          placeholder="e.g. Vintage Leather Jacket, Road Bike, Wooden Desk, Guitar Amp..." 
                           value={adTitle}
                           onChange={(e) => setAdTitle(e.target.value)}
-                          className="w-full pl-11 pr-4 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-brand-blue outline-none text-sm font-medium" 
+                          className="w-full pl-11 pr-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
                         />
                       </div>
-                      
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="relative">
-                          <Euro className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <input 
-                            type="text" 
-                            placeholder={adCategory === 'Jobs' || adCategory === 'Services' ? "Price (Optional)" : "Price"} 
-                            value={adPrice}
-                            onChange={(e) => setAdPrice(e.target.value)}
-                            className="w-full pl-11 pr-4 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-brand-blue outline-none text-sm font-medium" 
-                          />
-                        </div>
-                        <div className="relative">
-                          <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <select 
-                            value={adCategory}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setAdCategory(val);
-                              if (val === 'Jobs' || val === 'Services') {
-                                setAdCondition('N/A');
-                              } else if (val === 'Real Estate') {
-                                setAdCondition('N/A');
+                    </div>
+                    
+                    {/* Category Selection with Pictograms */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Category <span className="text-emerald-600">*</span>
+                        </label>
+                        <span className="text-[11px] text-slate-400">Select category</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {[
+                          { id: 'Clothing', label: 'Fashion & Vintage', icon: Shirt, emoji: '👗' },
+                          { id: 'Home', label: 'Furniture & Home', icon: Armchair, emoji: '🛋️' },
+                          { id: 'Electronics', label: 'Electronics & Tech', icon: Music, emoji: '💻' },
+                          { id: 'Leisure', label: 'Bikes & Sports', icon: Bike, emoji: '🚲' },
+                          { id: 'School & Kids', label: 'Kids & Baby', icon: GraduationCap, emoji: '🧸' },
+                          { id: 'Books', label: 'Books & Media', icon: BookOpen, emoji: '📚' },
+                          { id: 'Relocation', label: 'Moving Out Sale', icon: Package, emoji: '📦' },
+                          { id: 'Vehicles', label: 'Vehicles & Transport', icon: Car, emoji: '🛵' },
+                          { id: 'Free', label: 'Free Giveaway', icon: Gift, emoji: '🎁' },
+                          { id: 'Other', label: 'Other Items', icon: Sparkles, emoji: '✨' },
+                        ].map((cat) => {
+                          const IconComp = cat.icon;
+                          const isSelected = adCategory === cat.id;
+                          return (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => {
+                                setAdCategory(cat.id);
+                                if (cat.id === 'Free') {
+                                  setAdPrice('Free');
+                                  setAdCondition('Good');
+                                } else if (adPrice === 'Free') {
+                                  setAdPrice('');
+                                }
+                              }}
+                              className={cn(
+                                "flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all cursor-pointer relative group",
+                                isSelected
+                                  ? "bg-emerald-50 border-emerald-600 text-emerald-950 shadow-2xs ring-2 ring-emerald-500/20 font-bold"
+                                  : "bg-slate-50 border-slate-200/90 text-slate-600 hover:bg-slate-100/80 hover:border-slate-300 font-medium"
+                              )}
+                            >
+                              <div className={cn(
+                                "w-9 h-9 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110",
+                                isSelected 
+                                  ? "bg-emerald-600 text-white shadow-xs" 
+                                  : "bg-white text-slate-600 border border-slate-200"
+                              )}>
+                                <IconComp className="w-4 h-4" />
+                              </div>
+                              <span className="text-[11px] leading-tight line-clamp-1">{cat.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Price & Condition */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Price <span className="text-emerald-600">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (adPrice === 'Free') {
+                                setAdPrice('');
                               } else {
-                                setAdCondition('Good');
+                                setAdPrice('Free');
+                                setAdCondition('Free');
                               }
                             }}
-                            className="w-full pl-11 pr-4 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-brand-blue outline-none text-sm font-medium appearance-none"
+                            className={cn(
+                              "text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-colors cursor-pointer",
+                              adPrice === 'Free' 
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700"
+                            )}
                           >
-                            <option value="Vehicles">Vehicles</option>
-                            <option value="Real Estate">Real Estate</option>
-                            <option value="Clothing">Clothing</option>
-                            <option value="Home">Home</option>
-                            <option value="Electronics">Electronics</option>
-                            <option value="Leisure">Leisure</option>
-                            <option value="Services">Services</option>
-                            <option value="Jobs">Jobs</option>
-                          </select>
+                            {adPrice === 'Free' ? '✓ Free Item' : 'Giving away for Free?'}
+                          </button>
+                        </div>
+                        <div className="relative">
+                          <Euro className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                          <input 
+                            type="text" 
+                            placeholder="e.g. 45€ (or Free)" 
+                            value={adPrice}
+                            onChange={(e) => setAdPrice(e.target.value)}
+                            className="w-full pl-11 pr-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                          />
                         </div>
                       </div>
 
-                      {adCategory === 'Real Estate' && (
-                        <div className="space-y-3">
-                          <div className="flex gap-2 p-1 bg-slate-50 rounded-2xl">
-                            {(['Rent', 'Sale'] as const).map((type) => (
-                              <button
-                                key={type}
-                                onClick={() => setAdHousingType(type)}
-                                className={cn(
-                                  "flex-1 py-3 rounded-xl text-sm font-bold transition-all",
-                                  adHousingType === type 
-                                    ? "bg-white text-brand-blue shadow-sm" 
-                                    : "text-slate-400 hover:text-slate-600"
-                                )}
-                              >
-                                For {type}
-                              </button>
-                            ))}
-                          </div>
-                          <div className="relative">
-                            <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <select 
-                              value={adPropertyType}
-                              onChange={(e) => setAdPropertyType(e.target.value)}
-                              className="w-full pl-11 pr-4 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-brand-blue outline-none text-sm font-medium appearance-none"
-                            >
-                              <option value="Apartment">Apartment</option>
-                              <option value="House">House</option>
-                              <option value="Studio">Studio</option>
-                              <option value="Office">Office</option>
-                            </select>
-                          </div>
-                        </div>
-                      )}
-
-                      {adCategory === 'Vehicles' && (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Condition
+                        </label>
                         <div className="relative">
-                          <Fuel className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <select 
-                            value={adFuelType}
-                            onChange={(e) => setAdFuelType(e.target.value)}
-                            className="w-full pl-11 pr-4 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-brand-blue outline-none text-sm font-medium appearance-none"
-                          >
-                            <option value="Petrol">Petrol</option>
-                            <option value="Diesel">Diesel</option>
-                            <option value="Electric">Electric</option>
-                            <option value="Hybrid">Hybrid</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {adCategory === 'Jobs' && (
-                        <div className="relative">
-                          <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <select 
-                            value={adContractType}
-                            onChange={(e) => setAdContractType(e.target.value)}
-                            className="w-full pl-11 pr-4 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-brand-blue outline-none text-sm font-medium appearance-none"
-                          >
-                            <option value="Full-time">Full-time</option>
-                            <option value="Part-time">Part-time</option>
-                            <option value="Contract">Contract</option>
-                            <option value="Internship">Internship</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {adCategory === 'Clothing' && (
-                        <div className="relative">
-                          <Shirt className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <select 
-                            value={adSize}
-                            onChange={(e) => setAdSize(e.target.value)}
-                            className="w-full pl-11 pr-4 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-brand-blue outline-none text-sm font-medium appearance-none"
-                          >
-                            <option value="XS">XS</option>
-                            <option value="S">S</option>
-                            <option value="M">M</option>
-                            <option value="L">L</option>
-                            <option value="XL">XL</option>
-                            <option value="XXL">XXL</option>
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Details */}
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Details</label>
-                    <div className={cn(
-                      "grid gap-3",
-                      (adCategory === 'Jobs' || adCategory === 'Services') ? "grid-cols-1" : "grid-cols-2"
-                    )}>
-                      {(adCategory !== 'Jobs' && adCategory !== 'Services') && (
-                        <div className="relative">
-                          <Award className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <Award className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
                           <select 
                             value={adCondition}
                             onChange={(e) => setAdCondition(e.target.value)}
-                            className="w-full pl-11 pr-4 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-brand-blue outline-none text-sm font-medium appearance-none"
+                            className="w-full pl-11 pr-9 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all appearance-none cursor-pointer"
                           >
-                            <option value="New">New</option>
-                            <option value="Like New">Like New</option>
-                            <option value="Good">Good</option>
-                            <option value="Fair">Fair</option>
-                            <option value="N/A">N/A</option>
+                            <option value="Brand New">Brand New / In box</option>
+                            <option value="Like New">Like New / Barely used</option>
+                            <option value="Very Good">Very Good condition</option>
+                            <option value="Good">Good condition</option>
+                            <option value="Fair">Fair / Vintage charm</option>
+                            <option value="Free">Free / Giving away</option>
                           </select>
+                          <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                         </div>
-                      )}
+                      </div>
+                    </div>
+
+                    {/* Phone Number / WhatsApp (Optional) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Phone / WhatsApp <span className="text-slate-400 font-normal normal-case">(optional)</span>
+                        </label>
+                        <span className="text-[11px] text-emerald-700 font-semibold">Enables Call & WhatsApp buttons</span>
+                      </div>
                       <div className="relative">
-                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                        <input 
+                          type="tel" 
+                          placeholder="e.g. +34 612 345 678 (buyer can reach you directly)" 
+                          value={adPhone}
+                          onChange={(e) => setAdPhone(e.target.value)}
+                          className="w-full pl-11 pr-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        If left blank, interested buyers will contact you exclusively through the in-app chat.
+                      </p>
+                    </div>
+
+                    {/* Category specific sub-options */}
+                    {adCategory === 'Real Estate' && (
+                      <div className="space-y-3 p-3 bg-emerald-50/40 rounded-2xl border border-emerald-100">
+                        <div className="flex gap-2 p-1 bg-white rounded-xl border border-slate-200">
+                          {(['Rent', 'Sale'] as const).map((type) => (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() => setAdHousingType(type)}
+                              className={cn(
+                                "flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                                adHousingType === type 
+                                  ? "bg-emerald-600 text-white shadow-2xs" 
+                                  : "text-slate-600 hover:text-slate-900"
+                              )}
+                            >
+                              For {type}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="relative">
+                          <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                          <select 
+                            value={adPropertyType}
+                            onChange={(e) => setAdPropertyType(e.target.value)}
+                            className="w-full pl-11 pr-9 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-medium appearance-none cursor-pointer"
+                          >
+                            <option value="Apartment">Apartment</option>
+                            <option value="House">House</option>
+                            <option value="Studio">Studio</option>
+                            <option value="Office">Office</option>
+                          </select>
+                          <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                        </div>
+                      </div>
+                    )}
+
+                    {adCategory === 'Vehicles' && (
+                      <div className="relative">
+                        <Fuel className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                        <select 
+                          value={adFuelType}
+                          onChange={(e) => setAdFuelType(e.target.value)}
+                          className="w-full pl-11 pr-9 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium appearance-none cursor-pointer"
+                        >
+                          <option value="Petrol">Petrol</option>
+                          <option value="Diesel">Diesel</option>
+                          <option value="Electric">Electric</option>
+                          <option value="Hybrid">Hybrid</option>
+                        </select>
+                        <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                      </div>
+                    )}
+
+                    {adCategory === 'Jobs' && (
+                      <div className="relative">
+                        <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                        <select 
+                          value={adContractType}
+                          onChange={(e) => setAdContractType(e.target.value)}
+                          className="w-full pl-11 pr-9 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium appearance-none cursor-pointer"
+                        >
+                          <option value="Full-time">Full-time</option>
+                          <option value="Part-time">Part-time</option>
+                          <option value="Contract">Contract</option>
+                          <option value="Internship">Internship</option>
+                        </select>
+                        <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                      </div>
+                    )}
+
+                    {adCategory === 'Clothing' && (
+                      <div className="relative">
+                        <Shirt className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                        <select 
+                          value={adSize}
+                          onChange={(e) => setAdSize(e.target.value)}
+                          className="w-full pl-11 pr-9 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium appearance-none cursor-pointer"
+                        >
+                          <option value="XS">XS</option>
+                          <option value="S">S</option>
+                          <option value="M">M</option>
+                          <option value="L">L</option>
+                          <option value="XL">XL</option>
+                          <option value="XXL">XXL</option>
+                        </select>
+                        <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Location & Precision Section */}
+                  <div className="space-y-3 p-4 bg-slate-50/80 rounded-2xl border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                        Location in Valencia
+                      </label>
+                      {/* Exact vs Approximate Switcher */}
+                      <div className="inline-flex p-0.5 bg-slate-200/80 rounded-xl text-xs font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => setAdLocationPrecision('approximate')}
+                          className={cn(
+                            "px-2.5 py-1 rounded-lg transition-all cursor-pointer text-[11px]",
+                            adLocationPrecision === 'approximate'
+                              ? "bg-white text-emerald-800 shadow-2xs font-bold"
+                              : "text-slate-600 hover:text-slate-900"
+                          )}
+                        >
+                          🌐 Approximate Area
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAdLocationPrecision('exact')}
+                          className={cn(
+                            "px-2.5 py-1 rounded-lg transition-all cursor-pointer text-[11px]",
+                            adLocationPrecision === 'exact'
+                              ? "bg-white text-emerald-800 shadow-2xs font-bold"
+                              : "text-slate-600 hover:text-slate-900"
+                          )}
+                        >
+                          🎯 Exact Location
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* District or Neighborhood Autocomplete */}
+                    <div>
+                      <div className="relative">
+                        <Navigation className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
                         <input 
                           type="text" 
-                          placeholder="Location" 
+                          list="valencia-locations-list"
+                          placeholder={adLocationPrecision === 'exact' ? "District or Town (e.g. Ruzafa, L'Eliana)" : "Select or type district / town (e.g. Ruzafa, Cabañal, L'Eliana)..."} 
                           value={adLocation}
                           onChange={(e) => setAdLocation(e.target.value)}
-                          className="w-full pl-11 pr-4 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-brand-blue outline-none text-sm font-medium" 
+                          className="w-full pl-11 pr-4 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400" 
                         />
+                        <datalist id="valencia-locations-list">
+                          {/* Valencia City Neighborhoods */}
+                          <option value="Ruzafa" />
+                          <option value="El Carmen / Ciutat Vella" />
+                          <option value="Eixample / Gran Vía" />
+                          <option value="Benimaclet" />
+                          <option value="Cabañal / Malvarrosa" />
+                          <option value="Campanar" />
+                          <option value="Mestalla / Blasco Ibáñez" />
+                          <option value="Patraix" />
+                          <option value="Quatre Carreres" />
+                          <option value="Olivereta" />
+                          <option value="Extramurs" />
+                          <option value="Pla del Real" />
+                          {/* Suburbs & Surrounding Towns */}
+                          <option value="L'Eliana" />
+                          <option value="Bétera" />
+                          <option value="Rocafort" />
+                          <option value="Godella" />
+                          <option value="La Cañada" />
+                          <option value="Paterna" />
+                          <option value="Moncada" />
+                          <option value="Alboraya / Port Saplaya" />
+                          <option value="Puçol" />
+                          <option value="Torrent" />
+                          <option value="El Saler" />
+                          <option value="Sagunto" />
+                          <option value="San Antonio de Benagéber" />
+                        </datalist>
+                      </div>
+                    </div>
+
+                    {/* Exact Street Address / Specific Meeting Spot Input when Exact is chosen */}
+                    {adLocationPrecision === 'exact' && (
+                      <div className="space-y-1 pt-1 animate-in fade-in duration-150">
+                        <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                          Exact Street Address or Meeting Spot <span className="text-emerald-600">*</span>
+                        </label>
+                        <div className="relative">
+                          <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                          <input 
+                            type="text" 
+                            placeholder="e.g. Calle Gran Vía Marqués del Turia 45, or Metro Colón Exit" 
+                            value={adExactAddress}
+                            onChange={(e) => setAdExactAddress(e.target.value)}
+                            className="w-full pl-11 pr-4 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                          />
+                        </div>
+                        <p className="text-[10px] text-emerald-700 font-medium">
+                          🎯 This exact street or meeting spot will be shown to buyers for item pickup.
+                        </p>
+                      </div>
+                    )}
+
+                    {adLocationPrecision === 'approximate' && (
+                      <p className="text-[10px] text-slate-500">
+                        🛡️ Approximate area protects your privacy. Buyers only see your district / town.
+                      </p>
+                    )}
+
+                    {/* Quick suggestion pills: Separated into Neighborhoods and Suburbs */}
+                    <div className="space-y-1.5 pt-1 border-t border-slate-200/60">
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-[11px]">
+                        <span className="text-slate-400 font-bold shrink-0 text-[10px] uppercase tracking-wider">Neighborhoods:</span>
+                        {['Ruzafa', 'El Carmen', 'Eixample', 'Benimaclet', 'Cabañal'].map((loc) => (
+                          <button
+                            key={loc}
+                            type="button"
+                            onClick={() => setAdLocation(loc)}
+                            className={cn(
+                              "px-2 py-0.5 rounded-lg border text-[11px] font-medium shrink-0 transition-colors cursor-pointer",
+                              adLocation === loc
+                                ? "bg-emerald-600 text-white border-emerald-600"
+                                : "bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border-slate-200"
+                            )}
+                          >
+                            {loc}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-[11px]">
+                        <span className="text-slate-400 font-bold shrink-0 text-[10px] uppercase tracking-wider">Suburbs:</span>
+                        {["L'Eliana", 'Bétera', 'Rocafort', 'Paterna', 'Puçol'].map((loc) => (
+                          <button
+                            key={loc}
+                            type="button"
+                            onClick={() => setAdLocation(loc)}
+                            className={cn(
+                              "px-2 py-0.5 rounded-lg border text-[11px] font-medium shrink-0 transition-colors cursor-pointer",
+                              adLocation === loc
+                                ? "bg-emerald-600 text-white border-emerald-600"
+                                : "bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border-slate-200"
+                            )}
+                          >
+                            {loc}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
 
                   {/* Description */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Description</label>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Description <span className="text-slate-400 font-normal normal-case">(optional)</span>
+                    </label>
                     <textarea 
-                      placeholder="Tell us more about it..." 
+                      placeholder="Describe your item or offer (dimensions, color, reason for selling, pickup details)..." 
                       value={adDescription}
                       onChange={(e) => setAdDescription(e.target.value)}
-                      className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-brand-blue outline-none h-32 text-sm font-medium resize-none" 
+                      className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none h-24 text-sm font-medium text-slate-900 resize-none transition-all placeholder:text-slate-400" 
                     />
                   </div>
 
+                  {/* Error Notification if any */}
+                  {adError && (
+                    <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-xs text-red-700 animate-in fade-in">
+                      <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="font-bold">Posting issue</p>
+                        <p className="text-[11px] text-red-600 mt-0.5">{adError}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
                   <button 
-                    className="w-full btn-primary py-4 text-lg font-bold rounded-2xl shadow-xl shadow-brand-blue/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none" 
+                    type="button"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 text-base font-bold rounded-2xl shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none cursor-pointer flex items-center justify-center gap-2" 
                     onClick={handlePostAd}
-                    disabled={isUploading || !adTitle || !adPrice}
+                    disabled={isUploading || !adTitle.trim() || ((adCategory !== 'Jobs' && adCategory !== 'Services') && !adPrice.trim())}
                   >
                     {isUploading ? (
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>Posting...</span>
+                        <span>Publishing ad...</span>
                       </div>
                     ) : (
-                      'Post Listing'
+                      <div className="flex items-center justify-center gap-2">
+                        <Plus className="w-5 h-5 stroke-[2.5]" />
+                        <span>Publish Ad</span>
+                      </div>
                     )}
                   </button>
                 </div>
+                )}
               </motion.div>
             </div>
           </motion.div>
@@ -3848,7 +4264,24 @@ export default function App() {
           {selectedAd && (
             <AdDetailModal 
               ad={selectedAd} 
-              onClose={() => setSelectedAd(null)} 
+              currentUser={currentUser}
+              isFavorite={favoriteAdIds.includes(String(selectedAd.id))}
+              onToggleFavorite={toggleFavoriteAd}
+              onClose={() => setSelectedAd(null)}
+              onRequireAuth={() => {
+                setSelectedAd(null);
+                handleNavigate('login');
+              }}
+              onOpenChat={(targetUser) => {
+                if (!currentUser) {
+                  setSelectedAd(null);
+                  handleNavigate('login');
+                  return;
+                }
+                setSelectedAd(null);
+                setInitialChat(targetUser);
+                setShowMessagesModal(true);
+              }}
             />
           )}
         </AnimatePresence>
@@ -3923,6 +4356,14 @@ export default function App() {
       )}
       </>
       )}
+
+      {/* Floating Push Notification Opt-in Prompt - ADMIN ONLY */}
+      {isAdmin && (
+        <PushNotificationPrompt 
+          currentUserId={currentUser?.id} 
+          isAdmin={isAdmin}
+        />
+      )}
       </div>
     </APIProvider>
   );
@@ -3930,15 +4371,38 @@ export default function App() {
 
 // --- Components ---
 
-function AdDetailModal({ ad, onClose }: { ad: Ad | any, onClose: () => void }) {
+function AdDetailModal({ 
+  ad, 
+  onClose,
+  onOpenChat,
+  currentUser,
+  onRequireAuth,
+  isFavorite,
+  onToggleFavorite
+}: { 
+  ad: Ad | any; 
+  onClose: () => void;
+  onOpenChat?: (targetUser: { name?: string; userId?: string; avatar?: string }) => void;
+  currentUser?: any;
+  onRequireAuth?: () => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (id: string | number) => void;
+}) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [direction, setDirection] = useState(0);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
+  const [showPhone, setShowPhone] = useState(false);
+  const [phoneCopied, setPhoneCopied] = useState(false);
+
   const price = ad.price.includes('€') ? ad.price : `${ad.price}€`;
   const images = ad.images && ad.images.length > 0 ? ad.images : [ad.image_url || ad.image];
   const createdAt = 'created_at' in ad ? ad.created_at : new Date().toISOString();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const sellerPhone = ad.seller_phone || ad.phone;
+  const hasPhone = Boolean(sellerPhone && sellerPhone.trim().length > 0);
+  const cleanPhone = (sellerPhone || '').replace(/[^0-9]/g, '');
 
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -3996,10 +4460,22 @@ function AdDetailModal({ ad, onClose }: { ad: Ad | any, onClose: () => void }) {
           className="relative w-full max-w-lg bg-white rounded-[32px] overflow-hidden shadow-2xl flex flex-col my-auto"
           onClick={e => e.stopPropagation()}
         >
-          <div className="absolute top-4 right-4 z-10">
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+            {onToggleFavorite && (
+              <button 
+                onClick={() => onToggleFavorite(String(ad.id))}
+                className={cn(
+                  "p-2 bg-white/90 backdrop-blur rounded-full shadow-lg transition-colors cursor-pointer",
+                  isFavorite ? "text-rose-500 hover:text-rose-600" : "text-slate-700 hover:text-rose-500"
+                )}
+                title={isFavorite ? "Remove from favorites" : "Save to favorites"}
+              >
+                <Heart className={cn("w-5 h-5", isFavorite && "fill-rose-500")} />
+              </button>
+            )}
             <button 
               onClick={onClose}
-              className="p-2 bg-white/90 backdrop-blur rounded-full shadow-lg text-slate-900 hover:bg-white transition-colors"
+              className="p-2 bg-white/90 backdrop-blur rounded-full shadow-lg text-slate-900 hover:bg-white transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -4062,87 +4538,258 @@ function AdDetailModal({ ad, onClose }: { ad: Ad | any, onClose: () => void }) {
             </div>
 
             <div className="p-6 space-y-6">
-            <div className="space-y-2">
-              <div className="flex justify-between items-start">
+            <div className="space-y-3">
+              <div className="flex justify-between items-start gap-4">
                 <div>
-                  <p className="text-xs font-bold text-brand-blue uppercase tracking-widest mb-1">
-                    {ad.category}
+                  <p className="text-xs font-bold text-fuchsia-600 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                    <span>{ad.category}</span>
+                    <span className="text-slate-300">·</span>
+                    <span className="text-slate-500 normal-case font-medium">Expat community friendly thrift</span>
                   </p>
                   <h3 className="text-2xl font-bold text-slate-900 font-display">{ad.title}</h3>
                 </div>
-                <div className="text-2xl font-semibold text-brand-blue">
+                <div className="text-2xl font-extrabold text-fuchsia-700 shrink-0">
                   {price}
                 </div>
               </div>
               
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-2 pt-1">
                 {ad.location && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-full text-xs font-medium text-slate-600">
-                    <MapPin className="w-3.5 h-3.5" />
-                    {ad.location}
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-fuchsia-50/70 border border-fuchsia-200/60 rounded-xl text-xs font-semibold text-fuchsia-900">
+                    <MapPin className="w-3.5 h-3.5 text-fuchsia-600" />
+                    <span>{ad.location}</span>
+                    {ad.location_precision === 'exact' ? (
+                      <span className="ml-1 text-[10px] font-bold text-fuchsia-800 bg-fuchsia-100 px-1.5 py-0.5 rounded-md">🎯 Exact</span>
+                    ) : (
+                      <span className="ml-1 text-[10px] font-medium text-fuchsia-700/80 bg-fuchsia-100/60 px-1.5 py-0.5 rounded-md">🌐 Area</span>
+                    )}
                   </div>
                 )}
                 {ad.condition && ad.condition !== 'N/A' && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-full text-xs font-medium text-slate-600">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-medium text-slate-600">
                     <Tag className="w-3.5 h-3.5" />
                     {ad.condition}
                   </div>
                 )}
                 {ad.type && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue/10 rounded-full text-xs font-bold text-brand-blue">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-fuchsia-50 rounded-xl text-xs font-bold text-fuchsia-700">
                     For {ad.type}
                   </div>
                 )}
                 {ad.fuel_type && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-full text-xs font-medium text-slate-600">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-medium text-slate-600">
                     <Fuel className="w-3.5 h-3.5" />
                     {ad.fuel_type}
                   </div>
                 )}
                 {ad.property_type && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-full text-xs font-medium text-slate-600">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-medium text-slate-600">
                     <Building2 className="w-3.5 h-3.5" />
                     {ad.property_type}
                   </div>
                 )}
                 {ad.contract_type && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-full text-xs font-medium text-slate-600">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-medium text-slate-600">
                     <Briefcase className="w-3.5 h-3.5" />
                     {ad.contract_type}
                   </div>
                 )}
                 {ad.size && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-full text-xs font-medium text-slate-600">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-medium text-slate-600">
                     <Shirt className="w-3.5 h-3.5" />
                     Size: {ad.size}
                   </div>
                 )}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-full text-xs font-medium text-slate-600">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-medium text-slate-600">
                   <Clock className="w-3.5 h-3.5" />
                   {formatRelativeTime(createdAt)}
+                </div>
+              </div>
+
+              {/* Seller information pill */}
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-fuchsia-50/50 border border-fuchsia-200/60">
+                <div className="flex items-center gap-3">
+                  {ad.seller_image ? (
+                    <img
+                      src={ad.seller_image}
+                      alt={ad.seller_name || 'Seller'}
+                      className="w-10 h-10 rounded-full object-cover border border-fuchsia-200"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-fuchsia-100 text-fuchsia-800 flex items-center justify-center font-bold text-sm">
+                      {(ad.seller_name || 'U').charAt(0)}
+                    </div>
+                  )}
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">{ad.seller_name || 'MyCityUnlocked Member'}</h5>
+                    <p className="text-[11px] text-fuchsia-700 font-medium flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-fuchsia-600" />
+                      <span>Verified MyCityUnlocked Community Member</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right text-[11px] text-slate-400">
+                  Valencia
                 </div>
               </div>
             </div>
 
             <div className="space-y-3">
               <h4 className="font-bold text-slate-900">Description</h4>
-              <div className="markdown-body">
+              <div className="markdown-body text-slate-700 text-sm leading-relaxed">
                 <SimpleMarkdown isPlain={true}>{ad.description || "No description provided for this item."}</SimpleMarkdown>
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-100 flex gap-3">
-              <button 
-                className="flex-1 bg-brand-blue text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-brand-blue/20 active:scale-[0.98] transition-transform"
-                onClick={() => {
-                  window.location.href = `mailto:seller@example.com?subject=Inquiry about ${ad.title}`;
-                }}
-              >
-                Send Email to Seller
-              </button>
-              <button className="p-4 bg-slate-100 text-slate-600 rounded-2xl font-bold active:scale-[0.98] transition-transform">
-                <ShareIcon className="w-5 h-5" />
-              </button>
+            {/* Contact Seller Area */}
+            <div className="pt-4 border-t border-slate-100 space-y-3">
+              {!currentUser ? (
+                /* Guest State: Require Login */
+                <div className="p-4 rounded-2xl bg-fuchsia-50/70 border border-fuchsia-200/80 space-y-3 text-center">
+                  <div className="flex items-center justify-center gap-2 text-fuchsia-950 font-bold text-sm">
+                    <Lock className="w-4 h-4 text-fuchsia-600" />
+                    <span>{hasPhone ? 'Contact details protected' : 'Member-only direct messaging'}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
+                    {hasPhone 
+                      ? "Sign in or create a free account to view the seller's phone number, WhatsApp contact, or start a direct chat."
+                      : "Sign in or create a free account to start an in-app conversation with this seller."
+                    }
+                  </p>
+                  <div className="flex gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={onRequireAuth}
+                      className="flex-1 py-3 px-4 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-xs rounded-xl shadow-md shadow-fuchsia-600/20 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      <span>{hasPhone ? 'Sign In to View Phone & WhatsApp' : 'Sign In to Chat with Seller'}</span>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (navigator.share) {
+                          navigator.share({ title: ad.title, text: ad.description, url: window.location.href }).catch(() => {});
+                        }
+                      }}
+                      className="p-3 bg-white hover:bg-slate-100 text-slate-600 rounded-xl font-bold border border-slate-200 active:scale-[0.98] transition-transform cursor-pointer"
+                      title="Share"
+                    >
+                      <ShareIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : hasPhone ? (
+                !showPhone ? (
+                  /* Case 1: Seller left a phone number, click to reveal */
+                  <div className="flex gap-3">
+                    <button 
+                      className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700 text-white py-3.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-md shadow-fuchsia-600/20 active:scale-[0.98] transition-all cursor-pointer"
+                      onClick={() => setShowPhone(true)}
+                    >
+                      <Phone className="w-4 h-4" />
+                      <span>Show Phone Number</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (navigator.share) {
+                          navigator.share({ title: ad.title, text: ad.description, url: window.location.href }).catch(() => {});
+                        }
+                      }}
+                      className="p-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold active:scale-[0.98] transition-transform cursor-pointer"
+                      title="Share"
+                    >
+                      <ShareIcon className="w-5 h-5" />
+                    </button>
+                  </div>
+                ) : (
+                  /* Phone number revealed */
+                  <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-emerald-950 font-black text-base sm:text-lg">
+                        <Phone className="w-4 h-4 text-emerald-600" />
+                        <span>{sellerPhone}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(sellerPhone);
+                          setPhoneCopied(true);
+                          setTimeout(() => setPhoneCopied(false), 2000);
+                        }}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-100 flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        {phoneCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{phoneCopied ? 'Copied!' : 'Copy'}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <a
+                        href={`tel:${sellerPhone}`}
+                        className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-center"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        <span>Call</span>
+                      </a>
+                      <a
+                        href={`https://wa.me/${cleanPhone}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-2.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-center"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>WhatsApp</span>
+                      </a>
+                    </div>
+
+                    {onOpenChat && (
+                      <div className="pt-2 border-t border-emerald-200/60 text-center">
+                        <button
+                          type="button"
+                          onClick={() => onOpenChat({ name: ad.seller_name, userId: ad.user_id, avatar: ad.seller_image })}
+                          className="text-xs font-semibold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                        >
+                          Or chat via in-app messages on MyCityUnlocked →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              ) : (
+                /* Case 2: Seller did NOT leave a phone number -> open in-app chat */
+                <div className="space-y-1.5">
+                  <div className="flex gap-3">
+                    <button 
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer"
+                      onClick={() => {
+                        if (onOpenChat) {
+                          onOpenChat({ name: ad.seller_name, userId: ad.user_id, avatar: ad.seller_image });
+                        } else {
+                          window.location.href = `mailto:seller@example.com?subject=MyCityUnlocked: Inquiry about ${ad.title}`;
+                        }
+                      }}
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>Chat with Seller (In-App)</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (navigator.share) {
+                          navigator.share({ title: ad.title, text: ad.description, url: window.location.href }).catch(() => {});
+                        }
+                      }}
+                      className="p-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold active:scale-[0.98] transition-transform cursor-pointer"
+                      title="Share"
+                    >
+                      <ShareIcon className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 text-center">
+                    No phone number provided · Contact the seller directly via in-app chat
+                  </p>
+                </div>
+              )}
             </div>
             </div>
           </div>
@@ -10649,8 +11296,10 @@ function HomeView({
               <p className="hidden md:block text-slate-500 text-base md:text-base lg:text-lg leading-relaxed font-medium">
                 From reliable pros to local events and visitor tips, you're in the right place.
               </p>
-              <p className="text-brand-blue font-bold italic text-sm sm:text-base md:text-base lg:text-lg transition-colors hover:text-brand-navy cursor-default -mt-0.5 md:mt-0">
-                Discover better, belong faster.
+              <p className="text-brand-blue font-bold italic text-sm sm:text-base md:text-base lg:text-lg transition-colors hover:text-brand-navy cursor-default -mt-0.5 md:mt-0 inline-flex flex-wrap items-center gap-x-0.5">
+                <span>Discover</span>
+                <RotatingCylinderWord />
+                <span>better, belong faster.</span>
               </p>
             </div>
           </div>
@@ -12662,56 +13311,11 @@ function DirectoryProCardItem({
                 <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
                   <button
                     type="button"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const shareUrl = `${window.location.origin}${window.location.pathname}?proId=${pro.id}`;
-                      const shareData = {
-                        title: pro.name,
-                        url: shareUrl
-                      };
-                      
-                      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-                        try {
-                          await navigator.share(shareData);
-                        } catch (err) {
-                          console.warn('Share sheets failed or cancelled:', err);
-                        }
-                      } else {
-                        try {
-                          await navigator.clipboard.writeText(shareUrl);
-                          setShared(true);
-                          setTimeout(() => setShared(false), 2000);
-                        } catch (err) {
-                          console.error('Failed to copy share link:', err);
-                        }
-                      }
-                    }}
-                    className={cn(
-                      "px-5 py-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xs border cursor-pointer",
-                      shared
-                        ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
-                        : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
-                    )}
-                  >
-                    {shared ? (
-                      <>
-                        <Check className="w-4 h-4" />
-                        <span>Link copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <ShareIcon className="w-4 h-4 text-slate-600" />
-                        <span>Share pro profile</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onToggleExpand();
                     }}
-                    className="w-full sm:w-auto px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xs"
+                    className="w-full sm:w-auto px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xs cursor-pointer"
                   >
                     <ChevronUp className="w-4 h-4 text-slate-500" />
                     <span>Close details</span>
@@ -17172,91 +17776,921 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
   );
 }
 
-function MarketplaceView({ onAddAd, ads, onSelectAd, scrollToTop }: { onAddAd: () => void, ads: Ad[], onSelectAd: (ad: Ad) => void, scrollToTop?: () => void }) {
+function MarketplaceView({ 
+  onAddAd, 
+  ads, 
+  onSelectAd, 
+  scrollToTop,
+  currentUser,
+  onNavigate,
+  favoriteAdIds,
+  onToggleFavoriteAd
+}: { 
+  onAddAd: () => void; 
+  ads: Ad[]; 
+  onSelectAd: (ad: Ad) => void; 
+  scrollToTop?: () => void;
+  currentUser?: any;
+  onNavigate?: (view: View, params?: any) => void;
+  favoriteAdIds?: string[];
+  onToggleFavoriteAd?: (id: string | number) => void;
+}) {
   useEffect(() => {
     scrollToTop?.();
   }, []);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedLocation, setSelectedLocation] = useState<string>('All');
+  const [customLocationInput, setCustomLocationInput] = useState<string>('');
+  const [isManualLocationActive, setIsManualLocationActive] = useState<boolean>(false);
+  const [selectedCondition, setSelectedCondition] = useState<string>('All');
+  const [selectedPriceRange, setSelectedPriceRange] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('newest');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [showSavedOnly, setShowSavedOnly] = useState<boolean>(false);
+  const [savedAdIds, setSavedAdIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('unlocked_marketplace_saved');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const effectiveSavedIds = favoriteAdIds !== undefined ? favoriteAdIds : savedAdIds;
+
+  // Reset price range when switching category so filter adapts cleanly
+  useEffect(() => {
+    setSelectedPriceRange('all');
+  }, [selectedCategory]);
+
+  const toggleSaveAd = (adId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onToggleFavoriteAd) {
+      onToggleFavoriteAd(adId);
+      return;
+    }
+    setSavedAdIds(prev => {
+      const updated = prev.includes(adId) ? prev.filter(id => id !== adId) : [...prev, adId];
+      try {
+        localStorage.setItem('unlocked_marketplace_saved', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Could not save favorite to localStorage', err);
+      }
+      return updated;
+    });
+  };
+
+  const categories = [
+    { id: 'All', label: 'All Items', icon: Sparkles },
+    { id: 'Clothing', label: 'Fashion & Vintage', icon: Shirt },
+    { id: 'Home', label: 'Furniture & Home', icon: Armchair },
+    { id: 'Electronics', label: 'Electronics & Tech', icon: Music },
+    { id: 'Leisure', label: 'Bikes & Sports', icon: Bike },
+    { id: 'School & Kids', label: 'Kids & Baby', icon: GraduationCap },
+    { id: 'Books', label: 'Books & Media', icon: BookOpen },
+    { id: 'Relocation', label: 'Moving Out', icon: Package },
+    { id: 'Free', label: 'Free Giveaways', icon: Gift },
+  ];
+
+  // Valencia City Neighborhoods vs Surrounding Suburbs
+  const valenciaNeighborhoods = [
+    { label: 'Ruzafa', value: 'Ruzafa' },
+    { label: 'El Carmen / Ciutat Vella', value: 'El Carmen' },
+    { label: 'Eixample / Gran Vía', value: 'Eixample' },
+    { label: 'Benimaclet', value: 'Benimaclet' },
+    { label: 'Cabañal / Malvarrosa', value: 'Cabañal' },
+    { label: 'Campanar', value: 'Campanar' },
+    { label: 'Mestalla / Blasco Ibáñez', value: 'Mestalla' },
+    { label: 'Patraix', value: 'Patraix' },
+    { label: 'Quatre Carreres', value: 'Quatre Carreres' },
+    { label: 'Olivereta', value: 'Olivereta' },
+    { label: 'Extramurs', value: 'Extramurs' },
+    { label: 'Pla del Real', value: 'Pla del Real' }
+  ];
+
+  const valenciaSuburbs = [
+    { label: "L'Eliana", value: "L'Eliana" },
+    { label: 'Bétera', value: 'Bétera' },
+    { label: 'Rocafort', value: 'Rocafort' },
+    { label: 'Godella', value: 'Godella' },
+    { label: 'La Cañada', value: 'La Cañada' },
+    { label: 'Paterna', value: 'Paterna' },
+    { label: 'Moncada', value: 'Moncada' },
+    { label: 'Alboraya / Port Saplaya', value: 'Alboraya' },
+    { label: 'Puçol', value: 'Puçol' },
+    { label: 'Torrent', value: 'Torrent' },
+    { label: 'El Saler', value: 'El Saler' },
+    { label: 'Sagunto', value: 'Sagunto' },
+    { label: 'San Antonio de Benagéber', value: 'San Antonio' }
+  ];
+
+  // Category-specific price ranges
+  const categoryPriceRangesMap: Record<string, { id: string; label: string; min?: number; max?: number }[]> = {
+    'Clothing': [
+      { id: 'all', label: 'All Clothing Prices' },
+      { id: 'cl_under_15', label: '< €15 (Thrift Deals)', max: 15 },
+      { id: 'cl_15_40', label: '€15 - €40', min: 15, max: 40 },
+      { id: 'cl_40_100', label: '€40 - €100 (Jackets & Rare)', min: 40, max: 100 },
+      { id: 'cl_100_plus', label: '€100+ (Designer Vintage)', min: 100 },
+    ],
+    'Home': [
+      { id: 'all', label: 'All Furniture & Decor' },
+      { id: 'hm_under_30', label: '< €30 (Ceramics & Lamps)', max: 30 },
+      { id: 'hm_30_100', label: '€30 - €100', min: 30, max: 100 },
+      { id: 'hm_100_300', label: '€100 - €300 (Mid-Century)', min: 100, max: 300 },
+      { id: 'hm_300_plus', label: '€300+', min: 300 },
+    ],
+    'Electronics': [
+      { id: 'all', label: 'All Vinyl & Audio' },
+      { id: 'el_under_25', label: '< €25 (LPs & Vinyl)', max: 25 },
+      { id: 'el_25_80', label: '€25 - €80', min: 25, max: 80 },
+      { id: 'el_80_250', label: '€80 - €250 (Turntables/Amps)', min: 80, max: 250 },
+      { id: 'el_250_plus', label: '€250+', min: 250 },
+    ],
+    'Leisure': [
+      { id: 'all', label: 'All Bikes & Sports' },
+      { id: 'ls_under_30', label: '< €30', max: 30 },
+      { id: 'ls_30_90', label: '€30 - €90', min: 30, max: 90 },
+      { id: 'ls_90_180', label: '€90 - €180 (City Bikes)', min: 90, max: 180 },
+      { id: 'ls_180_plus', label: '€180+', min: 180 },
+    ],
+    'School & Kids': [
+      { id: 'all', label: 'All Kids & Baby' },
+      { id: 'sk_free', label: 'Free Giveaway (€0)', max: 0.1 },
+      { id: 'sk_under_15', label: '< €15', max: 15 },
+      { id: 'sk_15_40', label: '€15 - €40', min: 15, max: 40 },
+      { id: 'sk_40_plus', label: '€40+', min: 40 },
+    ],
+    'Free': [
+      { id: 'all', label: '100% Free / Zero Waste' },
+    ],
+    'Relocation': [
+      { id: 'all', label: 'All Moving Out Deals' },
+      { id: 'rel_free', label: 'Free (€0)', max: 0.1 },
+      { id: 'rel_under_30', label: '< €30', max: 30 },
+      { id: 'rel_30_80', label: '€30 - €80', min: 30, max: 80 },
+      { id: 'rel_80_plus', label: '€80+', min: 80 },
+    ],
+    'Services': [
+      { id: 'all', label: 'All Rates' },
+      { id: 'srv_under_25', label: '< €25/h', max: 25 },
+      { id: 'srv_25_50', label: '€25 - €50/h', min: 25, max: 50 },
+      { id: 'srv_50_plus', label: '€50+/h', min: 50 },
+    ],
+  };
+
+  const currentPriceRanges = categoryPriceRangesMap[selectedCategory] || [
+    { id: 'all', label: 'All Prices' },
+    { id: 'def_under_30', label: '< €30', max: 30 },
+    { id: 'def_30_100', label: '€30 - €100', min: 30, max: 100 },
+    { id: 'def_100_300', label: '€100 - €300', min: 100, max: 300 },
+    { id: 'def_300_plus', label: '€300+', min: 300 },
+  ];
+
+  const parseNumericPrice = (priceStr?: string): number => {
+    if (!priceStr) return 0;
+    const cleaned = priceStr.replace(/[^0-9.]/g, '');
+    const val = parseFloat(cleaned);
+    return isNaN(val) ? 0 : val;
+  };
+
+  const formatRelativeTime = (dateStr?: string) => {
+    if (!dateStr) return 'Recently';
+    try {
+      const diffMs = Date.now() - new Date(dateStr).getTime();
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      if (diffHours < 1) return 'Just now';
+      if (diffHours === 1) return '1h ago';
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return '1d ago';
+      if (diffDays < 30) return `${diffDays}d ago`;
+      return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch {
+      return 'Recently';
+    }
+  };
+
+  // Filtered & Sorted Ads
+  const filteredAds = useMemo(() => {
+    const list = Array.isArray(ads) ? ads : [];
+
+    return list
+      .filter((ad) => {
+        if (!ad) return false;
+
+        // Search query
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase().trim();
+          const matchTitle = (ad.title || '').toLowerCase().includes(q);
+          const matchDesc = (ad.description || '').toLowerCase().includes(q);
+          const matchLoc = (ad.location || '').toLowerCase().includes(q);
+          const matchSeller = (ad.seller_name || '').toLowerCase().includes(q);
+          const matchCat = (ad.category || '').toLowerCase().includes(q);
+          if (!matchTitle && !matchDesc && !matchLoc && !matchSeller && !matchCat) return false;
+        }
+
+        // Category filter
+        if (selectedCategory !== 'All' && ad.category !== selectedCategory) {
+          return false;
+        }
+
+        // Saved filter
+        if (showSavedOnly && !effectiveSavedIds.includes(String(ad.id))) {
+          return false;
+        }
+
+        // Location filter (manual input takes precedence if active)
+        const adLocLower = (ad.location || '').toLowerCase();
+        if (isManualLocationActive && customLocationInput.trim()) {
+          const customTerm = customLocationInput.toLowerCase().trim();
+          if (!adLocLower.includes(customTerm)) {
+            return false;
+          }
+        } else if (selectedLocation !== 'All' && selectedLocation !== 'CUSTOM_INPUT') {
+          const targetTerm = selectedLocation.toLowerCase().trim();
+          if (!adLocLower.includes(targetTerm)) {
+            return false;
+          }
+        }
+
+        // Condition filter
+        if (selectedCondition !== 'All') {
+          const adCond = (ad.condition || '').toLowerCase();
+          const targetCond = selectedCondition.toLowerCase();
+          if (targetCond.includes('pristine') || targetCond === 'new') {
+            if (!adCond.includes('new') && !adCond.includes('pristine')) return false;
+          } else if (targetCond.includes('like new') || targetCond.includes('loved')) {
+            if (!adCond.includes('like new') && !adCond.includes('loved') && !adCond.includes('pristine')) return false;
+          } else if (targetCond.includes('good')) {
+            if (!adCond.includes('good')) return false;
+          } else if (targetCond.includes('upcycle')) {
+            if (!adCond.includes('upcycle')) return false;
+          } else if (targetCond.includes('fair') || targetCond.includes('distressed')) {
+            if (!adCond.includes('fair') && !adCond.includes('distressed')) return false;
+          } else if (targetCond.includes('free')) {
+            if (!adCond.includes('free') && !((ad.price || '').toLowerCase().includes('free'))) return false;
+          } else if (!adCond.includes(targetCond) && !targetCond.includes(adCond)) {
+            return false;
+          }
+        }
+
+        // Dynamic price range filter
+        if (selectedPriceRange !== 'all') {
+          const numPrice = parseNumericPrice(ad.price);
+          const activeRange = currentPriceRanges.find(r => r.id === selectedPriceRange);
+          if (activeRange) {
+            if (activeRange.min !== undefined && numPrice < activeRange.min) return false;
+            if (activeRange.max !== undefined && numPrice > activeRange.max) return false;
+          }
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'price_asc') {
+          return parseNumericPrice(a.price) - parseNumericPrice(b.price);
+        }
+        if (sortBy === 'price_desc') {
+          return parseNumericPrice(b.price) - parseNumericPrice(a.price);
+        }
+        if (sortBy === 'title_asc') {
+          return (a.title || '').localeCompare(b.title || '');
+        }
+        // newest first (default)
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      });
+  }, [ads, searchQuery, selectedCategory, selectedLocation, isManualLocationActive, customLocationInput, selectedCondition, selectedPriceRange, currentPriceRanges, sortBy, showSavedOnly, savedAdIds]);
+
+  const hasActiveFilters = searchQuery.trim() !== '' || selectedCategory !== 'All' || selectedLocation !== 'All' || customLocationInput.trim() !== '' || selectedCondition !== 'All' || selectedPriceRange !== 'all' || showSavedOnly;
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setSelectedCategory('All');
+    setSelectedLocation('All');
+    setCustomLocationInput('');
+    setIsManualLocationActive(false);
+    setSelectedCondition('All');
+    setSelectedPriceRange('all');
+    setShowSavedOnly(false);
+  };
+
+  const handleLocationSelect = (val: string) => {
+    if (val === 'CUSTOM_INPUT') {
+      setIsManualLocationActive(true);
+      setSelectedLocation('CUSTOM_INPUT');
+    } else {
+      setSelectedLocation(val);
+      setIsManualLocationActive(false);
+      setCustomLocationInput('');
+    }
+  };
+
+  const handleAddAdClick = () => {
+    if (!currentUser) {
+      onNavigate?.('login');
+      return;
+    }
+    onAddAd();
+  };
+
+  // Flag pour mettre la page en construction. Passer à false pour la réactiver instantanément.
+  const isUnderConstruction = true;
+
+  if (isUnderConstruction) {
+    return (
+      <div className="p-4 md:p-10 pt-8 md:pt-14 space-y-6 pb-32 max-w-3xl mx-auto text-center">
+        <div className="bg-white rounded-3xl border border-slate-200/80 p-8 sm:p-14 shadow-sm space-y-6">
+          <div className="relative inline-flex items-center justify-center">
+            <div className="w-20 h-20 rounded-3xl bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center shadow-xs">
+              <Wrench className="w-9 h-9 stroke-[2]" />
+            </div>
+            <span className="absolute -top-1 -right-1 flex h-4 w-4">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500"></span>
+            </span>
+          </div>
+
+          <div className="space-y-3 max-w-lg mx-auto">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200/70 text-amber-800 text-xs font-bold tracking-wide uppercase">
+              <Clock className="w-3.5 h-3.5" />
+              <span>Under Construction</span>
+            </div>
+            
+            <h1 className="text-2xl sm:text-3xl font-black font-display text-slate-900 tracking-tight">
+              MyCityUnlocked <span className="text-fuchsia-600">Thrift</span> is getting an upgrade
+            </h1>
+            
+            <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
+              We’re currently fine-tuning this space to give you a smoother, simpler way to buy, sell, and pass on second-hand treasures in Valencia.
+            </p>
+            <p className="text-slate-400 text-xs">
+              Check back very soon! In the meantime, explore local events and guides.
+            </p>
+          </div>
+
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => onNavigate?.('home')}
+              className="px-6 py-3 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-sm rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Discover</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate?.('events')}
+              className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-all cursor-pointer"
+            >
+              <span>Explore Events</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-[80vh] flex items-center justify-center p-6">
-      <div className="max-w-xl w-full text-center space-y-12">
-        {/* Animated Icon Group */}
-        <div className="relative inline-block">
-          <motion.div
-            animate={{ 
-              scale: [1, 1.05, 1],
-              rotate: [0, 5, -5, 0]
-            }}
-            transition={{ 
-              duration: 6, 
-              repeat: Infinity,
-              ease: "easeInOut" 
-            }}
-            className="w-32 h-32 bg-brand-blue/5 rounded-[40px] flex items-center justify-center relative z-10"
-          >
-            <ShoppingBag className="w-12 h-12 text-brand-blue" />
-          </motion.div>
-          
-          {/* Decorative elements */}
-          <motion.div 
-            animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 4, repeat: Infinity }}
-            className="absolute -top-4 -right-4 w-12 h-12 bg-rose-100 rounded-full blur-2xl"
-          />
-          <motion.div 
-            animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0.4, 0.2] }}
-            transition={{ duration: 5, repeat: Infinity, delay: 1 }}
-            className="absolute -bottom-8 -left-8 w-20 h-20 bg-brand-blue/20 rounded-full blur-3xl"
-          />
-        </div>
-
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <motion.p 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-[10px] font-black text-brand-blue uppercase tracking-[0.5em]"
-            >
-              Exclusive Community Area
-            </motion.p>
-            <motion.h2 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="text-4xl md:text-6xl font-black font-display text-brand-navy tracking-tight"
-            >
-              Marketplace <br/>
-              <span className="text-brand-blue italic font-medium">Coming Soon.</span>
-            </motion.h2>
+    <div className="p-4 md:p-10 pt-3 md:pt-5 space-y-6 pb-32 max-w-7xl mx-auto">
+      {/* Clean Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-fuchsia-50 text-fuchsia-600 flex items-center justify-center border border-fuchsia-200/80 shrink-0">
+              <Tag className="w-5 h-5 stroke-[2.2]" />
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-black font-display text-slate-900 tracking-tight">
+                MyCityUnlocked <span className="text-fuchsia-600">Thrift</span>
+              </h1>
+            </div>
           </div>
-          
-          <motion.p 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="text-slate-500 text-sm md:text-base leading-relaxed max-w-md mx-auto"
-          >
-            We're building a secure, private space for our community to trade, share, and connect. Stay tuned for the grand opening.
-          </motion.p>
+          <p className="text-slate-500 text-sm mt-1.5">
+            Local second-hand, vintage & pre-loved community exchange in Valencia.
+          </p>
         </div>
 
-        {/* Status indicator */}
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="flex items-center justify-center gap-3"
+        <button
+          type="button"
+          onClick={handleAddAdClick}
+          className="self-start sm:self-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2 shrink-0 cursor-pointer active:scale-95"
         >
-          <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-brand-blue animate-pulse" />
-            <div className="w-1.5 h-1.5 rounded-full bg-brand-blue/40" />
-            <div className="w-1.5 h-1.5 rounded-full bg-brand-blue/20" />
+          <Plus className="w-4 h-4 stroke-[2.5]" />
+          <span>Post an Ad</span>
+        </button>
+      </div>
+
+      {/* Search Bar & Categories */}
+      <div className="space-y-4">
+        {/* Search Input */}
+        <div className="relative">
+          <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-600" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search second-hand bikes, furniture, vintage clothes, electronics, books..."
+            className="w-full pl-12 sm:pl-13 pr-12 py-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs focus:ring-2 focus:ring-emerald-500/25 focus:border-emerald-600 outline-none text-sm md:text-base text-slate-900 placeholder:text-slate-400 font-medium transition-all"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+              title="Clear search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Category Horizontal Filter */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+          {categories.map((cat) => {
+            const Icon = cat.icon;
+            const isSelected = selectedCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCategory(cat.id)}
+                className={cn(
+                  "px-4 py-2.5 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer shrink-0 border",
+                  isSelected
+                    ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-emerald-50/50 hover:text-emerald-950 hover:border-emerald-200"
+                )}
+              >
+                <Icon className={cn("w-4 h-4", isSelected ? "text-white" : "text-emerald-600")} />
+                <span>{cat.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Secondary Controls Bar: Location, Dynamic Price Range, Condition, Sort */}
+      <div className="space-y-3 p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+            {/* Location Select */}
+            <div className="relative">
+              <select
+                value={selectedLocation}
+                onChange={(e) => handleLocationSelect(e.target.value)}
+                className="pl-8 pr-8 py-2 bg-slate-50 text-slate-800 text-xs font-semibold rounded-xl border border-slate-200 shadow-2xs hover:bg-white outline-none cursor-pointer appearance-none max-w-[210px] truncate"
+              >
+                <option value="All">📍 All Valencia Locations</option>
+                <optgroup label="Valencia City Neighborhoods">
+                  {valenciaNeighborhoods.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Suburbs & Surrounding Towns">
+                  {valenciaSuburbs.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </optgroup>
+                <option value="CUSTOM_INPUT">✏️ Enter Custom Location...</option>
+              </select>
+              <MapPin className="w-3.5 h-3.5 text-emerald-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {/* Manual Location Toggle */}
+            {!isManualLocationActive ? (
+              <button
+                type="button"
+                onClick={() => setIsManualLocationActive(true)}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1 cursor-pointer"
+                title="Type any location"
+              >
+                <Edit2 className="w-3 h-3" />
+                <span>Type location</span>
+              </button>
+            ) : null}
+
+            {/* Dynamic Category Price Range Select */}
+            <div className="relative">
+              <select
+                value={selectedPriceRange}
+                onChange={(e) => setSelectedPriceRange(e.target.value)}
+                className="pl-8 pr-8 py-2 bg-slate-50 text-slate-800 text-xs font-semibold rounded-xl border border-slate-200 shadow-2xs hover:bg-white outline-none cursor-pointer appearance-none"
+              >
+                {currentPriceRanges.map((range) => (
+                  <option key={range.id} value={range.id}>
+                    {range.label}
+                  </option>
+                ))}
+              </select>
+              <Euro className="w-3.5 h-3.5 text-emerald-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {/* Condition Select */}
+            <div className="relative">
+              <select
+                value={selectedCondition}
+                onChange={(e) => setSelectedCondition(e.target.value)}
+                className="pl-8 pr-8 py-2 bg-slate-50 text-slate-800 text-xs font-semibold rounded-xl border border-slate-200 shadow-2xs hover:bg-white outline-none cursor-pointer appearance-none"
+              >
+                <option value="All">All Conditions</option>
+                <option value="Pristine Vintage">Pristine Vintage</option>
+                <option value="Like New">Like New / Gently Loved</option>
+                <option value="Good">Good Vintage</option>
+                <option value="Upcycled">Upcycled / Custom</option>
+                <option value="Fair">Fair / Distressed</option>
+                <option value="Free">Free / Zero Waste</option>
+              </select>
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {/* Saved Items Filter Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowSavedOnly(!showSavedOnly)}
+              className={cn(
+                "px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer",
+                showSavedOnly
+                  ? "bg-rose-50 text-rose-700 border-rose-200 shadow-2xs"
+                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+              )}
+              title="Show saved listings"
+            >
+              <Heart className={cn("w-3.5 h-3.5", showSavedOnly ? "fill-rose-500 text-rose-500" : "text-slate-400")} />
+              <span>Saved ({effectiveSavedIds.length})</span>
+            </button>
+
+            {/* Reset Filters Shortcut */}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-900 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            System Refinement in Progress
-          </span>
-        </motion.div>
+
+          {/* Right side: Sort & View Toggle */}
+          <div className="flex items-center gap-3">
+            {/* Sort Select */}
+            <div className="relative">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="pl-8 pr-8 py-2 bg-slate-50 text-slate-800 text-xs font-semibold rounded-xl border border-slate-200 shadow-2xs hover:bg-white outline-none cursor-pointer appearance-none"
+              >
+                <option value="newest">Newest first</option>
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+                <option value="title_asc">Title A-Z</option>
+              </select>
+              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {/* Grid / List View Toggle */}
+            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl p-0.5 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={cn(
+                  "p-1.5 rounded-lg transition-colors cursor-pointer",
+                  viewMode === 'grid' ? "bg-white text-emerald-600 shadow-2xs" : "text-slate-400 hover:text-slate-600"
+                )}
+                title="Grid view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={cn(
+                  "p-1.5 rounded-lg transition-colors cursor-pointer",
+                  viewMode === 'list' ? "bg-white text-emerald-600 shadow-2xs" : "text-slate-400 hover:text-slate-600"
+                )}
+                title="List view"
+              >
+                <ListIcon className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Manual Location Input Field (Revealed when active) */}
+        {isManualLocationActive && (
+          <div className="pt-2 border-t border-slate-100 flex items-center gap-3">
+            <div className="relative flex-1">
+              <MapPin className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={customLocationInput}
+                onChange={(e) => setCustomLocationInput(e.target.value)}
+                placeholder="Type any Valencia location, town or street (e.g. L'Eliana, Bétera, Puçol, Ruzafa)..."
+                className="w-full pl-9 pr-8 py-2 bg-emerald-50/40 rounded-xl border border-emerald-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                autoFocus
+              />
+              {customLocationInput && (
+                <button
+                  type="button"
+                  onClick={() => setCustomLocationInput('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Quick location suggestions */}
+            <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+              <span>Suggestions:</span>
+              {["L'Eliana", "Bétera", "Puçol", "Rocafort", "Ruzafa"].map((town) => (
+                <button
+                  key={town}
+                  type="button"
+                  onClick={() => setCustomLocationInput(town)}
+                  className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 transition-colors"
+                >
+                  {town}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsManualLocationActive(false);
+                setCustomLocationInput('');
+                setSelectedLocation('All');
+              }}
+              className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1"
+            >
+              Close
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Results Header Counter */}
+      <div className="flex items-center justify-between text-xs text-slate-500 font-medium px-1">
+        <span>
+          Showing <strong className="text-slate-900 font-bold">{filteredAds.length}</strong> {filteredAds.length === 1 ? 'listing' : 'listings'}
+          {selectedCategory !== 'All' && ` in ${selectedCategory}`}
+          {isManualLocationActive && customLocationInput.trim() && (
+            <span className="ml-1 text-emerald-700 font-semibold">near "{customLocationInput.trim()}"</span>
+          )}
+        </span>
+        <span className="hidden sm:inline">MyCityUnlocked Community Exchange · Click any listing for full details</span>
+      </div>
+
+      {/* Ads Container (Grid or List View) */}
+      {filteredAds.length > 0 ? (
+        viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredAds.map((ad) => {
+              const isSaved = effectiveSavedIds.includes(String(ad.id));
+              const displayPrice = ad.price?.includes('€') ? ad.price : `${ad.price}€`;
+              const displayImage = ad.image_url || (ad.images && ad.images[0]) || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400';
+
+              return (
+                <div
+                  key={ad.id}
+                  onClick={() => onSelectAd(ad)}
+                  className="group bg-white rounded-3xl border border-slate-200/80 hover:border-emerald-300 shadow-2xs hover:shadow-xl hover:shadow-emerald-500/10 transition-all duration-300 overflow-hidden flex flex-col cursor-pointer hover:-translate-y-1"
+                >
+                  {/* Image container */}
+                  <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden">
+                    <img
+                      src={displayImage}
+                      alt={ad.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                      loading="lazy"
+                    />
+
+                    {/* Distinctive Emerald Price floating tag */}
+                    <div className="absolute bottom-3 left-3 bg-emerald-600 text-white font-extrabold text-sm sm:text-base px-3 py-1.5 rounded-xl shadow-md">
+                      {displayPrice}
+                    </div>
+
+                    {/* Favorite save button */}
+                    <button
+                      type="button"
+                      onClick={(e) => toggleSaveAd(String(ad.id), e)}
+                      className={cn(
+                        "absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-transform active:scale-90 backdrop-blur-md shadow-md cursor-pointer",
+                        isSaved
+                          ? "bg-rose-500 text-white"
+                          : "bg-white/90 text-slate-600 hover:bg-white hover:text-rose-500"
+                      )}
+                      title={isSaved ? "Remove from saved" : "Save ad"}
+                    >
+                      <Heart className={cn("w-4 h-4", isSaved && "fill-current")} />
+                    </button>
+                  </div>
+
+                  {/* Body content */}
+                  <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                    <div className="space-y-2">
+                      {/* Zero-pill metadata line with clean typographic separators */}
+                      <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5 flex-wrap">
+                        <span className="text-emerald-600 font-bold">{ad.category}</span>
+                        {ad.condition && ad.condition !== 'N/A' && (
+                          <>
+                            <span aria-hidden="true" className="text-slate-300">·</span>
+                            <span>{ad.condition}</span>
+                          </>
+                        )}
+                        {ad.location && (
+                          <>
+                            <span aria-hidden="true" className="text-slate-300">·</span>
+                            <span className="truncate max-w-[170px] text-slate-600 font-medium">{ad.location}</span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Title */}
+                      <h3 className="font-bold text-base text-slate-900 group-hover:text-emerald-600 transition-colors line-clamp-1 leading-snug">
+                        {ad.title}
+                      </h3>
+
+                      {/* Brief description */}
+                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                        {ad.description}
+                      </p>
+                    </div>
+
+                    {/* Footer: Seller & Time */}
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {ad.seller_image ? (
+                          <img
+                            src={ad.seller_image}
+                            alt={ad.seller_name || 'Seller'}
+                            className="w-6 h-6 rounded-full object-cover shrink-0"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-bold text-emerald-800 shrink-0">
+                            {(ad.seller_name || 'U').charAt(0)}
+                          </div>
+                        )}
+                        <span className="font-medium text-slate-700 truncate">{ad.seller_name || 'MyCityUnlocked Member'}</span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 shrink-0">{formatRelativeTime(ad.created_at)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* List View */
+          <div className="space-y-3">
+            {filteredAds.map((ad) => {
+              const isSaved = effectiveSavedIds.includes(String(ad.id));
+              const displayPrice = ad.price?.includes('€') ? ad.price : `${ad.price}€`;
+              const displayImage = ad.image_url || (ad.images && ad.images[0]) || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400';
+
+              return (
+                <div
+                  key={ad.id}
+                  onClick={() => onSelectAd(ad)}
+                  className="group bg-white rounded-2xl border border-slate-200/80 hover:border-emerald-300 p-3 sm:p-4 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between cursor-pointer"
+                >
+                  <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
+                    <img
+                      src={displayImage}
+                      alt={ad.title}
+                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 bg-slate-100"
+                      loading="lazy"
+                    />
+                    <div className="space-y-1 min-w-0">
+                      <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5 flex-wrap">
+                        <span className="text-emerald-600 font-bold">{ad.category}</span>
+                        {ad.condition && ad.condition !== 'N/A' && (
+                          <>
+                            <span aria-hidden="true" className="text-slate-300">·</span>
+                            <span>{ad.condition}</span>
+                          </>
+                        )}
+                        {ad.location && (
+                          <>
+                            <span aria-hidden="true" className="text-slate-300">·</span>
+                            <span className="text-slate-600">{ad.location}</span>
+                          </>
+                        )}
+                      </div>
+                      <h3 className="font-bold text-base text-slate-900 group-hover:text-emerald-600 transition-colors truncate">
+                        {ad.title}
+                      </h3>
+                      <p className="text-xs text-slate-500 line-clamp-1 max-w-xl">
+                        {ad.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-slate-100">
+                    <div className="text-lg font-black text-emerald-700">
+                      {displayPrice}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => toggleSaveAd(String(ad.id), e)}
+                        className={cn(
+                          "p-2 rounded-xl transition-colors cursor-pointer",
+                          isSaved ? "text-rose-500 bg-rose-50" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        )}
+                        title={isSaved ? "Remove from saved" : "Save ad"}
+                      >
+                        <Heart className={cn("w-4 h-4", isSaved && "fill-current")} />
+                      </button>
+                      <span className="text-xs text-emerald-600 font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                        <span>Details</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : (
+        /* Clean Empty State */
+        <div className="bg-slate-50 rounded-3xl border border-slate-200 p-10 text-center space-y-4 max-w-md mx-auto my-8">
+          <div className="w-14 h-14 bg-white rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-center mx-auto text-emerald-600">
+            <Tag className="w-6 h-6 text-emerald-600" />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="text-lg font-bold text-slate-900 font-display">No items match your filters</h3>
+            <p className="text-slate-500 text-xs sm:text-sm leading-relaxed max-w-sm mx-auto">
+              Try modifying your search keywords, clearing selected filters, or checking back soon.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 shadow-2xs transition-colors cursor-pointer"
+            >
+              Reset Filters
+            </button>
+            <button
+              type="button"
+              onClick={handleAddAdClick}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Post an Ad</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Community Trust Strip */}
+      <div className="mt-14 pt-8 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 text-left">
+        <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+          <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Direct Local Exchange</h4>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Connect directly with local residents and expats across Valencia for easy pick-up.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+          <Euro className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Zero Fees</h4>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              100% free community platform. No commission, listing fees or middleman charges.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+          <MapPin className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">All Valencia & Suburbs</h4>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Ruzafa, Carmen, Eixample, Cabañal, and towns like L'Eliana, Bétera, Rocafort.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -17462,7 +18896,13 @@ function ProfileView({
   onToggleFavoriteEvent,
   favoriteProIds = [],
   onToggleFavoritePro,
-  events = []
+  favoriteAdIds = [],
+  onToggleFavoriteAd,
+  allAds = [],
+  events = [],
+  onOpenCreateAd,
+  onSelectAd,
+  onAdDeleted
 }: { 
   scrollToTop?: () => void, 
   onNavigate?: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
@@ -17477,11 +18917,17 @@ function ProfileView({
   onToggleFavoriteEvent?: (id: string) => void,
   favoriteProIds?: string[],
   onToggleFavoritePro?: (id: string | number) => void,
-  events?: Event[]
+  favoriteAdIds?: string[],
+  onToggleFavoriteAd?: (id: string | number) => void,
+  allAds?: Ad[],
+  events?: Event[],
+  onOpenCreateAd?: () => void,
+  onSelectAd?: (ad: Ad) => void,
+  onAdDeleted?: () => void
 }) {
   const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
-  const [myAccountTab, setMyAccountTab] = useState<'profile' | 'favorites' | 'testimonies' | 'chats'>('favorites');
-  const [favSubTab, setFavSubTab] = useState<'pros' | 'events'>('pros');
+  const [myAccountTab, setMyAccountTab] = useState<'favorites' | 'testimonies' | 'chats'>('favorites');
+  const [favSubTab, setFavSubTab] = useState<'all' | 'pros' | 'events'>('all');
   const [expandedFavProId, setExpandedFavProId] = useState<string | null>(null);
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -17497,6 +18943,125 @@ function ProfileView({
   const [docContent, setDocContent] = useState<string>('');
   const [docTitle, setDocTitle] = useState<string>('');
   const [isLoadingDoc, setIsLoadingDoc] = useState(false);
+
+  // Marketplace listings state
+  const [myAds, setMyAds] = useState<Ad[]>([]);
+  const [loadingMyAds, setLoadingMyAds] = useState(false);
+  const [deletingAdId, setDeletingAdId] = useState<string | null>(null);
+  const [confirmDeleteAdId, setConfirmDeleteAdId] = useState<string | null>(null);
+
+  // Push Notifications state
+  const [oneSignalAppId, setOneSignalAppId] = useState<string>(() => oneSignalService.getAppId());
+  const [tempAppId, setTempAppId] = useState<string>(() => oneSignalService.getAppId());
+  const [isEditingAppId, setIsEditingAppId] = useState<boolean>(false);
+  const [oneSignalSubId, setOneSignalSubId] = useState<string | null>(null);
+
+  const [pushStatus, setPushStatus] = useState<NotificationPermission | 'unsupported'>(() => {
+    return pushNotificationService.getPermission();
+  });
+  const [isPushSubscribed, setIsPushSubscribed] = useState<boolean>(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushFeedback, setPushFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [showPushSqlModal, setShowPushSqlModal] = useState(false);
+  const [showOneSignalGuide, setShowOneSignalGuide] = useState(false);
+
+  useEffect(() => {
+    const initPush = async () => {
+      if (oneSignalService.getAppId()) {
+        try {
+          await oneSignalService.init(currentUser?.id);
+          const sub = await oneSignalService.isSubscribed();
+          setIsPushSubscribed(sub);
+          const subId = await oneSignalService.getSubscriptionId();
+          setOneSignalSubId(subId);
+        } catch (e) {
+          console.warn('OneSignal check failed:', e);
+        }
+      } else if (pushNotificationService.isSupported()) {
+        setPushStatus(pushNotificationService.getPermission());
+        const sub = await pushNotificationService.getExistingSubscription();
+        setIsPushSubscribed(!!sub);
+      }
+    };
+    initPush();
+  }, [currentUser, oneSignalAppId]);
+
+  const handleSaveAppId = async () => {
+    const trimmed = tempAppId.trim();
+    if (!trimmed) {
+      setPushFeedback({ type: 'error', text: 'Veuillez saisir un App ID valide.' });
+      return;
+    }
+    setPushLoading(true);
+    setPushFeedback(null);
+    try {
+      oneSignalService.setAppId(trimmed);
+      setOneSignalAppId(trimmed);
+      setIsEditingAppId(false);
+      await oneSignalService.init(currentUser?.id);
+      const sub = await oneSignalService.isSubscribed();
+      setIsPushSubscribed(sub);
+      const subId = await oneSignalService.getSubscriptionId();
+      setOneSignalSubId(subId);
+      setPushFeedback({ type: 'success', text: 'OneSignal App ID configuré et initialisé avec succès !' });
+    } catch (err: any) {
+      setPushFeedback({ type: 'error', text: err?.message || 'Erreur lors de la configuration de OneSignal.' });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const handleTogglePush = async () => {
+    setPushLoading(true);
+    setPushFeedback(null);
+    try {
+      if (oneSignalService.getAppId()) {
+        if (isPushSubscribed) {
+          await oneSignalService.unsubscribe();
+          setIsPushSubscribed(false);
+          setPushFeedback({ type: 'success', text: 'Notifications OneSignal désactivées sur cet appareil.' });
+        } else {
+          await oneSignalService.subscribe(currentUser?.id);
+          setIsPushSubscribed(true);
+          const subId = await oneSignalService.getSubscriptionId();
+          setOneSignalSubId(subId);
+          setPushFeedback({ type: 'success', text: 'Abonné aux notifications OneSignal avec succès !' });
+        }
+      } else {
+        if (isPushSubscribed) {
+          await pushNotificationService.unsubscribeUser(currentUser?.id || 'guest');
+          setIsPushSubscribed(false);
+          setPushFeedback({ type: 'success', text: 'Notifications push désactivées sur cet appareil.' });
+        } else {
+          await pushNotificationService.subscribeUser(currentUser?.id || 'guest');
+          setIsPushSubscribed(true);
+          setPushStatus('granted');
+          setPushFeedback({ type: 'success', text: 'Notifications push activées avec succès !' });
+        }
+      }
+    } catch (err: any) {
+      console.error('Push toggle error:', err);
+      setPushFeedback({ type: 'error', text: err?.message || 'Erreur lors de la configuration des notifications.' });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const handleSendTestNotification = async () => {
+    setPushLoading(true);
+    setPushFeedback(null);
+    try {
+      await pushNotificationService.showLocalNotification(
+        'Unlocked Valencia 🌴',
+        'Test OneSignal / PWA réussi ! Les notifications s\'affichent sur votre appareil.'
+      );
+      setPushFeedback({ type: 'success', text: 'Notification de test envoyée avec succès sur votre appareil !' });
+    } catch (err: any) {
+      setPushFeedback({ type: 'error', text: err?.message || 'Impossible d\'envoyer la notification de test.' });
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedDocKey) {
@@ -17581,12 +19146,49 @@ function ProfileView({
     }
   };
 
+  const fetchMyAds = React.useCallback(async () => {
+    if (!currentUser?.id) return;
+    setLoadingMyAds(true);
+    try {
+      const allMarketplaceAds = await marketplaceService.getAds();
+      const currentUserName = userProfile?.full_name || currentUser?.user_metadata?.full_name;
+      const userAds = allMarketplaceAds.filter(ad => 
+        (ad.user_id && ad.user_id === currentUser.id) || 
+        (currentUserName && ad.seller_name && ad.seller_name.trim().toLowerCase() === currentUserName.trim().toLowerCase())
+      );
+      setMyAds(userAds);
+    } catch (e) {
+      console.error('Error fetching my marketplace ads:', e);
+    } finally {
+      setLoadingMyAds(false);
+    }
+  }, [currentUser?.id, currentUser?.user_metadata?.full_name, userProfile?.full_name]);
+
+  const handleDeleteAd = async (adId: string) => {
+    setDeletingAdId(adId);
+    try {
+      await marketplaceService.deleteAd(adId);
+      await fetchMyAds();
+      onAdDeleted?.();
+      setMsg({ type: 'success', text: 'Marketplace item removed successfully.' });
+      setTimeout(() => setMsg(null), 4000);
+    } catch (err: any) {
+      console.error('Error deleting marketplace item:', err);
+      setMsg({ type: 'error', text: err?.message || 'Failed to remove marketplace item.' });
+      setTimeout(() => setMsg(null), 4000);
+    } finally {
+      setDeletingAdId(null);
+      setConfirmDeleteAdId(null);
+    }
+  };
+
   useEffect(() => {
     if (activeSubPage === 'My Account') {
       fetchMyTestimonies();
       fetchMyConversations();
+      fetchMyAds();
     }
-  }, [activeSubPage, userProfile]);
+  }, [activeSubPage, userProfile, fetchMyAds]);
 
   useEffect(() => {
     if (activeSubPage !== 'Settings') {
@@ -17705,6 +19307,7 @@ function ProfileView({
 
   const handleLogout = async () => {
     try {
+      await oneSignalService.logoutUser();
       await authService.signOut();
       localStorage.removeItem('keep_me_signed_in');
       localStorage.removeItem('unlocked_active_view');
@@ -18021,11 +19624,11 @@ function ProfileView({
               </div>
 
               {/* Stats & Quick Navigation Row */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-3">
                 <button 
                   onClick={() => setMyAccountTab('favorites')}
                   className={cn(
-                    "p-4 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
+                    "p-3.5 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
                     myAccountTab === 'favorites' ? "border-rose-300 ring-2 ring-rose-500/5 bg-rose-50/10" : "border-slate-100/90 hover:border-rose-100"
                   )}
                 >
@@ -18033,7 +19636,7 @@ function ProfileView({
                     <Heart className={cn("w-4 h-4", myAccountTab === 'favorites' && "fill-rose-500")} />
                   </div>
                   <div>
-                    <div className="text-lg font-black text-slate-800 leading-none">{favoriteProIds.length + favoriteEventIds.length}</div>
+                    <div className="text-lg font-black text-slate-800 leading-none">{favoriteProIds.length + favoriteEventIds.length + favoriteAdIds.length}</div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Favorites</div>
                   </div>
                 </button>
@@ -18041,7 +19644,7 @@ function ProfileView({
                 <button 
                   onClick={() => setMyAccountTab('testimonies')}
                   className={cn(
-                    "p-4 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
+                    "p-3.5 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
                     myAccountTab === 'testimonies' ? "border-brand-blue/30 ring-2 ring-brand-blue/5 bg-brand-blue/5" : "border-slate-100/90 hover:border-brand-blue/10"
                   )}
                 >
@@ -18057,11 +19660,11 @@ function ProfileView({
                 <button 
                   onClick={() => setMyAccountTab('chats')}
                   className={cn(
-                    "p-4 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
-                    myAccountTab === 'chats' ? "border-emerald-300 ring-2 ring-emerald-500/5 bg-emerald-50/10" : "border-slate-100/90 hover:border-emerald-100"
+                    "p-3.5 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
+                    myAccountTab === 'chats' ? "border-sky-300 ring-2 ring-sky-500/5 bg-sky-50/10" : "border-slate-100/90 hover:border-sky-100"
                   )}
                 >
-                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'chats' ? "bg-emerald-50 text-emerald-500" : "bg-slate-50 text-slate-400")}>
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'chats' ? "bg-sky-50 text-sky-600" : "bg-slate-50 text-slate-400")}>
                     <MessageSquare className="w-4 h-4" />
                   </div>
                   <div>
@@ -18094,204 +19697,175 @@ function ProfileView({
                     className="space-y-4"
                   >
                     <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
-                      {/* Header and Sub-tabs */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-50 pb-4">
-                        <div className="flex items-center gap-2">
-                          <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />
-                          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Favorites</h3>
-                        </div>
+                      {/* Header with Total Count and Subtitle */}
+                      {(() => {
+                        const totalFavorites = favoriteProIds.length + favoriteEventIds.length + favoriteAdIds.length;
+                        const adSource = (allAds && allAds.length > 0) ? allAds : myAds;
+                        const savedPros = allPros.filter(pro => favoriteProIds.includes(String(pro.id)));
+                        const savedEvents = events?.filter(ev => favoriteEventIds.includes(ev.id)) || [];
+                        const savedAds = adSource.filter(ad => favoriteAdIds.includes(String(ad.id)));
 
-                        {/* Sub-tab pills */}
-                        <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl self-start sm:self-auto">
-                          <button
-                            type="button"
-                            onClick={() => setFavSubTab('pros')}
-                            className={cn(
-                              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
-                              favSubTab === 'pros'
-                                ? "bg-white text-slate-900 shadow-2xs font-extrabold"
-                                : "text-slate-500 hover:text-slate-800"
-                            )}
-                          >
-                            <User className="w-3.5 h-3.5 text-brand-blue" />
-                            <span>Professionals</span>
-                            <span className={cn(
-                              "text-[10px] px-1.5 py-0.2 rounded-full",
-                              favSubTab === 'pros' ? "bg-blue-50 text-brand-blue" : "bg-slate-200/60 text-slate-600"
-                            )}>{favoriteProIds.length}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFavSubTab('events')}
-                            className={cn(
-                              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
-                              favSubTab === 'events'
-                                ? "bg-white text-slate-900 shadow-2xs font-extrabold"
-                                : "text-slate-500 hover:text-slate-800"
-                            )}
-                          >
-                            <Calendar className="w-3.5 h-3.5 text-orange-500" />
-                            <span>Events</span>
-                            <span className={cn(
-                              "text-[10px] px-1.5 py-0.2 rounded-full",
-                              favSubTab === 'events' ? "bg-orange-50 text-orange-600" : "bg-slate-200/60 text-slate-600"
-                            )}>{favoriteEventIds.length}</span>
-                          </button>
-                        </div>
-                      </div>
+                        const renderProsList = (showEmpty = true) => {
+                          if (savedPros.length === 0) {
+                            if (!showEmpty) return null;
+                            return (
+                              <div className="py-10 text-center space-y-3 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 p-6">
+                                <div className="w-12 h-12 bg-blue-50 text-brand-blue rounded-2xl flex items-center justify-center mx-auto">
+                                  <User className="w-6 h-6" />
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="font-bold text-slate-800 text-sm">No favorite professionals saved yet</p>
+                                  <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                                    Browse verified local service providers, doctors, tutors, and handymen in Valencia and save your favorites here.
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveSubPage(null);
+                                    onNavigate?.('explore');
+                                  }}
+                                  className="px-4 py-2 bg-brand-blue hover:bg-blue-600 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer active:scale-95"
+                                >
+                                  Explore Directory
+                                </button>
+                              </div>
+                            );
+                          }
 
-                      {/* Content depending on favSubTab */}
-                      {favSubTab === 'pros' ? (
-                        <div>
-                          {favoriteProIds.length === 0 ? (
-                            <div className="py-12 text-center space-y-4">
-                              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto text-rose-400">
-                                <Heart className="w-8 h-8" />
-                              </div>
-                              <div className="space-y-1">
-                                <p className="font-bold text-slate-800">No favorite professionals saved yet</p>
-                                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                                  Browse verified local service providers, handymen, tutors, and tax advisors in Valencia and save your top recommendations here!
-                                </p>
-                              </div>
-                              <button
-                                onClick={() => {
-                                  setActiveSubPage(null);
-                                  onNavigate?.('explore');
-                                }}
-                                className="px-5 py-2.5 bg-brand-blue hover:bg-blue-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all cursor-pointer active:scale-95"
-                              >
-                                Explore Directory
-                              </button>
-                            </div>
-                          ) : (
+                          return (
                             <div className="divide-y divide-slate-100/80">
-                              {allPros
-                                .filter(pro => favoriteProIds.includes(String(pro.id)))
-                                .map(pro => {
-                                  const isExpanded = expandedFavProId === String(pro.id);
-                                  return (
-                                    <div key={pro.id} className="py-4 first:pt-0 last:pb-0 flex flex-col gap-3 group">
-                                      <div className="flex items-center gap-4">
-                                        <div className="w-14 h-14 rounded-2xl bg-slate-100 overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center">
-                                          {pro.image ? (
-                                            <img src={pro.image} alt={pro.name} className="w-full h-full object-cover" />
-                                          ) : (
-                                            <User className="w-6 h-6 text-slate-300" />
-                                          )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-[9px] font-extrabold uppercase tracking-widest text-brand-blue bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
-                                              {pro.category || 'Professional'}
-                                            </span>
-                                            {typeof pro.rating === 'number' && pro.rating > 0 ? (
-                                              <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5">
-                                                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                                {pro.rating}
-                                              </span>
-                                            ) : null}
-                                          </div>
-                                          <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-sm truncate mt-1">
-                                            {pro.name}
-                                          </h4>
-                                          {pro.company_name && (
-                                            <p className="text-xs text-slate-500 font-medium truncate">{pro.company_name}</p>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <button
-                                            onClick={() => {
-                                              setExpandedFavProId(isExpanded ? null : String(pro.id));
-                                            }}
-                                            className={cn(
-                                              "px-3.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer",
-                                              isExpanded 
-                                                ? "bg-brand-blue text-white hover:bg-blue-600 shadow-sm"
-                                                : "bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-brand-blue"
-                                            )}
-                                          >
-                                            {isExpanded ? 'Close' : 'View'}
-                                          </button>
-                                          <button
-                                            onClick={() => onToggleFavoritePro?.(pro.id)}
-                                            className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
-                                            title="Remove favorite"
-                                          >
-                                            <Heart className="w-4 h-4 fill-rose-500" />
-                                          </button>
-                                        </div>
+                              {savedPros.map(pro => {
+                                const isExpanded = expandedFavProId === String(pro.id);
+                                return (
+                                  <div key={pro.id} className="py-3.5 first:pt-0 last:pb-0 flex flex-col gap-3 group">
+                                    <div className="flex items-center gap-3.5">
+                                      <div className="w-13 h-13 rounded-2xl bg-slate-100 overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center">
+                                        {pro.image ? (
+                                          <img src={pro.image} alt={pro.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                          <User className="w-6 h-6 text-slate-300" />
+                                        )}
                                       </div>
-
-                                      {/* Inline Expanded Professional Card */}
-                                      {isExpanded && (
-                                        <div className="mt-1 border border-slate-100 rounded-3xl overflow-hidden shadow-xs bg-slate-50/5 p-1">
-                                          <DirectoryProCardItem
-                                            pro={pro}
-                                            index={0}
-                                            isExpanded={true}
-                                            onToggleExpand={() => setExpandedFavProId(null)}
-                                            currentUser={currentUser}
-                                            userProfile={userProfile}
-                                            onNavigate={onNavigate}
-                                            onProUpdate={refetchPros}
-                                            userLocation={null}
-                                            hasRealLocation={false}
-                                            favoriteProIds={favoriteProIds}
-                                            onToggleFavoritePro={onToggleFavoritePro}
-                                          />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-brand-blue bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
+                                            {pro.category || 'Professional'}
+                                          </span>
+                                          {typeof pro.rating === 'number' && pro.rating > 0 ? (
+                                            <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5">
+                                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                              {pro.rating}
+                                            </span>
+                                          ) : null}
                                         </div>
-                                      )}
+                                        <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-sm truncate mt-1">
+                                          {pro.name}
+                                        </h4>
+                                        {pro.company_name && (
+                                          <p className="text-xs text-slate-500 font-medium truncate">{pro.company_name}</p>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setExpandedFavProId(isExpanded ? null : String(pro.id));
+                                          }}
+                                          className={cn(
+                                            "px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer",
+                                            isExpanded 
+                                              ? "bg-brand-blue text-white hover:bg-blue-600 shadow-sm"
+                                              : "bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-brand-blue"
+                                          )}
+                                        >
+                                          {isExpanded ? 'Close' : 'View'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => onToggleFavoritePro?.(pro.id)}
+                                          className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
+                                          title="Remove from favorites"
+                                        >
+                                          <Heart className="w-4 h-4 fill-rose-500" />
+                                        </button>
+                                      </div>
                                     </div>
-                                  );
-                                })}
+
+                                    {isExpanded && (
+                                      <div className="mt-1 border border-slate-100 rounded-3xl overflow-hidden shadow-xs bg-slate-50/5 p-1">
+                                        <DirectoryProCardItem
+                                          pro={pro}
+                                          index={0}
+                                          isExpanded={true}
+                                          onToggleExpand={() => setExpandedFavProId(null)}
+                                          currentUser={currentUser}
+                                          userProfile={userProfile}
+                                          onNavigate={onNavigate}
+                                          onProUpdate={refetchPros}
+                                          userLocation={null}
+                                          hasRealLocation={false}
+                                          favoriteProIds={favoriteProIds}
+                                          onToggleFavoritePro={onToggleFavoritePro}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div>
-                          {favoriteEventIds.length === 0 ? (
-                            <div className="py-12 text-center space-y-4">
-                              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto text-rose-400">
-                                <Heart className="w-8 h-8" />
+                          );
+                        };
+
+                        const renderEventsList = (showEmpty = true) => {
+                          if (savedEvents.length === 0) {
+                            if (!showEmpty) return null;
+                            return (
+                              <div className="py-10 text-center space-y-3 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 p-6">
+                                <div className="w-12 h-12 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center mx-auto">
+                                  <Calendar className="w-6 h-6" />
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="font-bold text-slate-800 text-sm">No favorite events saved yet</p>
+                                  <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                                    Browse upcoming concerts, festivals, cultural tours and workshops in Valencia.
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveSubPage(null);
+                                    onNavigate?.('events');
+                                  }}
+                                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer active:scale-95"
+                                >
+                                  Explore Events
+                                </button>
                               </div>
-                              <div className="space-y-1">
-                                <p className="font-bold text-slate-800">No favorite events yet</p>
-                                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                                  Browse upcoming concerts, workshops, and city tours, and click the heart icon to save them here!
-                                </p>
-                              </div>
-                              <button
-                                onClick={() => {
-                                  setActiveSubPage(null);
-                                  onNavigate?.('events');
-                                }}
-                                className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all cursor-pointer active:scale-95"
-                              >
-                                Explore Events
-                              </button>
-                            </div>
-                          ) : (
+                            );
+                          }
+
+                          return (
                             <div className="divide-y divide-slate-100/80">
-                              {events?.filter(ev => favoriteEventIds.includes(ev.id)).map(event => {
+                              {savedEvents.map(event => {
                                 const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
                                 return (
-                                  <div key={event.id} className="py-4 first:pt-0 last:pb-0 flex items-center gap-4 group">
+                                  <div key={event.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center gap-3.5 group">
                                     <img 
                                       src={event.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=200'} 
                                       alt="" 
-                                      className="w-16 h-16 rounded-xl object-cover shrink-0 bg-slate-50 border border-slate-100" 
+                                      className="w-15 h-15 rounded-xl object-cover shrink-0 bg-slate-50 border border-slate-100" 
                                       referrerPolicy="no-referrer"
                                     />
                                     <div className="flex-1 min-w-0">
                                       <span className="text-[9px] font-extrabold uppercase tracking-widest text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100/50">
                                         {event.category || 'Event'}
                                       </span>
-                                      <h4 className="font-bold text-slate-900 group-hover:text-orange-500 transition-colors text-sm truncate mt-1.5">
+                                      <h4 className="font-bold text-slate-900 group-hover:text-orange-500 transition-colors text-sm truncate mt-1">
                                         {event.title}
                                       </h4>
                                       <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                        <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                                         <span>{formattedDate}</span>
                                         {event.location && (
                                           <>
@@ -18301,20 +19875,22 @@ function ProfileView({
                                         )}
                                       </p>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5 shrink-0">
                                       <button
+                                        type="button"
                                         onClick={() => {
                                           setActiveSubPage(null);
                                           onNavigate?.('events', { eventId: event.id });
                                         }}
-                                        className="px-3.5 py-1.5 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                        className="px-3 py-1.5 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
                                       >
                                         View
                                       </button>
                                       <button
+                                        type="button"
                                         onClick={() => onToggleFavoriteEvent?.(event.id)}
-                                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
-                                        title="Remove favorite"
+                                        className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
+                                        title="Remove from favorites"
                                       >
                                         <Heart className="w-4 h-4 fill-rose-500" />
                                       </button>
@@ -18323,9 +19899,206 @@ function ProfileView({
                                 );
                               })}
                             </div>
-                          )}
-                        </div>
-                      )}
+                          );
+                        };
+
+
+
+                        return (
+                          <>
+                            {/* Header Row */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100/80 flex items-center justify-center text-rose-500 shrink-0">
+                                  <Heart className="w-5 h-5 fill-rose-500" />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-bold text-slate-900 text-base tracking-tight font-display">My Favorites</h3>
+                                    <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-100/80 text-rose-700">
+                                      {totalFavorites}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-0.5">
+                                    Your saved professionals, events & second-hand finds in Valencia
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Intuitive Category Filter Selector (Grid layout, perfectly responsive) */}
+                            <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-100/80 rounded-2xl">
+                              {/* Tab: All */}
+                              <button
+                                type="button"
+                                onClick={() => setFavSubTab('all')}
+                                className={cn(
+                                  "py-2.5 px-2 sm:px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between sm:justify-center gap-1 sm:gap-2 min-w-0",
+                                  favSubTab === 'all'
+                                    ? "bg-white text-slate-900 shadow-2xs font-extrabold"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
+                                )}
+                              >
+                                <div className="flex items-center gap-1 min-w-0">
+                                  <LayoutGrid className={cn("w-3.5 h-3.5 shrink-0", favSubTab === 'all' ? "text-rose-500" : "text-slate-400")} />
+                                  <span className="truncate">All</span>
+                                </div>
+                                <span className={cn(
+                                  "text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0",
+                                  favSubTab === 'all' ? "bg-rose-50 text-rose-600" : "bg-slate-200/70 text-slate-600"
+                                )}>
+                                  {totalFavorites}
+                                </span>
+                              </button>
+
+                              {/* Tab: Professionals */}
+                              <button
+                                type="button"
+                                onClick={() => setFavSubTab('pros')}
+                                className={cn(
+                                  "py-2.5 px-2 sm:px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between sm:justify-center gap-1 sm:gap-2 min-w-0",
+                                  favSubTab === 'pros'
+                                    ? "bg-white text-slate-900 shadow-2xs font-extrabold"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
+                                )}
+                              >
+                                <div className="flex items-center gap-1 min-w-0">
+                                  <User className={cn("w-3.5 h-3.5 shrink-0", favSubTab === 'pros' ? "text-brand-blue" : "text-slate-400")} />
+                                  <span className="truncate">Pros</span>
+                                </div>
+                                <span className={cn(
+                                  "text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0",
+                                  favSubTab === 'pros' ? "bg-blue-50 text-brand-blue" : "bg-slate-200/70 text-slate-600"
+                                )}>
+                                  {favoriteProIds.length}
+                                </span>
+                              </button>
+
+                              {/* Tab: Events */}
+                              <button
+                                type="button"
+                                onClick={() => setFavSubTab('events')}
+                                className={cn(
+                                  "py-2.5 px-2 sm:px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between sm:justify-center gap-1 sm:gap-2 min-w-0",
+                                  favSubTab === 'events'
+                                    ? "bg-white text-slate-900 shadow-2xs font-extrabold"
+                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
+                                )}
+                              >
+                                <div className="flex items-center gap-1 min-w-0">
+                                  <Calendar className={cn("w-3.5 h-3.5 shrink-0", favSubTab === 'events' ? "text-orange-500" : "text-slate-400")} />
+                                  <span className="truncate">Events</span>
+                                </div>
+                                <span className={cn(
+                                  "text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0",
+                                  favSubTab === 'events' ? "bg-orange-50 text-orange-600" : "bg-slate-200/70 text-slate-600"
+                                )}>
+                                  {favoriteEventIds.length}
+                                </span>
+                              </button>
+                            </div>
+
+                            {/* Tab Contents */}
+                            {favSubTab === 'all' && (
+                              <div className="space-y-6 pt-1">
+                                {totalFavorites === 0 ? (
+                                  <div className="py-12 text-center space-y-4 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200 p-6">
+                                    <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto text-rose-400">
+                                      <Heart className="w-8 h-8" />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="font-bold text-slate-800">No favorites saved yet</p>
+                                      <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                                        You haven't saved any professionals or events yet. Tap the heart icon anywhere across the app to bookmark your top picks here!
+                                      </p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveSubPage(null);
+                                          onNavigate?.('explore');
+                                        }}
+                                        className="px-4 py-2 bg-brand-blue hover:bg-blue-600 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                                      >
+                                        Browse Directory
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveSubPage(null);
+                                          onNavigate?.('events');
+                                        }}
+                                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                                      >
+                                        Browse Events
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-6">
+                                    {/* Pros Section */}
+                                    {savedPros.length > 0 && (
+                                      <div className="space-y-3">
+                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                                          <div className="flex items-center gap-2">
+                                            <User className="w-4 h-4 text-brand-blue" />
+                                            <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                                              Professionals ({savedPros.length})
+                                            </h4>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => setFavSubTab('pros')}
+                                            className="text-xs text-brand-blue font-bold hover:underline cursor-pointer"
+                                          >
+                                            View only pros →
+                                          </button>
+                                        </div>
+                                        {renderProsList(false)}
+                                      </div>
+                                    )}
+
+                                    {/* Events Section */}
+                                    {savedEvents.length > 0 && (
+                                      <div className="space-y-3">
+                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                                          <div className="flex items-center gap-2">
+                                            <Calendar className="w-4 h-4 text-orange-500" />
+                                            <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                                              Events ({savedEvents.length})
+                                            </h4>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => setFavSubTab('events')}
+                                            className="text-xs text-orange-600 font-bold hover:underline cursor-pointer"
+                                          >
+                                            View only events →
+                                          </button>
+                                        </div>
+                                        {renderEventsList(false)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {favSubTab === 'pros' && (
+                              <div className="pt-1">
+                                {renderProsList(true)}
+                              </div>
+                            )}
+
+                            {favSubTab === 'events' && (
+                              <div className="pt-1">
+                                {renderEventsList(true)}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </motion.div>
                 )}
@@ -18630,6 +20403,220 @@ function ProfileView({
         {activeSubPage === 'Settings' && (
           <ProfileSubPage key="subpage-settings" title="Settings" onBack={() => setActiveSubPage(null)}>
             <div className="max-w-2xl mx-auto space-y-6">
+              {/* OneSignal Push Notifications Section - ADMIN ONLY */}
+              {isAdmin && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-600 flex items-center justify-center shrink-0 font-black text-xs">
+                        <Bell className="w-5 h-5 text-red-500" />
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-bold text-slate-900">Notifications Push (OneSignal)</p>
+                          <span className={cn(
+                            "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
+                            isPushSubscribed ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                            oneSignalAppId ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                            "bg-slate-100 text-slate-600 border border-slate-200"
+                          )}>
+                            {isPushSubscribed ? 'Abonné' : oneSignalAppId ? 'Prêt à s\'abonner' : 'App ID manquant'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Envoyez et recevez des notifications push instantanées via le service OneSignal.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Push Toggle Switch */}
+                    <button
+                      type="button"
+                      onClick={handleTogglePush}
+                      disabled={pushLoading || (!oneSignalAppId && !pushNotificationService.isSupported())}
+                      className={cn(
+                        "w-12 h-6 rounded-full relative transition-colors cursor-pointer shrink-0 mt-2",
+                        pushLoading && "opacity-60 cursor-wait",
+                        !oneSignalAppId && "opacity-50 cursor-not-allowed",
+                        isPushSubscribed ? "bg-emerald-600" : "bg-slate-200"
+                      )}
+                      title={!oneSignalAppId ? "Renseignez d'abord votre OneSignal App ID ci-dessous" : isPushSubscribed ? "Désactiver les notifications" : "Activer les notifications"}
+                    >
+                      <div className={cn(
+                        "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all flex items-center justify-center",
+                        isPushSubscribed ? "right-1" : "left-1"
+                      )}>
+                        {pushLoading && <Loader2 className="w-2.5 h-2.5 animate-spin text-slate-400" />}
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* App ID configuration row */}
+                  <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-100 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700">OneSignal App ID</span>
+                      {!isEditingAppId ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTempAppId(oneSignalAppId);
+                            setIsEditingAppId(true);
+                          }}
+                          className="text-xs text-brand-blue font-bold hover:underline cursor-pointer"
+                        >
+                          {oneSignalAppId ? 'Modifier' : 'Configurer'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingAppId(false)}
+                          className="text-xs text-slate-400 font-medium hover:underline cursor-pointer"
+                        >
+                          Annuler
+                        </button>
+                      )}
+                    </div>
+
+                    {isEditingAppId ? (
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={tempAppId}
+                          onChange={(e) => setTempAppId(e.target.value)}
+                          placeholder="Ex: 8a7b3c2d-1234-4567-89ab-cdef01234567"
+                          className="flex-1 px-3 py-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-blue font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveAppId}
+                          disabled={pushLoading}
+                          className="px-3 py-2 bg-brand-blue text-white text-xs font-bold rounded-lg hover:bg-brand-blue/90 cursor-pointer disabled:opacity-50"
+                        >
+                          Enregistrer
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
+                        <span>{oneSignalAppId ? `${oneSignalAppId.slice(0, 8)}...${oneSignalAppId.slice(-6)}` : 'Non configuré (cliquez sur Configurer)'}</span>
+                        {oneSignalSubId && (
+                          <span className="text-[10px] text-emerald-600 font-sans font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                            ID: {oneSignalSubId.slice(0, 8)}...
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* iOS instructions if running in browser */}
+                  {pushNotificationService.isIOSInBrowser() && (
+                    <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed">
+                      <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">Configuration requise sur iPhone / iPad (iOS 16.4+) :</p>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          Apple autorise les notifications push uniquement si l'application est ajoutée à votre écran d'accueil. Appuyez sur le bouton <strong>Partager ⎋</strong> de Safari puis sur <strong>« Sur l'écran d'accueil »</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Push feedback alert */}
+                  {pushFeedback && (
+                    <div className={cn(
+                      "p-3 rounded-xl text-xs font-semibold flex items-center gap-2 animate-in fade-in",
+                      pushFeedback.type === 'success' ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"
+                    )}>
+                      {pushFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                      <span>{pushFeedback.text}</span>
+                    </div>
+                  )}
+
+                  {/* Actions Row */}
+                  <div className="pt-2 flex flex-wrap items-center gap-2.5 border-t border-slate-50">
+                    <button
+                      type="button"
+                      onClick={handleSendTestNotification}
+                      disabled={pushLoading}
+                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Tester une notification</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowOneSignalGuide(!showOneSignalGuide)}
+                      className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>{showOneSignalGuide ? 'Fermer le guide' : 'Guide OneSignal pas-à-pas'}</span>
+                    </button>
+
+                    <a
+                      href="https://dashboard.onesignal.com"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ml-auto"
+                    >
+                      <span>Dashboard OneSignal</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+
+                  {/* Expandable OneSignal Guide */}
+                  {showOneSignalGuide && (
+                    <div className="mt-3 p-4 bg-slate-50 rounded-xl text-xs space-y-3 border border-slate-200 text-slate-700 leading-relaxed animate-in fade-in">
+                      <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                        <Rocket className="w-4 h-4 text-red-500" />
+                        Configuration OneSignal & Déploiement Stores (Play Store & App Store) :
+                      </p>
+                      
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1.5 text-blue-900">
+                        <p className="font-bold flex items-center gap-1.5">
+                          <Smartphone className="w-4 h-4 text-brand-blue" />
+                          Sur les smartphones de vos utilisateurs (iOS & Android) :
+                        </p>
+                        <p className="text-[11px] text-blue-800">
+                          • <strong>Invite automatique mobile :</strong> Nous avons intégré une bannière d'abonnement qui apparaît automatiquement sur le téléphone de vos utilisateurs lorsqu'ils ouvrent l'application pour leur proposer d'activer les alertes en 1 clic.
+                          <br />
+                          • <strong>Android (Google Play) :</strong> Les notifications arrivent directement dans le tiroir de notification Android avec vibration et son.
+                          <br />
+                          • <strong>iOS (Apple App Store) :</strong> L'utilisateur doit accepter l'autorisation native une fois dans l'application pour recevoir les alertes sur l'écran verrouillé.
+                        </p>
+                      </div>
+
+                      <ol className="list-decimal pl-4 space-y-2">
+                        <li>
+                          <strong>Créer votre compte OneSignal :</strong> Rendez-vous sur <a href="https://onesignal.com" target="_blank" rel="noreferrer" className="text-brand-blue underline font-semibold">onesignal.com</a>.
+                        </li>
+                        <li>
+                          <strong>Créer une application :</strong> Cliquez sur <em>« New App/Website »</em>, nommez-la <em>Unlocked</em>.
+                        </li>
+                        <li>
+                          <strong>Configuration Web Push (couvre Web, PWA & Wrappers stores) :</strong>
+                          <ul className="list-disc pl-4 mt-1 text-slate-600 text-[11px] space-y-0.5">
+                            <li>Choisissez <strong>Web Push</strong> → <strong>Typical Site</strong>.</li>
+                            <li>Site URL : L'adresse URL de production de votre application.</li>
+                          </ul>
+                        </li>
+                        <li>
+                          <strong>(Optionnel) Clés natives pour wrappers Play Store & App Store :</strong>
+                          <p className="text-[11px] text-slate-600 mt-0.5">
+                            Si votre wrapper mobile utilise les services natifs : dans OneSignal <em>Settings → Platforms</em>, vous pouvez ajouter <strong>Google Android (FCM)</strong> avec vos clés Firebase, et <strong>Apple iOS (APNs)</strong> avec la clé <code>.p8</code> de votre compte Apple Developer.
+                          </p>
+                        </li>
+                        <li>
+                          <strong>Renseigner votre App ID :</strong> Copiez votre <strong>OneSignal App ID</strong> (depuis <em>Settings → Keys & IDs</em>) et collez-le dans le champ ci-dessus.
+                        </li>
+                        <li>
+                          <strong>Envoyer vos notifications :</strong> Rendez-vous dans <em>Messages → New Message → Push Notification</em> sur le dashboard OneSignal. Vos utilisateurs sur iPhone et Android recevront la notification en direct !
+                        </li>
+                      </ol>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Chat Participation Section */}
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                 {[

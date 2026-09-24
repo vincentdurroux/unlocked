@@ -1,3 +1,10 @@
+// OneSignal Web SDK Service Worker integration
+try {
+  importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+} catch (e) {
+  console.warn('[Service Worker] Could not load OneSignal SDK worker:', e);
+}
+
 // Service Worker for Unlocked PWA
 const CACHE_NAME = 'unlocked-cache-v1';
 const ASSETS_TO_CACHE = [
@@ -72,5 +79,80 @@ self.addEventListener('fetch', (event) => {
           }
         });
       })
+  );
+});
+
+// ==========================================
+// Web Push Notifications Handling
+// ==========================================
+
+self.addEventListener('push', (event) => {
+  console.log('[Service Worker] Push event received');
+
+  let data = {
+    title: 'Unlocked Valencia',
+    body: 'You have a new notification!',
+    icon: '/logo2.png',
+    badge: '/logo2.png',
+    url: '/'
+  };
+
+  if (event.data) {
+    try {
+      const json = event.data.json();
+      data = { ...data, ...json };
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: data.icon || '/logo2.png',
+    badge: data.badge || '/logo2.png',
+    vibrate: [100, 50, 100],
+    data: {
+      url: data.url || '/',
+      dateOfArrival: Date.now(),
+      primaryKey: 1
+    },
+    actions: data.actions || [
+      { action: 'open', title: 'Open App' },
+      { action: 'close', title: 'Dismiss' }
+    ]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  console.log('[Service Worker] Notification clicked:', event.notification.tag);
+  event.notification.close();
+
+  if (event.action === 'close') {
+    return;
+  }
+
+  const targetUrl = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // If a window is already open, focus it and navigate
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.focus();
+          if ('navigate' in client && targetUrl !== '/') {
+            client.navigate(targetUrl);
+          }
+          return;
+        }
+      }
+      // Otherwise open a new window
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
   );
 });

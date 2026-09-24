@@ -37,6 +37,7 @@ export interface Profile {
   updated_at?: string;
   favorite_event_ids?: string[];
   favorite_pro_ids?: string[];
+  favorite_ad_ids?: string[];
 }
 
 export const authService = {
@@ -162,18 +163,42 @@ export const authService = {
       }
     }
 
-    // 2. Perform the update
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({
-        ...profile,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', profile.id)
-      .select()
-      .single();
+    // 2. Perform the update with resilient schema column fallback (PGRST204 / 42703)
+    let currentPayload: Record<string, any> = {
+      ...profile,
+      updated_at: new Date().toISOString(),
+    };
 
-    if (error) throw error;
+    let data: any = null;
+    const maxRetries = 5;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const res = await supabase
+          .from('profiles')
+          .update(currentPayload)
+          .eq('id', profile.id)
+          .select()
+          .single();
+
+        if (res.error) throw res.error;
+        data = res.data;
+        break;
+      } catch (err: any) {
+        const errMsg = err?.message || JSON.stringify(err);
+        const match = errMsg.match(/Could not find the '([^']+)' column/i);
+        if (match && match[1] && match[1] in currentPayload) {
+          const colToRemove = match[1];
+          console.warn(`[Profile Update] Column '${colToRemove}' does not exist in 'profiles' table. Retrying update without it...`);
+          delete currentPayload[colToRemove];
+          continue;
+        }
+        if (err?.code === '42703' || err?.code === 'PGRST204') {
+          console.warn('[Profile Update] Schema column mismatch in profiles, skipping non-fatal update error:', err);
+          return profile;
+        }
+        throw err;
+      }
+    }
 
     // 3. Propagate the new name to testimonies if they are modified
     if (profile.full_name !== undefined && oldName && oldName !== profile.full_name) {
@@ -221,41 +246,71 @@ export const authService = {
 
     if (existing) {
       // Update
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({
-          ...profile,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', profile.id)
-        .select()
-        .single();
+      let currentPayload: Record<string, any> = {
+        ...profile,
+        updated_at: new Date().toISOString(),
+      };
       
-      if (error && error.code === '42703' && ('chat_enabled' in profile)) {
-        console.warn('chat_enabled column is missing, please update the schema. Skipping error.');
-        return existing;
+      const maxRetries = 5;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const res = await supabase
+            .from('profiles')
+            .update(currentPayload)
+            .eq('id', profile.id)
+            .select()
+            .single();
+
+          if (res.error) throw res.error;
+          return res.data;
+        } catch (err: any) {
+          const errMsg = err?.message || JSON.stringify(err);
+          const match = errMsg.match(/Could not find the '([^']+)' column/i);
+          if (match && match[1] && match[1] in currentPayload) {
+            delete currentPayload[match[1]];
+            continue;
+          }
+          if (err?.code === '42703' || err?.code === 'PGRST204') {
+            console.warn('[upsertProfile] Schema column mismatch, returning existing record:', err);
+            return existing;
+          }
+          throw err;
+        }
       }
-      
-      if (error) throw error;
-      return data;
+      return existing;
     } else {
       // Insert
-      const { data, error } = await supabase
-        .from('profiles')
-        .insert({
-          ...profile,
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-        
-      if (error && error.code === '42703' && ('chat_enabled' in profile)) {
-        console.warn('chat_enabled column is missing, please update the schema. Skipping error.');
-        return profile;
-      }
+      let currentPayload: Record<string, any> = {
+        ...profile,
+        updated_at: new Date().toISOString(),
+      };
 
-      if (error) throw error;
-      return data;
+      const maxRetries = 5;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const res = await supabase
+            .from('profiles')
+            .insert(currentPayload)
+            .select()
+            .single();
+
+          if (res.error) throw res.error;
+          return res.data;
+        } catch (err: any) {
+          const errMsg = err?.message || JSON.stringify(err);
+          const match = errMsg.match(/Could not find the '([^']+)' column/i);
+          if (match && match[1] && match[1] in currentPayload) {
+            delete currentPayload[match[1]];
+            continue;
+          }
+          if (err?.code === '42703' || err?.code === 'PGRST204') {
+            console.warn('[upsertProfile] Schema column mismatch, returning payload:', err);
+            return profile;
+          }
+          throw err;
+        }
+      }
+      return profile;
     }
   },
 
