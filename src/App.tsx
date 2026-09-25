@@ -18113,7 +18113,6 @@ function MarketplaceView({
                 )}
               >
                 <span className="text-sm leading-none">{cat.emoji}</span>
-                <Icon className={cn("w-3.5 h-3.5", isSelected ? "text-white" : "text-purple-600")} />
                 <span>{cat.label}</span>
                 {count > 0 && (
                   <span

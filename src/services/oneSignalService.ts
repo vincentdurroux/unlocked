@@ -199,6 +199,9 @@ class OneSignalService {
         } as any,
         serviceWorkerParam: { scope: '/' },
         serviceWorkerPath: 'OneSignalSDKWorker.js',
+        welcomeNotification: {
+          disable: true,
+        } as any,
       });
 
       this.isInitialized = true;
