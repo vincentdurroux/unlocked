@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Papa from 'papaparse';
 import { parseProfessionalCSV, rowToPro, detectColumnMappings, parseEventCSV, detectEventColumnMappings, rowToEvent } from './utils/csvParser';
 import { Logo } from './components/Logo';
-import { AdminAiEventSearch, getCategoryWithEmoji, parseDescriptionSections, renderFormattedContent } from './components/AdminAiEventSearch';
-import { AdminEventsManager } from './components/AdminEventsManager';
-import { AdminAnalytics } from './components/AdminAnalytics';
+import { getCategoryWithEmoji, parseDescriptionSections, renderFormattedContent } from './components/AdminAiEventSearch';
+
+const AdminAiEventSearch = React.lazy(() => import('./components/AdminAiEventSearch').then(m => ({ default: m.AdminAiEventSearch })));
+const AdminEventsManager = React.lazy(() => import('./components/AdminEventsManager').then(m => ({ default: m.AdminEventsManager })));
+const AdminAnalytics = React.lazy(() => import('./components/AdminAnalytics').then(m => ({ default: m.AdminAnalytics })));
 import { 
   Home, 
   Search, 
@@ -108,7 +110,12 @@ import {
   BarChart3,
   Compass,
   Music,
-  Recycle
+  Recycle,
+  Footprints,
+  Gem,
+  Baby,
+  Gamepad2,
+  WashingMachine
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
@@ -120,7 +127,7 @@ import { APIProvider, Map, AdvancedMarker, Pin, useMapsLibrary, useMap } from '@
 import { useProfessionals } from './hooks/useProfessionals';
 import { proService } from './services/proService';
 import { eventService, isSameDay } from './services/eventService';
-import { formatEventDate, formatEventTime, getCategoryBadge, getCategoryBadges, matchesCategoryFilter, CATEGORY_LIST, isEventExpired } from './utils/eventFormatter';
+import { formatEventDate, formatEventTime, getCategoryBadge, getCategoryBadges, matchesCategoryFilter, CATEGORY_LIST, isEventExpired, isEventMatchingDateFilter, isYearRoundEvent, getEventStartDate } from './utils/eventFormatter';
 import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { searchService } from './services/searchService';
@@ -132,6 +139,7 @@ import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
 import { LandingEventHighlightsCard } from './components/LandingEventHighlightsCard';
 import { HeaderWeatherWidget } from './components/HeaderWeatherWidget';
 import { RotatingCylinderWord } from './components/RotatingCylinderWord';
+import { MarketplaceLocationPicker } from './components/MarketplaceLocationPicker';
 
 // Custom Tooth Icon matching screenshot
 const ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -686,6 +694,15 @@ const parseAnnouncement = (ann: any) => {
 
 const GOOGLE_MAPS_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 
+export const formatSellerName = (name?: string): string => {
+  if (!name || !name.trim()) return 'Community Member';
+  const clean = name.trim();
+  const parts = clean.split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  if (parts.includes('&') || parts.includes('and') || parts.includes('+')) return clean;
+  return `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
+};
+
 const LANGUAGES_LIST = ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Russian', 'Chinese', 'Japanese', 'Arabic'];
 
 function AddressAutocomplete({ 
@@ -1232,6 +1249,37 @@ const MOCK_EVENTS: Event[] = [
 - 🎟️ **Community Registration**: [Valencia Ciudad del Running Official Portal](https://www.valenciaciudaddelrunning.com)
 - 🌐 Organizer: Valencia Running & Wellness Collective`,
     coordinates: { lat: 39.4678, lng: -0.3625 },
+    verified_real: true
+  },
+  {
+    id: 'yr-1',
+    title: 'Lonja de la Seda & Valencia Silk Heritage Permanent Exhibition',
+    date: 'Year Round',
+    start_date: 'Year Round',
+    time: '10:00 AM - 07:00 PM',
+    start_time: '10:00 AM',
+    end_time: '07:00 PM',
+    location: 'La Lonja de la Seda, Carrer de la Llotja 2, Valencia',
+    category: 'Culture',
+    image: 'https://images.unsplash.com/photo-1548625361-16a7f05a9c08?auto=format&fit=crop&q=80&w=800',
+    is_free: false,
+    price: '2€ (Free on Sundays & Holidays)',
+    ticket_url: 'https://www.valencia.es',
+    sources: [
+      { title: 'Valencia Cultural Heritage', url: 'https://www.valencia.es' }
+    ],
+    description: `**✨ What can you expect?**
+- Explore Valencia's premier UNESCO World Heritage Gothic monument and the rich history of the Mediterranean silk trade.
+- Permanent exhibition hall, courtyard with orange trees (Patio de los Naranjos), and the monumental Hall of Columns (Sala de Contratación).
+- Open Tuesday to Sunday, including all weekends. Free admission on Sundays and festive days.
+
+**🎯 Perfect for**
+- Residents, history enthusiasts, visiting friends, and families seeking an iconic cultural landmark in the heart of Valencia.
+
+**💡 Good to know (tips)**
+- 🎟️ **Admission**: 2€ General, 1€ concessions. Free on Sundays!
+- ⏰ **Opening hours**: Tuesday to Saturday 10:00 - 19:00, Sunday 10:00 - 14:00 (Open all weekends!). Closed on Mondays.`,
+    coordinates: { lat: 39.4744, lng: -0.3785 },
     verified_real: true
   }
 ];
@@ -2388,6 +2436,8 @@ export default function App() {
   const [adLocation, setAdLocation] = useState('');
   const [adLocationPrecision, setAdLocationPrecision] = useState<'approximate' | 'exact'>('approximate');
   const [adExactAddress, setAdExactAddress] = useState('');
+  const [adLat, setAdLat] = useState<number | null>(null);
+  const [adLng, setAdLng] = useState<number | null>(null);
   const [adDescription, setAdDescription] = useState('');
   const [adHousingType, setAdHousingType] = useState<'Rent' | 'Sale'>('Rent');
   const [adFuelType, setAdFuelType] = useState('Petrol');
@@ -2537,6 +2587,9 @@ export default function App() {
         location: finalLocation,
         location_precision: adLocationPrecision,
         exact_address: adExactAddress.trim() || undefined,
+        lat: adLat || undefined,
+        lng: adLng || undefined,
+        coordinates: adLat && adLng ? { lat: adLat, lng: adLng } : undefined,
         description: adDescription,
         type: adCategory === 'Real Estate' ? adHousingType : undefined,
         fuel_type: adCategory === 'Vehicles' ? adFuelType : undefined,
@@ -2559,6 +2612,8 @@ export default function App() {
       setAdLocation('');
       setAdLocationPrecision('approximate');
       setAdExactAddress('');
+      setAdLat(null);
+      setAdLng(null);
       setAdDescription('');
       setAdHousingType('Rent');
       setAdFuelType('Petrol');
@@ -2584,9 +2639,9 @@ export default function App() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     
-    const remainingSlots = 3 - uploadedImageUrls.length;
+    const remainingSlots = 8 - uploadedImageUrls.length;
     if (remainingSlots <= 0) {
-      alert('Maximum 3 photos allowed');
+      alert('Maximum 8 photos allowed per listing');
       return;
     }
 
@@ -3340,37 +3395,44 @@ export default function App() {
                 </div>
               )}
               {activeView === 'admin' && (
-                <AdminView 
-                  onRefetchPros={refetchPros}
-                  scrollToTop={scrollToTop}
-                  currentUser={currentUser}
-                  events={events}
-                  onRefetchEvents={refetchEvents}
-                  allPros={allPros}
-                  highlightedProId={highlightedProId}
-                  setHighlightedProId={setHighlightedProId}
-                  highlightedEventId={highlightedEventId}
-                  setHighlightedEventId={setHighlightedEventId}
-                  highlightedArticleId={highlightedArticleId}
-                  setHighlightedArticleId={setHighlightedArticleId}
-                  highlightedTestimonyId={highlightedTestimonyId}
-                  setHighlightedTestimonyId={setHighlightedTestimonyId}
-                  highlightedProIds={highlightedProIds}
-                  setHighlightedProIds={setHighlightedProIds}
-                  highlightedEventIds={highlightedEventIds}
-                  setHighlightedEventIds={setHighlightedEventIds}
-                  highlightedArticleIds={highlightedArticleIds}
-                  setHighlightedArticleIds={setHighlightedArticleIds}
-                  highlightedTestimoniesIds={highlightedTestimoniesIds}
-                  setHighlightedTestimoniesIds={setHighlightedTestimoniesIds}
-                  guideCategories={guideCategories}
-                  setGuideCategories={setGuideCategories}
-                  allArticles={allArticles}
-                  setGlobalAlert={setGlobalAlert}
-                  onRefetchAnnouncements={fetchAnnouncementsFromDb}
-                  discoveredEventTitle={discoveredEventTitle}
-                  setDiscoveredEventTitle={setDiscoveredEventTitle}
-                />
+                <React.Suspense fallback={
+                  <div className="flex flex-col items-center justify-center py-24 gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+                    <p className="text-xs font-semibold text-slate-500">Loading Admin Portal...</p>
+                  </div>
+                }>
+                  <AdminView 
+                    onRefetchPros={refetchPros}
+                    scrollToTop={scrollToTop}
+                    currentUser={currentUser}
+                    events={events}
+                    onRefetchEvents={refetchEvents}
+                    allPros={allPros}
+                    highlightedProId={highlightedProId}
+                    setHighlightedProId={setHighlightedProId}
+                    highlightedEventId={highlightedEventId}
+                    setHighlightedEventId={setHighlightedEventId}
+                    highlightedArticleId={highlightedArticleId}
+                    setHighlightedArticleId={setHighlightedArticleId}
+                    highlightedTestimonyId={highlightedTestimonyId}
+                    setHighlightedTestimonyId={setHighlightedTestimonyId}
+                    highlightedProIds={highlightedProIds}
+                    setHighlightedProIds={setHighlightedProIds}
+                    highlightedEventIds={highlightedEventIds}
+                    setHighlightedEventIds={setHighlightedEventIds}
+                    highlightedArticleIds={highlightedArticleIds}
+                    setHighlightedArticleIds={setHighlightedArticleIds}
+                    highlightedTestimoniesIds={highlightedTestimoniesIds}
+                    setHighlightedTestimoniesIds={setHighlightedTestimoniesIds}
+                    guideCategories={guideCategories}
+                    setGuideCategories={setGuideCategories}
+                    allArticles={allArticles}
+                    setGlobalAlert={setGlobalAlert}
+                    onRefetchAnnouncements={fetchAnnouncementsFromDb}
+                    discoveredEventTitle={discoveredEventTitle}
+                    setDiscoveredEventTitle={setDiscoveredEventTitle}
+                  />
+                </React.Suspense>
               )}
               {activeView === 'marketplace' && (
                 <MarketplaceView 
@@ -3690,33 +3752,33 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/80 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain touch-pan-y" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
+              className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/70 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain touch-pan-y" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
               onClick={() => setShowAddAd(false)}
             >
-              <div className="min-h-full flex items-start justify-center p-4 sm:p-6">
+              <div className="min-h-full flex items-start justify-center p-3 sm:p-6 py-6">
                 <motion.div 
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 15 }}
+                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 20, scale: 0.98 }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="bg-white w-full max-w-xl rounded-[32px] p-6 sm:p-8 space-y-6 relative shadow-2xl my-auto border border-slate-100"
+                  className="bg-white w-full max-w-2xl rounded-[28px] p-5 sm:p-7 space-y-6 relative shadow-2xl my-auto border border-slate-100"
                   onClick={e => e.stopPropagation()}
                 >
                 {/* Modal Header */}
                 <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200/80 shrink-0">
+                    <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200/80 shrink-0 shadow-2xs">
                       <Tag className="w-5 h-5 stroke-[2.2]" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold font-display text-slate-900 leading-tight">Post an Ad</h2>
-                      <p className="text-xs text-slate-500">Valencia Thrift · Buy, sell & pass on second-hand items</p>
+                      <h2 className="text-xl sm:text-2xl font-black font-display text-slate-900 tracking-tight">Post an Ad</h2>
+                      <p className="text-xs text-slate-500 mt-0.5">List items for sale, trade, or free in Valencia</p>
                     </div>
                   </div>
                   <button 
                     type="button"
                     onClick={() => setShowAddAd(false)}
-                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 rounded-full transition-colors cursor-pointer"
+                    className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 rounded-full transition-colors cursor-pointer"
                     aria-label="Close"
                   >
                     <X className="w-4 h-4" />
@@ -3757,19 +3819,24 @@ export default function App() {
                   </div>
                 ) : (
                 <div className="space-y-5">
-                  {/* Photo Section */}
-                  <div className="space-y-2.5">
+                  {/* Photo Section (Up to 8 Photos) */}
+                  <div className="space-y-2.5 p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80">
                     <div className="flex justify-between items-center">
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                        Photos <span className="text-slate-400 font-normal normal-case">(optional, up to 3)</span>
-                      </label>
+                      <div>
+                        <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                          Photos <span className="text-slate-400 font-normal normal-case">(up to 8)</span>
+                        </label>
+                        <p className="text-[11px] text-slate-400">First photo will be used as the cover thumbnail</p>
+                      </div>
                       <span className={cn(
-                        "text-[11px] font-bold px-2.5 py-0.5 rounded-full transition-colors",
-                        uploadedImageUrls.length > 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-500"
+                        "text-[11px] font-bold px-2.5 py-1 rounded-full transition-colors",
+                        uploadedImageUrls.length > 0 ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : "bg-white text-slate-500 border border-slate-200"
                       )}>
-                        {uploadedImageUrls.length}/3 photos
+                        {uploadedImageUrls.length}/8 photos
                       </span>
                     </div>
+
                     <input 
                       type="file" 
                       ref={fileInputRef} 
@@ -3778,36 +3845,49 @@ export default function App() {
                       multiple
                       onChange={handleImageUpload}
                     />
-                    <div className="grid grid-cols-3 gap-3">
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                       {uploadedImageUrls.map((url, index) => (
-                        <div key={index} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 shadow-2xs group">
-                          <img src={url} alt={`Preview ${index}`} className="w-full h-full object-cover" />
+                        <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 shadow-2xs group bg-slate-100">
+                          <img src={url} alt={`Preview ${index + 1}`} className="w-full h-full object-cover" />
+                          {index === 0 && (
+                            <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 bg-slate-900/80 backdrop-blur-xs text-white text-[9px] font-bold rounded-md tracking-wider uppercase">
+                              Cover
+                            </span>
+                          )}
                           <button 
                             type="button"
                             onClick={() => setUploadedImageUrls(prev => prev.filter((_, i) => i !== index))}
-                            className="absolute top-1.5 right-1.5 p-1.5 bg-white/90 backdrop-blur text-red-500 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            className="absolute top-1.5 right-1.5 p-1.5 bg-white/90 backdrop-blur text-red-500 hover:text-red-700 hover:bg-white rounded-full shadow-md transition-all cursor-pointer"
                             title="Remove photo"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       ))}
-                      {uploadedImageUrls.length < 3 && (
+
+                      {uploadedImageUrls.length < 8 && (
                         <button 
                           type="button"
                           onClick={() => !isUploading && fileInputRef.current?.click()}
                           disabled={isUploading}
                           className={cn(
-                            "aspect-square bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-500 gap-1.5 cursor-pointer hover:bg-emerald-50/50 hover:border-emerald-300 hover:text-emerald-700 transition-all active:scale-95",
+                            "aspect-square bg-white rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-500 gap-1.5 cursor-pointer hover:bg-emerald-50/60 hover:border-emerald-400 hover:text-emerald-700 transition-all active:scale-95 shadow-2xs",
                             isUploading && "opacity-50 cursor-wait"
                           )}
                         >
                           {isUploading ? (
-                            <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+                            <>
+                              <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+                              <span className="text-[10px] font-bold text-slate-500">Uploading...</span>
+                            </>
                           ) : (
                             <>
-                              <Camera className="w-6 h-6 text-emerald-600" />
-                              <span className="text-[11px] font-bold">Add Photo</span>
+                              <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                <Plus className="w-4 h-4 stroke-[2.5]" />
+                              </div>
+                              <span className="text-[11px] font-bold text-slate-700">Add Photo</span>
+                              <span className="text-[10px] text-slate-400 font-medium">({8 - uploadedImageUrls.length} left)</span>
                             </>
                           )}
                         </button>
@@ -3816,44 +3896,49 @@ export default function App() {
                   </div>
 
                   {/* Basic Info */}
-                  <div className="space-y-3.5">
+                  <div className="space-y-4">
                     {/* Title */}
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                         Listing Title <span className="text-emerald-600">*</span>
                       </label>
                       <div className="relative">
-                        <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                        <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
                         <input 
                           type="text" 
-                          placeholder="e.g. Vintage Leather Jacket, Road Bike, Wooden Desk, Guitar Amp..." 
+                          placeholder="e.g. Lycée Français uniform set, Sezane silk dress, Vintage Peugeot bike, Oak desk..." 
                           value={adTitle}
                           onChange={(e) => setAdTitle(e.target.value)}
-                          className="w-full pl-11 pr-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                          className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
                         />
                       </div>
                     </div>
                     
-                    {/* Category Selection with Pictograms */}
+                    {/* Category Selection: 15 Modern Chips */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                           Category <span className="text-emerald-600">*</span>
                         </label>
-                        <span className="text-[11px] text-slate-400">Select category</span>
+                        <span className="text-[11px] text-slate-400 font-medium">Select 1 category</span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
                         {[
-                          { id: 'Clothing', label: 'Fashion & Vintage', icon: Shirt, emoji: '👗' },
-                          { id: 'Home', label: 'Furniture & Home', icon: Armchair, emoji: '🛋️' },
-                          { id: 'Electronics', label: 'Electronics & Tech', icon: Music, emoji: '💻' },
-                          { id: 'Leisure', label: 'Bikes & Sports', icon: Bike, emoji: '🚲' },
-                          { id: 'School & Kids', label: 'Kids & Baby', icon: GraduationCap, emoji: '🧸' },
-                          { id: 'Books', label: 'Books & Media', icon: BookOpen, emoji: '📚' },
-                          { id: 'Relocation', label: 'Moving Out Sale', icon: Package, emoji: '📦' },
-                          { id: 'Vehicles', label: 'Vehicles & Transport', icon: Car, emoji: '🛵' },
-                          { id: 'Free', label: 'Free Giveaway', icon: Gift, emoji: '🎁' },
-                          { id: 'Other', label: 'Other Items', icon: Sparkles, emoji: '✨' },
+                          { id: 'School & Uniforms', label: 'School & Uniforms', icon: GraduationCap, emoji: '🎒' },
+                          { id: 'Women’s Clothing', label: 'Women’s Clothing', icon: Shirt, emoji: '👗' },
+                          { id: 'Men’s Clothing', label: 'Men’s Clothing', icon: Shirt, emoji: '👔' },
+                          { id: 'Kids’ Clothing', label: 'Kids’ Clothing', icon: Smile, emoji: '🧒' },
+                          { id: 'Shoes', label: 'Shoes', icon: Footprints, emoji: '👟' },
+                          { id: 'Jewellery & Accessories', label: 'Jewellery & Accessories', icon: Gem, emoji: '💍' },
+                          { id: 'Sports & Outdoors', label: 'Sports & Outdoors', icon: Bike, emoji: '🚴' },
+                          { id: 'Baby & Nursery', label: 'Baby & Nursery', icon: Baby, emoji: '👶' },
+                          { id: 'Toys & Games', label: 'Toys & Games', icon: Gamepad2, emoji: '🎲' },
+                          { id: 'Electronics', label: 'Electronics', icon: Smartphone, emoji: '💻' },
+                          { id: 'Home Décor & Furniture', label: 'Home Décor & Furniture', icon: Armchair, emoji: '🛋️' },
+                          { id: 'Appliances', label: 'Appliances', icon: WashingMachine, emoji: '☕' },
+                          { id: 'Cars & Vehicles', label: 'Cars & Vehicles', icon: Car, emoji: '🚗' },
+                          { id: 'Books & Media', label: 'Books & Media', icon: BookOpen, emoji: '📚' },
+                          { id: 'Other', label: 'Other', icon: Package, emoji: '✨' },
                         ].map((cat) => {
                           const IconComp = cat.icon;
                           const isSelected = adCategory === cat.id;
@@ -3863,29 +3948,16 @@ export default function App() {
                               type="button"
                               onClick={() => {
                                 setAdCategory(cat.id);
-                                if (cat.id === 'Free') {
-                                  setAdPrice('Free');
-                                  setAdCondition('Good');
-                                } else if (adPrice === 'Free') {
-                                  setAdPrice('');
-                                }
                               }}
                               className={cn(
-                                "flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center transition-all cursor-pointer relative group",
+                                "flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all cursor-pointer",
                                 isSelected
-                                  ? "bg-emerald-50 border-emerald-600 text-emerald-950 shadow-2xs ring-2 ring-emerald-500/20 font-bold"
-                                  : "bg-slate-50 border-slate-200/90 text-slate-600 hover:bg-slate-100/80 hover:border-slate-300 font-medium"
+                                  ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold"
+                                  : "bg-slate-50 border-slate-200/90 text-slate-700 hover:bg-slate-100 hover:border-slate-300 font-medium"
                               )}
                             >
-                              <div className={cn(
-                                "w-9 h-9 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-110",
-                                isSelected 
-                                  ? "bg-emerald-600 text-white shadow-xs" 
-                                  : "bg-white text-slate-600 border border-slate-200"
-                              )}>
-                                <IconComp className="w-4 h-4" />
-                              </div>
-                              <span className="text-[11px] leading-tight line-clamp-1">{cat.label}</span>
+                              <span className="text-base leading-none shrink-0">{cat.emoji}</span>
+                              <span className="text-xs leading-tight line-clamp-1 truncate">{cat.label}</span>
                             </button>
                           );
                         })}
@@ -3916,17 +3988,17 @@ export default function App() {
                                 : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700"
                             )}
                           >
-                            {adPrice === 'Free' ? '✓ Free Item' : 'Giving away for Free?'}
+                            {adPrice === 'Free' ? '✓ Free / Don' : 'Make it Free (€0)'}
                           </button>
                         </div>
                         <div className="relative">
-                          <Euro className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                          <Euro className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
                           <input 
                             type="text" 
-                            placeholder="e.g. 45€ (or Free)" 
+                            placeholder="e.g. 35€ (or Free)" 
                             value={adPrice}
                             onChange={(e) => setAdPrice(e.target.value)}
-                            className="w-full pl-11 pr-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                            className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
                           />
                         </div>
                       </div>
@@ -3936,18 +4008,18 @@ export default function App() {
                           Condition
                         </label>
                         <div className="relative">
-                          <Award className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                          <Award className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
                           <select 
                             value={adCondition}
                             onChange={(e) => setAdCondition(e.target.value)}
-                            className="w-full pl-11 pr-9 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all appearance-none cursor-pointer"
+                            className="w-full pl-10 pr-9 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all appearance-none cursor-pointer"
                           >
-                            <option value="Brand New">Brand New / In box</option>
+                            <option value="Brand New">Brand New / With tags</option>
                             <option value="Like New">Like New / Barely used</option>
                             <option value="Very Good">Very Good condition</option>
                             <option value="Good">Good condition</option>
-                            <option value="Fair">Fair / Vintage charm</option>
-                            <option value="Free">Free / Giving away</option>
+                            <option value="Fair">Fair condition</option>
+                            <option value="Free">Free giveaway</option>
                           </select>
                           <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                         </div>
@@ -3960,307 +4032,83 @@ export default function App() {
                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                           Phone / WhatsApp <span className="text-slate-400 font-normal normal-case">(optional)</span>
                         </label>
-                        <span className="text-[11px] text-emerald-700 font-semibold">Enables Call & WhatsApp buttons</span>
+                        <span className="text-[11px] text-emerald-700 font-semibold">Enables Direct WhatsApp button</span>
                       </div>
                       <div className="relative">
-                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                        <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
                         <input 
                           type="tel" 
-                          placeholder="e.g. +34 612 345 678 (buyer can reach you directly)" 
+                          placeholder="e.g. +34 612 345 678" 
                           value={adPhone}
                           onChange={(e) => setAdPhone(e.target.value)}
-                          className="w-full pl-11 pr-4 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                          className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
                         />
                       </div>
                       <p className="text-[11px] text-slate-400 mt-1">
-                        If left blank, interested buyers will contact you exclusively through the in-app chat.
+                        If left blank, buyers contact you safely through in-app messaging.
                       </p>
                     </div>
 
-                    {/* Category specific sub-options */}
-                    {adCategory === 'Real Estate' && (
-                      <div className="space-y-3 p-3 bg-emerald-50/40 rounded-2xl border border-emerald-100">
-                        <div className="flex gap-2 p-1 bg-white rounded-xl border border-slate-200">
-                          {(['Rent', 'Sale'] as const).map((type) => (
-                            <button
-                              key={type}
-                              type="button"
-                              onClick={() => setAdHousingType(type)}
-                              className={cn(
-                                "flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                                adHousingType === type 
-                                  ? "bg-emerald-600 text-white shadow-2xs" 
-                                  : "text-slate-600 hover:text-slate-900"
-                              )}
-                            >
-                              For {type}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="relative">
-                          <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
-                          <select 
-                            value={adPropertyType}
-                            onChange={(e) => setAdPropertyType(e.target.value)}
-                            className="w-full pl-11 pr-9 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-medium appearance-none cursor-pointer"
-                          >
-                            <option value="Apartment">Apartment</option>
-                            <option value="House">House</option>
-                            <option value="Studio">Studio</option>
-                            <option value="Office">Office</option>
-                          </select>
-                          <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                        </div>
-                      </div>
-                    )}
-
-                    {adCategory === 'Vehicles' && (
-                      <div className="relative">
-                        <Fuel className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
-                        <select 
-                          value={adFuelType}
-                          onChange={(e) => setAdFuelType(e.target.value)}
-                          className="w-full pl-11 pr-9 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium appearance-none cursor-pointer"
-                        >
-                          <option value="Petrol">Petrol</option>
-                          <option value="Diesel">Diesel</option>
-                          <option value="Electric">Electric</option>
-                          <option value="Hybrid">Hybrid</option>
-                        </select>
-                        <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                      </div>
-                    )}
-
-                    {adCategory === 'Jobs' && (
-                      <div className="relative">
-                        <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
-                        <select 
-                          value={adContractType}
-                          onChange={(e) => setAdContractType(e.target.value)}
-                          className="w-full pl-11 pr-9 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium appearance-none cursor-pointer"
-                        >
-                          <option value="Full-time">Full-time</option>
-                          <option value="Part-time">Part-time</option>
-                          <option value="Contract">Contract</option>
-                          <option value="Internship">Internship</option>
-                        </select>
-                        <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                      </div>
-                    )}
-
-                    {adCategory === 'Clothing' && (
-                      <div className="relative">
-                        <Shirt className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
-                        <select 
-                          value={adSize}
-                          onChange={(e) => setAdSize(e.target.value)}
-                          className="w-full pl-11 pr-9 py-3 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium appearance-none cursor-pointer"
-                        >
-                          <option value="XS">XS</option>
-                          <option value="S">S</option>
-                          <option value="M">M</option>
-                          <option value="L">L</option>
-                          <option value="XL">XL</option>
-                          <option value="XXL">XXL</option>
-                        </select>
-                        <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Location & Precision Section */}
-                  <div className="space-y-3 p-4 bg-slate-50/80 rounded-2xl border border-slate-200">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                        Location in Valencia
-                      </label>
-                      {/* Exact vs Approximate Switcher */}
-                      <div className="inline-flex p-0.5 bg-slate-200/80 rounded-xl text-xs font-semibold">
-                        <button
-                          type="button"
-                          onClick={() => setAdLocationPrecision('approximate')}
-                          className={cn(
-                            "px-2.5 py-1 rounded-lg transition-all cursor-pointer text-[11px]",
-                            adLocationPrecision === 'approximate'
-                              ? "bg-white text-emerald-800 shadow-2xs font-bold"
-                              : "text-slate-600 hover:text-slate-900"
-                          )}
-                        >
-                          🌐 Approximate Area
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAdLocationPrecision('exact')}
-                          className={cn(
-                            "px-2.5 py-1 rounded-lg transition-all cursor-pointer text-[11px]",
-                            adLocationPrecision === 'exact'
-                              ? "bg-white text-emerald-800 shadow-2xs font-bold"
-                              : "text-slate-600 hover:text-slate-900"
-                          )}
-                        >
-                          🎯 Exact Location
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* District or Neighborhood Autocomplete */}
-                    <div>
-                      <div className="relative">
-                        <Navigation className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
-                        <input 
-                          type="text" 
-                          list="valencia-locations-list"
-                          placeholder={adLocationPrecision === 'exact' ? "District or Town (e.g. Ruzafa, L'Eliana)" : "Select or type district / town (e.g. Ruzafa, Cabañal, L'Eliana)..."} 
-                          value={adLocation}
-                          onChange={(e) => setAdLocation(e.target.value)}
-                          className="w-full pl-11 pr-4 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400" 
-                        />
-                        <datalist id="valencia-locations-list">
-                          {/* Valencia City Neighborhoods */}
-                          <option value="Ruzafa" />
-                          <option value="El Carmen / Ciutat Vella" />
-                          <option value="Eixample / Gran Vía" />
-                          <option value="Benimaclet" />
-                          <option value="Cabañal / Malvarrosa" />
-                          <option value="Campanar" />
-                          <option value="Mestalla / Blasco Ibáñez" />
-                          <option value="Patraix" />
-                          <option value="Quatre Carreres" />
-                          <option value="Olivereta" />
-                          <option value="Extramurs" />
-                          <option value="Pla del Real" />
-                          {/* Suburbs & Surrounding Towns */}
-                          <option value="L'Eliana" />
-                          <option value="Bétera" />
-                          <option value="Rocafort" />
-                          <option value="Godella" />
-                          <option value="La Cañada" />
-                          <option value="Paterna" />
-                          <option value="Moncada" />
-                          <option value="Alboraya / Port Saplaya" />
-                          <option value="Puçol" />
-                          <option value="Torrent" />
-                          <option value="El Saler" />
-                          <option value="Sagunto" />
-                          <option value="San Antonio de Benagéber" />
-                        </datalist>
-                      </div>
-                    </div>
-
-                    {/* Exact Street Address / Specific Meeting Spot Input when Exact is chosen */}
-                    {adLocationPrecision === 'exact' && (
-                      <div className="space-y-1 pt-1 animate-in fade-in duration-150">
-                        <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                          Exact Street Address or Meeting Spot <span className="text-emerald-600">*</span>
-                        </label>
-                        <div className="relative">
-                          <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
-                          <input 
-                            type="text" 
-                            placeholder="e.g. Calle Gran Vía Marqués del Turia 45, or Metro Colón Exit" 
-                            value={adExactAddress}
-                            onChange={(e) => setAdExactAddress(e.target.value)}
-                            className="w-full pl-11 pr-4 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400" 
-                          />
-                        </div>
-                        <p className="text-[10px] text-emerald-700 font-medium">
-                          🎯 This exact street or meeting spot will be shown to buyers for item pickup.
-                        </p>
-                      </div>
-                    )}
-
-                    {adLocationPrecision === 'approximate' && (
-                      <p className="text-[10px] text-slate-500">
-                        🛡️ Approximate area protects your privacy. Buyers only see your district / town.
-                      </p>
-                    )}
-
-                    {/* Quick suggestion pills: Separated into Neighborhoods and Suburbs */}
-                    <div className="space-y-1.5 pt-1 border-t border-slate-200/60">
-                      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-[11px]">
-                        <span className="text-slate-400 font-bold shrink-0 text-[10px] uppercase tracking-wider">Neighborhoods:</span>
-                        {['Ruzafa', 'El Carmen', 'Eixample', 'Benimaclet', 'Cabañal'].map((loc) => (
-                          <button
-                            key={loc}
-                            type="button"
-                            onClick={() => setAdLocation(loc)}
-                            className={cn(
-                              "px-2 py-0.5 rounded-lg border text-[11px] font-medium shrink-0 transition-colors cursor-pointer",
-                              adLocation === loc
-                                ? "bg-emerald-600 text-white border-emerald-600"
-                                : "bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border-slate-200"
-                            )}
-                          >
-                            {loc}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-[11px]">
-                        <span className="text-slate-400 font-bold shrink-0 text-[10px] uppercase tracking-wider">Suburbs:</span>
-                        {["L'Eliana", 'Bétera', 'Rocafort', 'Paterna', 'Puçol'].map((loc) => (
-                          <button
-                            key={loc}
-                            type="button"
-                            onClick={() => setAdLocation(loc)}
-                            className={cn(
-                              "px-2 py-0.5 rounded-lg border text-[11px] font-medium shrink-0 transition-colors cursor-pointer",
-                              adLocation === loc
-                                ? "bg-emerald-600 text-white border-emerald-600"
-                                : "bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border-slate-200"
-                            )}
-                          >
-                            {loc}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Description <span className="text-slate-400 font-normal normal-case">(optional)</span>
-                    </label>
-                    <textarea 
-                      placeholder="Describe your item or offer (dimensions, color, reason for selling, pickup details)..." 
-                      value={adDescription}
-                      onChange={(e) => setAdDescription(e.target.value)}
-                      className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none h-24 text-sm font-medium text-slate-900 resize-none transition-all placeholder:text-slate-400" 
+                    {/* Google Maps Location & Mini Map Picker Section */}
+                    <MarketplaceLocationPicker
+                      location={adLocation}
+                      exactAddress={adExactAddress}
+                      precision={adLocationPrecision}
+                      lat={adLat}
+                      lng={adLng}
+                      onChangeLocation={setAdLocation}
+                      onChangeExactAddress={setAdExactAddress}
+                      onChangePrecision={setAdLocationPrecision}
+                      onChangeCoordinates={(newLat, newLng) => {
+                        setAdLat(newLat);
+                        setAdLng(newLng);
+                      }}
                     />
-                  </div>
 
-                  {/* Error Notification if any */}
-                  {adError && (
-                    <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-xs text-red-700 animate-in fade-in">
-                      <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="font-bold">Posting issue</p>
-                        <p className="text-[11px] text-red-600 mt-0.5">{adError}</p>
-                      </div>
+                    {/* Description */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Description <span className="text-slate-400 font-normal normal-case">(optional)</span>
+                      </label>
+                      <textarea 
+                        placeholder="Describe your item (dimensions, condition, size, reason for selling, pickup details)..." 
+                        value={adDescription}
+                        onChange={(e) => setAdDescription(e.target.value)}
+                        className="w-full p-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none h-24 text-sm font-medium text-slate-900 resize-none transition-all placeholder:text-slate-400" 
+                      />
                     </div>
-                  )}
 
-                  {/* Submit Button */}
-                  <button 
-                    type="button"
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 text-base font-bold rounded-2xl shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none cursor-pointer flex items-center justify-center gap-2" 
-                    onClick={handlePostAd}
-                    disabled={isUploading || !adTitle.trim() || ((adCategory !== 'Jobs' && adCategory !== 'Services') && !adPrice.trim())}
-                  >
-                    {isUploading ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>Publishing ad...</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2">
-                        <Plus className="w-5 h-5 stroke-[2.5]" />
-                        <span>Publish Ad</span>
+                    {/* Error Notification if any */}
+                    {adError && (
+                      <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-xs text-red-700 animate-in fade-in">
+                        <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-bold">Posting issue</p>
+                          <p className="text-[11px] text-red-600 mt-0.5">{adError}</p>
+                        </div>
                       </div>
                     )}
-                  </button>
+
+                    {/* Submit Button */}
+                    <button 
+                      type="button"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 text-base font-bold rounded-2xl shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none cursor-pointer flex items-center justify-center gap-2" 
+                      onClick={handlePostAd}
+                      disabled={isUploading || !adTitle.trim() || !adPrice.trim()}
+                    >
+                      {isUploading ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Publishing listing...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <Plus className="w-5 h-5 stroke-[2.5]" />
+                          <span>Publish Listing</span>
+                        </div>
+                      )}
+                    </button>
+                  </div>
                 </div>
                 )}
               </motion.div>
@@ -4550,27 +4398,25 @@ function AdDetailModal({
             <div className="space-y-3">
               <div className="flex justify-between items-start gap-4">
                 <div>
-                  <p className="text-xs font-bold text-fuchsia-600 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1 flex items-center gap-1.5">
                     <span>{ad.category}</span>
-                    <span className="text-slate-300">·</span>
-                    <span className="text-slate-500 normal-case font-medium">Expat community friendly thrift</span>
                   </p>
                   <h3 className="text-2xl font-bold text-slate-900 font-display">{ad.title}</h3>
                 </div>
-                <div className="text-2xl font-extrabold text-fuchsia-700 shrink-0">
+                <div className="text-2xl font-extrabold text-emerald-700 shrink-0">
                   {price}
                 </div>
               </div>
               
               <div className="flex flex-wrap gap-2 pt-1">
                 {ad.location && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-fuchsia-50/70 border border-fuchsia-200/60 rounded-xl text-xs font-semibold text-fuchsia-900">
-                    <MapPin className="w-3.5 h-3.5 text-fuchsia-600" />
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50/70 border border-emerald-200/60 rounded-xl text-xs font-semibold text-emerald-900">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-600" />
                     <span>{ad.location}</span>
                     {ad.location_precision === 'exact' ? (
-                      <span className="ml-1 text-[10px] font-bold text-fuchsia-800 bg-fuchsia-100 px-1.5 py-0.5 rounded-md">🎯 Exact</span>
+                      <span className="ml-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded-md">🎯 Exact</span>
                     ) : (
-                      <span className="ml-1 text-[10px] font-medium text-fuchsia-700/80 bg-fuchsia-100/60 px-1.5 py-0.5 rounded-md">🌐 Area</span>
+                      <span className="ml-1 text-[10px] font-medium text-emerald-700/80 bg-emerald-100/60 px-1.5 py-0.5 rounded-md">🌐 Area</span>
                     )}
                   </div>
                 )}
@@ -4581,7 +4427,7 @@ function AdDetailModal({
                   </div>
                 )}
                 {ad.type && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-fuchsia-50 rounded-xl text-xs font-bold text-fuchsia-700">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 rounded-xl text-xs font-bold text-emerald-700">
                     For {ad.type}
                   </div>
                 )}
@@ -4616,29 +4462,28 @@ function AdDetailModal({
               </div>
 
               {/* Seller information pill */}
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-fuchsia-50/50 border border-fuchsia-200/60">
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
                 <div className="flex items-center gap-3">
                   {ad.seller_image ? (
                     <img
                       src={ad.seller_image}
-                      alt={ad.seller_name || 'Seller'}
-                      className="w-10 h-10 rounded-full object-cover border border-fuchsia-200"
+                      alt={formatSellerName(ad.seller_name)}
+                      className="w-10 h-10 rounded-full object-cover border border-emerald-200"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-fuchsia-100 text-fuchsia-800 flex items-center justify-center font-bold text-sm">
-                      {(ad.seller_name || 'U').charAt(0)}
+                    <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm">
+                      {formatSellerName(ad.seller_name).charAt(0)}
                     </div>
                   )}
                   <div>
-                    <h5 className="text-xs font-bold text-slate-900">{ad.seller_name || 'MyCityUnlocked Member'}</h5>
-                    <p className="text-[11px] text-fuchsia-700 font-medium flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3 text-fuchsia-600" />
-                      <span>Verified MyCityUnlocked Community Member</span>
+                    <h5 className="text-sm font-bold text-slate-900">{formatSellerName(ad.seller_name)}</h5>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      Member in Valencia
                     </p>
                   </div>
                 </div>
-                <div className="text-right text-[11px] text-slate-400">
-                  Valencia
+                <div className="text-right text-xs font-semibold text-slate-500">
+                  {ad.location || 'Valencia'}
                 </div>
               </div>
             </div>
@@ -4650,13 +4495,81 @@ function AdDetailModal({
               </div>
             </div>
 
+            {/* Google Maps Location Preview (Clickable on map to open Google Maps) */}
+            {ad.location && (
+              <div className="space-y-2 pt-1">
+                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-emerald-600" />
+                  <span>Location in Valencia</span>
+                </h4>
+
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((ad.exact_address || ad.location) + ', Valencia, Spain')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block p-3 bg-slate-50 hover:bg-slate-100/90 rounded-2xl border border-slate-200/80 space-y-2.5 transition-all group cursor-pointer"
+                  title="Click to open location in Google Maps"
+                >
+                  <div className="flex items-start justify-between gap-2 text-xs">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">{ad.location}</span>
+                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-emerald-600 transition-colors" />
+                      </div>
+                      {ad.exact_address && ad.location_precision === 'exact' && (
+                        <p className="text-slate-500 text-[11px] mt-0.5">{ad.exact_address}</p>
+                      )}
+                    </div>
+                    <span className={cn(
+                      "text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0",
+                      ad.location_precision === 'exact' ? "bg-emerald-100 text-emerald-800" : "bg-slate-200/80 text-slate-600"
+                    )}>
+                      {ad.location_precision === 'exact' ? '🎯 Exact spot' : '🌐 Approximate area'}
+                    </span>
+                  </div>
+
+                  {Boolean((ad.lat && ad.lng) || (ad.coordinates?.lat && ad.coordinates?.lng)) && (
+                    <div className="h-36 sm:h-44 rounded-xl overflow-hidden border border-slate-200 shadow-2xs relative pointer-events-none">
+                      <APIProvider apiKey={GOOGLE_MAPS_KEY}>
+                        <Map
+                          defaultCenter={{
+                            lat: Number(ad.lat || ad.coordinates?.lat),
+                            lng: Number(ad.lng || ad.coordinates?.lng)
+                          }}
+                          center={{
+                            lat: Number(ad.lat || ad.coordinates?.lat),
+                            lng: Number(ad.lng || ad.coordinates?.lng)
+                          }}
+                          defaultZoom={14}
+                          zoom={14}
+                          mapId="MARKETPLACE_AD_DETAIL_MAP"
+                          disableDefaultUI={true}
+                          zoomControl={false}
+                          className="w-full h-full"
+                        >
+                          <AdvancedMarker
+                            position={{
+                              lat: Number(ad.lat || ad.coordinates?.lat),
+                              lng: Number(ad.lng || ad.coordinates?.lng)
+                            }}
+                          >
+                            <Pin background="#059669" glyphColor="#ffffff" borderColor="#047857" />
+                          </AdvancedMarker>
+                        </Map>
+                      </APIProvider>
+                    </div>
+                  )}
+                </a>
+              </div>
+            )}
+
             {/* Contact Seller Area */}
             <div className="pt-4 border-t border-slate-100 space-y-3">
               {!currentUser ? (
                 /* Guest State: Require Login */
-                <div className="p-4 rounded-2xl bg-fuchsia-50/70 border border-fuchsia-200/80 space-y-3 text-center">
-                  <div className="flex items-center justify-center gap-2 text-fuchsia-950 font-bold text-sm">
-                    <Lock className="w-4 h-4 text-fuchsia-600" />
+                <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-3 text-center">
+                  <div className="flex items-center justify-center gap-2 text-emerald-950 font-bold text-sm">
+                    <Lock className="w-4 h-4 text-emerald-600" />
                     <span>{hasPhone ? 'Contact details protected' : 'Member-only direct messaging'}</span>
                   </div>
                   <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
@@ -4669,7 +4582,7 @@ function AdDetailModal({
                     <button
                       type="button"
                       onClick={onRequireAuth}
-                      className="flex-1 py-3 px-4 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-xs rounded-xl shadow-md shadow-fuchsia-600/20 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+                      className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
                     >
                       <LogIn className="w-4 h-4" />
                       <span>{hasPhone ? 'Sign In to View Phone & WhatsApp' : 'Sign In to Chat with Seller'}</span>
@@ -4693,7 +4606,7 @@ function AdDetailModal({
                   /* Case 1: Seller left a phone number, click to reveal */
                   <div className="flex gap-3">
                     <button 
-                      className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700 text-white py-3.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-md shadow-fuchsia-600/20 active:scale-[0.98] transition-all cursor-pointer"
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer"
                       onClick={() => setShowPhone(true)}
                     >
                       <Phone className="w-4 h-4" />
@@ -4756,7 +4669,7 @@ function AdDetailModal({
                       <div className="pt-2 border-t border-emerald-200/60 text-center">
                         <button
                           type="button"
-                          onClick={() => onOpenChat({ name: ad.seller_name, userId: ad.user_id, avatar: ad.seller_image })}
+                          onClick={() => onOpenChat({ name: formatSellerName(ad.seller_name), userId: ad.user_id, avatar: ad.seller_image })}
                           className="text-xs font-semibold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
                         >
                           Or chat via in-app messages on MyCityUnlocked →
@@ -4766,21 +4679,21 @@ function AdDetailModal({
                   </div>
                 )
               ) : (
-                /* Case 2: Seller did NOT leave a phone number -> open in-app chat */
+                /* Case 2: Seller did NOT leave a phone number -> direct chat button */
                 <div className="space-y-1.5">
                   <div className="flex gap-3">
                     <button 
                       className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer"
                       onClick={() => {
                         if (onOpenChat) {
-                          onOpenChat({ name: ad.seller_name, userId: ad.user_id, avatar: ad.seller_image });
+                          onOpenChat({ name: formatSellerName(ad.seller_name), userId: ad.user_id, avatar: ad.seller_image });
                         } else {
                           window.location.href = `mailto:seller@example.com?subject=MyCityUnlocked: Inquiry about ${ad.title}`;
                         }
                       }}
                     >
                       <MessageSquare className="w-4 h-4" />
-                      <span>Chat with Seller (In-App)</span>
+                      <span>Chat with Seller</span>
                     </button>
                     <button 
                       onClick={() => {
@@ -4795,7 +4708,7 @@ function AdDetailModal({
                     </button>
                   </div>
                   <p className="text-[11px] text-slate-400 text-center">
-                    No phone number provided · Contact the seller directly via in-app chat
+                    Contact the seller directly via in-app chat
                   </p>
                 </div>
               )}
@@ -9655,7 +9568,7 @@ function AdminView({
                   {/* Emoji Quick Picker Toolbar */}
                   <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-100/90 rounded-xl border border-slate-200/70">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">Emojis:</span>
-                    {['✨', '📍', '💡', '🎯', '🏡', '🏖️', '🌳', '🥐', '☕', '🍷', '🥘', '🎨', '🎭', '🎶', '🚇', '📋', '🏥', '👨‍👩‍👧', '🐾', '💶', '🎟️', '🔗', '⭐', '🤝'].map(emoji => (
+                    {['✨', '📍', '💡', '������', '🏡', '🏖️', '🌳', '🥐', '☕', '🍷', '🥘', '🎨', '🎭', '🎶', '🚇', '📋', '🏥', '👨‍👩‍👧', '🐾', '💶', '🎟️', '🔗', '⭐', '🤝'].map(emoji => (
                       <button
                         key={emoji}
                         type="button"
@@ -16501,51 +16414,6 @@ function EventsView({
   // Filtered & sorted events
   const filteredEvents = useMemo(() => {
     const today = new Date();
-    const y = today.getFullYear();
-    const m = String(today.getMonth() + 1).padStart(2, '0');
-    const d = String(today.getDate()).padStart(2, '0');
-    const todayStr = `${y}-${m}-${d}`;
-
-    const tom = new Date();
-    tom.setDate(tom.getDate() + 1);
-    const tomY = tom.getFullYear();
-    const tomM = String(tom.getMonth() + 1).padStart(2, '0');
-    const tomD = String(tom.getDate()).padStart(2, '0');
-    const tomorrowStr = `${tomY}-${tomM}-${tomD}`;
-
-    // Calculate dates for this weekend (Friday, Saturday, Sunday)
-    const todayDay = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-    const getRelativeDateStr = (offset: number) => {
-      const d = new Date(today);
-      d.setDate(today.getDate() + offset);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const date = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${date}`;
-    };
-
-    let fridayStr = '';
-    let saturdayStr = '';
-    let sundayStr = '';
-
-    if (todayDay === 0) { // Sunday
-      fridayStr = getRelativeDateStr(-2);
-      saturdayStr = getRelativeDateStr(-1);
-      sundayStr = getRelativeDateStr(0);
-    } else if (todayDay === 6) { // Saturday
-      fridayStr = getRelativeDateStr(-1);
-      saturdayStr = getRelativeDateStr(0);
-      sundayStr = getRelativeDateStr(1);
-    } else if (todayDay === 5) { // Friday
-      fridayStr = getRelativeDateStr(0);
-      saturdayStr = getRelativeDateStr(1);
-      sundayStr = getRelativeDateStr(2);
-    } else { // Mon - Thu
-      const daysToFriday = 5 - todayDay;
-      fridayStr = getRelativeDateStr(daysToFriday);
-      saturdayStr = getRelativeDateStr(daysToFriday + 1);
-      sundayStr = getRelativeDateStr(daysToFriday + 2);
-    }
 
     return events.filter(ev => {
       // 0. Auto-exclude expired events
@@ -16573,28 +16441,26 @@ function EventsView({
         }
       }
 
-      // 3. Date Filter (today, tomorrow, weekend)
-      const evDate = ev.start_date || ev.date || '';
-      if (dateFilter === 'today') {
-        if (evDate !== todayStr) return false;
-      } else if (dateFilter === 'tomorrow') {
-        if (evDate !== tomorrowStr) return false;
-      } else if (dateFilter === 'weekend') {
-        if (evDate) {
-          if (evDate !== fridayStr && evDate !== saturdayStr && evDate !== sundayStr) {
-            return false;
-          }
-        } else {
-          return false;
-        }
+      // 3. Date Filter (today, tomorrow, weekend) - includes Year Round events (verified open on weekends/target day)
+      if (!isEventMatchingDateFilter(ev, dateFilter, today)) {
+        return false;
       }
 
       return true;
     }).sort((a, b) => {
+      const isYRA = isYearRoundEvent(a);
+      const isYRB = isYearRoundEvent(b);
+      // Place scheduled events first, then permanent/year-round events
+      if (isYRA && !isYRB) return 1;
+      if (!isYRA && isYRB) return -1;
+      if (isYRA && isYRB) return (a.title || '').localeCompare(b.title || '');
+
+      const timeA = getEventStartDate(a)?.getTime() || 0;
+      const timeB = getEventStartDate(b)?.getTime() || 0;
+      if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+
       const dateA = a.start_date || a.date || '';
       const dateB = b.start_date || b.date || '';
-      if (!dateA) return 1;
-      if (!dateB) return -1;
       return dateA.localeCompare(dateB);
     });
   }, [events, selectedCategory, searchQuery, dateFilter]);
@@ -17852,15 +17718,22 @@ function MarketplaceView({
   };
 
   const categories = [
-    { id: 'All', label: 'All Items', icon: Sparkles },
-    { id: 'Clothing', label: 'Fashion & Vintage', icon: Shirt },
-    { id: 'Home', label: 'Furniture & Home', icon: Armchair },
-    { id: 'Electronics', label: 'Electronics & Tech', icon: Music },
-    { id: 'Leisure', label: 'Bikes & Sports', icon: Bike },
-    { id: 'School & Kids', label: 'Kids & Baby', icon: GraduationCap },
-    { id: 'Books', label: 'Books & Media', icon: BookOpen },
-    { id: 'Relocation', label: 'Moving Out', icon: Package },
-    { id: 'Free', label: 'Free Giveaways', icon: Gift },
+    { id: 'All', label: 'All Items', icon: Sparkles, emoji: '✨' },
+    { id: 'School & Uniforms', label: 'School & Uniforms', icon: GraduationCap, emoji: '🎒' },
+    { id: 'Women’s Clothing', label: 'Women’s Clothing', icon: Shirt, emoji: '👗' },
+    { id: 'Men’s Clothing', label: 'Men’s Clothing', icon: Shirt, emoji: '👔' },
+    { id: 'Kids’ Clothing', label: 'Kids’ Clothing', icon: Smile, emoji: '🧒' },
+    { id: 'Shoes', label: 'Shoes', icon: Footprints, emoji: '👟' },
+    { id: 'Jewellery & Accessories', label: 'Jewellery & Accessories', icon: Gem, emoji: '💍' },
+    { id: 'Sports & Outdoors', label: 'Sports & Outdoors', icon: Bike, emoji: '🚴' },
+    { id: 'Baby & Nursery', label: 'Baby & Nursery', icon: Baby, emoji: '👶' },
+    { id: 'Toys & Games', label: 'Toys & Games', icon: Gamepad2, emoji: '🎲' },
+    { id: 'Electronics', label: 'Electronics', icon: Smartphone, emoji: '💻' },
+    { id: 'Home Décor & Furniture', label: 'Home Décor & Furniture', icon: Armchair, emoji: '🛋️' },
+    { id: 'Appliances', label: 'Appliances', icon: WashingMachine, emoji: '☕' },
+    { id: 'Cars & Vehicles', label: 'Cars & Vehicles', icon: Car, emoji: '🚗' },
+    { id: 'Books & Media', label: 'Books & Media', icon: BookOpen, emoji: '📚' },
+    { id: 'Other', label: 'Other', icon: Package, emoji: '🏷️' },
   ];
 
   // Valencia City Neighborhoods vs Surrounding Suburbs
@@ -17895,63 +17768,144 @@ function MarketplaceView({
     { label: 'San Antonio de Benagéber', value: 'San Antonio' }
   ];
 
+  // Robust category matcher supporting both curly/straight quotes and friendly aliases
+  const matchCategory = (itemCategory?: string, targetCategory?: string) => {
+    if (!targetCategory || targetCategory === 'All') return true;
+    if (!itemCategory) return false;
+    const a = itemCategory.toLowerCase().replace(/['’]/g, "'").replace(/&amp;/g, '&').trim();
+    const b = targetCategory.toLowerCase().replace(/['’]/g, "'").replace(/&amp;/g, '&').trim();
+    if (a === b) return true;
+    if (b === "women's clothing" && (a === "clothing" || a.includes("women"))) return true;
+    if (b === "men's clothing" && (a === "clothing" || a.includes("men"))) return true;
+    if (b === "kids' clothing" && (a === "school & kids" || a.includes("kid"))) return true;
+    if (b === "baby & nursery" && (a === "school & kids" || a.includes("baby") || a.includes("nursery"))) return true;
+    if (b === "school & uniforms" && (a === "school & kids" || a.includes("school") || a.includes("uniform"))) return true;
+    if (b === "home décor & furniture" && (a === "home" || a.includes("furniture") || a.includes("decor") || a.includes("décor"))) return true;
+    if (b === "sports & outdoors" && (a === "leisure" || a.includes("sport") || a.includes("outdoor") || a.includes("bike"))) return true;
+    if (b === "books & media" && (a === "books" || a.includes("book") || a.includes("media"))) return true;
+    if (b === "cars & vehicles" && (a === "vehicles" || a.includes("car") || a.includes("vehicle") || a.includes("scooter"))) return true;
+    if (b === "appliances" && (a.includes("appliance") || a.includes("coffee") || a.includes("espresso") || a.includes("kitchen"))) return true;
+    if (b === "toys & games" && (a.includes("toy") || a.includes("game"))) return true;
+    if (b === "shoes" && (a.includes("shoe") || a.includes("sneaker") || a.includes("boot") || a.includes("sandal"))) return true;
+    if (b === "jewellery & accessories" && (a.includes("jewel") || a.includes("accessori") || a.includes("watch"))) return true;
+    return false;
+  };
+
+  // Category item counts
+  const categoryCounts = useMemo(() => {
+    const list = Array.isArray(ads) ? ads : [];
+    const counts: Record<string, number> = { All: list.length };
+    categories.forEach(cat => {
+      if (cat.id === 'All') return;
+      counts[cat.id] = list.filter(ad => matchCategory(ad.category, cat.id)).length;
+    });
+    return counts;
+  }, [ads]);
+
   // Category-specific price ranges
   const categoryPriceRangesMap: Record<string, { id: string; label: string; min?: number; max?: number }[]> = {
-    'Clothing': [
-      { id: 'all', label: 'All Clothing Prices' },
-      { id: 'cl_under_15', label: '< €15 (Thrift Deals)', max: 15 },
-      { id: 'cl_15_40', label: '€15 - €40', min: 15, max: 40 },
-      { id: 'cl_40_100', label: '€40 - €100 (Jackets & Rare)', min: 40, max: 100 },
-      { id: 'cl_100_plus', label: '€100+ (Designer Vintage)', min: 100 },
+    'School & Uniforms': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'sc_free', label: 'Free Giveaway (€0)', max: 0.1 },
+      { id: 'sc_under_15', label: '< €15 (Affordable)', max: 15 },
+      { id: 'sc_15_40', label: '€15 - €40 (Uniforms & Bundles)', min: 15, max: 40 },
+      { id: 'sc_40_plus', label: '€40+', min: 40 },
     ],
-    'Home': [
-      { id: 'all', label: 'All Furniture & Decor' },
-      { id: 'hm_under_30', label: '< €30 (Ceramics & Lamps)', max: 30 },
-      { id: 'hm_30_100', label: '€30 - €100', min: 30, max: 100 },
-      { id: 'hm_100_300', label: '€100 - €300 (Mid-Century)', min: 100, max: 300 },
-      { id: 'hm_300_plus', label: '€300+', min: 300 },
+    'Women’s Clothing': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'wc_under_15', label: '< €15 (Thrift Deals)', max: 15 },
+      { id: 'wc_15_40', label: '€15 - €40', min: 15, max: 40 },
+      { id: 'wc_40_100', label: '€40 - €100', min: 40, max: 100 },
+      { id: 'wc_100_plus', label: '€100+', min: 100 },
+    ],
+    'Men’s Clothing': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'mc_under_15', label: '< €15', max: 15 },
+      { id: 'mc_15_40', label: '€15 - €40', min: 15, max: 40 },
+      { id: 'mc_40_100', label: '€40 - €100', min: 40, max: 100 },
+      { id: 'mc_100_plus', label: '€100+', min: 100 },
+    ],
+    'Kids’ Clothing': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'kc_free', label: 'Free Giveaway (€0)', max: 0.1 },
+      { id: 'kc_under_15', label: '< €15', max: 15 },
+      { id: 'kc_15_35', label: '€15 - €35', min: 15, max: 35 },
+      { id: 'kc_35_plus', label: '€35+', min: 35 },
+    ],
+    'Shoes': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'sh_under_25', label: '< €25', max: 25 },
+      { id: 'sh_25_60', label: '€25 - €60', min: 25, max: 60 },
+      { id: 'sh_60_plus', label: '€60+', min: 60 },
+    ],
+    'Jewellery & Accessories': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'ja_under_20', label: '< €20', max: 20 },
+      { id: 'ja_20_50', label: '€20 - €50', min: 20, max: 50 },
+      { id: 'ja_50_plus', label: '€50+', min: 50 },
+    ],
+    'Sports & Outdoors': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'so_under_30', label: '< €30', max: 30 },
+      { id: 'so_30_80', label: '€30 - €80', min: 30, max: 80 },
+      { id: 'so_80_200', label: '€80 - €200 (Bikes & SUP)', min: 80, max: 200 },
+      { id: 'so_200_plus', label: '€200+', min: 200 },
+    ],
+    'Baby & Nursery': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'bn_free', label: 'Free Giveaway (€0)', max: 0.1 },
+      { id: 'bn_under_25', label: '< €25', max: 25 },
+      { id: 'bn_25_80', label: '€25 - €80', min: 25, max: 80 },
+      { id: 'bn_80_plus', label: '€80+ (Strollers & Cribs)', min: 80 },
+    ],
+    'Toys & Games': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'tg_under_15', label: '< €15', max: 15 },
+      { id: 'tg_15_40', label: '€15 - €40', min: 15, max: 40 },
+      { id: 'tg_40_plus', label: '€40+', min: 40 },
     ],
     'Electronics': [
-      { id: 'all', label: 'All Vinyl & Audio' },
-      { id: 'el_under_25', label: '< €25 (LPs & Vinyl)', max: 25 },
-      { id: 'el_25_80', label: '€25 - €80', min: 25, max: 80 },
-      { id: 'el_80_250', label: '€80 - €250 (Turntables/Amps)', min: 80, max: 250 },
-      { id: 'el_250_plus', label: '€250+', min: 250 },
+      { id: 'all', label: 'All Prices' },
+      { id: 'el_under_30', label: '< €30', max: 30 },
+      { id: 'el_30_100', label: '€30 - €100', min: 30, max: 100 },
+      { id: 'el_100_plus', label: '€100+', min: 100 },
     ],
-    'Leisure': [
-      { id: 'all', label: 'All Bikes & Sports' },
-      { id: 'ls_under_30', label: '< €30', max: 30 },
-      { id: 'ls_30_90', label: '€30 - €90', min: 30, max: 90 },
-      { id: 'ls_90_180', label: '€90 - €180 (City Bikes)', min: 90, max: 180 },
-      { id: 'ls_180_plus', label: '€180+', min: 180 },
+    'Home Décor & Furniture': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'hd_under_30', label: '< €30 (Lamps & Decor)', max: 30 },
+      { id: 'hd_30_100', label: '€30 - €100', min: 30, max: 100 },
+      { id: 'hd_100_300', label: '€100 - €300 (Vintage & Tables)', min: 100, max: 300 },
+      { id: 'hd_300_plus', label: '€300+', min: 300 },
     ],
-    'School & Kids': [
-      { id: 'all', label: 'All Kids & Baby' },
-      { id: 'sk_free', label: 'Free Giveaway (€0)', max: 0.1 },
-      { id: 'sk_under_15', label: '< €15', max: 15 },
-      { id: 'sk_15_40', label: '€15 - €40', min: 15, max: 40 },
-      { id: 'sk_40_plus', label: '€40+', min: 40 },
+    'Appliances': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'ap_under_30', label: '< €30', max: 30 },
+      { id: 'ap_30_90', label: '€30 - €90', min: 30, max: 90 },
+      { id: 'ap_90_plus', label: '€90+', min: 90 },
     ],
-    'Free': [
-      { id: 'all', label: '100% Free / Zero Waste' },
+    'Cars & Vehicles': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'cv_under_200', label: '< €200 (Scooters & Gear)', max: 200 },
+      { id: 'cv_200_1000', label: '€200 - €1,000', min: 200, max: 1000 },
+      { id: 'cv_1000_plus', label: '€1,000+ (Mopeds & Cars)', min: 1000 },
     ],
-    'Relocation': [
-      { id: 'all', label: 'All Moving Out Deals' },
-      { id: 'rel_free', label: 'Free (€0)', max: 0.1 },
-      { id: 'rel_under_30', label: '< €30', max: 30 },
-      { id: 'rel_30_80', label: '€30 - €80', min: 30, max: 80 },
-      { id: 'rel_80_plus', label: '€80+', min: 80 },
+    'Books & Media': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'bm_under_10', label: '< €10', max: 10 },
+      { id: 'bm_10_25', label: '€10 - €25', min: 10, max: 25 },
+      { id: 'bm_25_plus', label: '€25+', min: 25 },
     ],
-    'Services': [
-      { id: 'all', label: 'All Rates' },
-      { id: 'srv_under_25', label: '< €25/h', max: 25 },
-      { id: 'srv_25_50', label: '€25 - €50/h', min: 25, max: 50 },
-      { id: 'srv_50_plus', label: '€50+/h', min: 50 },
+    'Other': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'ot_free', label: 'Free Giveaway (€0)', max: 0.1 },
+      { id: 'ot_under_25', label: '< €25', max: 25 },
+      { id: 'ot_25_plus', label: '€25+', min: 25 },
     ],
   };
 
   const currentPriceRanges = categoryPriceRangesMap[selectedCategory] || [
     { id: 'all', label: 'All Prices' },
+    { id: 'def_free', label: 'Free Items (€0)', max: 0.1 },
     { id: 'def_under_30', label: '< €30', max: 30 },
     { id: 'def_30_100', label: '€30 - €100', min: 30, max: 100 },
     { id: 'def_100_300', label: '€100 - €300', min: 100, max: 300 },
@@ -17960,6 +17914,7 @@ function MarketplaceView({
 
   const parseNumericPrice = (priceStr?: string): number => {
     if (!priceStr) return 0;
+    if (priceStr.toLowerCase().includes('free') || priceStr.toLowerCase().includes('gratuit')) return 0;
     const cleaned = priceStr.replace(/[^0-9.]/g, '');
     const val = parseFloat(cleaned);
     return isNaN(val) ? 0 : val;
@@ -18001,8 +17956,8 @@ function MarketplaceView({
           if (!matchTitle && !matchDesc && !matchLoc && !matchSeller && !matchCat) return false;
         }
 
-        // Category filter
-        if (selectedCategory !== 'All' && ad.category !== selectedCategory) {
+        // Category filter with smart matcher
+        if (selectedCategory !== 'All' && !matchCategory(ad.category, selectedCategory)) {
           return false;
         }
 
@@ -18073,9 +18028,9 @@ function MarketplaceView({
         const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
         return dateB - dateA;
       });
-  }, [ads, searchQuery, selectedCategory, selectedLocation, isManualLocationActive, customLocationInput, selectedCondition, selectedPriceRange, currentPriceRanges, sortBy, showSavedOnly, savedAdIds]);
+  }, [ads, searchQuery, selectedCategory, selectedLocation, isManualLocationActive, customLocationInput, selectedCondition, selectedPriceRange, currentPriceRanges, sortBy, showSavedOnly, effectiveSavedIds]);
 
-  const hasActiveFilters = searchQuery.trim() !== '' || selectedCategory !== 'All' || selectedLocation !== 'All' || customLocationInput.trim() !== '' || selectedCondition !== 'All' || selectedPriceRange !== 'all' || showSavedOnly;
+  const hasActiveFilters = searchQuery.trim() !== '' || selectedCategory !== 'All' || selectedLocation !== 'All' || customLocationInput.trim() !== '' || selectedCondition !== 'All' || selectedPriceRange !== 'all';
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -18085,18 +18040,11 @@ function MarketplaceView({
     setIsManualLocationActive(false);
     setSelectedCondition('All');
     setSelectedPriceRange('all');
-    setShowSavedOnly(false);
   };
 
   const handleLocationSelect = (val: string) => {
-    if (val === 'CUSTOM_INPUT') {
-      setIsManualLocationActive(true);
-      setSelectedLocation('CUSTOM_INPUT');
-    } else {
-      setSelectedLocation(val);
-      setIsManualLocationActive(false);
-      setCustomLocationInput('');
-    }
+    setSelectedLocation(val);
+    setCustomLocationInput('');
   };
 
   const handleAddAdClick = () => {
@@ -18107,110 +18055,58 @@ function MarketplaceView({
     onAddAd();
   };
 
-  // Flag pour mettre la page en construction. Passer à false pour la réactiver instantanément.
-  const isUnderConstruction = true;
-
-  if (isUnderConstruction) {
-    return (
-      <div className="p-4 md:p-10 pt-8 md:pt-14 space-y-6 pb-32 max-w-3xl mx-auto text-center">
-        <div className="bg-white rounded-3xl border border-slate-200/80 p-8 sm:p-14 shadow-sm space-y-6">
-          <div className="relative inline-flex items-center justify-center">
-            <div className="w-20 h-20 rounded-3xl bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center shadow-xs">
-              <Wrench className="w-9 h-9 stroke-[2]" />
-            </div>
-            <span className="absolute -top-1 -right-1 flex h-4 w-4">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500"></span>
-            </span>
-          </div>
-
-          <div className="space-y-3 max-w-lg mx-auto">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200/70 text-amber-800 text-xs font-bold tracking-wide uppercase">
-              <Clock className="w-3.5 h-3.5" />
-              <span>Under Construction</span>
-            </div>
-            
-            <h1 className="text-2xl sm:text-3xl font-black font-display text-slate-900 tracking-tight">
-              Unlocked <span className="text-fuchsia-600">Good Stuff</span>
-            </h1>
-            
-            <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
-              We’re currently fine-tuning this space to give you a smoother, simpler way to buy, sell, and pass on second-hand treasures in Valencia.
-            </p>
-            <p className="text-slate-400 text-xs">
-              Check back very soon! In the meantime, explore local events and guides.
-            </p>
-          </div>
-
-          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => onNavigate?.('home')}
-              className="px-6 py-3 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-sm rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back to Discover</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigate?.('events')}
-              className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-all cursor-pointer"
-            >
-              <span>Explore Events</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-4 md:p-10 pt-3 md:pt-5 space-y-6 pb-32 max-w-7xl mx-auto">
-      {/* Clean Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+      {/* Modern, Clean Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-fuchsia-50 text-fuchsia-600 flex items-center justify-center border border-fuchsia-200/80 shrink-0">
-              <Tag className="w-5 h-5 stroke-[2.2]" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200/80 shrink-0 shadow-2xs">
+              <Shirt className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-black font-display text-slate-900 tracking-tight">
-                Unlocked <span className="text-fuchsia-600">Good Stuff</span>
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-black font-display text-slate-900 tracking-tight">
+                  Unlocked <span className="text-emerald-600">Good Stuff</span>
+                </h1>
+                <span className="hidden sm:inline-flex text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Valencia
+                </span>
+              </div>
+              <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
+                Local second-hand, pre-loved items, school gear & neighbor marketplace in Valencia.
+              </p>
             </div>
           </div>
-          <p className="text-slate-500 text-sm mt-1.5">
-            Local second-hand, vintage & pre-loved community exchange in Valencia.
-          </p>
         </div>
 
         <button
           type="button"
           onClick={handleAddAdClick}
-          className="self-start sm:self-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2 shrink-0 cursor-pointer active:scale-95"
+          className="self-start sm:self-auto px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-2xl shadow-md hover:shadow-lg shadow-emerald-600/20 active:scale-95 transition-all flex items-center gap-2 shrink-0 cursor-pointer group"
         >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
+          <Plus className="w-4 h-4 stroke-[2.8] transition-transform group-hover:rotate-90 duration-300" />
           <span>Post an Ad</span>
         </button>
       </div>
 
-      {/* Search Bar & Categories */}
-      <div className="space-y-4">
+      {/* Unified Search & Filters Card */}
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3.5">
         {/* Search Input */}
         <div className="relative">
-          <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-600" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search second-hand bikes, furniture, vintage clothes, electronics, books..."
-            className="w-full pl-12 sm:pl-13 pr-12 py-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs focus:ring-2 focus:ring-emerald-500/25 focus:border-emerald-600 outline-none text-sm md:text-base text-slate-900 placeholder:text-slate-400 font-medium transition-all"
+            placeholder="Search school uniforms, kids clothes, bikes, sofa, coffee machine, books, electronics..."
+            className="w-full pl-11 pr-10 py-3 bg-slate-50 rounded-2xl border border-slate-200/90 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm text-slate-900 placeholder:text-slate-400 font-medium transition-all"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-full transition-colors cursor-pointer"
               title="Clear search"
             >
               <X className="w-4 h-4" />
@@ -18218,35 +18114,48 @@ function MarketplaceView({
           )}
         </div>
 
-        {/* Category Horizontal Filter */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+        {/* 15 Category Filter Chips (Directly in same filter toolbar) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none -mx-2 px-2 sm:mx-0 sm:px-0">
           {categories.map((cat) => {
             const Icon = cat.icon;
             const isSelected = selectedCategory === cat.id;
+            const count = categoryCounts[cat.id] ?? 0;
+
             return (
               <button
                 key={cat.id}
                 type="button"
                 onClick={() => setSelectedCategory(cat.id)}
                 className={cn(
-                  "px-4 py-2.5 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-2 whitespace-nowrap transition-all cursor-pointer shrink-0 border",
+                  "px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all cursor-pointer shrink-0 border",
                   isSelected
-                    ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-emerald-50/50 hover:text-emerald-950 hover:border-emerald-200"
+                    ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
                 )}
               >
-                <Icon className={cn("w-4 h-4", isSelected ? "text-white" : "text-emerald-600")} />
+                <span className="text-sm leading-none">{cat.emoji}</span>
+                <Icon className={cn("w-3.5 h-3.5", isSelected ? "text-white" : "text-emerald-600")} />
                 <span>{cat.label}</span>
+                {count > 0 && (
+                  <span
+                    className={cn(
+                      "text-[10px] font-bold px-1.5 py-0.2 rounded-full transition-colors ml-0.5",
+                      isSelected
+                        ? "bg-white/25 text-white"
+                        : "bg-slate-200/80 text-slate-600"
+                    )}
+                  >
+                    {count}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
-      </div>
 
-      {/* Secondary Controls Bar: Location, Dynamic Price Range, Condition, Sort */}
-      <div className="space-y-3 p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+        {/* Secondary Controls Bar: Location, Dynamic Price Range, Condition, Sort */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
             {/* Location Select */}
             <div className="relative">
               <select
@@ -18269,24 +18178,10 @@ function MarketplaceView({
                     </option>
                   ))}
                 </optgroup>
-                <option value="CUSTOM_INPUT">✏️ Enter Custom Location...</option>
               </select>
               <MapPin className="w-3.5 h-3.5 text-emerald-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
-
-            {/* Manual Location Toggle */}
-            {!isManualLocationActive ? (
-              <button
-                type="button"
-                onClick={() => setIsManualLocationActive(true)}
-                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1 cursor-pointer"
-                title="Type any location"
-              >
-                <Edit2 className="w-3 h-3" />
-                <span>Type location</span>
-              </button>
-            ) : null}
 
             {/* Dynamic Category Price Range Select */}
             <div className="relative">
@@ -18323,22 +18218,6 @@ function MarketplaceView({
               <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
-
-            {/* Saved Items Filter Toggle */}
-            <button
-              type="button"
-              onClick={() => setShowSavedOnly(!showSavedOnly)}
-              className={cn(
-                "px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer",
-                showSavedOnly
-                  ? "bg-rose-50 text-rose-700 border-rose-200 shadow-2xs"
-                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
-              )}
-              title="Show saved listings"
-            >
-              <Heart className={cn("w-3.5 h-3.5", showSavedOnly ? "fill-rose-500 text-rose-500" : "text-slate-400")} />
-              <span>Saved ({effectiveSavedIds.length})</span>
-            </button>
 
             {/* Reset Filters Shortcut */}
             {hasActiveFilters && (
@@ -18398,59 +18277,6 @@ function MarketplaceView({
             </div>
           </div>
         </div>
-
-        {/* Manual Location Input Field (Revealed when active) */}
-        {isManualLocationActive && (
-          <div className="pt-2 border-t border-slate-100 flex items-center gap-3">
-            <div className="relative flex-1">
-              <MapPin className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={customLocationInput}
-                onChange={(e) => setCustomLocationInput(e.target.value)}
-                placeholder="Type any Valencia location, town or street (e.g. L'Eliana, Bétera, Puçol, Ruzafa)..."
-                className="w-full pl-9 pr-8 py-2 bg-emerald-50/40 rounded-xl border border-emerald-200 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                autoFocus
-              />
-              {customLocationInput && (
-                <button
-                  type="button"
-                  onClick={() => setCustomLocationInput('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Quick location suggestions */}
-            <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-              <span>Suggestions:</span>
-              {["L'Eliana", "Bétera", "Puçol", "Rocafort", "Ruzafa"].map((town) => (
-                <button
-                  key={town}
-                  type="button"
-                  onClick={() => setCustomLocationInput(town)}
-                  className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 transition-colors"
-                >
-                  {town}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setIsManualLocationActive(false);
-                setCustomLocationInput('');
-                setSelectedLocation('All');
-              }}
-              className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1"
-            >
-              Close
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Results Header Counter */}
@@ -18547,15 +18373,15 @@ function MarketplaceView({
                         {ad.seller_image ? (
                           <img
                             src={ad.seller_image}
-                            alt={ad.seller_name || 'Seller'}
+                            alt={formatSellerName(ad.seller_name)}
                             className="w-6 h-6 rounded-full object-cover shrink-0"
                           />
                         ) : (
                           <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-bold text-emerald-800 shrink-0">
-                            {(ad.seller_name || 'U').charAt(0)}
+                            {formatSellerName(ad.seller_name).charAt(0)}
                           </div>
                         )}
-                        <span className="font-medium text-slate-700 truncate">{ad.seller_name || 'MyCityUnlocked Member'}</span>
+                        <span className="font-medium text-slate-700 truncate">{formatSellerName(ad.seller_name)}</span>
                       </div>
                       <span className="text-[11px] text-slate-400 shrink-0">{formatRelativeTime(ad.created_at)}</span>
                     </div>

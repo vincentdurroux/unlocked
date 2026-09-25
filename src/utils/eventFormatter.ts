@@ -279,6 +279,286 @@ export function getEventStartDate(event: { start_date?: string | null; end_date?
 }
 
 /**
+ * Detects if an event is a "Year Round" / permanent / ongoing event.
+ */
+export function isYearRoundEvent(event: {
+  start_date?: string | null;
+  end_date?: string | null;
+  date?: string | null;
+  title?: string | null;
+  description?: string | null;
+  tags?: string | null;
+  category?: string | null;
+}): boolean {
+  const dates = `${event.start_date || ''} ${event.end_date || ''} ${event.date || ''}`.trim();
+  if (/year[- ]round|toute l'ann[ée]e|permanent|all[- ]year|ongoing|annual/i.test(dates)) {
+    return true;
+  }
+  const norm = normalizeSingleDate(event.start_date || event.date);
+  if (norm === 'YEAR ROUND') {
+    return true;
+  }
+  const metadata = `${event.title || ''} ${event.tags || ''} ${event.category || ''}`.toLowerCase();
+  if (/(#|\b)(year[- ]round|permanent|toute[- ]l['’]ann[ée]e)\b/i.test(metadata)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Checks whether an event (particularly year-round) is open on the weekend (Saturday and/or Sunday).
+ */
+export function isEventOpenOnWeekend(event: {
+  time?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  description?: string | null;
+  tags?: string | null;
+  title?: string | null;
+}): boolean {
+  const content = `${event.time || ''} ${event.start_time || ''} ${event.end_time || ''} ${event.description || ''} ${event.tags || ''} ${event.title || ''}`.toLowerCase();
+
+  // 1. Explicitly closed on weekends / Saturdays / Sundays
+  if (
+    /closed\s+(on\s+)?(the\s+)?(weekends?|saturdays?\s*(and|&)\s*sundays?)/i.test(content) ||
+    /ferm[ée](s)?\s+(le\s+)?(week[- ]?end|samedi\s*(et|&)\s*dimanche)/i.test(content) ||
+    /cerrado\s+(los\s+)?(fines\s+de\s+semana|s[aá]bados\s*(y|&)\s*domingos)/i.test(content) ||
+    /ferm[ée](s)?\s+samedi\s*(et|&)\s*dimanche/i.test(content) ||
+    /closed\s+saturdays?\s*(&|and)\s*sundays?/i.test(content)
+  ) {
+    return false;
+  }
+
+  // 2. Weekdays only (en semaine uniquement, solo días laborables)
+  if (
+    /\b(weekdays?\s+only|only\s+on\s+weekdays?)\b/i.test(content) ||
+    /\b(en\s+semaine\s+uniquement|uniquement\s+en\s+semaine|en\s+semaine\s+seulement)\b/i.test(content) ||
+    /\b(solo\s+d[ií]as\s+laborables|solo\s+entre\s+semana)\b/i.test(content)
+  ) {
+    return false;
+  }
+
+  // 3. Monday to Friday pattern without weekend mention
+  const hasMonToFri =
+    /\b(mon(day)?\s*(-|to)\s*fri(day)?)\b/i.test(content) ||
+    /\b(lun(di)?\s*(-|au)\s*ven(dredi)?)\b/i.test(content) ||
+    /\b(lun(es)?\s*(-|a)\s*vie(rnes)?)\b/i.test(content);
+
+  if (hasMonToFri) {
+    // If it mentions Monday-Friday, does it also explicitly list weekend opening (e.g. "Sat: 10:00-14:00" or "samedi")?
+    const hasWeekendOpening =
+      /\b(sat(urday)?|sam(edi)?|s[aá]b(ado)?|sun(day)?|dim(anche)?|dom(ingo)?)\s*[:\-–0-9]/i.test(content) ||
+      /\b(week[- ]?end|open\s+sat|ouvert\s+le\s+samedi|ouvert\s+le\s+dimanche|open\s+sun)\b/i.test(content);
+    if (!hasWeekendOpening) {
+      return false;
+    }
+  }
+
+  // Default: Open on weekends unless restricted
+  return true;
+}
+
+/**
+ * Checks whether an event is closed on a specific day of the week (0 = Sunday, 1 = Monday, ..., 6 = Saturday).
+ */
+export function isEventClosedOnDayOfWeek(content: string, dayOfWeek: number): boolean {
+  if (!content) return false;
+  const lower = content.toLowerCase();
+
+  switch (dayOfWeek) {
+    case 0: // Sunday
+      return (
+        /closed\s+(on\s+)?sundays?/i.test(lower) ||
+        /ferm[ée](s)?\s+(le\s+)?dimanche/i.test(lower) ||
+        /cerrado\s+(los\s+)?domingos?/i.test(lower)
+      );
+    case 1: // Monday
+      return (
+        /closed\s+(on\s+)?mondays?/i.test(lower) ||
+        /ferm[ée](s)?\s+(le\s+)?lundi/i.test(lower) ||
+        /cerrado\s+(los\s+)?lunes/i.test(lower)
+      );
+    case 2: // Tuesday
+      return (
+        /closed\s+(on\s+)?tuesdays?/i.test(lower) ||
+        /ferm[ée](s)?\s+(le\s+)?mardi/i.test(lower) ||
+        /cerrado\s+(los\s+)?martes/i.test(lower)
+      );
+    case 3: // Wednesday
+      return (
+        /closed\s+(on\s+)?wednesdays?/i.test(lower) ||
+        /ferm[ée](s)?\s+(le\s+)?mercredi/i.test(lower) ||
+        /cerrado\s+(los\s+)?mi[eé]rcoles/i.test(lower)
+      );
+    case 4: // Thursday
+      return (
+        /closed\s+(on\s+)?thursdays?/i.test(lower) ||
+        /ferm[ée](s)?\s+(le\s+)?jeudi/i.test(lower) ||
+        /cerrado\s+(los\s+)?jueves/i.test(lower)
+      );
+    case 5: // Friday
+      return (
+        /closed\s+(on\s+)?fridays?/i.test(lower) ||
+        /ferm[ée](s)?\s+(le\s+)?vendredi/i.test(lower) ||
+        /cerrado\s+(los\s+)?viernes/i.test(lower)
+      );
+    case 6: // Saturday
+      return (
+        /closed\s+(on\s+)?saturdays?/i.test(lower) ||
+        /ferm[ée](s)?\s+(le\s+)?samedi/i.test(lower) ||
+        /cerrado\s+(los\s+)?s[aá]bados?/i.test(lower)
+      );
+    default:
+      return false;
+  }
+}
+
+/**
+ * Checks whether an event matches a selected date filter: 'all' | 'today' | 'tomorrow' | 'weekend'.
+ * Properly handles:
+ * - "Year Round" / permanent events (visible on today, tomorrow, and weekend IF open on the weekend).
+ * - Multi-day date ranges (e.g. from 2026-09-20 to 2026-09-30, or "NOV 12 - NOV 20").
+ * - Single day dates in various formats ("2026-09-25", "SEP 25", "25/09/2026", etc.).
+ */
+export function isEventMatchingDateFilter(
+  event: {
+    start_date?: string | null;
+    end_date?: string | null;
+    date?: string | null;
+    time?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    description?: string | null;
+    tags?: string | null;
+    title?: string | null;
+    category?: string | null;
+  },
+  dateFilter: 'all' | 'today' | 'tomorrow' | 'weekend',
+  referenceDate = new Date()
+): boolean {
+  if (dateFilter === 'all') return true;
+
+  // 1. Handle "Year Round" / permanent events
+  if (isYearRoundEvent(event)) {
+    const content = `${event.time || ''} ${event.start_time || ''} ${event.end_time || ''} ${event.description || ''} ${event.tags || ''} ${event.title || ''}`;
+
+    if (dateFilter === 'today') {
+      const todayDayOfWeek = referenceDate.getDay(); // 0 = Sun, 6 = Sat
+      if (todayDayOfWeek === 0 || todayDayOfWeek === 6) {
+        return isEventOpenOnWeekend(event);
+      }
+      return !isEventClosedOnDayOfWeek(content, todayDayOfWeek);
+    }
+
+    if (dateFilter === 'tomorrow') {
+      const tom = new Date(referenceDate);
+      tom.setDate(tom.getDate() + 1);
+      const tomDayOfWeek = tom.getDay();
+      if (tomDayOfWeek === 0 || tomDayOfWeek === 6) {
+        return isEventOpenOnWeekend(event);
+      }
+      return !isEventClosedOnDayOfWeek(content, tomDayOfWeek);
+    }
+
+    if (dateFilter === 'weekend') {
+      // Must be open on the weekend!
+      return isEventOpenOnWeekend(event);
+    }
+  }
+
+  // 2. Handle standard scheduled events
+  const refYear = referenceDate.getFullYear();
+  const sDate = getEventStartDate(event, refYear);
+  const eDate = getEventEndDate(event, refYear) || sDate;
+
+  // Helpers to get start and end timestamps for target days
+  const getDayRange = (d: Date) => {
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
+    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+    return { start, end };
+  };
+
+  const getIsoStr = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const evDateRaw = (event.start_date || event.date || '').trim();
+
+  if (dateFilter === 'today') {
+    const { start, end } = getDayRange(referenceDate);
+    if (sDate && eDate) {
+      if (sDate.getTime() <= end && eDate.getTime() >= start) return true;
+    }
+    const todayIso = getIsoStr(referenceDate);
+    const todayNorm = normalizeSingleDate(todayIso);
+    const evNorm = normalizeSingleDate(evDateRaw);
+    return evDateRaw === todayIso || (!!todayNorm && todayNorm === evNorm);
+  }
+
+  if (dateFilter === 'tomorrow') {
+    const tom = new Date(referenceDate);
+    tom.setDate(tom.getDate() + 1);
+    const { start, end } = getDayRange(tom);
+    if (sDate && eDate) {
+      if (sDate.getTime() <= end && eDate.getTime() >= start) return true;
+    }
+    const tomIso = getIsoStr(tom);
+    const tomNorm = normalizeSingleDate(tomIso);
+    const evNorm = normalizeSingleDate(evDateRaw);
+    return evDateRaw === tomIso || (!!tomNorm && tomNorm === evNorm);
+  }
+
+  if (dateFilter === 'weekend') {
+    const dayOfWeek = referenceDate.getDay(); // 0 = Sun, ..., 5 = Fri, 6 = Sat
+    const fri = new Date(referenceDate);
+    const sat = new Date(referenceDate);
+    const sun = new Date(referenceDate);
+
+    if (dayOfWeek === 0) { // Sunday
+      fri.setDate(referenceDate.getDate() - 2);
+      sat.setDate(referenceDate.getDate() - 1);
+      sun.setDate(referenceDate.getDate());
+    } else if (dayOfWeek === 6) { // Saturday
+      fri.setDate(referenceDate.getDate() - 1);
+      sat.setDate(referenceDate.getDate());
+      sun.setDate(referenceDate.getDate() + 1);
+    } else if (dayOfWeek === 5) { // Friday
+      fri.setDate(referenceDate.getDate());
+      sat.setDate(referenceDate.getDate() + 1);
+      sun.setDate(referenceDate.getDate() + 2);
+    } else { // Mon-Thu
+      const daysToFri = 5 - dayOfWeek;
+      fri.setDate(referenceDate.getDate() + daysToFri);
+      sat.setDate(referenceDate.getDate() + daysToFri + 1);
+      sun.setDate(referenceDate.getDate() + daysToFri + 2);
+    }
+
+    const weekendStart = new Date(fri.getFullYear(), fri.getMonth(), fri.getDate(), 0, 0, 0, 0).getTime();
+    const weekendEnd = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate(), 23, 59, 59, 999).getTime();
+
+    if (sDate && eDate) {
+      if (sDate.getTime() <= weekendEnd && eDate.getTime() >= weekendStart) return true;
+    }
+
+    // String fallbacks for Friday, Saturday, Sunday
+    const friIso = getIsoStr(fri);
+    const satIso = getIsoStr(sat);
+    const sunIso = getIsoStr(sun);
+    const evNorm = normalizeSingleDate(evDateRaw);
+    if (evDateRaw === friIso || evDateRaw === satIso || evDateRaw === sunIso) return true;
+    if (evNorm && (evNorm === normalizeSingleDate(friIso) || evNorm === normalizeSingleDate(satIso) || evNorm === normalizeSingleDate(sunIso))) {
+      return true;
+    }
+    return false;
+  }
+
+  return false;
+}
+
+/**
  * Checks whether an event takes place in the current calendar month (or reference date).
  */
 export function isEventInCurrentMonth(
@@ -286,6 +566,7 @@ export function isEventInCurrentMonth(
   referenceDate = new Date()
 ): boolean {
   if (isEventExpired(event, referenceDate)) return false;
+  if (isYearRoundEvent(event)) return true;
 
   const currentYear = referenceDate.getFullYear();
   const currentMonth = referenceDate.getMonth(); // 0-indexed (e.g. 8 for September)
@@ -317,6 +598,7 @@ export function isEventInCurrentOrNextMonth(
   referenceDate = new Date()
 ): boolean {
   if (isEventExpired(event, referenceDate)) return false;
+  if (isYearRoundEvent(event)) return true;
 
   const currentYear = referenceDate.getFullYear();
   const currentMonth = referenceDate.getMonth(); // 0-indexed
@@ -358,6 +640,7 @@ export function isEventInCurrentOrNextMonth(
  * An event is expired only if its end date is strictly before today (00:00:00).
  */
 export function isEventExpired(event: { start_date?: string | null; end_date?: string | null; date?: string | null }, now = new Date()): boolean {
+  if (isYearRoundEvent(event)) return false;
   const endDate = getEventEndDate(event, now.getFullYear());
   if (!endDate) return false; // If date cannot be parsed, do not mistakenly drop it
 

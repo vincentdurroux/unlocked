@@ -49,6 +49,8 @@ function getWeatherDetails(code: number) {
 
 export function HeaderWeatherWidget() {
   const [isOpen, setIsOpen] = useState(false);
+  const [locationName, setLocationName] = useState('Valencia');
+  const [isGeolocated, setIsGeolocated] = useState(false);
   const [weather, setWeather] = useState<WeatherData>({
     temp: 24,
     weatherCode: 0,
@@ -65,51 +67,113 @@ export function HeaderWeatherWidget() {
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch Valencia live weather from Open-Meteo
-  useEffect(() => {
-    let isMounted = true;
-    async function fetchWeather() {
-      try {
-        const response = await fetch(
-          'https://api.open-meteo.com/v1/forecast?latitude=39.4699&longitude=-0.3763&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Europe%2FMadrid'
-        );
-        if (!response.ok) throw new Error('Failed to fetch weather');
-        const data = await response.json();
-        
-        if (isMounted && data.current && data.daily) {
-          const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  // Helper to fetch weather for specific coordinates
+  const fetchWeatherForCoords = async (lat: number, lng: number, cityLabel: string, geolocated: boolean) => {
+    try {
+      const response = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Europe%2FMadrid`
+      );
+      if (!response.ok) throw new Error('Failed to fetch weather');
+      const data = await response.json();
+      
+      if (data.current && data.daily) {
+        const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-          const forecastData = (data.daily.time || []).slice(0, 3).map((timeStr: string, idx: number) => {
-            const date = new Date(timeStr);
-            let dayLabel = daysOfWeek[date.getDay()];
-            if (idx === 0) dayLabel = 'Today';
-            if (idx === 1) dayLabel = 'Tomorrow';
-            
-            return {
-              day: dayLabel,
-              code: data.daily.weather_code[idx] ?? 0,
-              max: Math.round(data.daily.temperature_2m_max[idx] ?? 24),
-              min: Math.round(data.daily.temperature_2m_min[idx] ?? 16)
-            };
-          });
+        const forecastData = (data.daily.time || []).slice(0, 3).map((timeStr: string, idx: number) => {
+          const date = new Date(timeStr);
+          let dayLabel = daysOfWeek[date.getDay()];
+          if (idx === 0) dayLabel = 'Today';
+          if (idx === 1) dayLabel = 'Tomorrow';
+          
+          return {
+            day: dayLabel,
+            code: data.daily.weather_code[idx] ?? 0,
+            max: Math.round(data.daily.temperature_2m_max[idx] ?? 24),
+            min: Math.round(data.daily.temperature_2m_min[idx] ?? 16)
+          };
+        });
 
-          setWeather({
-            temp: Math.round(data.current.temperature_2m),
-            weatherCode: data.current.weather_code,
-            humidity: Math.round(data.current.relative_humidity_2m),
-            windSpeed: Math.round(data.current.wind_speed_10m),
-            tempMax: Math.round(data.daily.temperature_2m_max[0] ?? data.current.temperature_2m),
-            tempMin: Math.round(data.daily.temperature_2m_min[0] ?? data.current.temperature_2m - 5),
-            forecast: forecastData
-          });
-        }
-      } catch (err) {
-        console.warn('Weather fetch error, using fallback Valencia weather data:', err);
+        setWeather({
+          temp: Math.round(data.current.temperature_2m),
+          weatherCode: data.current.weather_code,
+          humidity: Math.round(data.current.relative_humidity_2m),
+          windSpeed: Math.round(data.current.wind_speed_10m),
+          tempMax: Math.round(data.daily.temperature_2m_max[0] ?? data.current.temperature_2m),
+          tempMin: Math.round(data.daily.temperature_2m_min[0] ?? data.current.temperature_2m - 5),
+          forecast: forecastData
+        });
+        setLocationName(cityLabel);
+        setIsGeolocated(geolocated);
       }
+    } catch (err) {
+      console.warn('Weather fetch error, using fallback Valencia weather data:', err);
     }
+  };
 
-    fetchWeather();
-    return () => { isMounted = false; };
+  // Determine user geolocation inside Valencian Community or default to Valencia
+  useEffect(() => {
+    let isCancelled = false;
+
+    const initWeather = async () => {
+      // Default coordinates for Valencia City
+      const DEFAULT_LAT = 39.4699;
+      const DEFAULT_LNG = -0.3763;
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            if (isCancelled) return;
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+
+            // Bounding box of the Valencian Community (Castellón, Valencia, Alicante)
+            const isInsideValencianCommunity = (lat >= 37.84 && lat <= 40.80) && (lng >= -1.55 && lng <= 0.70);
+
+            if (isInsideValencianCommunity) {
+              let detectedCity = 'Valencia';
+              try {
+                // Reverse-geocode to get the city/municipality name in Valencian Community
+                const geoRes = await fetch(
+                  `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
+                );
+                if (geoRes.ok) {
+                  const geoData = await geoRes.json();
+                  const placeName = geoData.locality || geoData.city || geoData.principalSubdivision;
+                  if (placeName && placeName.trim()) {
+                    detectedCity = placeName.trim();
+                  }
+                }
+              } catch {
+                detectedCity = 'Valencia';
+              }
+
+              if (!isCancelled) {
+                fetchWeatherForCoords(lat, lng, detectedCity, true);
+              }
+            } else {
+              // Outside Valencian Community -> fallback to Valencia
+              if (!isCancelled) {
+                fetchWeatherForCoords(DEFAULT_LAT, DEFAULT_LNG, 'Valencia', false);
+              }
+            }
+          },
+          () => {
+            // Geolocation not granted or error -> fallback to Valencia
+            if (!isCancelled) {
+              fetchWeatherForCoords(DEFAULT_LAT, DEFAULT_LNG, 'Valencia', false);
+            }
+          },
+          { timeout: 8000, maximumAge: 600000 }
+        );
+      } else {
+        fetchWeatherForCoords(DEFAULT_LAT, DEFAULT_LNG, 'Valencia', false);
+      }
+    };
+
+    initWeather();
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   // Close dropdown on click outside
@@ -141,8 +205,8 @@ export function HeaderWeatherWidget() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="group flex items-center gap-2 py-1.5 px-3 sm:px-3.5 rounded-2xl transition-all duration-200 cursor-pointer select-none shrink-0 text-slate-800 hover:text-slate-950 hover:bg-slate-100/80 active:scale-98"
-        title="Valencia Weather"
-        aria-label="Valencia Weather"
+        title={`${locationName} Weather`}
+        aria-label={`${locationName} Weather`}
       >
         <div className="flex flex-col items-center leading-tight">
           <div className="flex items-center gap-1.5 sm:gap-2">
@@ -151,8 +215,9 @@ export function HeaderWeatherWidget() {
               {weather.temp}°C
             </span>
           </div>
-          <span className="font-extrabold text-slate-600 text-[11px] sm:text-xs tracking-tight -mt-0.5">
-            Valencia
+          <span className="font-extrabold text-slate-600 text-[11px] sm:text-xs tracking-tight -mt-0.5 flex items-center gap-0.5 max-w-[90px] truncate">
+            {isGeolocated && <MapPin className="w-2.5 h-2.5 text-emerald-600 shrink-0 inline" />}
+            <span className="truncate">{locationName}</span>
           </span>
         </div>
 
@@ -184,8 +249,15 @@ export function HeaderWeatherWidget() {
               {/* Soft Warm Header Bar */}
               <div className="flex items-center justify-between pb-3 border-b border-[#F4EDE0]">
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                  <MapPin className="w-4 h-4 text-amber-500" />
-                  <span className="tracking-tight">Valencia, Spain</span>
+                  <MapPin className={`w-4 h-4 ${isGeolocated ? 'text-emerald-600' : 'text-amber-500'}`} />
+                  <span className="tracking-tight">
+                    {locationName}{locationName.toLowerCase() === 'valencia' ? ', Spain' : ', Comunitat Valenciana'}
+                  </span>
+                  {isGeolocated && (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-md">
+                      GPS
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-amber-800/85 bg-[#FFF7E8] px-2.5 py-0.5 rounded-full border border-[#F3E5C8]">
