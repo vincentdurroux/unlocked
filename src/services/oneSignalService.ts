@@ -1,11 +1,8 @@
 import OneSignal from 'react-onesignal';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-// App ID provided by OneSignal Web SDK integration (https://documentation.onesignal.com/docs/en/web-sdk-setup)
+// Public Web SDK client App ID fallback (used only if server route is unreachable)
 export const ONESIGNAL_APP_ID = '10a14311-a42a-4681-9682-ce965d80ae75';
-
-// Default App ID fallback or env variable
-const DEFAULT_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || ONESIGNAL_APP_ID;
 
 export type PushSubscriptionObserver = (subscriptionId: string) => void;
 
@@ -36,16 +33,36 @@ class OneSignalService {
   }
 
   /**
+   * Fetch OneSignal App ID securely from the backend server
+   * (Ensures no secrets or keys are exposed via client-side VITE_ environment variables)
+   */
+  async fetchAppIdFromServer(): Promise<string> {
+    if (this.currentAppId) return this.currentAppId;
+    try {
+      const res = await fetch('/api/onesignal-config');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.appId) {
+          this.currentAppId = data.appId;
+          return data.appId;
+        }
+      }
+    } catch (err) {
+      console.warn('[OneSignal] Could not fetch config from server proxy, using default:', err);
+    }
+    return this.getAppId();
+  }
+
+  /**
    * Get the active OneSignal App ID
    */
   getAppId(): string {
     if (this.currentAppId) return this.currentAppId;
     const stored = typeof window !== 'undefined' ? localStorage.getItem('onesignal_app_id') : null;
-    // If stored was the old mobile App ID, update automatically to the new Web SDK App ID
     if (stored && stored !== '4653c1cf-3dbe-494d-8897-cfa37b9d4d41') {
       return stored;
     }
-    return DEFAULT_APP_ID;
+    return ONESIGNAL_APP_ID;
   }
 
   /**
@@ -119,7 +136,9 @@ class OneSignalService {
    */
   async init(userId?: string): Promise<boolean> {
     if (typeof window === 'undefined') return false;
-    const appId = this.getAppId();
+
+    // Fetch App ID securely from backend server
+    const appId = await this.fetchAppIdFromServer();
 
     if (!appId) {
       console.warn('[OneSignal] No App ID configured.');
@@ -212,7 +231,7 @@ class OneSignalService {
    * Prompt user for notification permission and opt-in
    */
   async subscribe(userId?: string): Promise<boolean> {
-    const appId = this.getAppId();
+    const appId = await this.fetchAppIdFromServer();
     if (!appId) {
       throw new Error('Veuillez d\'abord renseigner votre OneSignal App ID.');
     }
@@ -300,6 +319,23 @@ class OneSignalService {
     } catch (err) {
       console.warn('[OneSignal] Error logging out user:', err);
     }
+  }
+
+  /**
+   * Send a push notification securely through the backend server proxy
+   * (Keeps the OneSignal REST API secret key strictly protected on the server)
+   */
+  async sendServerNotification(title: string, message: string, url: string = '/', targetUserIds?: string[]): Promise<any> {
+    const res = await fetch('/api/send-push-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, message, url, targetUserIds })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Erreur lors de l\'envoi de la notification push.');
+    }
+    return data;
   }
 }
 

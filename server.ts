@@ -1140,6 +1140,66 @@ FOR EACH REAL EVENT FOUND:
     }
   });
 
+  // Secure OneSignal configuration endpoint (Server-side secrets protection)
+  app.get("/api/onesignal-config", (req, res) => {
+    const appId = process.env.ONESIGNAL_APP_ID || "10a14311-a42a-4681-9682-ce965d80ae75";
+    res.json({
+      appId,
+      hasServerApiKey: Boolean(process.env.ONESIGNAL_REST_API_KEY)
+    });
+  });
+
+  // Secure server-side push notification endpoint (OneSignal REST API key remains 100% secret on the server)
+  app.post("/api/send-push-notification", async (req, res) => {
+    try {
+      const { title, message, targetUserIds, url } = req.body;
+      const appId = process.env.ONESIGNAL_APP_ID || "10a14311-a42a-4681-9682-ce965d80ae75";
+      const restApiKey = process.env.ONESIGNAL_REST_API_KEY;
+
+      if (!restApiKey) {
+        return res.status(400).json({ 
+          error: "ONESIGNAL_REST_API_KEY n'est pas encore configurée sur le serveur. Veuillez l'ajouter dans vos variables d'environnement serveur pour envoyer des notifications push en production." 
+        });
+      }
+
+      const payload: any = {
+        app_id: appId,
+        headings: { en: title || "Unlocked Valencia" },
+        contents: { en: message || "You have a new update!" },
+        url: url || "/"
+      };
+
+      if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
+        payload.include_aliases = { external_id: targetUserIds };
+        payload.target_channel = "push";
+      } else {
+        payload.included_segments = ["Subscribed Users"];
+      }
+
+      const oneSignalRes = await fetch("https://onesignal.com/api/v1/notifications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Basic ${restApiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await oneSignalRes.json();
+      if (!oneSignalRes.ok) {
+        return res.status(oneSignalRes.status).json({ 
+          error: data.errors?.[0] || "Échec de l'envoi de la notification push OneSignal.",
+          details: data 
+        });
+      }
+
+      return res.json({ success: true, result: data });
+    } catch (err: any) {
+      console.error("[api] OneSignal push send error:", err);
+      return res.status(500).json({ error: err.message || "Erreur serveur lors de l'envoi OneSignal." });
+    }
+  });
+
   // OneSignal & PWA Service Worker headers
   app.get(["/OneSignalSDKWorker.js", "/sw.js"], (req, res, next) => {
     res.setHeader("Service-Worker-Allowed", "/");
