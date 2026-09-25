@@ -145,7 +145,25 @@ class OneSignalService {
       return false;
     }
 
-    if (this.isInitialized) {
+    const windowOneSignal = typeof window !== 'undefined' ? (window as any).OneSignal : null;
+    const isAlreadyInitialized = this.isInitialized || !!(windowOneSignal?._isInitialized || windowOneSignal?.User?.PushSubscription);
+
+    if (isAlreadyInitialized) {
+      this.isInitialized = true;
+      if (!this.observerBound && windowOneSignal?.User?.PushSubscription) {
+        this.observerBound = true;
+        try {
+          windowOneSignal.User.PushSubscription.addEventListener('change', (change: any) => {
+            const newId = change?.current?.id || windowOneSignal.User?.PushSubscription?.id;
+            this.notifyObservers(newId);
+          });
+        } catch (err) {
+          console.warn('[OneSignal] Could not bind change event:', err);
+        }
+      }
+      const currentSubId = windowOneSignal?.User?.PushSubscription?.id;
+      if (currentSubId) this.notifyObservers(currentSubId);
+
       if (userId) {
         await this.loginUser(userId);
       }
@@ -188,7 +206,27 @@ class OneSignalService {
       }
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
+      // If already initialized by inline script, recover gracefully
+      const isAlreadyInitError = String(error?.message || '').toLowerCase().includes('already initialized');
+      if (isAlreadyInitError || (typeof window !== 'undefined' && (window as any).OneSignal?.User)) {
+        this.isInitialized = true;
+        if (!this.observerBound) {
+          this.observerBound = true;
+          try {
+            OneSignal.User?.PushSubscription?.addEventListener('change', (change: any) => {
+              const newId = change?.current?.id || OneSignal.User?.PushSubscription?.id;
+              this.notifyObservers(newId);
+            });
+          } catch (err) {
+            console.warn('[OneSignal] Could not bind change event:', err);
+          }
+        }
+        const currentSubId = OneSignal.User?.PushSubscription?.id;
+        if (currentSubId) this.notifyObservers(currentSubId);
+        if (userId) await this.loginUser(userId);
+        return true;
+      }
       console.error('[OneSignal] Initialization error:', error);
       return false;
     }

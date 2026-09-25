@@ -15,6 +15,14 @@
     <title>Unlocked</title>
     <!-- OneSignal Web SDK v16 -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "10a14311-a42a-4681-9682-ce965d80ae75",
+        });
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
