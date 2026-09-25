@@ -22,9 +22,6 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
     // Only check in browser
     if (typeof window === 'undefined') return;
 
-    // Push notification prompt is temporarily restricted to admins only
-    if (!isAdmin) return;
-
     // Check if user dismissed prompt recently (last 7 days)
     const dismissedAt = localStorage.getItem('unlocked_push_prompt_dismissed');
     if (dismissedAt) {

@@ -5,11 +5,30 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  const onesignalAppId =
+    process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
+    env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
+    process.env.ONESIGNAL_APP_ID ||
+    env.ONESIGNAL_APP_ID ||
+    '10a14311-a42a-4681-9682-ce965d80ae75';
+
   return {
-    plugins: [react(), tailwindcss()],
+    envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        name: 'html-transform-onesignal',
+        transformIndexHtml(html) {
+          return html.replace(/%NEXT_PUBLIC_ONESIGNAL_APP_ID%/g, onesignalAppId);
+        },
+      },
+    ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.GOOGLE_MAPS_PLATFORM_KEY': JSON.stringify(env.GOOGLE_MAPS_PLATFORM_KEY || ''),
+      'process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID': JSON.stringify(onesignalAppId),
+      'process.env.ONESIGNAL_APP_ID': JSON.stringify(onesignalAppId),
     },
     resolve: {
       alias: {

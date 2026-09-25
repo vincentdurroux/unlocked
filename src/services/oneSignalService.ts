@@ -1,8 +1,11 @@
 import OneSignal from 'react-onesignal';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-// Public Web SDK client App ID fallback (used only if server route is unreachable)
-export const ONESIGNAL_APP_ID = '10a14311-a42a-4681-9682-ce965d80ae75';
+// Public Web SDK client App ID fallback (reads NEXT_PUBLIC_ONESIGNAL_APP_ID from Vercel / environment)
+export const ONESIGNAL_APP_ID =
+  (typeof process !== 'undefined' && (process.env as any)?.NEXT_PUBLIC_ONESIGNAL_APP_ID) ||
+  (typeof import.meta !== 'undefined' && (import.meta as any)?.env?.NEXT_PUBLIC_ONESIGNAL_APP_ID) ||
+  '10a14311-a42a-4681-9682-ce965d80ae75';
 
 export type PushSubscriptionObserver = (subscriptionId: string) => void;
 
@@ -241,9 +244,12 @@ class OneSignalService {
       if (!this.isInitialized) {
         await this.init();
       }
-      const optIn = OneSignal.User?.PushSubscription?.optedIn;
-      const permission = OneSignal.Notifications?.permission;
-      return !!optIn && permission;
+      const windowOS = (window as any).OneSignal;
+      const optIn = OneSignal.User?.PushSubscription?.optedIn ?? windowOS?.User?.PushSubscription?.optedIn;
+      const permission = (typeof Notification !== 'undefined' && Notification.permission === 'granted') || 
+                         OneSignal.Notifications?.permission || 
+                         windowOS?.Notifications?.permission;
+      return !!optIn && !!permission;
     } catch (err) {
       console.warn('[OneSignal] Error checking subscription:', err);
       return false;
@@ -259,7 +265,8 @@ class OneSignalService {
       if (!this.isInitialized) {
         await this.init();
       }
-      return OneSignal.User?.PushSubscription?.id || null;
+      const windowOS = (window as any).OneSignal;
+      return OneSignal.User?.PushSubscription?.id || windowOS?.User?.PushSubscription?.id || null;
     } catch (err) {
       return null;
     }
@@ -274,6 +281,12 @@ class OneSignalService {
       throw new Error('Veuillez d\'abord renseigner votre OneSignal App ID.');
     }
 
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'denied') {
+        throw new Error('Les notifications sont bloquées dans votre navigateur. Cliquez sur l\'icône de cadenas 🔒 à gauche de la barre d\'adresse pour réautoriser les notifications.');
+      }
+    }
+
     if (!this.isInitialized) {
       const ok = await this.init(userId);
       if (!ok) {
@@ -281,16 +294,36 @@ class OneSignalService {
       }
     }
 
+    const windowOS = typeof window !== 'undefined' ? (window as any).OneSignal : null;
+
     try {
-      await OneSignal.Notifications.requestPermission();
-      await OneSignal.User.PushSubscription.optIn();
+      // First try OneSignal SDK requestPermission
+      if (OneSignal.Notifications?.requestPermission) {
+        await OneSignal.Notifications.requestPermission();
+      } else if (windowOS?.Notifications?.requestPermission) {
+        await windowOS.Notifications.requestPermission();
+      } else if (typeof Notification !== 'undefined') {
+        await Notification.requestPermission();
+      }
+
+      // If user permission is granted, opt in
+      if (OneSignal.User?.PushSubscription?.optIn) {
+        await OneSignal.User.PushSubscription.optIn();
+      } else if (windowOS?.User?.PushSubscription?.optIn) {
+        await windowOS.User.PushSubscription.optIn();
+      }
+
+      // Sync observer with latest subscription ID
+      const subId = this.getCurrentSubscriptionId();
+      if (subId) {
+        this.notifyObservers(subId);
+      }
 
       if (userId) {
         await this.loginUser(userId);
       }
 
       // Sync player ID to Supabase if configured
-      const subId = OneSignal.User?.PushSubscription?.id;
       if (subId && userId && isSupabaseConfigured) {
         try {
           await supabase.from('profiles').update({
@@ -307,6 +340,40 @@ class OneSignalService {
       console.error('[OneSignal] Error subscribing user:', err);
       throw new Error(err?.message || 'Erreur lors de l\'activation des notifications OneSignal.');
     }
+  }
+
+  /**
+   * Run full diagnostics on the current Web Push & OneSignal environment
+   */
+  async getDiagnostics() {
+    const isBrowser = typeof window !== 'undefined';
+    const hasNotification = isBrowser && 'Notification' in window;
+    const hasServiceWorker = isBrowser && 'serviceWorker' in navigator;
+    const hasPushManager = isBrowser && 'PushManager' in window;
+    const permission = hasNotification ? Notification.permission : 'unsupported';
+    const isSupported = hasNotification && hasServiceWorker && hasPushManager;
+    const appId = this.getAppId();
+    const isInit = this.isInitialized;
+    const subscriptionId = await this.getSubscriptionId();
+    const isSub = await this.isSubscribed();
+    
+    let activeWorkerUrl: string | null = null;
+    if (hasServiceWorker) {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        activeWorkerUrl = reg?.active?.scriptURL || null;
+      } catch (_) {}
+    }
+
+    return {
+      isSupported,
+      permission,
+      isInit,
+      appId,
+      subscriptionId,
+      isSubscribed: isSub,
+      activeWorkerUrl
+    };
   }
 
   /**

@@ -4365,13 +4365,11 @@ export default function App() {
       </>
       )}
 
-      {/* Floating Push Notification Opt-in Prompt - ADMIN ONLY */}
-      {isAdmin && (
-        <PushNotificationPrompt 
-          currentUserId={currentUser?.id} 
-          isAdmin={isAdmin}
-        />
-      )}
+      {/* Floating Push Notification Opt-in Prompt */}
+      <PushNotificationPrompt 
+        currentUserId={currentUser?.id} 
+        isAdmin={isAdmin}
+      />
 
       {/* OneSignal SDK Verification Dialog (Mandatory AI Prompt Specification) */}
       <OneSignalVerificationDialog userId={currentUser?.id} />
@@ -18975,8 +18973,18 @@ function ProfileView({
   const [pushFeedback, setPushFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [showPushSqlModal, setShowPushSqlModal] = useState(false);
   const [showOneSignalGuide, setShowOneSignalGuide] = useState(false);
+  const [hasServerApiKey, setHasServerApiKey] = useState(false);
+  const [copiedSubId, setCopiedSubId] = useState(false);
 
   useEffect(() => {
+    // Check if server has ONESIGNAL_REST_API_KEY configured
+    fetch('/api/onesignal-config')
+      .then(r => r.json())
+      .then(d => {
+        if (d && d.hasServerApiKey) setHasServerApiKey(true);
+      })
+      .catch(() => {});
+
     const initPush = async () => {
       if (oneSignalService.getAppId()) {
         try {
@@ -18985,6 +18993,9 @@ function ProfileView({
           setIsPushSubscribed(sub);
           const subId = await oneSignalService.getSubscriptionId();
           setOneSignalSubId(subId);
+          if (typeof window !== 'undefined' && 'Notification' in window) {
+            setPushStatus(Notification.permission);
+          }
         } catch (e) {
           console.warn('OneSignal check failed:', e);
         }
@@ -18995,6 +19006,16 @@ function ProfileView({
       }
     };
     initPush();
+
+    // Listen for live OneSignal subscription changes
+    const unsub = oneSignalService.addPushSubscriptionObserver((newId) => {
+      if (newId) {
+        setOneSignalSubId(newId);
+        setIsPushSubscribed(true);
+      }
+    });
+
+    return () => unsub();
   }, [currentUser, oneSignalAppId]);
 
   const handleSaveAppId = async () => {
@@ -19036,6 +19057,9 @@ function ProfileView({
           setIsPushSubscribed(true);
           const subId = await oneSignalService.getSubscriptionId();
           setOneSignalSubId(subId);
+          if (typeof window !== 'undefined' && 'Notification' in window) {
+            setPushStatus(Notification.permission);
+          }
           setPushFeedback({ type: 'success', text: 'Abonné aux notifications OneSignal avec succès !' });
         }
       } else {
@@ -19062,13 +19086,49 @@ function ProfileView({
     setPushLoading(true);
     setPushFeedback(null);
     try {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'denied') {
+          throw new Error('Les notifications sont bloquées dans votre navigateur. Cliquez sur l\'icône de cadenas 🔒 à côté de l\'URL pour réautoriser les notifications.');
+        }
+        if (Notification.permission === 'default') {
+          const p = await Notification.requestPermission();
+          setPushStatus(p);
+          if (p !== 'granted') {
+            throw new Error('Vous devez autoriser les notifications pour recevoir le test.');
+          }
+        }
+      }
       await pushNotificationService.showLocalNotification(
         'Unlocked Valencia 🌴',
-        'Test OneSignal / PWA réussi ! Les notifications s\'affichent sur votre appareil.'
+        'Test Web Push réussi ! Vos notifications s\'affichent parfaitement sur votre appareil.'
       );
-      setPushFeedback({ type: 'success', text: 'Notification de test envoyée avec succès sur votre appareil !' });
+      setPushFeedback({ type: 'success', text: 'Notification de test affichée sur votre écran !' });
     } catch (err: any) {
-      setPushFeedback({ type: 'error', text: err?.message || 'Impossible d\'envoyer la notification de test.' });
+      setPushFeedback({ type: 'error', text: err?.message || 'Impossible d\'afficher la notification de test.' });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const handleSendServerPushNotification = async () => {
+    setPushLoading(true);
+    setPushFeedback(null);
+    try {
+      const res = await oneSignalService.sendServerNotification(
+        'Unlocked Valencia 🌴',
+        'Ceci est un push en direct envoyé via OneSignal ! Le service fonctionne parfaitement.',
+        '/'
+      );
+      const recipientCount = res?.result?.recipients ?? 'tous vos abonnés';
+      setPushFeedback({
+        type: 'success',
+        text: `Push serveur envoyé avec succès via OneSignal ! (${recipientCount} destinataires)`
+      });
+    } catch (err: any) {
+      setPushFeedback({
+        type: 'error',
+        text: err?.message || 'Erreur lors de l\'envoi du push serveur. Vérifiez ONESIGNAL_REST_API_KEY sur Vercel.'
+      });
     } finally {
       setPushLoading(false);
     }
@@ -20414,58 +20474,111 @@ function ProfileView({
         {activeSubPage === 'Settings' && (
           <ProfileSubPage key="subpage-settings" title="Settings" onBack={() => setActiveSubPage(null)}>
             <div className="max-w-2xl mx-auto space-y-6">
-              {/* OneSignal Push Notifications Section - ADMIN ONLY */}
-              {isAdmin && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-600 flex items-center justify-center shrink-0 font-black text-xs">
-                        <Bell className="w-5 h-5 text-red-500" />
-                      </div>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-bold text-slate-900">Notifications Push (OneSignal)</p>
-                          <span className={cn(
-                            "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
-                            isPushSubscribed ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
-                            oneSignalAppId ? "bg-amber-50 text-amber-700 border border-amber-200" :
-                            "bg-slate-100 text-slate-600 border border-slate-200"
-                          )}>
-                            {isPushSubscribed ? 'Abonné' : oneSignalAppId ? 'Prêt à s\'abonner' : 'App ID manquant'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          Envoyez et recevez des notifications push instantanées via le service OneSignal.
-                        </p>
-                      </div>
+              {/* OneSignal Push Notifications Section */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-600 flex items-center justify-center shrink-0 font-black text-xs">
+                      <Bell className="w-5 h-5 text-red-500" />
                     </div>
-
-                    {/* Push Toggle Switch */}
-                    <button
-                      type="button"
-                      onClick={handleTogglePush}
-                      disabled={pushLoading || (!oneSignalAppId && !pushNotificationService.isSupported())}
-                      className={cn(
-                        "w-12 h-6 rounded-full relative transition-colors cursor-pointer shrink-0 mt-2",
-                        pushLoading && "opacity-60 cursor-wait",
-                        !oneSignalAppId && "opacity-50 cursor-not-allowed",
-                        isPushSubscribed ? "bg-emerald-600" : "bg-slate-200"
-                      )}
-                      title={!oneSignalAppId ? "Renseignez d'abord votre OneSignal App ID ci-dessous" : isPushSubscribed ? "Désactiver les notifications" : "Activer les notifications"}
-                    >
-                      <div className={cn(
-                        "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all flex items-center justify-center",
-                        isPushSubscribed ? "right-1" : "left-1"
-                      )}>
-                        {pushLoading && <Loader2 className="w-2.5 h-2.5 animate-spin text-slate-400" />}
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-bold text-slate-900">Notifications Push (OneSignal)</p>
+                        <span className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
+                          isPushSubscribed ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                          oneSignalAppId ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                          "bg-slate-100 text-slate-600 border border-slate-200"
+                        )}>
+                          {isPushSubscribed ? 'Abonné' : oneSignalAppId ? 'Prêt à s\'abonner' : 'App ID manquant'}
+                        </span>
+                        {pushStatus === 'denied' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                            Bloqué navigateur
+                          </span>
+                        )}
                       </div>
-                    </button>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Recevez les alertes en direct pour les nouveaux messages, événements et annonces.
+                      </p>
+                    </div>
                   </div>
 
-                  {/* App ID configuration row */}
+                  {/* Push Toggle Switch */}
+                  <button
+                    type="button"
+                    onClick={handleTogglePush}
+                    disabled={pushLoading || (!oneSignalAppId && !pushNotificationService.isSupported())}
+                    className={cn(
+                      "w-12 h-6 rounded-full relative transition-colors cursor-pointer shrink-0 mt-2",
+                      pushLoading && "opacity-60 cursor-wait",
+                      !oneSignalAppId && "opacity-50 cursor-not-allowed",
+                      isPushSubscribed ? "bg-emerald-600" : "bg-slate-200"
+                    )}
+                    title={!oneSignalAppId ? "Renseignez d'abord votre OneSignal App ID ci-dessous" : isPushSubscribed ? "Désactiver les notifications" : "Activer les notifications"}
+                  >
+                    <div className={cn(
+                      "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all flex items-center justify-center",
+                      isPushSubscribed ? "right-1" : "left-1"
+                    )}>
+                      {pushLoading && <Loader2 className="w-2.5 h-2.5 animate-spin text-slate-400" />}
+                    </div>
+                  </button>
+                </div>
+
+                {/* Diagnostics and Player ID Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">État navigateur</span>
+                    <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                      {pushStatus === 'granted' ? (
+                        <span className="text-emerald-600 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Autorisé
+                        </span>
+                      ) : pushStatus === 'denied' ? (
+                        <span className="text-rose-600 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5" /> Bloqué (vérifiez cadenas URL)
+                        </span>
+                      ) : (
+                        <span className="text-amber-600 flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" /> En attente d'autorisation
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Player ID OneSignal</span>
+                      {oneSignalSubId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(oneSignalSubId);
+                            setCopiedSubId(true);
+                            setTimeout(() => setCopiedSubId(false), 2000);
+                          }}
+                          className="text-[10px] text-brand-blue font-bold hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <Copy className="w-3 h-3" />
+                          {copiedSubId ? 'Copié !' : 'Copier'}
+                        </button>
+                      )}
+                    </div>
+                    <div className="font-mono text-[11px] text-slate-700 truncate">
+                      {oneSignalSubId ? oneSignalSubId : isPushSubscribed ? 'En cours de synchronisation...' : 'Non abonné'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* App ID configuration row - for Admin or configuration */}
+                {isAdmin && (
                   <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-100 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-700">OneSignal App ID</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-slate-700">OneSignal App ID</span>
+                        <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-mono">Admin</span>
+                      </div>
                       {!isEditingAppId ? (
                         <button
                           type="button"
@@ -20494,7 +20607,7 @@ function ProfileView({
                           type="text"
                           value={tempAppId}
                           onChange={(e) => setTempAppId(e.target.value)}
-                          placeholder="Ex: 8a7b3c2d-1234-4567-89ab-cdef01234567"
+                          placeholder="Ex: 10a14311-a42a-4681-9682-ce965d80ae75"
                           className="flex-1 px-3 py-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-blue font-mono"
                         />
                         <button
@@ -20508,138 +20621,141 @@ function ProfileView({
                       </div>
                     ) : (
                       <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
-                        <span>{oneSignalAppId ? `${oneSignalAppId.slice(0, 8)}...${oneSignalAppId.slice(-6)}` : 'Non configuré (cliquez sur Configurer)'}</span>
-                        {oneSignalSubId && (
-                          <span className="text-[10px] text-emerald-600 font-sans font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                            ID: {oneSignalSubId.slice(0, 8)}...
-                          </span>
-                        )}
+                        <span>{oneSignalAppId ? `${oneSignalAppId.slice(0, 8)}...${oneSignalAppId.slice(-6)}` : 'Non configuré'}</span>
+                        <span className="text-[10px] text-emerald-600 font-sans font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                          Worker: OneSignalSDKWorker.js
+                        </span>
                       </div>
                     )}
                   </div>
+                )}
 
-                  {/* iOS instructions if running in browser */}
-                  {pushNotificationService.isIOSInBrowser() && (
-                    <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed">
-                      <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-bold">Configuration requise sur iPhone / iPad (iOS 16.4+) :</p>
-                        <p className="text-[11px] text-amber-800 mt-0.5">
-                          Apple autorise les notifications push uniquement si l'application est ajoutée à votre écran d'accueil. Appuyez sur le bouton <strong>Partager ⎋</strong> de Safari puis sur <strong>« Sur l'écran d'accueil »</strong>.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Push feedback alert */}
-                  {pushFeedback && (
-                    <div className={cn(
-                      "p-3 rounded-xl text-xs font-semibold flex items-center gap-2 animate-in fade-in",
-                      pushFeedback.type === 'success' ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"
-                    )}>
-                      {pushFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                      <span>{pushFeedback.text}</span>
-                    </div>
-                  )}
-
-                  {/* Actions Row */}
-                  <div className="pt-2 flex flex-wrap items-center gap-2.5 border-t border-slate-50">
-                    <button
-                      type="button"
-                      onClick={handleSendTestNotification}
-                      disabled={pushLoading}
-                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <Zap className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Tester une notification</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        localStorage.removeItem('onesignal_verification_dialog_shown');
-                        window.location.reload();
-                      }}
-                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                      title="Réafficher le dialogue de vérification SDK OneSignal"
-                    >
-                      <Bell className="w-3.5 h-3.5 text-red-500" />
-                      <span>Dialogue de vérification SDK</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowOneSignalGuide(!showOneSignalGuide)}
-                      className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <BookOpen className="w-3.5 h-3.5" />
-                      <span>{showOneSignalGuide ? 'Fermer le guide' : 'Guide OneSignal pas-à-pas'}</span>
-                    </button>
-
-                    <a
-                      href="https://dashboard.onesignal.com"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ml-auto"
-                    >
-                      <span>Dashboard OneSignal</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-
-                  {/* Expandable OneSignal Guide */}
-                  {showOneSignalGuide && (
-                    <div className="mt-3 p-4 bg-slate-50 rounded-xl text-xs space-y-3 border border-slate-200 text-slate-700 leading-relaxed animate-in fade-in">
-                      <p className="font-bold text-slate-900 flex items-center gap-1.5">
-                        <Rocket className="w-4 h-4 text-red-500" />
-                        Configuration OneSignal & Déploiement Stores (Play Store & App Store) :
+                {/* iOS instructions if running in browser */}
+                {pushNotificationService.isIOSInBrowser() && (
+                  <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Configuration requise sur iPhone / iPad (iOS 16.4+) :</p>
+                      <p className="text-[11px] text-amber-800 mt-0.5">
+                        Apple autorise les notifications push uniquement si l'application est ajoutée à votre écran d'accueil. Appuyez sur le bouton <strong>Partager ⎋</strong> de Safari puis sur <strong>« Sur l'écran d'accueil »</strong>.
                       </p>
-                      
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1.5 text-blue-900">
-                        <p className="font-bold flex items-center gap-1.5">
-                          <Smartphone className="w-4 h-4 text-brand-blue" />
-                          Sur les smartphones de vos utilisateurs (iOS & Android) :
-                        </p>
-                        <p className="text-[11px] text-blue-800">
-                          • <strong>Invite automatique mobile :</strong> Nous avons intégré une bannière d'abonnement qui apparaît automatiquement sur le téléphone de vos utilisateurs lorsqu'ils ouvrent l'application pour leur proposer d'activer les alertes en 1 clic.
-                          <br />
-                          • <strong>Android (Google Play) :</strong> Les notifications arrivent directement dans le tiroir de notification Android avec vibration et son.
-                          <br />
-                          • <strong>iOS (Apple App Store) :</strong> L'utilisateur doit accepter l'autorisation native une fois dans l'application pour recevoir les alertes sur l'écran verrouillé.
-                        </p>
-                      </div>
-
-                      <ol className="list-decimal pl-4 space-y-2">
-                        <li>
-                          <strong>Créer votre compte OneSignal :</strong> Rendez-vous sur <a href="https://onesignal.com" target="_blank" rel="noreferrer" className="text-brand-blue underline font-semibold">onesignal.com</a>.
-                        </li>
-                        <li>
-                          <strong>Créer une application :</strong> Cliquez sur <em>« New App/Website »</em>, nommez-la <em>Unlocked</em>.
-                        </li>
-                        <li>
-                          <strong>Configuration Web Push (couvre Web, PWA & Wrappers stores) :</strong>
-                          <ul className="list-disc pl-4 mt-1 text-slate-600 text-[11px] space-y-0.5">
-                            <li>Choisissez <strong>Web Push</strong> → <strong>Typical Site</strong>.</li>
-                            <li>Site URL : L'adresse URL de production de votre application.</li>
-                          </ul>
-                        </li>
-                        <li>
-                          <strong>(Optionnel) Clés natives pour wrappers Play Store & App Store :</strong>
-                          <p className="text-[11px] text-slate-600 mt-0.5">
-                            Si votre wrapper mobile utilise les services natifs : dans OneSignal <em>Settings → Platforms</em>, vous pouvez ajouter <strong>Google Android (FCM)</strong> avec vos clés Firebase, et <strong>Apple iOS (APNs)</strong> avec la clé <code>.p8</code> de votre compte Apple Developer.
-                          </p>
-                        </li>
-                        <li>
-                          <strong>Renseigner votre App ID :</strong> Copiez votre <strong>OneSignal App ID</strong> (depuis <em>Settings → Keys & IDs</em>) et collez-le dans le champ ci-dessus.
-                        </li>
-                        <li>
-                          <strong>Envoyer vos notifications :</strong> Rendez-vous dans <em>Messages → New Message → Push Notification</em> sur le dashboard OneSignal. Vos utilisateurs sur iPhone et Android recevront la notification en direct !
-                        </li>
-                      </ol>
                     </div>
+                  </div>
+                )}
+
+                {/* Push feedback alert */}
+                {pushFeedback && (
+                  <div className={cn(
+                    "p-3 rounded-xl text-xs font-semibold flex items-center gap-2 animate-in fade-in",
+                    pushFeedback.type === 'success' ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100"
+                  )}>
+                    {pushFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                    <span>{pushFeedback.text}</span>
+                  </div>
+                )}
+
+                {/* Actions Row */}
+                <div className="pt-2 flex flex-wrap items-center gap-2.5 border-t border-slate-50">
+                  <button
+                    type="button"
+                    onClick={handleSendTestNotification}
+                    disabled={pushLoading}
+                    className="px-3.5 py-1.5 bg-brand-blue hover:bg-blue-600 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Tester une notification</span>
+                  </button>
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={handleSendServerPushNotification}
+                      disabled={pushLoading}
+                      className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      title={hasServerApiKey ? "Envoyer un vrai push OneSignal à tous les abonnés via l'API REST" : "Configurez ONESIGNAL_REST_API_KEY sur le serveur pour activer le broadcast"}
+                    >
+                      <Send className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Push OneSignal réel (Serveur)</span>
+                    </button>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.removeItem('onesignal_verification_dialog_shown');
+                      window.location.reload();
+                    }}
+                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                    title="Réinitialiser et afficher le dialogue de vérification OneSignal"
+                  >
+                    <Bell className="w-3.5 h-3.5 text-red-500" />
+                    <span>Dialogue vérification SDK</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowOneSignalGuide(!showOneSignalGuide)}
+                    className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>{showOneSignalGuide ? 'Fermer le guide' : 'Guide OneSignal pas-à-pas'}</span>
+                  </button>
+
+                  <a
+                    href="https://dashboard.onesignal.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ml-auto"
+                  >
+                    <span>Dashboard OneSignal</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
-              )}
+
+                {/* Expandable OneSignal Guide */}
+                {showOneSignalGuide && (
+                  <div className="mt-3 p-4 bg-slate-50 rounded-xl text-xs space-y-3 border border-slate-200 text-slate-700 leading-relaxed animate-in fade-in">
+                    <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Rocket className="w-4 h-4 text-red-500" />
+                      Guide de vérification et configuration OneSignal :
+                    </p>
+                    
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5 text-amber-900">
+                      <p className="font-bold flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                        Point clé pour que les notifications fonctionnent :
+                      </p>
+                      <p className="text-[11px] text-amber-800">
+                        Dans votre tableau de bord OneSignal (<strong>Settings &gt; Platforms &gt; Web Push</strong>), vérifiez que le <strong>Site URL</strong> correspond à l'adresse de votre application (ex: <code>https://votre-projet.vercel.app</code>) ou que l'option <strong>« Localhost Testing »</strong> est activée si vous testez en environnement local ou prévisualisation.
+                      </p>
+                    </div>
+
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1.5 text-blue-900">
+                      <p className="font-bold flex items-center gap-1.5">
+                        <Smartphone className="w-4 h-4 text-brand-blue" />
+                        Sur les smartphones de vos utilisateurs (iOS & Android) :
+                      </p>
+                      <p className="text-[11px] text-blue-800">
+                        • <strong>Invite automatique :</strong> Une bannière d'activation s'affiche automatiquement en bas de l'écran après quelques secondes.<br />
+                        • <strong>Android :</strong> Fonctionne instantanément dès que l'utilisateur clique sur « Activer ».<br />
+                        • <strong>iPhone / iPad :</strong> Requiert que l'utilisateur ait ajouté l'application sur son écran d'accueil (Partager &gt; Sur l'écran d'accueil) en raison des règles d'Apple pour Web Push (iOS 16.4+).
+                      </p>
+                    </div>
+
+                    <ol className="list-decimal pl-4 space-y-2">
+                      <li>
+                        <strong>Tester immédiatement :</strong> Cliquez sur le bouton bleu <em>« Tester une notification »</em> ci-dessus pour vérifier que votre navigateur affiche bien la bannière de notification.
+                      </li>
+                      <li>
+                        <strong>Vérifier votre inscription dans OneSignal :</strong> Une fois abonné, copiez votre <strong>Player ID</strong> ci-dessus et vérifiez qu'il apparaît bien dans votre console OneSignal sous <em>Audience &gt; All Users</em>.
+                      </li>
+                      <li>
+                        <strong>Envoyer un push réel depuis OneSignal :</strong> Dans votre console OneSignal, rendez-vous dans <em>Messages &gt; New Message &gt; Push Notification</em> pour envoyer un message à tous vos utilisateurs.
+                      </li>
+                    </ol>
+                  </div>
+                )}
+              </div>
 
               {/* Chat Participation Section */}
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
