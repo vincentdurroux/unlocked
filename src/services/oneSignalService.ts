@@ -274,72 +274,116 @@ class OneSignalService {
 
   /**
    * Prompt user for notification permission and opt-in
+   * CRITICAL FOR MOBILE: Must execute permission request immediately in the user gesture event frame
+   * without any preceding network fetch delays (which cause modern mobile browsers to drop user activation).
    */
   async subscribe(userId?: string): Promise<boolean> {
-    const appId = await this.fetchAppIdFromServer();
-    if (!appId) {
-      throw new Error('Veuillez d\'abord renseigner votre OneSignal App ID.');
+    const dev = this.getDeviceInfo();
+
+    // 1. iOS Safari limitation: Web Push requires Standalone mode (added to Home Screen)
+    if (dev.isIOS && !dev.isStandalone) {
+      const err: any = new Error(
+        "Sur iPhone, les notifications nécessitent d'ajouter l'application à l'écran d'accueil (Partager ⎋ > Sur l'écran d'accueil)."
+      );
+      err.code = 'IOS_STANDALONE_REQUIRED';
+      throw err;
     }
 
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'denied') {
-        throw new Error('Les notifications sont bloquées dans votre navigateur. Cliquez sur l\'icône de cadenas 🔒 à gauche de la barre d\'adresse pour réautoriser les notifications.');
+    // 2. Browser check
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      const err: any = new Error("Ce navigateur ne prend pas en charge les notifications push.");
+      err.code = 'UNSUPPORTED';
+      throw err;
+    }
+
+    // 3. Permission already denied in browser settings
+    if (Notification.permission === 'denied') {
+      const err: any = new Error(
+        "Les notifications sont bloquées dans les paramètres de votre navigateur. Veuillez appuyer sur l'icône de cadenas ou de réglages à gauche de la barre d'adresse pour réautoriser les notifications."
+      );
+      err.code = 'PERMISSION_DENIED';
+      throw err;
+    }
+
+    // 4. REQUEST PERMISSION IMMEDIATELY (preserving user gesture)
+    let currentPerm: NotificationPermission = Notification.permission;
+
+    if (currentPerm !== 'granted') {
+      const windowOS = typeof window !== 'undefined' ? (window as any).OneSignal : null;
+      try {
+        if (windowOS?.Notifications?.requestPermission) {
+          await windowOS.Notifications.requestPermission();
+          currentPerm = Notification.permission;
+        } else if (Notification.requestPermission) {
+          currentPerm = await Notification.requestPermission();
+        }
+      } catch (e) {
+        // Fallback for older browsers using callback syntax
+        try {
+          if (Notification.requestPermission) {
+            currentPerm = await new Promise<NotificationPermission>((resolve) => {
+              Notification.requestPermission(resolve);
+            });
+          }
+        } catch (_) {}
+      }
+
+      // Check result of request
+      if (currentPerm === 'denied') {
+        const err: any = new Error(
+          "Vous avez refusé l'autorisation des notifications. Vous pouvez la réactiver dans les paramètres de votre navigateur."
+        );
+        err.code = 'PERMISSION_DENIED';
+        throw err;
+      }
+
+      if (currentPerm !== 'granted') {
+        const err: any = new Error("L'autorisation de notification n'a pas été accordée.");
+        err.code = 'PERMISSION_DISMISSED';
+        throw err;
       }
     }
 
+    // 5. Now that permission is granted, ensure OneSignal is initialized and opt in
     if (!this.isInitialized) {
-      const ok = await this.init(userId);
-      if (!ok) {
-        throw new Error('Échec de l\'initialisation de OneSignal. Vérifiez votre App ID.');
-      }
+      await this.init(userId);
     }
 
     const windowOS = typeof window !== 'undefined' ? (window as any).OneSignal : null;
 
     try {
-      // First try OneSignal SDK requestPermission
-      if (OneSignal.Notifications?.requestPermission) {
-        await OneSignal.Notifications.requestPermission();
-      } else if (windowOS?.Notifications?.requestPermission) {
-        await windowOS.Notifications.requestPermission();
-      } else if (typeof Notification !== 'undefined') {
-        await Notification.requestPermission();
-      }
-
-      // If user permission is granted, opt in
       if (OneSignal.User?.PushSubscription?.optIn) {
         await OneSignal.User.PushSubscription.optIn();
       } else if (windowOS?.User?.PushSubscription?.optIn) {
         await windowOS.User.PushSubscription.optIn();
       }
-
-      // Sync observer with latest subscription ID
-      const subId = this.getCurrentSubscriptionId();
-      if (subId) {
-        this.notifyObservers(subId);
-      }
-
-      if (userId) {
-        await this.loginUser(userId);
-      }
-
-      // Sync player ID to Supabase if configured
-      if (subId && userId && isSupabaseConfigured) {
-        try {
-          await supabase.from('profiles').update({
-            onesignal_player_id: subId,
-            updated_at: new Date().toISOString()
-          } as any).eq('id', userId);
-        } catch (_) {
-          // Column might not exist yet, safe fallback
-        }
-      }
-
-      return true;
-    } catch (err: any) {
-      console.error('[OneSignal] Error subscribing user:', err);
-      throw new Error(err?.message || 'Erreur lors de l\'activation des notifications OneSignal.');
+    } catch (err) {
+      console.warn('[OneSignal] optIn call warning:', err);
     }
+
+    // 6. Sync observer with latest subscription ID
+    const subId = this.getCurrentSubscriptionId() || windowOS?.User?.PushSubscription?.id;
+    if (subId) {
+      this.notifyObservers(subId);
+    }
+
+    if (userId) {
+      await this.loginUser(userId);
+    }
+
+    // Sync player ID to Supabase if configured
+    if (subId && userId && isSupabaseConfigured) {
+      try {
+        await supabase.from('profiles').update({
+          onesignal_player_id: subId,
+          updated_at: new Date().toISOString()
+        } as any).eq('id', userId);
+      } catch (_) {
+        // Column might not exist yet, safe fallback
+      }
+    }
+
+    return true;
   }
 
   /**

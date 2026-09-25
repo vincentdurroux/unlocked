@@ -19076,7 +19076,19 @@ function ProfileView({
       }
     } catch (err: any) {
       console.error('Push toggle error:', err);
-      setPushFeedback({ type: 'error', text: err?.message || 'Erreur lors de la configuration des notifications.' });
+      if (err?.code === 'IOS_STANDALONE_REQUIRED') {
+        setPushFeedback({
+          type: 'error',
+          text: "Sur iPhone, ajoutez l'application à votre écran d'accueil (icône Partager ⎋ > Sur l'écran d'accueil) pour recevoir des notifications."
+        });
+      } else if (err?.code === 'PERMISSION_DENIED') {
+        setPushFeedback({
+          type: 'error',
+          text: "Les notifications sont bloquées dans votre navigateur. Cliquez sur l'icône 🔒 à gauche de la barre d'adresse pour les autoriser."
+        });
+      } else {
+        setPushFeedback({ type: 'error', text: err?.message || 'Erreur lors de la configuration des notifications.' });
+      }
     } finally {
       setPushLoading(false);
     }
