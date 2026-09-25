@@ -5269,6 +5269,48 @@ function CategorySelector({
   );
 }
 
+const initialNewProState = {
+  name: '',
+  company_name: '',
+  category: '',
+  categories: [] as string[],
+  rating: 0,
+  review_count: 0,
+  languages: [] as string[],
+  image: '',
+  bio: '',
+  phone: '',
+  whatsapp: '',
+  email: '',
+  website: '',
+  instagram: '',
+  facebook: '',
+  location: '',
+  lat: 0,
+  lng: 0,
+  top_qualities: [] as string[],
+  has_filled_form: false,
+  is_recommended: true
+};
+
+const initialNewEventState = {
+  title: '',
+  start_date: '',
+  end_date: '',
+  start_time: '',
+  end_time: '',
+  location: '',
+  category: '',
+  description: '',
+  image: '',
+  lat: 0,
+  lng: 0,
+  ticket_url: '',
+  price: '',
+  is_free: true,
+  sources: [] as any[]
+};
+
 function AdminView({ 
   scrollToTop, 
   onRefetchPros, 
@@ -5344,7 +5386,7 @@ function AdminView({
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dashboardCategory, setDashboardCategory] = useState<'pros' | 'events' | 'testimonies' | 'reported_users' | 'highlights' | 'guides' | 'announcements' | 'analytics'>('pros');
-  const [activeTab, setActiveTab ] = useState<'recommendations' | 'add_pro' | 'edit_pro' | 'add_event' | 'edit_event' | 'all_events' | 'completed' | 'refused' | 'import_csv'>('recommendations');
+  const [activeTab, setActiveTab ] = useState<'recommendations' | 'add_pro' | 'edit_pro' | 'add_event' | 'edit_event' | 'all_events' | 'ai_event_search' | 'completed' | 'refused' | 'import_csv'>('recommendations');
   const [activeRecId, setActiveRecId] = useState<string | null>(null);
   const [editingProId, setEditingProId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -6100,29 +6142,7 @@ function AdminView({
   }, [allTestimonies]);
 
   // Form state for adding pro
-  const [newPro, setNewPro] = useState({
-    name: '',
-    company_name: '',
-    category: '',
-    categories: [] as string[],
-    rating: 0,
-    review_count: 0,
-    languages: [] as string[],
-    image: '',
-    bio: '',
-    phone: '',
-    whatsapp: '',
-    email: '',
-    website: '',
-    instagram: '',
-    facebook: '',
-    location: '',
-    lat: 0,
-    lng: 0,
-    top_qualities: [] as string[],
-    has_filled_form: false,
-    is_recommended: true
-  });
+  const [newPro, setNewPro] = useState({ ...initialNewProState });
 
   // Compute existing categories and usage counts from allPros and completedPros
   const { existingCategories, categoryUsageCounts } = useMemo(() => {
@@ -6220,19 +6240,7 @@ function AdminView({
     };
   }, [completedPros, allPros]);
 
-  const [newEvent, setNewEvent] = useState({
-    title: '',
-    start_date: '',
-    end_date: '',
-    start_time: '',
-    end_time: '',
-    location: '',
-    category: '',
-    description: '',
-    image: '',
-    lat: 0,
-    lng: 0
-  });
+  const [newEvent, setNewEvent] = useState({ ...initialNewEventState });
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -6432,19 +6440,7 @@ function AdminView({
       }
 
       setEditingEventId(null);
-      setNewEvent({
-        title: '',
-        start_date: '',
-        end_date: '',
-        start_time: '',
-        end_time: '',
-        location: '',
-        category: '',
-        description: '',
-        image: '',
-        lat: 0,
-        lng: 0
-      });
+      setNewEvent({ ...initialNewEventState });
       setSelectedFile(null);
       setPreviewUrl(null);
       setActiveTab('all_events');
@@ -6619,24 +6615,7 @@ function AdminView({
       setActiveRecId(null);
       setEditingProId(null);
       setActiveTab('completed');
-      setNewPro({
-        name: '',
-        company_name: '',
-        category: '',
-        rating: 0,
-        review_count: 0,
-        languages: [],
-        image: '',
-        bio: '',
-        phone: '',
-        email: '',
-        website: '',
-        instagram: '',
-        facebook: '',
-        location: '',
-        lat: 0,
-        lng: 0
-      });
+      setNewPro({ ...initialNewProState });
       setSelectedFile(null);
       setPreviewUrl(null);
     } catch (err) {
@@ -6688,24 +6667,7 @@ function AdminView({
       setTimeout(() => {
         setActiveTab('completed');
         setEditingProId(null);
-        setNewPro({
-          name: '',
-          company_name: '',
-          category: '',
-          rating: 0,
-          review_count: 0,
-          languages: [],
-          image: '',
-          bio: '',
-          phone: '',
-          email: '',
-          website: '',
-          instagram: '',
-          facebook: '',
-          location: '',
-          lat: 0,
-          lng: 0
-        });
+        setNewPro({ ...initialNewProState });
         setPreviewUrl(null);
         setMsg(null);
       }, 1500);
@@ -6882,25 +6844,7 @@ function AdminView({
                   setActiveRecId(null);
                   setEditingProId(null);
                   setSelectedFile(null);
-                  setNewPro({
-                    name: '',
-                    company_name: '',
-                    category: '',
-                    rating: 0,
-                    review_count: 0,
-                    languages: [],
-                    image: '',
-                    bio: '',
-                    phone: '',
-                    email: '',
-                    website: '',
-                    instagram: '',
-                    facebook: '',
-                    location: '',
-                    lat: 0,
-                    lng: 0,
-                    is_recommended: true
-                  });
+                  setNewPro({ ...initialNewProState });
                   setPreviewUrl(null);
                 }}
                 className={cn(
@@ -6967,19 +6911,7 @@ function AdminView({
                 onClick={() => {
                   setActiveTab('add_event');
                   setEditingEventId(null);
-                  setNewEvent({
-                    title: '',
-                    start_date: '',
-                    end_date: '',
-                    start_time: '',
-                    end_time: '',
-                    location: '',
-                    category: '',
-                    description: '',
-                    image: '',
-                    lat: 0,
-                    lng: 0
-                  });
+                  setNewEvent({ ...initialNewEventState });
                   setSelectedFile(null);
                   setPreviewUrl(null);
                 }}
@@ -7560,7 +7492,7 @@ function AdminView({
                           <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Bio / Description</label>
                           <textarea 
                             value={newPro.bio}
-                            onChange={e => setNewPro({...newPro, bio: e.target.value, description: e.target.value})}
+                            onChange={e => setNewPro({...newPro, bio: e.target.value})}
                             className="w-full h-24 sm:h-32 bg-slate-50 border border-slate-100 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 text-xs sm:text-sm font-medium text-slate-900 resize-none"
                             placeholder="Description or summary of services..."
                           />
@@ -8267,8 +8199,8 @@ function AdminView({
               if (activeProSort === 'alphabet') {
                 return (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity: 'base' });
               } else {
-                const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-                const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                const dateA = (a as any).created_at ? new Date((a as any).created_at).getTime() : 0;
+                const dateB = (b as any).created_at ? new Date((b as any).created_at).getTime() : 0;
                 return dateB - dateA; // newest first
               }
             });
@@ -9568,7 +9500,7 @@ function AdminView({
                   {/* Emoji Quick Picker Toolbar */}
                   <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-100/90 rounded-xl border border-slate-200/70">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">Emojis:</span>
-                    {['✨', '📍', '💡', '������', '🏡', '🏖️', '🌳', '🥐', '☕', '🍷', '🥘', '🎨', '🎭', '🎶', '🚇', '📋', '🏥', '👨‍👩‍👧', '🐾', '💶', '🎟️', '🔗', '⭐', '🤝'].map(emoji => (
+                    {['✨', '📍', '💡', '🎯', '🏡', '🏖️', '🌳', '🥐', '☕', '🍷', '🥘', '🎨', '🎭', '🎶', '🚇', '📋', '🏥', '👨‍👩‍👧', '🐾', '💶', '🎟️', '🔗', '⭐', '🤝'].map(emoji => (
                       <button
                         key={emoji}
                         type="button"
@@ -13973,7 +13905,7 @@ function ExploreView({
 
               {/* Large Blue Recommendations Action Button */}
               <button 
-                onClick={handleSearchSubmit}
+                onClick={() => handleSearchSubmit()}
                 disabled={aiLoading || !search.trim()}
                 className="w-full py-4.5 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-[24px] font-bold text-sm md:text-base shadow-lg shadow-blue-500/15 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
               >
@@ -16433,7 +16365,7 @@ function EventsView({
         const desc = (ev.description || '').toLowerCase();
         const cat = (ev.category || '').toLowerCase();
         const loc = (ev.location || '').toLowerCase();
-        const tags = (ev.tags || '').toLowerCase();
+        const tags = ((ev as any).tags || '').toLowerCase();
         const combined = `${title} ${cat} ${desc} ${loc} ${tags}`;
         // Verify match
         if (!combined.includes(query) && !query.split(/\s+/).every(word => combined.includes(word))) {
@@ -18796,7 +18728,7 @@ function ProfileView({
   });
   const [isPushSubscribed, setIsPushSubscribed] = useState<boolean>(false);
   const [pushLoading, setPushLoading] = useState(false);
-  const [pushFeedback, setPushFeedback] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [pushFeedback, setPushFeedback] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
   const [showPushSqlModal, setShowPushSqlModal] = useState(false);
   const [showOneSignalGuide, setShowOneSignalGuide] = useState(false);
   const [hasServerApiKey, setHasServerApiKey] = useState(false);
