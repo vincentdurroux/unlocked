@@ -1206,6 +1206,29 @@ FOR EACH REAL EVENT FOUND:
     }
   });
 
+  // Digital Asset Links for Android TWA (removes Chrome Custom Tab URL bar)
+  app.get("/.well-known/assetlinks.json", (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    const distAssetlinks = path.join(process.cwd(), "dist", ".well-known", "assetlinks.json");
+    const publicAssetlinks = path.join(process.cwd(), "public", ".well-known", "assetlinks.json");
+    if (fs.existsSync(distAssetlinks)) {
+      return res.sendFile(distAssetlinks);
+    }
+    if (fs.existsSync(publicAssetlinks)) {
+      return res.sendFile(publicAssetlinks);
+    }
+    return res.json([
+      {
+        relation: ["delegate_permission/common.handle_all_urls"],
+        target: {
+          namespace: "android_app",
+          package_name: "app.mycityunlocked.twa",
+          sha256_cert_fingerprints: []
+        }
+      }
+    ]);
+  });
+
   // OneSignal & PWA Service Worker headers
   app.get(["/OneSignalSDKWorker.js", "/sw.js"], (req, res, next) => {
     res.setHeader("Service-Worker-Allowed", "/");
@@ -1222,7 +1245,7 @@ FOR EACH REAL EVENT FOUND:
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, { dotfiles: 'allow' }));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
