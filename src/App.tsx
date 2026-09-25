@@ -3035,7 +3035,7 @@ export default function App() {
   }, [activeView]);
 
   return (
-    <APIProvider apiKey={GOOGLE_MAPS_KEY} version="weekly">
+    <APIProvider apiKey={GOOGLE_MAPS_KEY} version="weekly" libraries={['places', 'marker']}>
       <div className="flex flex-col h-screen h-[100dvh] bg-white w-full mx-auto shadow-2xl overflow-hidden relative">
         <OrientationLock />
       
@@ -3450,6 +3450,7 @@ export default function App() {
                   onNavigate={handleNavigate}
                   favoriteAdIds={favoriteAdIds}
                   onToggleFavoriteAd={toggleFavoriteAd}
+                  onAdDeleted={() => fetchAds()}
                 />
               )}
               {/* MessagesView moved to modal */}
@@ -3803,7 +3804,7 @@ export default function App() {
                           setShowAddAd(false);
                           handleNavigate('login');
                         }}
-                        className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+                        className="w-full sm:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
                       >
                         <LogIn className="w-4 h-4" />
                         <span>Sign In / Register</span>
@@ -3988,7 +3989,7 @@ export default function App() {
                                 : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700"
                             )}
                           >
-                            {adPrice === 'Free' ? '✓ Free / Don' : 'Make it Free (€0)'}
+                            {adPrice === 'Free' ? '✓ Free / Giveaway' : 'Make it Free (€0)'}
                           </button>
                         </div>
                         <div className="relative">
@@ -4121,6 +4122,8 @@ export default function App() {
             <AdDetailModal 
               ad={selectedAd} 
               currentUser={currentUser}
+              userProfile={userProfile}
+              onAdDeleted={() => fetchAds()}
               isFavorite={favoriteAdIds.includes(String(selectedAd.id))}
               onToggleFavorite={toggleFavoriteAd}
               onClose={() => setSelectedAd(null)}
@@ -4233,17 +4236,21 @@ function AdDetailModal({
   onClose,
   onOpenChat,
   currentUser,
+  userProfile,
   onRequireAuth,
   isFavorite,
-  onToggleFavorite
+  onToggleFavorite,
+  onAdDeleted
 }: { 
   ad: Ad | any; 
   onClose: () => void;
   onOpenChat?: (targetUser: { name?: string; userId?: string; avatar?: string }) => void;
   currentUser?: any;
+  userProfile?: any;
   onRequireAuth?: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: (id: string | number) => void;
+  onAdDeleted?: () => void;
 }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [direction, setDirection] = useState(0);
@@ -4251,6 +4258,8 @@ function AdDetailModal({
   const [isHovering, setIsHovering] = useState(false);
   const [showPhone, setShowPhone] = useState(false);
   const [phoneCopied, setPhoneCopied] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const price = ad.price.includes('€') ? ad.price : `${ad.price}€`;
   const images = ad.images && ad.images.length > 0 ? ad.images : [ad.image_url || ad.image];
@@ -4260,6 +4269,27 @@ function AdDetailModal({
   const sellerPhone = ad.seller_phone || ad.phone;
   const hasPhone = Boolean(sellerPhone && sellerPhone.trim().length > 0);
   const cleanPhone = (sellerPhone || '').replace(/[^0-9]/g, '');
+
+  const isOwner = currentUser?.id && (
+    ad.user_id === currentUser.id ||
+    (ad.seller_name && userProfile?.full_name && ad.seller_name.trim().toLowerCase() === userProfile.full_name.trim().toLowerCase()) ||
+    (ad.seller_name && currentUser?.user_metadata?.full_name && ad.seller_name.trim().toLowerCase() === currentUser.user_metadata.full_name.trim().toLowerCase())
+  );
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await marketplaceService.deleteAd(ad.id);
+      onAdDeleted?.();
+      onClose();
+    } catch (err) {
+      console.error('Error deleting ad:', err);
+      alert('Failed to delete item.');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
 
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -4468,18 +4498,15 @@ function AdDetailModal({
                     <img
                       src={ad.seller_image}
                       alt={formatSellerName(ad.seller_name)}
-                      className="w-10 h-10 rounded-full object-cover border border-emerald-200"
+                      className="w-10 h-10 rounded-full object-cover border border-purple-200"
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm">
+                    <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-sm">
                       {formatSellerName(ad.seller_name).charAt(0)}
                     </div>
                   )}
                   <div>
                     <h5 className="text-sm font-bold text-slate-900">{formatSellerName(ad.seller_name)}</h5>
-                    <p className="text-[11px] text-slate-400 font-medium">
-                      Member in Valencia
-                    </p>
                   </div>
                 </div>
                 <div className="text-right text-xs font-semibold text-slate-500">
@@ -4499,7 +4526,7 @@ function AdDetailModal({
             {ad.location && (
               <div className="space-y-2 pt-1">
                 <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-emerald-600" />
+                  <MapPin className="w-4 h-4 text-purple-600" />
                   <span>Location in Valencia</span>
                 </h4>
 
@@ -4513,8 +4540,8 @@ function AdDetailModal({
                   <div className="flex items-start justify-between gap-2 text-xs">
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">{ad.location}</span>
-                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-emerald-600 transition-colors" />
+                        <span className="font-bold text-slate-800 group-hover:text-purple-700 transition-colors">{ad.location}</span>
+                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-purple-600 transition-colors" />
                       </div>
                       {ad.exact_address && ad.location_precision === 'exact' && (
                         <p className="text-slate-500 text-[11px] mt-0.5">{ad.exact_address}</p>
@@ -4522,7 +4549,7 @@ function AdDetailModal({
                     </div>
                     <span className={cn(
                       "text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0",
-                      ad.location_precision === 'exact' ? "bg-emerald-100 text-emerald-800" : "bg-slate-200/80 text-slate-600"
+                      ad.location_precision === 'exact' ? "bg-purple-100 text-purple-800" : "bg-slate-200/80 text-slate-600"
                     )}>
                       {ad.location_precision === 'exact' ? '🎯 Exact spot' : '🌐 Approximate area'}
                     </span>
@@ -4530,7 +4557,7 @@ function AdDetailModal({
 
                   {Boolean((ad.lat && ad.lng) || (ad.coordinates?.lat && ad.coordinates?.lng)) && (
                     <div className="h-36 sm:h-44 rounded-xl overflow-hidden border border-slate-200 shadow-2xs relative pointer-events-none">
-                      <APIProvider apiKey={GOOGLE_MAPS_KEY}>
+                      <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} libraries={['places', 'marker']}>
                         <Map
                           defaultCenter={{
                             lat: Number(ad.lat || ad.coordinates?.lat),
@@ -4553,7 +4580,9 @@ function AdDetailModal({
                               lng: Number(ad.lng || ad.coordinates?.lng)
                             }}
                           >
-                            <Pin background="#059669" glyphColor="#ffffff" borderColor="#047857" />
+                            <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
+                              <MapPin className="w-4 h-4 text-white" />
+                            </div>
                           </AdvancedMarker>
                         </Map>
                       </APIProvider>
@@ -4567,9 +4596,9 @@ function AdDetailModal({
             <div className="pt-4 border-t border-slate-100 space-y-3">
               {!currentUser ? (
                 /* Guest State: Require Login */
-                <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-3 text-center">
-                  <div className="flex items-center justify-center gap-2 text-emerald-950 font-bold text-sm">
-                    <Lock className="w-4 h-4 text-emerald-600" />
+                <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200/80 space-y-3 text-center">
+                  <div className="flex items-center justify-center gap-2 text-purple-950 font-bold text-sm">
+                    <Lock className="w-4 h-4 text-purple-600" />
                     <span>{hasPhone ? 'Contact details protected' : 'Member-only direct messaging'}</span>
                   </div>
                   <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
@@ -4582,7 +4611,7 @@ function AdDetailModal({
                     <button
                       type="button"
                       onClick={onRequireAuth}
-                      className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+                      className="flex-1 py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md shadow-purple-600/20 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
                     >
                       <LogIn className="w-4 h-4" />
                       <span>{hasPhone ? 'Sign In to View Phone & WhatsApp' : 'Sign In to Chat with Seller'}</span>
@@ -4606,7 +4635,7 @@ function AdDetailModal({
                   /* Case 1: Seller left a phone number, click to reveal */
                   <div className="flex gap-3">
                     <button 
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer"
+                      className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-md shadow-purple-600/20 active:scale-[0.98] transition-all cursor-pointer"
                       onClick={() => setShowPhone(true)}
                     >
                       <Phone className="w-4 h-4" />
@@ -4621,15 +4650,15 @@ function AdDetailModal({
                       className="p-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold active:scale-[0.98] transition-transform cursor-pointer"
                       title="Share"
                     >
-                      <ShareIcon className="w-5 h-5" />
+                      <ShareIcon className="w-4 h-4" />
                     </button>
                   </div>
                 ) : (
                   /* Phone number revealed */
-                  <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-3">
+                  <div className="p-4 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-emerald-950 font-black text-base sm:text-lg">
-                        <Phone className="w-4 h-4 text-emerald-600" />
+                      <div className="flex items-center gap-2 text-purple-950 font-black text-base sm:text-lg">
+                        <Phone className="w-4 h-4 text-purple-600" />
                         <span>{sellerPhone}</span>
                       </div>
                       <button
@@ -4639,9 +4668,9 @@ function AdDetailModal({
                           setPhoneCopied(true);
                           setTimeout(() => setPhoneCopied(false), 2000);
                         }}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-100 flex items-center gap-1 cursor-pointer transition-colors"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-purple-200 text-purple-800 hover:bg-purple-100 flex items-center gap-1 cursor-pointer transition-colors"
                       >
-                        {phoneCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        {phoneCopied ? <Check className="w-3.5 h-3.5 text-purple-600" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>{phoneCopied ? 'Copied!' : 'Copy'}</span>
                       </button>
                     </div>
@@ -4649,7 +4678,7 @@ function AdDetailModal({
                     <div className="flex gap-2">
                       <a
                         href={`tel:${sellerPhone}`}
-                        className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-center"
+                        className="flex-1 py-2.5 px-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-center"
                       >
                         <Phone className="w-3.5 h-3.5" />
                         <span>Call</span>
@@ -4658,7 +4687,7 @@ function AdDetailModal({
                         href={`https://wa.me/${cleanPhone}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 py-2.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-center"
+                        className="flex-1 py-2.5 px-3 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-center"
                       >
                         <MessageCircle className="w-3.5 h-3.5" />
                         <span>WhatsApp</span>
@@ -4683,7 +4712,7 @@ function AdDetailModal({
                 <div className="space-y-1.5">
                   <div className="flex gap-3">
                     <button 
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-[0.98] transition-all cursor-pointer"
+                      className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-md shadow-purple-600/20 active:scale-[0.98] transition-all cursor-pointer"
                       onClick={() => {
                         if (onOpenChat) {
                           onOpenChat({ name: formatSellerName(ad.seller_name), userId: ad.user_id, avatar: ad.seller_image });
@@ -12275,7 +12304,7 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
 
   return (
     <div className="w-full h-full">
-      <APIProvider apiKey={GOOGLE_MAPS_KEY}>
+      <APIProvider apiKey={GOOGLE_MAPS_KEY} libraries={['places', 'marker']}>
         <Map
           defaultCenter={center}
           defaultZoom={13}
@@ -13032,7 +13061,7 @@ function DirectoryProCardItem({
                       </a>
                       {pro.coordinates && (
                         <div className="w-full h-36 rounded-2xl overflow-hidden border border-slate-200 shadow-xs relative">
-                          <APIProvider apiKey={GOOGLE_MAPS_KEY}>
+                          <APIProvider apiKey={GOOGLE_MAPS_KEY} libraries={['places', 'marker']}>
                             <Map defaultCenter={pro.coordinates} defaultZoom={15} gestureHandling={'none'} disableDefaultUI={true} mapId={`MINI_MAP_${pro.id}`} className="w-full h-full">
                               <AdvancedMarker position={pro.coordinates}>
                                 <Pin background="#E11D48" glyphColor="#fff" borderColor="#BE123D" />
@@ -16919,7 +16948,7 @@ function EventsView({
                               <span>Location & Interactive Map</span>
                             </h5>
                             <div className="h-56 sm:h-64 w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner">
-                              <APIProvider apiKey={GOOGLE_MAPS_KEY}>
+                              <APIProvider apiKey={GOOGLE_MAPS_KEY} libraries={['places', 'marker']}>
                                 <Map
                                   defaultCenter={event.coordinates}
                                   defaultZoom={15}
@@ -17591,7 +17620,8 @@ function MarketplaceView({
   currentUser,
   onNavigate,
   favoriteAdIds,
-  onToggleFavoriteAd
+  onToggleFavoriteAd,
+  onAdDeleted
 }: { 
   onAddAd: () => void; 
   ads: Ad[]; 
@@ -17601,6 +17631,7 @@ function MarketplaceView({
   onNavigate?: (view: View, params?: any) => void;
   favoriteAdIds?: string[];
   onToggleFavoriteAd?: (id: string | number) => void;
+  onAdDeleted?: () => void;
 }) {
   useEffect(() => {
     scrollToTop?.();
@@ -17616,6 +17647,8 @@ function MarketplaceView({
   const [sortBy, setSortBy] = useState<string>('newest');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showSavedOnly, setShowSavedOnly] = useState<boolean>(false);
+  const [confirmDeleteAdId, setConfirmDeleteAdId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [savedAdIds, setSavedAdIds] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('unlocked_marketplace_saved');
@@ -17979,6 +18012,20 @@ function MarketplaceView({
     setCustomLocationInput('');
   };
 
+  const handleDeleteAd = async (id: string) => {
+    setIsDeleting(true);
+    try {
+      await marketplaceService.deleteAd(id);
+      onAdDeleted?.();
+      setConfirmDeleteAdId(null);
+    } catch (err) {
+      console.error('Error deleting ad:', err);
+      alert('Failed to delete item.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleAddAdClick = () => {
     if (!currentUser) {
       onNavigate?.('login');
@@ -17993,15 +18040,15 @@ function MarketplaceView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200/80 shrink-0 shadow-2xs">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-200/80 shrink-0 shadow-2xs">
               <Shirt className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-black font-display text-slate-900 tracking-tight">
-                  Unlocked <span className="text-emerald-600">Good Stuff</span>
+                  Unlocked <span className="text-purple-600">Good Stuff</span>
                 </h1>
-                <span className="hidden sm:inline-flex text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="hidden sm:inline-flex text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
                   Valencia
                 </span>
               </div>
@@ -18015,7 +18062,7 @@ function MarketplaceView({
         <button
           type="button"
           onClick={handleAddAdClick}
-          className="self-start sm:self-auto px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-2xl shadow-md hover:shadow-lg shadow-emerald-600/20 active:scale-95 transition-all flex items-center gap-2 shrink-0 cursor-pointer group"
+          className="self-start sm:self-auto px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm rounded-2xl shadow-md hover:shadow-lg shadow-purple-600/20 active:scale-95 transition-all flex items-center gap-2 shrink-0 cursor-pointer group"
         >
           <Plus className="w-4 h-4 stroke-[2.8] transition-transform group-hover:rotate-90 duration-300" />
           <span>Post an Ad</span>
@@ -18026,13 +18073,13 @@ function MarketplaceView({
       <div className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3.5">
         {/* Search Input */}
         <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search school uniforms, kids clothes, bikes, sofa, coffee machine, books, electronics..."
-            className="w-full pl-11 pr-10 py-3 bg-slate-50 rounded-2xl border border-slate-200/90 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm text-slate-900 placeholder:text-slate-400 font-medium transition-all"
+            className="w-full pl-11 pr-10 py-3 bg-slate-50 rounded-2xl border border-slate-200/90 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm text-slate-900 placeholder:text-slate-400 font-medium transition-all"
           />
           {searchQuery && (
             <button
@@ -18061,12 +18108,12 @@ function MarketplaceView({
                 className={cn(
                   "px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all cursor-pointer shrink-0 border",
                   isSelected
-                    ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold"
+                    ? "bg-purple-600 text-white border-purple-600 shadow-2xs font-bold"
                     : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
                 )}
               >
                 <span className="text-sm leading-none">{cat.emoji}</span>
-                <Icon className={cn("w-3.5 h-3.5", isSelected ? "text-white" : "text-emerald-600")} />
+                <Icon className={cn("w-3.5 h-3.5", isSelected ? "text-white" : "text-purple-600")} />
                 <span>{cat.label}</span>
                 {count > 0 && (
                   <span
@@ -18111,7 +18158,7 @@ function MarketplaceView({
                   ))}
                 </optgroup>
               </select>
-              <MapPin className="w-3.5 h-3.5 text-emerald-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <MapPin className="w-3.5 h-3.5 text-purple-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
@@ -18128,7 +18175,7 @@ function MarketplaceView({
                   </option>
                 ))}
               </select>
-              <Euro className="w-3.5 h-3.5 text-emerald-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Euro className="w-3.5 h-3.5 text-purple-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
@@ -18156,7 +18203,7 @@ function MarketplaceView({
               <button
                 type="button"
                 onClick={resetFilters}
-                className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-900 transition-colors flex items-center gap-1 cursor-pointer"
+                className="px-2.5 py-1.5 text-xs font-bold text-purple-700 hover:text-purple-900 transition-colors flex items-center gap-1 cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Reset</span>
@@ -18189,7 +18236,7 @@ function MarketplaceView({
                 onClick={() => setViewMode('grid')}
                 className={cn(
                   "p-1.5 rounded-lg transition-colors cursor-pointer",
-                  viewMode === 'grid' ? "bg-white text-emerald-600 shadow-2xs" : "text-slate-400 hover:text-slate-600"
+                  viewMode === 'grid' ? "bg-white text-purple-600 shadow-2xs" : "text-slate-400 hover:text-slate-600"
                 )}
                 title="Grid view"
               >
@@ -18200,7 +18247,7 @@ function MarketplaceView({
                 onClick={() => setViewMode('list')}
                 className={cn(
                   "p-1.5 rounded-lg transition-colors cursor-pointer",
-                  viewMode === 'list' ? "bg-white text-emerald-600 shadow-2xs" : "text-slate-400 hover:text-slate-600"
+                  viewMode === 'list' ? "bg-white text-purple-600 shadow-2xs" : "text-slate-400 hover:text-slate-600"
                 )}
                 title="List view"
               >
@@ -18217,7 +18264,7 @@ function MarketplaceView({
           Showing <strong className="text-slate-900 font-bold">{filteredAds.length}</strong> {filteredAds.length === 1 ? 'listing' : 'listings'}
           {selectedCategory !== 'All' && ` in ${selectedCategory}`}
           {isManualLocationActive && customLocationInput.trim() && (
-            <span className="ml-1 text-emerald-700 font-semibold">near "{customLocationInput.trim()}"</span>
+            <span className="ml-1 text-purple-700 font-semibold">near "{customLocationInput.trim()}"</span>
           )}
         </span>
         <span className="hidden sm:inline">MyCityUnlocked Community Exchange · Click any listing for full details</span>
@@ -18236,7 +18283,7 @@ function MarketplaceView({
                 <div
                   key={ad.id}
                   onClick={() => onSelectAd(ad)}
-                  className="group bg-white rounded-3xl border border-slate-200/80 hover:border-emerald-300 shadow-2xs hover:shadow-xl hover:shadow-emerald-500/10 transition-all duration-300 overflow-hidden flex flex-col cursor-pointer hover:-translate-y-1"
+                  className="group bg-white rounded-3xl border border-slate-200/80 hover:border-purple-300 shadow-2xs hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300 overflow-hidden flex flex-col cursor-pointer hover:-translate-y-1"
                 >
                   {/* Image container */}
                   <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden">
@@ -18247,25 +18294,41 @@ function MarketplaceView({
                       loading="lazy"
                     />
 
-                    {/* Distinctive Emerald Price floating tag */}
-                    <div className="absolute bottom-3 left-3 bg-emerald-600 text-white font-extrabold text-sm sm:text-base px-3 py-1.5 rounded-xl shadow-md">
+                    {/* Distinctive Purple Price floating tag */}
+                    <div className="absolute bottom-3 left-3 bg-purple-600 text-white font-extrabold text-sm sm:text-base px-3 py-1.5 rounded-xl shadow-md">
                       {displayPrice}
                     </div>
 
                     {/* Favorite save button */}
-                    <button
-                      type="button"
-                      onClick={(e) => toggleSaveAd(String(ad.id), e)}
-                      className={cn(
-                        "absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-transform active:scale-90 backdrop-blur-md shadow-md cursor-pointer",
-                        isSaved
-                          ? "bg-rose-500 text-white"
-                          : "bg-white/90 text-slate-600 hover:bg-white hover:text-rose-500"
+                    <div className="absolute top-3 right-3 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => toggleSaveAd(String(ad.id), e)}
+                        className={cn(
+                          "w-9 h-9 rounded-full flex items-center justify-center transition-transform active:scale-90 backdrop-blur-md shadow-md cursor-pointer",
+                          isSaved
+                            ? "bg-rose-500 text-white"
+                            : "bg-white/90 text-slate-600 hover:bg-white hover:text-rose-500"
+                        )}
+                        title={isSaved ? "Remove from saved" : "Save ad"}
+                      >
+                        <Heart className={cn("w-4 h-4", isSaved && "fill-current")} />
+                      </button>
+
+                      {currentUser?.id && (ad.user_id === currentUser.id) && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDeleteAdId(ad.id);
+                          }}
+                          className="w-9 h-9 rounded-full bg-white/90 text-slate-400 hover:text-rose-600 flex items-center justify-center backdrop-blur-md shadow-md cursor-pointer transition-all active:scale-90"
+                          title="Delete Listing"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       )}
-                      title={isSaved ? "Remove from saved" : "Save ad"}
-                    >
-                      <Heart className={cn("w-4 h-4", isSaved && "fill-current")} />
-                    </button>
+                    </div>
                   </div>
 
                   {/* Body content */}
@@ -18273,7 +18336,7 @@ function MarketplaceView({
                     <div className="space-y-2">
                       {/* Zero-pill metadata line with clean typographic separators */}
                       <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5 flex-wrap">
-                        <span className="text-emerald-600 font-bold">{ad.category}</span>
+                        <span className="text-purple-600 font-bold">{ad.category}</span>
                         {ad.condition && ad.condition !== 'N/A' && (
                           <>
                             <span aria-hidden="true" className="text-slate-300">·</span>
@@ -18289,7 +18352,7 @@ function MarketplaceView({
                       </div>
 
                       {/* Title */}
-                      <h3 className="font-bold text-base text-slate-900 group-hover:text-emerald-600 transition-colors line-clamp-1 leading-snug">
+                      <h3 className="font-bold text-base text-slate-900 group-hover:text-purple-600 transition-colors line-clamp-1 leading-snug">
                         {ad.title}
                       </h3>
 
@@ -18309,7 +18372,7 @@ function MarketplaceView({
                             className="w-6 h-6 rounded-full object-cover shrink-0"
                           />
                         ) : (
-                          <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-bold text-emerald-800 shrink-0">
+                          <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-[10px] font-bold text-purple-800 shrink-0">
                             {formatSellerName(ad.seller_name).charAt(0)}
                           </div>
                         )}
@@ -18334,7 +18397,7 @@ function MarketplaceView({
                 <div
                   key={ad.id}
                   onClick={() => onSelectAd(ad)}
-                  className="group bg-white rounded-2xl border border-slate-200/80 hover:border-emerald-300 p-3 sm:p-4 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between cursor-pointer"
+                  className="group bg-white rounded-2xl border border-slate-200/80 hover:border-purple-300 p-3 sm:p-4 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between cursor-pointer"
                 >
                   <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
                     <img
@@ -18345,7 +18408,7 @@ function MarketplaceView({
                     />
                     <div className="space-y-1 min-w-0">
                       <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5 flex-wrap">
-                        <span className="text-emerald-600 font-bold">{ad.category}</span>
+                        <span className="text-purple-600 font-bold">{ad.category}</span>
                         {ad.condition && ad.condition !== 'N/A' && (
                           <>
                             <span aria-hidden="true" className="text-slate-300">·</span>
@@ -18359,7 +18422,7 @@ function MarketplaceView({
                           </>
                         )}
                       </div>
-                      <h3 className="font-bold text-base text-slate-900 group-hover:text-emerald-600 transition-colors truncate">
+                      <h3 className="font-bold text-base text-slate-900 group-hover:text-purple-600 transition-colors truncate">
                         {ad.title}
                       </h3>
                       <p className="text-xs text-slate-500 line-clamp-1 max-w-xl">
@@ -18369,7 +18432,7 @@ function MarketplaceView({
                   </div>
 
                   <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-slate-100">
-                    <div className="text-lg font-black text-emerald-700">
+                    <div className="text-lg font-black text-purple-700">
                       {displayPrice}
                     </div>
                     <div className="flex items-center gap-2">
@@ -18384,7 +18447,7 @@ function MarketplaceView({
                       >
                         <Heart className={cn("w-4 h-4", isSaved && "fill-current")} />
                       </button>
-                      <span className="text-xs text-emerald-600 font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                      <span className="text-xs text-purple-600 font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                         <span>Details</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </span>
@@ -18398,8 +18461,8 @@ function MarketplaceView({
       ) : (
         /* Clean Empty State */
         <div className="bg-slate-50 rounded-3xl border border-slate-200 p-10 text-center space-y-4 max-w-md mx-auto my-8">
-          <div className="w-14 h-14 bg-white rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-center mx-auto text-emerald-600">
-            <Tag className="w-6 h-6 text-emerald-600" />
+          <div className="w-14 h-14 bg-white rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-center mx-auto text-purple-600">
+            <Tag className="w-6 h-6 text-purple-600" />
           </div>
           <div className="space-y-1.5">
             <h3 className="text-lg font-bold text-slate-900 font-display">No items match your filters</h3>
@@ -18418,7 +18481,7 @@ function MarketplaceView({
             <button
               type="button"
               onClick={handleAddAdClick}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Post an Ad</span>
@@ -18427,10 +18490,41 @@ function MarketplaceView({
         </div>
       )}
 
+      {confirmDeleteAdId && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center">
+            <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-black text-slate-900 text-lg">Delete Item?</h4>
+              <p className="text-xs text-slate-500">Are you sure you want to remove this listing? This action cannot be undone.</p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteAdId(null)}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteAd(confirmDeleteAdId)}
+                disabled={isDeleting}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Community Trust Strip */}
       <div className="mt-14 pt-8 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 text-left">
         <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
-          <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          <ShieldCheck className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
             <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Direct Local Exchange</h4>
             <p className="text-xs text-slate-500 leading-relaxed">
@@ -18440,7 +18534,7 @@ function MarketplaceView({
         </div>
 
         <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
-          <Euro className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          <Euro className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
             <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Zero Fees</h4>
             <p className="text-xs text-slate-500 leading-relaxed">
@@ -18450,7 +18544,7 @@ function MarketplaceView({
         </div>
 
         <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
-          <MapPin className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          <MapPin className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
             <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">All Valencia & Suburbs</h4>
             <p className="text-xs text-slate-500 leading-relaxed">
@@ -18693,7 +18787,7 @@ function ProfileView({
   onAdDeleted?: () => void
 }) {
   const [activeSubPage, setActiveSubPage] = useState<string | null>(null);
-  const [myAccountTab, setMyAccountTab] = useState<'favorites' | 'testimonies' | 'chats'>('favorites');
+  const [myAccountTab, setMyAccountTab] = useState<'favorites' | 'testimonies' | 'chats' | 'items'>('favorites');
   const [favSubTab, setFavSubTab] = useState<'all' | 'pros' | 'events'>('all');
   const [expandedFavProId, setExpandedFavProId] = useState<string | null>(null);
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
@@ -19466,7 +19560,7 @@ function ProfileView({
               </div>
 
               {/* Stats & Quick Navigation Row */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <button 
                   onClick={() => setMyAccountTab('favorites')}
                   className={cn(
@@ -19480,6 +19574,22 @@ function ProfileView({
                   <div>
                     <div className="text-lg font-black text-slate-800 leading-none">{favoriteProIds.length + favoriteEventIds.length + favoriteAdIds.length}</div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Favorites</div>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={() => setMyAccountTab('items')}
+                  className={cn(
+                    "p-3.5 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
+                    myAccountTab === 'items' ? "border-purple-300 ring-2 ring-purple-500/5 bg-purple-50/10" : "border-slate-100/90 hover:border-purple-100"
+                  )}
+                >
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'items' ? "bg-purple-50 text-purple-600" : "bg-slate-50 text-slate-400")}>
+                    <Shirt className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-black text-slate-800 leading-none">{myAds.length}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">My Items</div>
                   </div>
                 </button>
 
@@ -19530,6 +19640,129 @@ function ProfileView({
 
               {/* Tab Contents */}
               <AnimatePresence mode="wait">
+                {myAccountTab === 'items' && (
+                  <motion.div 
+                    key="tab-items"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
+                      <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+                        <div className="flex items-center gap-2">
+                          <Shirt className="w-5 h-5 text-purple-600" />
+                          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Marketplace Items</h3>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onOpenCreateAd?.()}
+                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Post an Ad</span>
+                        </button>
+                      </div>
+
+                      {loadingMyAds ? (
+                        <div className="py-12 flex justify-center text-slate-400">
+                          <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+                        </div>
+                      ) : myAds.length === 0 ? (
+                        <div className="py-12 text-center space-y-3 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 p-6">
+                          <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto">
+                            <Shirt className="w-6 h-6" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="font-bold text-slate-800 text-sm">No items posted yet</p>
+                            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                              List your pre-loved clothing, school uniforms, or household items for sale or free in Valencia!
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => onOpenCreateAd?.()}
+                            className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>Post your first item</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {myAds.map((ad) => {
+                            const img = ad.image_url || (ad.images && ad.images[0]);
+                            const isDeleting = deletingAdId === ad.id;
+                            return (
+                              <div key={ad.id} className="p-3 bg-slate-50/80 rounded-2xl border border-slate-200 flex gap-3 items-center group">
+                                <div 
+                                  onClick={() => onSelectAd?.(ad)}
+                                  className="w-16 h-16 rounded-xl overflow-hidden bg-slate-200 shrink-0 cursor-pointer relative"
+                                >
+                                  {img ? (
+                                    <img src={img} alt={ad.title} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                      <Shirt className="w-6 h-6" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div 
+                                  onClick={() => onSelectAd?.(ad)}
+                                  className="min-w-0 flex-1 cursor-pointer"
+                                >
+                                  <div className="text-xs font-extrabold text-purple-700 mb-0.5">{ad.price}</div>
+                                  <h4 className="text-xs font-bold text-slate-900 truncate">{ad.title}</h4>
+                                  <p className="text-[11px] text-slate-500 truncate">{ad.location || 'Valencia'} · {ad.category}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteAdId(ad.id)}
+                                  disabled={isDeleting}
+                                  className="p-2 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl border border-slate-200 transition-colors cursor-pointer shrink-0"
+                                  title="Delete item"
+                                >
+                                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {confirmDeleteAdId && (
+                      <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center">
+                          <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+                            <Trash2 className="w-6 h-6" />
+                          </div>
+                          <div className="space-y-1">
+                            <h4 className="font-black text-slate-900 text-lg">Delete Item?</h4>
+                            <p className="text-xs text-slate-500">Are you sure you want to remove this listing from the marketplace? This cannot be undone.</p>
+                          </div>
+                          <div className="flex gap-2 pt-2">
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteAdId(null)}
+                              className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAd(confirmDeleteAdId)}
+                              className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+
                 {myAccountTab === 'favorites' && (
                   <motion.div 
                     key="tab-favorites"
