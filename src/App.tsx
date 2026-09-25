@@ -127,6 +127,7 @@ import { searchService } from './services/searchService';
 import { pushNotificationService } from './services/pushNotificationService';
 import { oneSignalService } from './services/oneSignalService';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
+import { OneSignalVerificationDialog } from './components/OneSignalVerificationDialog';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
 import { LandingEventHighlightsCard } from './components/LandingEventHighlightsCard';
 import { HeaderWeatherWidget } from './components/HeaderWeatherWidget';
@@ -1375,6 +1376,13 @@ export default function App() {
     };
     lockOrientation();
   }, []);
+
+  // Global OneSignal SDK initialization
+  useEffect(() => {
+    oneSignalService.init(currentUser?.id).catch((err) => {
+      console.warn('[OneSignal] Global initialization error:', err);
+    });
+  }, [currentUser?.id]);
 
   const mainRef = useRef<HTMLElement>(null);
   const { professionals: allPros, loading: prosLoading, refetch: refetchPros } = useProfessionals([]);
@@ -2695,7 +2703,7 @@ export default function App() {
     { id: 'explore', label: 'Find Pro', icon: Search },
     { id: 'events', label: 'Events', icon: Calendar },
     { id: 'guides', label: 'Guides', icon: BookOpen },
-    { id: 'marketplace', label: 'Thrift', icon: Shirt },
+    { id: 'marketplace', label: 'Stuff', icon: Shirt },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 
@@ -4364,6 +4372,9 @@ export default function App() {
           isAdmin={isAdmin}
         />
       )}
+
+      {/* OneSignal SDK Verification Dialog (Mandatory AI Prompt Specification) */}
+      <OneSignalVerificationDialog userId={currentUser?.id} />
       </div>
     </APIProvider>
   );
@@ -18122,7 +18133,7 @@ function MarketplaceView({
             </div>
             
             <h1 className="text-2xl sm:text-3xl font-black font-display text-slate-900 tracking-tight">
-              MyCityUnlocked <span className="text-fuchsia-600">Thrift</span> is getting an upgrade
+              Unlocked <span className="text-fuchsia-600">Good Stuff</span>
             </h1>
             
             <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
@@ -18166,7 +18177,7 @@ function MarketplaceView({
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-black font-display text-slate-900 tracking-tight">
-                MyCityUnlocked <span className="text-fuchsia-600">Thrift</span>
+                Unlocked <span className="text-fuchsia-600">Good Stuff</span>
               </h1>
             </div>
           </div>
@@ -20545,6 +20556,19 @@ function ProfileView({
 
                     <button
                       type="button"
+                      onClick={() => {
+                        localStorage.removeItem('onesignal_verification_dialog_shown');
+                        window.location.reload();
+                      }}
+                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                      title="Réafficher le dialogue de vérification SDK OneSignal"
+                    >
+                      <Bell className="w-3.5 h-3.5 text-red-500" />
+                      <span>Dialogue de vérification SDK</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => setShowOneSignalGuide(!showOneSignalGuide)}
                       className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
                     >
@@ -21368,7 +21392,7 @@ function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
             </li>
             <li onClick={() => onNavigate('marketplace')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
                <ChevronRight className="w-3 h-3" />
-               Marketplace
+               Stuff
             </li>
             <li onClick={() => onNavigate('feedback')} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3">
                <ChevronRight className="w-3 h-3" />

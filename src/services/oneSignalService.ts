@@ -1,12 +1,19 @@
 import OneSignal from 'react-onesignal';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
+// App ID provided by OneSignal Web SDK integration (https://documentation.onesignal.com/docs/en/web-sdk-setup)
+export const ONESIGNAL_APP_ID = '10a14311-a42a-4681-9682-ce965d80ae75';
+
 // Default App ID fallback or env variable
-const DEFAULT_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || '';
+const DEFAULT_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID || ONESIGNAL_APP_ID;
+
+export type PushSubscriptionObserver = (subscriptionId: string) => void;
 
 class OneSignalService {
   private isInitialized = false;
   private currentAppId = '';
+  private subscriptionObservers = new Set<PushSubscriptionObserver>();
+  private observerBound = false;
 
   /**
    * Device and platform detection for App Store / Play Store
@@ -34,7 +41,11 @@ class OneSignalService {
   getAppId(): string {
     if (this.currentAppId) return this.currentAppId;
     const stored = typeof window !== 'undefined' ? localStorage.getItem('onesignal_app_id') : null;
-    return stored || DEFAULT_APP_ID;
+    // If stored was the old mobile App ID, update automatically to the new Web SDK App ID
+    if (stored && stored !== '4653c1cf-3dbe-494d-8897-cfa37b9d4d41') {
+      return stored;
+    }
+    return DEFAULT_APP_ID;
   }
 
   /**
@@ -49,6 +60,61 @@ class OneSignalService {
   }
 
   /**
+   * Evaluates if a given subscription ID is a real server-assigned value
+   * (non-empty and not prefixed with 'local-')
+   */
+  isRealServerAssignedId(id?: string | null): boolean {
+    return !!id && typeof id === 'string' && id.trim().length > 0 && !id.startsWith('local-');
+  }
+
+  /**
+   * Get current push subscription ID synchronously if available
+   */
+  getCurrentSubscriptionId(): string | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      return OneSignal.User?.PushSubscription?.id || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Register a push subscription observer.
+   * Immediately evaluates current subscription ID, and triggers on change.
+   * Returns an unsubscribe function.
+   */
+  addPushSubscriptionObserver(observer: PushSubscriptionObserver): () => void {
+    this.subscriptionObservers.add(observer);
+
+    // Evaluate immediately at observer-registration time (Requirement 4)
+    const currentId = this.getCurrentSubscriptionId();
+    if (this.isRealServerAssignedId(currentId)) {
+      try {
+        observer(currentId!);
+      } catch (err) {
+        console.error('[OneSignal] Observer immediate error:', err);
+      }
+    }
+
+    return () => {
+      this.subscriptionObservers.delete(observer);
+    };
+  }
+
+  private notifyObservers(subId?: string | null) {
+    if (this.isRealServerAssignedId(subId)) {
+      this.subscriptionObservers.forEach((observer) => {
+        try {
+          observer(subId!);
+        } catch (err) {
+          console.error('[OneSignal] Observer notification error:', err);
+        }
+      });
+    }
+  }
+
+  /**
    * Initialize OneSignal Web SDK
    */
   async init(userId?: string): Promise<boolean> {
@@ -56,7 +122,7 @@ class OneSignalService {
     const appId = this.getAppId();
 
     if (!appId) {
-      console.warn('[OneSignal] No App ID configured. Set VITE_ONESIGNAL_APP_ID in .env or configure in Settings.');
+      console.warn('[OneSignal] No App ID configured.');
       return false;
     }
 
@@ -80,6 +146,23 @@ class OneSignalService {
 
       this.isInitialized = true;
       console.log('[OneSignal] Initialized successfully with App ID:', appId);
+
+      // Register push subscription observer listener immediately (Requirement 1)
+      if (!this.observerBound) {
+        this.observerBound = true;
+        try {
+          OneSignal.User?.PushSubscription?.addEventListener('change', (change: any) => {
+            const newId = change?.current?.id || OneSignal.User?.PushSubscription?.id;
+            this.notifyObservers(newId);
+          });
+        } catch (err) {
+          console.warn('[OneSignal] Could not bind change event:', err);
+        }
+      }
+
+      // Requirement 4: Evaluate current subscription ID immediately at init
+      const currentSubId = OneSignal.User?.PushSubscription?.id;
+      this.notifyObservers(currentSubId);
 
       if (userId) {
         await this.loginUser(userId);
