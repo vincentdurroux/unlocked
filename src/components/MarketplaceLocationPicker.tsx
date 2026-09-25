@@ -54,9 +54,14 @@ function MapController({
     }
   }, [map, coords.lat, coords.lng]);
 
-  const handleContainerClick = useCallback((e: google.maps.MapMouseEvent) => {
-    if (e.latLng) {
-      onMapClick(e.latLng.lat(), e.latLng.lng());
+  const handleContainerClick = useCallback((e: any) => {
+    const latLng = e.detail?.latLng || e.latLng;
+    if (latLng) {
+      const lat = typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat;
+      const lng = typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng;
+      if (lat !== undefined && lng !== undefined) {
+        onMapClick(lat, lng);
+      }
     }
   }, [onMapClick]);
 
