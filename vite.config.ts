@@ -39,37 +39,7 @@ export default defineConfig(({mode}) => {
       target: 'esnext',
       cssMinify: true,
       minify: 'esbuild',
-      chunkSizeWarningLimit: 1000,
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('react/') || id.includes('react-dom/')) {
-                return 'vendor-react';
-              }
-              if (id.includes('motion') || id.includes('framer-motion')) {
-                return 'vendor-motion';
-              }
-              if (id.includes('recharts') || id.includes('d3-')) {
-                return 'vendor-recharts';
-              }
-              if (id.includes('@vis.gl') || id.includes('@googlemaps')) {
-                return 'vendor-maps';
-              }
-              if (id.includes('@supabase')) {
-                return 'vendor-supabase';
-              }
-              if (id.includes('lucide-react')) {
-                return 'vendor-icons';
-              }
-              if (id.includes('@google/genai')) {
-                return 'vendor-genai';
-              }
-              return 'vendor-others';
-            }
-          },
-        },
-      },
+      chunkSizeWarningLimit: 2000,
     },
     ssr: {
       noExternal: ['browser-image-compression'],
