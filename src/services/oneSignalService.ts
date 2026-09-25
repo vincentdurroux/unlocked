@@ -135,6 +135,17 @@ class OneSignalService {
   }
 
   /**
+   * Check if current hostname is compatible with the active OneSignal App ID
+   */
+  isOriginAllowedForAppId(appId: string): boolean {
+    if (typeof window === 'undefined') return true;
+    const isDefault = appId === '10a14311-a42a-4681-9682-ce965d80ae75';
+    if (!isDefault) return true;
+    const hostname = window.location.hostname;
+    return hostname.endsWith('mycityunlocked.app') || hostname === 'localhost' || hostname === '127.0.0.1';
+  }
+
+  /**
    * Initialize OneSignal Web SDK
    */
   async init(userId?: string): Promise<boolean> {
@@ -145,6 +156,12 @@ class OneSignalService {
 
     if (!appId) {
       console.warn('[OneSignal] No App ID configured.');
+      return false;
+    }
+
+    // Guard against OneSignal domain restriction on dev / preview domains
+    if (!this.isOriginAllowedForAppId(appId)) {
+      console.info(`[OneSignal] Skipping OneSignal SDK init: default App ID is bound to https://mycityunlocked.app (current host: ${window.location.hostname})`);
       return false;
     }
 
@@ -210,8 +227,13 @@ class OneSignalService {
 
       return true;
     } catch (error: any) {
+      const errMsg = String(error?.message || error || '');
+      if (errMsg.includes('mycityunlocked.app') || errMsg.toLowerCase().includes('can only be used on')) {
+        console.info('[OneSignal] Origin restriction notice handled gracefully:', errMsg);
+        return false;
+      }
       // If already initialized by inline script, recover gracefully
-      const isAlreadyInitError = String(error?.message || '').toLowerCase().includes('already initialized');
+      const isAlreadyInitError = errMsg.toLowerCase().includes('already initialized');
       if (isAlreadyInitError || (typeof window !== 'undefined' && (window as any).OneSignal?.User)) {
         this.isInitialized = true;
         if (!this.observerBound) {
@@ -278,44 +300,34 @@ class OneSignalService {
    * without any preceding network fetch delays (which cause modern mobile browsers to drop user activation).
    */
   async subscribe(userId?: string): Promise<boolean> {
-    const dev = this.getDeviceInfo();
-
-    // 1. iOS Safari limitation: Web Push requires Standalone mode (added to Home Screen)
-    if (dev.isIOS && !dev.isStandalone) {
-      const err: any = new Error(
-        "Sur iPhone, les notifications nécessitent d'ajouter l'application à l'écran d'accueil (Partager ⎋ > Sur l'écran d'accueil)."
-      );
-      err.code = 'IOS_STANDALONE_REQUIRED';
-      throw err;
-    }
-
-    // 2. Browser check
+    // 1. Browser check
     if (typeof window === 'undefined' || !('Notification' in window)) {
-      const err: any = new Error("Ce navigateur ne prend pas en charge les notifications push.");
-      err.code = 'UNSUPPORTED';
-      throw err;
+      console.info('[OneSignal] Push notifications not supported in this browser.');
+      return false;
     }
 
-    // 3. Permission already denied in browser settings
+    // 2. Permission already denied in browser settings
     if (Notification.permission === 'denied') {
-      const err: any = new Error(
-        "Les notifications sont bloquées dans les paramètres de votre navigateur. Veuillez appuyer sur l'icône de cadenas ou de réglages à gauche de la barre d'adresse pour réautoriser les notifications."
-      );
-      err.code = 'PERMISSION_DENIED';
-      throw err;
+      console.info('[OneSignal] Notification permission is currently denied.');
+      return false;
     }
 
-    // 4. REQUEST PERMISSION IMMEDIATELY (preserving user gesture)
+    // 3. REQUEST PERMISSION IMMEDIATELY (native system prompt)
+    // Directly invoke Notification.requestPermission() within the user gesture event frame
+    // so mobile browsers (iOS/Android) and desktop browsers present the generic system message immediately.
     let currentPerm: NotificationPermission = Notification.permission;
 
     if (currentPerm !== 'granted') {
-      const windowOS = typeof window !== 'undefined' ? (window as any).OneSignal : null;
       try {
-        if (windowOS?.Notifications?.requestPermission) {
-          await windowOS.Notifications.requestPermission();
-          currentPerm = Notification.permission;
-        } else if (Notification.requestPermission) {
-          currentPerm = await Notification.requestPermission();
+        if (typeof Notification.requestPermission === 'function') {
+          const reqPromise = Notification.requestPermission();
+          if (reqPromise && typeof (reqPromise as any).then === 'function') {
+            currentPerm = await reqPromise;
+          } else {
+            currentPerm = await new Promise<NotificationPermission>((resolve) => {
+              Notification.requestPermission(resolve);
+            });
+          }
         }
       } catch (e) {
         // Fallback for older browsers using callback syntax
@@ -328,46 +340,48 @@ class OneSignalService {
         } catch (_) {}
       }
 
-      // Check result of request
-      if (currentPerm === 'denied') {
-        const err: any = new Error(
-          "Vous avez refusé l'autorisation des notifications. Vous pouvez la réactiver dans les paramètres de votre navigateur."
-        );
-        err.code = 'PERMISSION_DENIED';
-        throw err;
-      }
-
       if (currentPerm !== 'granted') {
-        const err: any = new Error("L'autorisation de notification n'a pas été accordée.");
-        err.code = 'PERMISSION_DISMISSED';
-        throw err;
+        return false;
       }
     }
 
-    // 5. Now that permission is granted, ensure OneSignal is initialized and opt in
-    if (!this.isInitialized) {
-      await this.init(userId);
+    // 4. Now that permission is granted, check origin compatibility before OneSignal opt-in
+    const activeAppId = this.getAppId();
+    const canUseOneSignal = this.isOriginAllowedForAppId(activeAppId);
+
+    if (canUseOneSignal) {
+      if (!this.isInitialized) {
+        await this.init(userId);
+      }
+
+      const windowOS = typeof window !== 'undefined' ? (window as any).OneSignal : null;
+
+      try {
+        if (OneSignal.User?.PushSubscription?.optIn) {
+          await OneSignal.User.PushSubscription.optIn();
+        } else if (windowOS?.User?.PushSubscription?.optIn) {
+          await windowOS.User.PushSubscription.optIn();
+        }
+      } catch (err: any) {
+        const msg = String(err?.message || err || '');
+        if (msg.includes('mycityunlocked.app') || msg.toLowerCase().includes('can only be used on')) {
+          console.info('[OneSignal] OptIn notice:', msg);
+        } else {
+          console.warn('[OneSignal] optIn call warning:', err);
+        }
+      }
+    } else {
+      console.info(`[OneSignal] Active origin (${window.location.hostname}) differs from production (mycityunlocked.app). Native notification permission is granted.`);
     }
 
+    // 5. Sync observer with latest subscription ID
     const windowOS = typeof window !== 'undefined' ? (window as any).OneSignal : null;
-
-    try {
-      if (OneSignal.User?.PushSubscription?.optIn) {
-        await OneSignal.User.PushSubscription.optIn();
-      } else if (windowOS?.User?.PushSubscription?.optIn) {
-        await windowOS.User.PushSubscription.optIn();
-      }
-    } catch (err) {
-      console.warn('[OneSignal] optIn call warning:', err);
-    }
-
-    // 6. Sync observer with latest subscription ID
     const subId = this.getCurrentSubscriptionId() || windowOS?.User?.PushSubscription?.id;
     if (subId) {
       this.notifyObservers(subId);
     }
 
-    if (userId) {
+    if (userId && canUseOneSignal) {
       await this.loginUser(userId);
     }
 

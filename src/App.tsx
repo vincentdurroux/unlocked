@@ -19051,16 +19051,24 @@ function ProfileView({
         if (isPushSubscribed) {
           await oneSignalService.unsubscribe();
           setIsPushSubscribed(false);
-          setPushFeedback({ type: 'success', text: 'Notifications OneSignal désactivées sur cet appareil.' });
+          setPushFeedback({ type: 'success', text: 'Notifications désactivées sur cet appareil.' });
         } else {
-          await oneSignalService.subscribe(currentUser?.id);
-          setIsPushSubscribed(true);
-          const subId = await oneSignalService.getSubscriptionId();
-          setOneSignalSubId(subId);
-          if (typeof window !== 'undefined' && 'Notification' in window) {
-            setPushStatus(Notification.permission);
+          const success = await oneSignalService.subscribe(currentUser?.id);
+          const currentPerm = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default';
+          setPushStatus(currentPerm);
+
+          if (success || currentPerm === 'granted') {
+            setIsPushSubscribed(true);
+            const subId = await oneSignalService.getSubscriptionId();
+            setOneSignalSubId(subId);
+            setPushFeedback({ type: 'success', text: 'Notifications activées avec succès !' });
+          } else if (currentPerm === 'denied') {
+            setIsPushSubscribed(false);
+            setPushFeedback({ type: 'error', text: 'Les notifications sont bloquées dans les paramètres de votre navigateur ou de votre téléphone.' });
+          } else {
+            setIsPushSubscribed(false);
+            setPushFeedback({ type: 'info', text: 'Autorisation des notifications non accordée ou annulée.' });
           }
-          setPushFeedback({ type: 'success', text: 'Abonné aux notifications OneSignal avec succès !' });
         }
       } else {
         if (isPushSubscribed) {
@@ -19076,18 +19084,11 @@ function ProfileView({
       }
     } catch (err: any) {
       console.error('Push toggle error:', err);
-      if (err?.code === 'IOS_STANDALONE_REQUIRED') {
-        setPushFeedback({
-          type: 'error',
-          text: "Sur iPhone, ajoutez l'application à votre écran d'accueil (icône Partager ⎋ > Sur l'écran d'accueil) pour recevoir des notifications."
-        });
-      } else if (err?.code === 'PERMISSION_DENIED') {
-        setPushFeedback({
-          type: 'error',
-          text: "Les notifications sont bloquées dans votre navigateur. Cliquez sur l'icône 🔒 à gauche de la barre d'adresse pour les autoriser."
-        });
+      const errMsg = err?.message || 'Erreur lors de la configuration des notifications.';
+      if (errMsg.includes('mycityunlocked.app') || errMsg.toLowerCase().includes('can only be used on')) {
+        setPushFeedback({ type: 'info', text: 'Notifications système autorisées. (OneSignal Web Push est configuré pour le domaine mycityunlocked.app).' });
       } else {
-        setPushFeedback({ type: 'error', text: err?.message || 'Erreur lors de la configuration des notifications.' });
+        setPushFeedback({ type: 'error', text: errMsg });
       }
     } finally {
       setPushLoading(false);

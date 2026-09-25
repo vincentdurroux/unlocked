@@ -18,16 +18,32 @@
     <script>
       window.OneSignalDeferred = window.OneSignalDeferred || [];
       OneSignalDeferred.push(async function(OneSignal) {
-        var configuredAppId = "%NEXT_PUBLIC_ONESIGNAL_APP_ID%";
-        if (!configuredAppId || configuredAppId.indexOf("%") !== -1) {
-          configuredAppId = "10a14311-a42a-4681-9682-ce965d80ae75";
+        try {
+          var configuredAppId = "%NEXT_PUBLIC_ONESIGNAL_APP_ID%";
+          if (!configuredAppId || configuredAppId.indexOf("%") !== -1) {
+            configuredAppId = "10a14311-a42a-4681-9682-ce965d80ae75";
+          }
+          var hostname = window.location.hostname;
+          var isDefaultAppId = configuredAppId === "10a14311-a42a-4681-9682-ce965d80ae75";
+          var isAllowedDomain = hostname.endsWith('mycityunlocked.app') || 
+                                hostname === 'localhost' || 
+                                hostname === '127.0.0.1';
+
+          // Prevent OneSignal SDK from throwing domain mismatch error on dev / preview domains
+          if (isDefaultAppId && !isAllowedDomain) {
+            console.info('[OneSignal] Skipping init: default App ID is registered for https://mycityunlocked.app (current host: ' + hostname + ')');
+            return;
+          }
+
+          await OneSignal.init({
+            appId: configuredAppId,
+            allowLocalhostAsSecureOrigin: true,
+            serviceWorkerPath: "OneSignalSDKWorker.js",
+            serviceWorkerParam: { scope: "/" }
+          });
+        } catch (err) {
+          console.warn('[OneSignal] Deferred init notice:', err && err.message ? err.message : err);
         }
-        await OneSignal.init({
-          appId: configuredAppId,
-          allowLocalhostAsSecureOrigin: true,
-          serviceWorkerPath: "OneSignalSDKWorker.js",
-          serviceWorkerParam: { scope: "/" }
-        });
       });
     </script>
   </head>
