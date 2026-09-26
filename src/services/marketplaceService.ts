@@ -43,8 +43,98 @@ export const marketplaceService = {
       if (!data || data.length === 0) {
         return [];
       }
-      
-      return (data as Ad[]);
+
+      // Collect user_ids to batch query author profiles from 'profiles' table
+      const userIds = Array.from(new Set(data.map((item: any) => item.user_id).filter(Boolean)));
+      const profilesMap: Record<string, { full_name?: string; avatar_url?: string }> = {};
+
+      if (userIds.length > 0) {
+        try {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url')
+            .in('id', userIds);
+
+          if (profiles) {
+            profiles.forEach((p: any) => {
+              profilesMap[p.id] = {
+                full_name: p.full_name,
+                avatar_url: p.avatar_url
+              };
+            });
+          }
+        } catch (profileErr) {
+          console.warn('[Marketplace] Could not batch fetch profiles:', profileErr);
+        }
+      }
+
+      // Parse metadata and enrich each ad
+      return data.map((rawItem: any) => {
+        let desc = rawItem.description || '';
+        let meta: Record<string, any> = {};
+
+        // Extract metadata block <!-- unlocked_meta:{...} -->
+        const metaMatch = desc.match(/<!--\s*unlocked_meta:([\s\S]*?)\s*-->/);
+        if (metaMatch) {
+          try {
+            meta = JSON.parse(metaMatch[1]);
+            // Remove the hidden metadata block from visible description
+            desc = desc.replace(metaMatch[0], '').trim();
+          } catch (e) {
+            console.warn('[Marketplace] Failed to parse ad metadata JSON:', e);
+          }
+        }
+
+        const userProfile = rawItem.user_id ? profilesMap[rawItem.user_id] : null;
+
+        const seller_name = rawItem.seller_name || 
+                            meta.seller_name || 
+                            userProfile?.full_name || 
+                            'Community Member';
+
+        const seller_image = rawItem.seller_image || 
+                             meta.seller_image || 
+                             userProfile?.avatar_url || 
+                             undefined;
+
+        const seller_phone = rawItem.seller_phone || 
+                             meta.seller_phone || 
+                             undefined;
+
+        const exact_address = rawItem.exact_address || 
+                              meta.exact_address || 
+                              undefined;
+
+        const location_precision = rawItem.location_precision || 
+                                  meta.location_precision || 
+                                  (exact_address ? 'exact' : 'approximate');
+
+        const lat = rawItem.lat !== undefined && rawItem.lat !== null 
+          ? Number(rawItem.lat) 
+          : (meta.lat !== undefined && meta.lat !== null ? Number(meta.lat) : undefined);
+
+        const lng = rawItem.lng !== undefined && rawItem.lng !== null 
+          ? Number(rawItem.lng) 
+          : (meta.lng !== undefined && meta.lng !== null ? Number(meta.lng) : undefined);
+
+        return {
+          ...rawItem,
+          description: desc,
+          seller_name,
+          seller_image,
+          seller_phone,
+          exact_address,
+          location_precision,
+          lat,
+          lng,
+          coordinates: lat && lng ? { lat, lng } : undefined,
+          type: rawItem.type || meta.type,
+          fuel_type: rawItem.fuel_type || meta.fuel_type,
+          property_type: rawItem.property_type || meta.property_type,
+          contract_type: rawItem.contract_type || meta.contract_type,
+          size: rawItem.size || meta.size,
+        } as Ad;
+      });
     } catch (error) {
       console.error('Error fetching ads from Supabase:', error);
       return [];
@@ -62,7 +152,7 @@ export const marketplaceService = {
       return newAd;
     }
 
-    // Embed extra category attributes & location precision into description if present
+    // Embed extra category attributes into visible description if present
     const extraDetails: string[] = [];
     if (ad.category === 'Real Estate') {
       if (ad.type) extraDetails.push(`For ${ad.type}`);
@@ -86,6 +176,26 @@ export const marketplaceService = {
       }
     }
 
+    // Store seller_phone, seller_name, exact_address, coordinates in a hidden metadata comment block
+    // to guarantee 100% persistence in Supabase even if custom columns do not exist in the database table
+    const meta: Record<string, any> = {};
+    if (ad.seller_name) meta.seller_name = ad.seller_name;
+    if (ad.seller_phone) meta.seller_phone = ad.seller_phone;
+    if (ad.seller_image) meta.seller_image = ad.seller_image;
+    if (ad.exact_address) meta.exact_address = ad.exact_address;
+    if (ad.location_precision) meta.location_precision = ad.location_precision;
+    if (ad.lat !== undefined && ad.lat !== null) meta.lat = ad.lat;
+    if (ad.lng !== undefined && ad.lng !== null) meta.lng = ad.lng;
+    if (ad.type) meta.type = ad.type;
+    if (ad.fuel_type) meta.fuel_type = ad.fuel_type;
+    if (ad.property_type) meta.property_type = ad.property_type;
+    if (ad.contract_type) meta.contract_type = ad.contract_type;
+    if (ad.size) meta.size = ad.size;
+
+    if (Object.keys(meta).length > 0) {
+      finalDescription = `${finalDescription}\n\n<!-- unlocked_meta:${JSON.stringify(meta)} -->`.trim();
+    }
+
     // Build payload with safe, standard columns
     const payload: Record<string, any> = {
       title: ad.title,
@@ -101,13 +211,17 @@ export const marketplaceService = {
     if (ad.seller_name) payload.seller_name = ad.seller_name;
     if (ad.seller_image) payload.seller_image = ad.seller_image;
     if (ad.seller_phone) payload.seller_phone = ad.seller_phone;
+    if (ad.lat !== undefined && ad.lat !== null) payload.lat = ad.lat;
+    if (ad.lng !== undefined && ad.lng !== null) payload.lng = ad.lng;
+    if (ad.exact_address) payload.exact_address = ad.exact_address;
+    if (ad.location_precision) payload.location_precision = ad.location_precision;
     if (ad.images && Array.isArray(ad.images) && ad.images.length > 0) {
       payload.images = ad.images;
     }
 
     // Robust insert loop: automatically removes any column that doesn't exist in Supabase schema (PGRST204)
     let currentPayload = { ...payload };
-    const maxRetries = 10;
+    const maxRetries = 12;
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
@@ -118,7 +232,20 @@ export const marketplaceService = {
           .single();
 
         if (error) throw error;
-        return data as Ad;
+        
+        // Return enriched Ad object
+        return {
+          ...data,
+          seller_name: ad.seller_name || data.seller_name,
+          seller_image: ad.seller_image || data.seller_image,
+          seller_phone: ad.seller_phone || data.seller_phone,
+          exact_address: ad.exact_address,
+          location_precision: ad.location_precision,
+          lat: ad.lat,
+          lng: ad.lng,
+          coordinates: ad.coordinates,
+          description: (ad.description || '').trim()
+        } as Ad;
       } catch (err: any) {
         const errMsg = err?.message || JSON.stringify(err);
         const match = errMsg.match(/Could not find the '([^']+)' column/i);

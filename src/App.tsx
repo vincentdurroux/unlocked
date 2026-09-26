@@ -696,11 +696,7 @@ const GOOGLE_MAPS_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 
 export const formatSellerName = (name?: string): string => {
   if (!name || !name.trim()) return 'Community Member';
-  const clean = name.trim();
-  const parts = clean.split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  if (parts.includes('&') || parts.includes('and') || parts.includes('+')) return clean;
-  return `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
+  return name.trim();
 };
 
 const LANGUAGES_LIST = ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Russian', 'Chinese', 'Japanese', 'Arabic'];
@@ -2432,7 +2428,7 @@ export default function App() {
   const [adTitle, setAdTitle] = useState('');
   const [adPrice, setAdPrice] = useState('');
   const [adCategory, setAdCategory] = useState('School & Kids');
-  const [adCondition, setAdCondition] = useState('Good');
+  const [adCondition, setAdCondition] = useState('Used');
   const [adLocation, setAdLocation] = useState('');
   const [adLocationPrecision, setAdLocationPrecision] = useState<'approximate' | 'exact'>('approximate');
   const [adExactAddress, setAdExactAddress] = useState('');
@@ -2572,16 +2568,35 @@ export default function App() {
     setIsUploading(true);
     setAdError(null);
     try {
-      const sellerDisplayName = userProfile?.full_name || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Community Member';
-      const sellerAvatar = userProfile?.avatar_url || currentUser?.user_metadata?.avatar_url || undefined;
+      let sellerDisplayName = userProfile?.full_name?.trim() || 
+                              currentUser?.user_metadata?.full_name?.trim() || 
+                              currentUser?.user_metadata?.name?.trim();
+      let sellerAvatar = userProfile?.avatar_url || 
+                         currentUser?.user_metadata?.avatar_url || 
+                         currentUser?.user_metadata?.picture;
+
+      // If userProfile isn't loaded in state yet, fetch it directly
+      if (!sellerDisplayName && currentUser?.id) {
+        try {
+          const fresh = await authService.getProfile(currentUser.id);
+          if (fresh?.full_name?.trim()) sellerDisplayName = fresh.full_name.trim();
+          if (fresh?.avatar_url) sellerAvatar = fresh.avatar_url;
+        } catch (e) {
+          console.warn('[handlePostAd] Could not load profile:', e);
+        }
+      }
+
+      if (!sellerDisplayName && currentUser?.email) {
+        sellerDisplayName = currentUser.email.split('@')[0];
+      }
 
       const finalLocation = adLocationPrecision === 'exact' && adExactAddress.trim()
         ? (adLocation ? `${adLocation} · ${adExactAddress.trim()}` : adExactAddress.trim())
         : (adLocation || 'Valencia');
 
       await marketplaceService.createAd({
-        title: adTitle,
-        price: adPrice,
+        title: adTitle.trim(),
+        price: adPrice.trim(),
         category: adCategory,
         condition: adCondition,
         location: finalLocation,
@@ -2590,14 +2605,14 @@ export default function App() {
         lat: adLat || undefined,
         lng: adLng || undefined,
         coordinates: adLat && adLng ? { lat: adLat, lng: adLng } : undefined,
-        description: adDescription,
+        description: adDescription.trim(),
         type: adCategory === 'Real Estate' ? adHousingType : undefined,
         fuel_type: adCategory === 'Vehicles' ? adFuelType : undefined,
         property_type: adCategory === 'Real Estate' ? adPropertyType : undefined,
         contract_type: adCategory === 'Jobs' ? adContractType : undefined,
         size: adCategory === 'Clothing' ? adSize : undefined,
         seller_phone: adPhone.trim() || undefined,
-        seller_name: sellerDisplayName,
+        seller_name: sellerDisplayName || 'Community Member',
         seller_image: sellerAvatar,
         user_id: currentUser?.id || undefined,
         image_url: uploadedImageUrls[0] || '',
@@ -3768,7 +3783,7 @@ export default function App() {
                 {/* Modal Header */}
                 <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200/80 shrink-0 shadow-2xs">
+                    <div className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-200/80 shrink-0 shadow-2xs">
                       <Tag className="w-5 h-5 stroke-[2.2]" />
                     </div>
                     <div>
@@ -3788,7 +3803,7 @@ export default function App() {
 
                 {!currentUser ? (
                   <div className="py-8 text-center space-y-4">
-                    <div className="w-16 h-16 rounded-3xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-200">
+                    <div className="w-16 h-16 rounded-3xl bg-purple-50 text-purple-600 flex items-center justify-center mx-auto border border-purple-200">
                       <Lock className="w-8 h-8" />
                     </div>
                     <div className="max-w-sm mx-auto space-y-1.5">
@@ -3820,19 +3835,49 @@ export default function App() {
                   </div>
                 ) : (
                 <div className="space-y-5">
+                  {/* Connected Seller Indicator */}
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200/80">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {userProfile?.avatar_url || currentUser?.user_metadata?.avatar_url ? (
+                        <img 
+                          src={userProfile?.avatar_url || currentUser?.user_metadata?.avatar_url} 
+                          alt="Seller Avatar" 
+                          className="w-10 h-10 rounded-full object-cover border border-purple-200 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-purple-200/70 text-purple-900 flex items-center justify-center font-bold text-sm shrink-0">
+                          {(userProfile?.full_name || currentUser?.user_metadata?.full_name || currentUser?.email || 'U').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Posting as seller</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>
+                        </div>
+                        <h5 className="text-sm font-bold text-slate-900 truncate">
+                          {userProfile?.full_name || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Community Member'}
+                        </h5>
+                        <p className="text-[11px] text-slate-500 truncate">{currentUser?.email}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-purple-700 bg-white px-2.5 py-1 rounded-full border border-purple-200 shrink-0 shadow-2xs">
+                      Linked to account
+                    </span>
+                  </div>
+
                   {/* Photo Section (Up to 8 Photos) */}
                   <div className="space-y-2.5 p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80">
                     <div className="flex justify-between items-center">
                       <div>
                         <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                          <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                          <Camera className="w-3.5 h-3.5 text-purple-600" />
                           Photos <span className="text-slate-400 font-normal normal-case">(up to 8)</span>
                         </label>
                         <p className="text-[11px] text-slate-400">First photo will be used as the cover thumbnail</p>
                       </div>
                       <span className={cn(
                         "text-[11px] font-bold px-2.5 py-1 rounded-full transition-colors",
-                        uploadedImageUrls.length > 0 ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : "bg-white text-slate-500 border border-slate-200"
+                        uploadedImageUrls.length > 0 ? "bg-purple-100 text-purple-800 border border-purple-200" : "bg-white text-slate-500 border border-slate-200"
                       )}>
                         {uploadedImageUrls.length}/8 photos
                       </span>
@@ -3873,18 +3918,18 @@ export default function App() {
                           onClick={() => !isUploading && fileInputRef.current?.click()}
                           disabled={isUploading}
                           className={cn(
-                            "aspect-square bg-white rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-500 gap-1.5 cursor-pointer hover:bg-emerald-50/60 hover:border-emerald-400 hover:text-emerald-700 transition-all active:scale-95 shadow-2xs",
+                            "aspect-square bg-white rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-500 gap-1.5 cursor-pointer hover:bg-purple-50/60 hover:border-purple-400 hover:text-purple-700 transition-all active:scale-95 shadow-2xs",
                             isUploading && "opacity-50 cursor-wait"
                           )}
                         >
                           {isUploading ? (
                             <>
-                              <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+                              <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
                               <span className="text-[10px] font-bold text-slate-500">Uploading...</span>
                             </>
                           ) : (
                             <>
-                              <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                              <div className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center">
                                 <Plus className="w-4 h-4 stroke-[2.5]" />
                               </div>
                               <span className="text-[11px] font-bold text-slate-700">Add Photo</span>
@@ -3901,16 +3946,16 @@ export default function App() {
                     {/* Title */}
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Listing Title <span className="text-emerald-600">*</span>
+                        Listing Title <span className="text-purple-600">*</span>
                       </label>
                       <div className="relative">
-                        <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                        <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
                         <input 
                           type="text" 
                           placeholder="e.g. Lycée Français uniform set, Sezane silk dress, Vintage Peugeot bike, Oak desk..." 
                           value={adTitle}
                           onChange={(e) => setAdTitle(e.target.value)}
-                          className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                          className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
                         />
                       </div>
                     </div>
@@ -3919,7 +3964,7 @@ export default function App() {
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          Category <span className="text-emerald-600">*</span>
+                          Category <span className="text-purple-600">*</span>
                         </label>
                         <span className="text-[11px] text-slate-400 font-medium">Select 1 category</span>
                       </div>
@@ -3953,7 +3998,7 @@ export default function App() {
                               className={cn(
                                 "flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all cursor-pointer",
                                 isSelected
-                                  ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold"
+                                  ? "bg-purple-600 text-white border-purple-600 shadow-2xs font-bold"
                                   : "bg-slate-50 border-slate-200/90 text-slate-700 hover:bg-slate-100 hover:border-slate-300 font-medium"
                               )}
                             >
@@ -3970,7 +4015,7 @@ export default function App() {
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
                           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                            Price <span className="text-emerald-600">*</span>
+                            Price <span className="text-purple-600">*</span>
                           </label>
                           <button
                             type="button"
@@ -3985,21 +4030,21 @@ export default function App() {
                             className={cn(
                               "text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-colors cursor-pointer",
                               adPrice === 'Free' 
-                                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                ? "bg-purple-100 text-purple-800 border-purple-300"
+                                : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-purple-50 hover:text-purple-700"
                             )}
                           >
                             {adPrice === 'Free' ? '✓ Free / Giveaway' : 'Make it Free (€0)'}
                           </button>
                         </div>
                         <div className="relative">
-                          <Euro className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                          <Euro className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
                           <input 
                             type="text" 
                             placeholder="e.g. 35€ (or Free)" 
                             value={adPrice}
                             onChange={(e) => setAdPrice(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                            className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
                           />
                         </div>
                       </div>
@@ -4009,18 +4054,17 @@ export default function App() {
                           Condition
                         </label>
                         <div className="relative">
-                          <Award className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                          <Award className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
                           <select 
                             value={adCondition}
                             onChange={(e) => setAdCondition(e.target.value)}
-                            className="w-full pl-10 pr-9 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all appearance-none cursor-pointer"
+                            className="w-full pl-10 pr-9 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-medium text-slate-900 transition-all appearance-none cursor-pointer"
                           >
-                            <option value="Brand New">Brand New / With tags</option>
-                            <option value="Like New">Like New / Barely used</option>
-                            <option value="Very Good">Very Good condition</option>
-                            <option value="Good">Good condition</option>
-                            <option value="Fair">Fair condition</option>
-                            <option value="Free">Free giveaway</option>
+                            <option value="New">New</option>
+                            <option value="Like New">Like New</option>
+                            <option value="Used">Used</option>
+                            <option value="Fair">Fair</option>
+                            <option value="Free">Free</option>
                           </select>
                           <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                         </div>
@@ -4033,20 +4077,20 @@ export default function App() {
                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                           Phone / WhatsApp <span className="text-slate-400 font-normal normal-case">(optional)</span>
                         </label>
-                        <span className="text-[11px] text-emerald-700 font-semibold">Enables Direct WhatsApp button</span>
+                        <span className="text-[11px] text-purple-700 font-semibold">Enables Direct WhatsApp button</span>
                       </div>
                       <div className="relative">
-                        <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                        <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
                         <input 
                           type="tel" 
                           placeholder="e.g. +34 612 345 678" 
                           value={adPhone}
                           onChange={(e) => setAdPhone(e.target.value)}
-                          className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                          className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
                         />
                       </div>
                       <p className="text-[11px] text-slate-400 mt-1">
-                        If left blank, buyers contact you safely through in-app messaging.
+                        If provided, buyers can call or contact you directly on WhatsApp. Otherwise, they contact you safely through in-app chat.
                       </p>
                     </div>
 
@@ -4075,7 +4119,7 @@ export default function App() {
                         placeholder="Describe your item (dimensions, condition, size, reason for selling, pickup details)..." 
                         value={adDescription}
                         onChange={(e) => setAdDescription(e.target.value)}
-                        className="w-full p-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none h-24 text-sm font-medium text-slate-900 resize-none transition-all placeholder:text-slate-400" 
+                        className="w-full p-3.5 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none h-24 text-sm font-medium text-slate-900 resize-none transition-all placeholder:text-slate-400" 
                       />
                     </div>
 
@@ -4093,7 +4137,7 @@ export default function App() {
                     {/* Submit Button */}
                     <button 
                       type="button"
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 text-base font-bold rounded-2xl shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none cursor-pointer flex items-center justify-center gap-2" 
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3.5 text-base font-bold rounded-2xl shadow-lg shadow-purple-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none cursor-pointer flex items-center justify-center gap-2" 
                       onClick={handlePostAd}
                       disabled={isUploading || !adTitle.trim() || !adPrice.trim()}
                     >
@@ -4269,6 +4313,10 @@ function AdDetailModal({
   const sellerPhone = ad.seller_phone || ad.phone;
   const hasPhone = Boolean(sellerPhone && sellerPhone.trim().length > 0);
   const cleanPhone = (sellerPhone || '').replace(/[^0-9]/g, '');
+  let waNumber = cleanPhone;
+  if (waNumber.length === 9 && (waNumber.startsWith('6') || waNumber.startsWith('7'))) {
+    waNumber = `34${waNumber}`;
+  }
 
   const isOwner = currentUser?.id && (
     ad.user_id === currentUser.id ||
@@ -4428,25 +4476,25 @@ function AdDetailModal({
             <div className="space-y-3">
               <div className="flex justify-between items-start gap-4">
                 <div>
-                  <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-purple-600 uppercase tracking-widest mb-1 flex items-center gap-1.5">
                     <span>{ad.category}</span>
                   </p>
                   <h3 className="text-2xl font-bold text-slate-900 font-display">{ad.title}</h3>
                 </div>
-                <div className="text-2xl font-extrabold text-emerald-700 shrink-0">
+                <div className="text-2xl font-extrabold text-purple-700 shrink-0">
                   {price}
                 </div>
               </div>
               
               <div className="flex flex-wrap gap-2 pt-1">
                 {ad.location && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50/70 border border-emerald-200/60 rounded-xl text-xs font-semibold text-emerald-900">
-                    <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50/70 border border-purple-200/60 rounded-xl text-xs font-semibold text-purple-900">
+                    <MapPin className="w-3.5 h-3.5 text-purple-600" />
                     <span>{ad.location}</span>
                     {ad.location_precision === 'exact' ? (
-                      <span className="ml-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded-md">🎯 Exact</span>
+                      <span className="ml-1 text-[10px] font-bold text-purple-800 bg-purple-100 px-1.5 py-0.5 rounded-md">🎯 Exact</span>
                     ) : (
-                      <span className="ml-1 text-[10px] font-medium text-emerald-700/80 bg-emerald-100/60 px-1.5 py-0.5 rounded-md">🌐 Area</span>
+                      <span className="ml-1 text-[10px] font-medium text-purple-700/80 bg-purple-100/60 px-1.5 py-0.5 rounded-md">🌐 Area</span>
                     )}
                   </div>
                 )}
@@ -4457,7 +4505,7 @@ function AdDetailModal({
                   </div>
                 )}
                 {ad.type && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 rounded-xl text-xs font-bold text-emerald-700">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 rounded-xl text-xs font-bold text-purple-700">
                     For {ad.type}
                   </div>
                 )}
@@ -4684,7 +4732,7 @@ function AdDetailModal({
                         <span>Call</span>
                       </a>
                       <a
-                        href={`https://wa.me/${cleanPhone}`}
+                        href={`https://wa.me/${waNumber}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex-1 py-2.5 px-3 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-center"
@@ -4695,11 +4743,11 @@ function AdDetailModal({
                     </div>
 
                     {onOpenChat && (
-                      <div className="pt-2 border-t border-emerald-200/60 text-center">
+                      <div className="pt-2 border-t border-purple-200/60 text-center">
                         <button
                           type="button"
                           onClick={() => onOpenChat({ name: formatSellerName(ad.seller_name), userId: ad.user_id, avatar: ad.seller_image })}
-                          className="text-xs font-semibold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                          className="text-xs font-semibold text-purple-800 hover:text-purple-950 underline cursor-pointer"
                         >
                           Or chat via in-app messages on MyCityUnlocked →
                         </button>
@@ -17430,16 +17478,16 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
                 placeholder="Search guides"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all font-normal text-sm"
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200/90 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-normal text-sm"
               />
             </div>
             <button
               onClick={() => {
                 document.getElementById('all-guides-section')?.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="bg-brand-blue text-white font-semibold text-sm px-5 py-3.5 rounded-2xl flex items-center gap-2 hover:bg-brand-blue/90 active:scale-95 transition-all duration-200 shadow-sm whitespace-nowrap"
+              className="bg-emerald-600 text-white font-semibold text-sm px-5 py-3.5 rounded-2xl flex items-center gap-2 hover:bg-emerald-700 active:scale-95 transition-all duration-200 shadow-md shadow-emerald-600/20 whitespace-nowrap cursor-pointer"
             >
-              <Search className="h-4 w-4" />
+              <Search className="h-4 w-4 stroke-[2.5]" />
               <span>Search</span>
             </button>
           </div>
@@ -17767,24 +17815,26 @@ function MarketplaceView({
     return counts;
   }, [ads]);
 
-  // Category-specific price ranges
+  // Category-specific price ranges without editorial comments
   const categoryPriceRangesMap: Record<string, { id: string; label: string; min?: number; max?: number }[]> = {
     'School & Uniforms': [
       { id: 'all', label: 'All Prices' },
-      { id: 'sc_free', label: 'Free Giveaway (€0)', max: 0.1 },
-      { id: 'sc_under_15', label: '< €15 (Affordable)', max: 15 },
-      { id: 'sc_15_40', label: '€15 - €40 (Uniforms & Bundles)', min: 15, max: 40 },
+      { id: 'sc_free', label: 'Free', max: 0.1 },
+      { id: 'sc_under_15', label: '< €15', max: 15 },
+      { id: 'sc_15_40', label: '€15 - €40', min: 15, max: 40 },
       { id: 'sc_40_plus', label: '€40+', min: 40 },
     ],
     'Women’s Clothing': [
       { id: 'all', label: 'All Prices' },
-      { id: 'wc_under_15', label: '< €15 (Thrift Deals)', max: 15 },
+      { id: 'wc_free', label: 'Free', max: 0.1 },
+      { id: 'wc_under_15', label: '< €15', max: 15 },
       { id: 'wc_15_40', label: '€15 - €40', min: 15, max: 40 },
       { id: 'wc_40_100', label: '€40 - €100', min: 40, max: 100 },
       { id: 'wc_100_plus', label: '€100+', min: 100 },
     ],
     'Men’s Clothing': [
       { id: 'all', label: 'All Prices' },
+      { id: 'mc_free', label: 'Free', max: 0.1 },
       { id: 'mc_under_15', label: '< €15', max: 15 },
       { id: 'mc_15_40', label: '€15 - €40', min: 15, max: 40 },
       { id: 'mc_40_100', label: '€40 - €100', min: 40, max: 100 },
@@ -17792,7 +17842,7 @@ function MarketplaceView({
     ],
     'Kids’ Clothing': [
       { id: 'all', label: 'All Prices' },
-      { id: 'kc_free', label: 'Free Giveaway (€0)', max: 0.1 },
+      { id: 'kc_free', label: 'Free', max: 0.1 },
       { id: 'kc_under_15', label: '< €15', max: 15 },
       { id: 'kc_15_35', label: '€15 - €35', min: 15, max: 35 },
       { id: 'kc_35_plus', label: '€35+', min: 35 },
@@ -17813,15 +17863,15 @@ function MarketplaceView({
       { id: 'all', label: 'All Prices' },
       { id: 'so_under_30', label: '< €30', max: 30 },
       { id: 'so_30_80', label: '€30 - €80', min: 30, max: 80 },
-      { id: 'so_80_200', label: '€80 - €200 (Bikes & SUP)', min: 80, max: 200 },
+      { id: 'so_80_200', label: '€80 - €200', min: 80, max: 200 },
       { id: 'so_200_plus', label: '€200+', min: 200 },
     ],
     'Baby & Nursery': [
       { id: 'all', label: 'All Prices' },
-      { id: 'bn_free', label: 'Free Giveaway (€0)', max: 0.1 },
+      { id: 'bn_free', label: 'Free', max: 0.1 },
       { id: 'bn_under_25', label: '< €25', max: 25 },
       { id: 'bn_25_80', label: '€25 - €80', min: 25, max: 80 },
-      { id: 'bn_80_plus', label: '€80+ (Strollers & Cribs)', min: 80 },
+      { id: 'bn_80_plus', label: '€80+', min: 80 },
     ],
     'Toys & Games': [
       { id: 'all', label: 'All Prices' },
@@ -17837,9 +17887,9 @@ function MarketplaceView({
     ],
     'Home Décor & Furniture': [
       { id: 'all', label: 'All Prices' },
-      { id: 'hd_under_30', label: '< €30 (Lamps & Decor)', max: 30 },
+      { id: 'hd_under_30', label: '< €30', max: 30 },
       { id: 'hd_30_100', label: '€30 - €100', min: 30, max: 100 },
-      { id: 'hd_100_300', label: '€100 - €300 (Vintage & Tables)', min: 100, max: 300 },
+      { id: 'hd_100_300', label: '€100 - €300', min: 100, max: 300 },
       { id: 'hd_300_plus', label: '€300+', min: 300 },
     ],
     'Appliances': [
@@ -17850,9 +17900,11 @@ function MarketplaceView({
     ],
     'Cars & Vehicles': [
       { id: 'all', label: 'All Prices' },
-      { id: 'cv_under_200', label: '< €200 (Scooters & Gear)', max: 200 },
-      { id: 'cv_200_1000', label: '€200 - €1,000', min: 200, max: 1000 },
-      { id: 'cv_1000_plus', label: '€1,000+ (Mopeds & Cars)', min: 1000 },
+      { id: 'cv_under_1500', label: '< €1,500', max: 1500 },
+      { id: 'cv_1500_5000', label: '€1,500 - €5,000', min: 1500, max: 5000 },
+      { id: 'cv_5000_10000', label: '€5,000 - €10,000', min: 5000, max: 10000 },
+      { id: 'cv_10000_20000', label: '€10,000 - €20,000', min: 10000, max: 20000 },
+      { id: 'cv_20000_plus', label: '€20,000+', min: 20000 },
     ],
     'Books & Media': [
       { id: 'all', label: 'All Prices' },
@@ -17862,7 +17914,7 @@ function MarketplaceView({
     ],
     'Other': [
       { id: 'all', label: 'All Prices' },
-      { id: 'ot_free', label: 'Free Giveaway (€0)', max: 0.1 },
+      { id: 'ot_free', label: 'Free', max: 0.1 },
       { id: 'ot_under_25', label: '< €25', max: 25 },
       { id: 'ot_25_plus', label: '€25+', min: 25 },
     ],
@@ -17870,7 +17922,7 @@ function MarketplaceView({
 
   const currentPriceRanges = categoryPriceRangesMap[selectedCategory] || [
     { id: 'all', label: 'All Prices' },
-    { id: 'def_free', label: 'Free Items (€0)', max: 0.1 },
+    { id: 'def_free', label: 'Free', max: 0.1 },
     { id: 'def_under_30', label: '< €30', max: 30 },
     { id: 'def_30_100', label: '€30 - €100', min: 30, max: 100 },
     { id: 'def_100_300', label: '€100 - €300', min: 100, max: 300 },
@@ -17949,17 +18001,15 @@ function MarketplaceView({
         if (selectedCondition !== 'All') {
           const adCond = (ad.condition || '').toLowerCase();
           const targetCond = selectedCondition.toLowerCase();
-          if (targetCond.includes('pristine') || targetCond === 'new') {
-            if (!adCond.includes('new') && !adCond.includes('pristine')) return false;
-          } else if (targetCond.includes('like new') || targetCond.includes('loved')) {
-            if (!adCond.includes('like new') && !adCond.includes('loved') && !adCond.includes('pristine')) return false;
-          } else if (targetCond.includes('good')) {
-            if (!adCond.includes('good')) return false;
-          } else if (targetCond.includes('upcycle')) {
-            if (!adCond.includes('upcycle')) return false;
-          } else if (targetCond.includes('fair') || targetCond.includes('distressed')) {
+          if (targetCond === 'new') {
+            if (!adCond.includes('new') || adCond.includes('like new')) return false;
+          } else if (targetCond === 'like new') {
+            if (!adCond.includes('like new') && !adCond.includes('pristine')) return false;
+          } else if (targetCond === 'used') {
+            if (!adCond.includes('used') && !adCond.includes('good') && !adCond.includes('fair') && !adCond.includes('vintage') && !adCond.includes('loved')) return false;
+          } else if (targetCond === 'fair') {
             if (!adCond.includes('fair') && !adCond.includes('distressed')) return false;
-          } else if (targetCond.includes('free')) {
+          } else if (targetCond === 'free') {
             if (!adCond.includes('free') && !((ad.price || '').toLowerCase().includes('free'))) return false;
           } else if (!adCond.includes(targetCond) && !targetCond.includes(adCond)) {
             return false;
@@ -18045,9 +18095,9 @@ function MarketplaceView({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-black font-display text-slate-900 tracking-tight">
+                <h2 className="text-2xl sm:text-3xl font-bold font-display text-slate-800 tracking-tight">
                   Unlocked <span className="text-purple-600">Good Stuff</span>
-                </h1>
+                </h2>
                 <span className="hidden sm:inline-flex text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
                   Valencia
                 </span>
@@ -18186,12 +18236,11 @@ function MarketplaceView({
                 className="pl-8 pr-8 py-2 bg-slate-50 text-slate-800 text-xs font-semibold rounded-xl border border-slate-200 shadow-2xs hover:bg-white outline-none cursor-pointer appearance-none"
               >
                 <option value="All">All Conditions</option>
-                <option value="Pristine Vintage">Pristine Vintage</option>
-                <option value="Like New">Like New / Gently Loved</option>
-                <option value="Good">Good Vintage</option>
-                <option value="Upcycled">Upcycled / Custom</option>
-                <option value="Fair">Fair / Distressed</option>
-                <option value="Free">Free / Zero Waste</option>
+                <option value="New">New</option>
+                <option value="Like New">Like New</option>
+                <option value="Used">Used</option>
+                <option value="Fair">Fair</option>
+                <option value="Free">Free</option>
               </select>
               <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -18255,10 +18304,40 @@ function MarketplaceView({
             </div>
           </div>
         </div>
+
+        {/* Search Action Button below filters */}
+        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="text-xs text-slate-500 font-medium w-full sm:w-auto text-center sm:text-left">
+            <span>Showing <strong className="text-slate-900 font-bold">{filteredAds.length}</strong> {filteredAds.length === 1 ? 'listing' : 'listings'}</span>
+            {selectedCategory !== 'All' && <span> in <strong className="text-purple-700">{selectedCategory}</strong></span>}
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="flex-1 sm:flex-none px-3.5 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                document.getElementById('marketplace-listings-results')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex-1 sm:flex-none px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md shadow-purple-600/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Search className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Search Listings</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Results Header Counter */}
-      <div className="flex items-center justify-between text-xs text-slate-500 font-medium px-1">
+      <div id="marketplace-listings-results" className="flex items-center justify-between text-xs text-slate-500 font-medium px-1 scroll-mt-6">
         <span>
           Showing <strong className="text-slate-900 font-bold">{filteredAds.length}</strong> {filteredAds.length === 1 ? 'listing' : 'listings'}
           {selectedCategory !== 'All' && ` in ${selectedCategory}`}
