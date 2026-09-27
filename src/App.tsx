@@ -2418,6 +2418,56 @@ export default function App() {
 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
+  const [editingAd, setEditingAd] = useState<any | null>(null);
+
+  const handleOpenCreateAd = () => {
+    setEditingAd(null);
+    setAdTitle('');
+    setAdPrice('');
+    setAdCategory('School & Kids');
+    setAdCondition('Used');
+    setAdLocation('');
+    setAdLocationPrecision('approximate');
+    setAdExactAddress('');
+    setAdLat(null);
+    setAdLng(null);
+    setAdDescription('');
+    setAdHousingType('Rent');
+    setAdFuelType('Petrol');
+    setAdPropertyType('Apartment');
+    setAdContractType('Full-time');
+    setAdSize('M');
+    setAdPhone('');
+    setAdPhoneCountryCode('+34');
+    setAdPickup(true);
+    setAdDeliveryAvailable(false);
+    setAdError(null);
+    setUploadedImageUrls([]);
+    setShowAddAd(true);
+  };
+
+  const handleEditAd = (ad: any) => {
+    setEditingAd(ad);
+    setAdTitle(ad.title || '');
+    setAdPrice(ad.price || '');
+    setAdCategory(ad.category || 'School & Kids');
+    setAdCondition(ad.condition || 'Used');
+    setAdLocation(ad.location || '');
+    setAdLocationPrecision(ad.location_precision || 'approximate');
+    setAdExactAddress(ad.exact_address || '');
+    setAdLat(ad.lat || null);
+    setAdLng(ad.lng || null);
+    setAdDescription(ad.description || '');
+    setAdHousingType(ad.type || 'Rent');
+    setAdFuelType(ad.fuel_type || 'Petrol');
+    setAdPropertyType(ad.property_type || 'Apartment');
+    setAdContractType(ad.contract_type || 'Full-time');
+    setAdSize(ad.size || 'M');
+    setAdPhone(ad.seller_phone || '');
+    setUploadedImageUrls(ad.images && ad.images.length > 0 ? ad.images : (ad.image_url ? [ad.image_url] : []));
+    setShowAddAd(true);
+  };
+
   const [city, setCity] = useState('Valencia');
   const [showCitySelector, setShowCitySelector] = useState(false);
 
@@ -2744,31 +2794,57 @@ export default function App() {
           ? 'Delivery'
           : 'Pick up';
 
-      await marketplaceService.createAd({
-        title: adTitle.trim(),
-        price: adPrice.trim(),
-        category: adCategory,
-        condition: adCondition,
-        location: finalLocation,
-        location_precision: adLocationPrecision,
-        exact_address: adLocationPrecision === 'exact' ? (adExactAddress.trim() || undefined) : undefined,
-        lat: finalLat || undefined,
-        lng: finalLng || undefined,
-        coordinates: finalLat && finalLng ? { lat: finalLat, lng: finalLng } : undefined,
-        description: cleanAdDescription(adDescription.trim()),
-        type: adCategory === 'Real Estate' ? adHousingType : undefined,
-        fuel_type: adCategory === 'Vehicles' ? adFuelType : undefined,
-        property_type: adCategory === 'Real Estate' ? adPropertyType : undefined,
-        contract_type: adCategory === 'Jobs' ? adContractType : undefined,
-        size: adCategory === 'Clothing' ? adSize : undefined,
-        delivery: computedDelivery,
-        seller_phone: formattedPhone || undefined,
-        seller_name: formatSellerName(sellerDisplayName),
-        seller_image: sellerAvatar,
-        user_id: currentUser?.id || undefined,
-        image_url: uploadedImageUrls[0] || '',
-        images: uploadedImageUrls
-      });
+      if (editingAd) {
+        await marketplaceService.updateAd(editingAd.id, {
+          title: adTitle.trim(),
+          price: adPrice.trim(),
+          category: adCategory,
+          condition: adCondition,
+          location: finalLocation,
+          location_precision: adLocationPrecision,
+          exact_address: adLocationPrecision === 'exact' ? (adExactAddress.trim() || undefined) : undefined,
+          lat: finalLat || undefined,
+          lng: finalLng || undefined,
+          description: cleanAdDescription(adDescription.trim()),
+          type: adCategory === 'Real Estate' ? adHousingType : undefined,
+          fuel_type: adCategory === 'Vehicles' ? adFuelType : undefined,
+          property_type: adCategory === 'Real Estate' ? adPropertyType : undefined,
+          contract_type: adCategory === 'Jobs' ? adContractType : undefined,
+          size: adCategory === 'Clothing' ? adSize : undefined,
+          delivery: computedDelivery,
+          seller_phone: formattedPhone || undefined,
+          image_url: uploadedImageUrls[0] || '',
+          images: uploadedImageUrls,
+          status: editingAd.status || 'available'
+        });
+        setEditingAd(null);
+      } else {
+        await marketplaceService.createAd({
+          title: adTitle.trim(),
+          price: adPrice.trim(),
+          category: adCategory,
+          condition: adCondition,
+          location: finalLocation,
+          location_precision: adLocationPrecision,
+          exact_address: adLocationPrecision === 'exact' ? (adExactAddress.trim() || undefined) : undefined,
+          lat: finalLat || undefined,
+          lng: finalLng || undefined,
+          coordinates: finalLat && finalLng ? { lat: finalLat, lng: finalLng } : undefined,
+          description: cleanAdDescription(adDescription.trim()),
+          type: adCategory === 'Real Estate' ? adHousingType : undefined,
+          fuel_type: adCategory === 'Vehicles' ? adFuelType : undefined,
+          property_type: adCategory === 'Real Estate' ? adPropertyType : undefined,
+          contract_type: adCategory === 'Jobs' ? adContractType : undefined,
+          size: adCategory === 'Clothing' ? adSize : undefined,
+          delivery: computedDelivery,
+          seller_phone: formattedPhone || undefined,
+          seller_name: formatSellerName(sellerDisplayName),
+          seller_image: sellerAvatar,
+          user_id: currentUser?.id || undefined,
+          image_url: uploadedImageUrls[0] || '',
+          images: uploadedImageUrls
+        });
+      }
       
       // Reset form
       setAdTitle('');
@@ -19354,6 +19430,7 @@ function ProfileView({
   allAds = [],
   events = [],
   onOpenCreateAd,
+  onEditAd,
   onSelectAd,
   onAdDeleted
 }: { 
@@ -19375,6 +19452,7 @@ function ProfileView({
   allAds?: Ad[],
   events?: Event[],
   onOpenCreateAd?: () => void,
+  onEditAd?: (ad: Ad) => void,
   onSelectAd?: (ad: Ad) => void,
   onAdDeleted?: () => void
 }) {
@@ -20269,7 +20347,7 @@ function ProfileView({
                       <div className="flex items-center justify-between border-b border-slate-50 pb-3">
                         <div className="flex items-center gap-2">
                           <Shirt className="w-5 h-5 text-purple-600" />
-                          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Marketplace Items</h3>
+                          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Items</h3>
                         </div>
                         <button
                           type="button"
@@ -20314,12 +20392,13 @@ function ProfileView({
                             const currentAdStatus = (ad.status as any) || 'available';
 
                             return (
-                              <div key={ad.id} className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200 flex flex-col justify-between gap-3 group transition-all hover:bg-white hover:shadow-sm">
+                              <div 
+                                key={ad.id} 
+                                onClick={() => onSelectAd?.(ad)}
+                                className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200 flex flex-col justify-between gap-3 group transition-all hover:bg-white hover:shadow-sm cursor-pointer"
+                              >
                                 <div className="flex gap-3 items-start">
-                                  <div 
-                                    onClick={() => onSelectAd?.(ad)}
-                                    className="w-16 h-16 rounded-xl overflow-hidden bg-slate-200 shrink-0 cursor-pointer relative"
-                                  >
+                                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-200 shrink-0 relative">
                                     {img ? (
                                       <img src={img} alt={ad.title} className={cn("w-full h-full object-cover", currentAdStatus === 'sold' && "grayscale-[40%]")} />
                                     ) : (
@@ -20333,10 +20412,7 @@ function ProfileView({
                                       </div>
                                     )}
                                   </div>
-                                  <div 
-                                    onClick={() => onSelectAd?.(ad)}
-                                    className="min-w-0 flex-1 cursor-pointer"
-                                  >
+                                  <div className="min-w-0 flex-1">
                                     <div className="flex items-center justify-between gap-1 mb-0.5">
                                       <div className="text-xs font-extrabold text-purple-700">{formatDisplayPrice(ad.price)}</div>
                                       <span className={cn(
@@ -20353,15 +20429,25 @@ function ProfileView({
                                     <h4 className="text-xs font-bold text-slate-900 truncate">{ad.title}</h4>
                                     <p className="text-[11px] text-slate-500 truncate">{ad.location || 'Valencia'} · {ad.category}</p>
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setConfirmDeleteAdId(ad.id)}
-                                    disabled={isDeleting}
-                                    className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl border border-slate-200 transition-colors cursor-pointer shrink-0"
-                                    title="Delete item"
-                                  >
-                                    {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                                  </button>
+                                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      onClick={() => onEditAd?.(ad)}
+                                      className="p-1.5 bg-white hover:bg-purple-50 text-slate-400 hover:text-purple-600 rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                                      title="Edit item"
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmDeleteAdId(ad.id)}
+                                      disabled={isDeleting}
+                                      className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                                      title="Delete item"
+                                    >
+                                      {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                    </button>
+                                  </div>
                                 </div>
 
                                 {/* Seller Quick Status Buttons */}
