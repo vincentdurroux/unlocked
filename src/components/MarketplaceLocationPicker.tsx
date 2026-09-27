@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MapPin,
   Search,
   Check,
   X,
-  Building2,
-  Navigation,
   MousePointer2,
-  ChevronRight,
-  Compass,
-  TreePine,
-  Home
+  LocateFixed,
+  Loader2,
+  AlertCircle,
+  ShieldCheck,
+  Building2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import {
@@ -216,20 +215,20 @@ export function MarketplaceLocationPicker({
   onChangeCoordinates
 }: MarketplaceLocationPickerProps) {
   const [query, setQuery] = useState(exactAddress || location || '');
-  const [filterSearch, setFilterSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'neighborhoods' | 'suburbs'>('all');
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Sync with outer address changes
   useEffect(() => {
-    if (precision === 'exact') {
-      if (exactAddress) setQuery(exactAddress);
-    } else {
-      if (location) setQuery(location);
+    if (exactAddress) {
+      setQuery(exactAddress);
+    } else if (location) {
+      setQuery(location);
     }
-  }, [exactAddress, location, precision]);
+  }, [exactAddress, location]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -241,27 +240,6 @@ export function MarketplaceLocationPicker({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Filtered Neighborhoods & Suburbs based on user search query
-  const filteredNeighborhoods = useMemo(() => {
-    if (!filterSearch.trim()) return VALENCIA_CITY_NEIGHBORHOODS;
-    const q = filterSearch.toLowerCase();
-    return VALENCIA_CITY_NEIGHBORHOODS.filter(n =>
-      n.name.toLowerCase().includes(q) ||
-      (n.zone && n.zone.toLowerCase().includes(q)) ||
-      (n.description && n.description.toLowerCase().includes(q))
-    );
-  }, [filterSearch]);
-
-  const filteredSuburbs = useMemo(() => {
-    if (!filterSearch.trim()) return VALENCIA_SUBURBS;
-    const q = filterSearch.toLowerCase();
-    return VALENCIA_SUBURBS.filter(s =>
-      s.name.toLowerCase().includes(q) ||
-      (s.zone && s.zone.toLowerCase().includes(q)) ||
-      (s.description && s.description.toLowerCase().includes(q))
-    );
-  }, [filterSearch]);
 
   // Google Places search
   const handleAddressInputChange = (val: string) => {
@@ -343,22 +321,11 @@ export function MarketplaceLocationPicker({
     );
   };
 
-  const handleSelectLocationItem = (item: LocationItem) => {
-    onChangeCoordinates(item.lat, item.lng);
-    onChangeLocation(item.name);
-    const suffix = item.category === 'neighborhood' ? ', Valencia' : ', Valencia (Comunidad Valenciana)';
-    onChangeExactAddress(`${item.name}${suffix}`);
-    setQuery(item.name);
-  };
-
-  const handleMapClick = useCallback((e: MapMouseEvent) => {
-    if (!e.detail.latLng) return;
-    const newLat = e.detail.latLng.lat;
-    const newLng = e.detail.latLng.lng;
-    
+  // Place/Move marker directly from Map click, GPS or drag
+  const handleMapPinpoint = useCallback((newLat: number, newLng: number) => {
     onChangeCoordinates(newLat, newLng);
-    
-    // Reverse geocode to get address
+
+    // Reverse geocode to get address & area name
     if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
       const geocoder = new google.maps.Geocoder();
       geocoder.geocode({ location: { lat: newLat, lng: newLng } }, (results, status) => {
@@ -367,8 +334,7 @@ export function MarketplaceLocationPicker({
           onChangeExactAddress(address);
           setQuery(address);
           
-          // Detect neighborhood
-          const components = results[0].address_components;
+          const components = results[0].address_components || [];
           const neighborhood = components.find(c => 
             c.types.includes('neighborhood') || 
             c.types.includes('sublocality_level_1') || 
@@ -383,325 +349,64 @@ export function MarketplaceLocationPicker({
     }
   }, [onChangeCoordinates, onChangeExactAddress, onChangeLocation]);
 
-  const isCurrentSelection = (name: string) => {
-    if (!location) return false;
-    const normA = location.trim().toLowerCase().split('(')[0].trim();
-    const normB = name.trim().toLowerCase().split('(')[0].trim();
-    return normA === normB || location.trim().toLowerCase() === name.trim().toLowerCase();
-  };
+  const handleMapClick = useCallback((e: MapMouseEvent) => {
+    if (!e.detail.latLng) return;
+    handleMapPinpoint(e.detail.latLng.lat, e.detail.latLng.lng);
+  }, [handleMapPinpoint]);
+
+  // GPS / Geolocation "Locate Me" handler
+  const handleLocateMe = useCallback(() => {
+    if (!navigator.geolocation) {
+      setGeoError('Geolocation is not supported by your browser.');
+      return;
+    }
+    setIsLocating(true);
+    setGeoError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const userLat = pos.coords.latitude;
+        const userLng = pos.coords.longitude;
+        setIsLocating(false);
+        handleMapPinpoint(userLat, userLng);
+      },
+      (err) => {
+        setIsLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setGeoError('Location access was denied. Please allow GPS permission in your browser or search your address.');
+        } else {
+          setGeoError('Could not fetch GPS location. Please type your address or click on the map.');
+        }
+        setTimeout(() => setGeoError(null), 6000);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  }, [handleMapPinpoint]);
+
+  // Current center coordinates for map display
+  const mapCenter = lat && lng ? { lat, lng } : VALENCIA_CENTER;
+  const isApproximate = precision === 'approximate';
 
   return (
-    <div className="space-y-3.5 p-4 bg-slate-50/90 rounded-2xl border border-slate-200" ref={containerRef}>
-      {/* Title & Mode Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+    <div className="space-y-3 p-4 bg-slate-50/90 rounded-2xl border border-slate-200" ref={containerRef}>
+      {/* Title */}
+      <div className="flex items-center justify-between">
         <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
           <MapPin className="w-4 h-4 text-purple-600 shrink-0" />
           <span>Location <span className="text-purple-600">*</span></span>
         </label>
-
-        {/* 2 Clear Tabs */}
-        <div className="inline-flex p-1 bg-slate-200/80 rounded-xl text-xs font-semibold self-start sm:self-auto gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              onChangePrecision('approximate');
-              if (!location && exactAddress) {
-                onChangeLocation(exactAddress.split(',')[0]);
-              }
-            }}
-            className={cn(
-              "px-3 py-1.5 rounded-lg transition-all cursor-pointer text-xs flex items-center gap-1.5",
-              precision === 'approximate'
-                ? "bg-white text-purple-800 shadow-2xs font-bold"
-                : "text-slate-600 hover:text-slate-900"
-            )}
-          >
-            <Building2 className="w-3.5 h-3.5 text-purple-600" />
-            <span>Select from List</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onChangePrecision('exact');
-            }}
-            className={cn(
-              "px-3 py-1.5 rounded-lg transition-all cursor-pointer text-xs flex items-center gap-1.5",
-              precision === 'exact'
-                ? "bg-white text-purple-800 shadow-2xs font-bold"
-                : "text-slate-600 hover:text-slate-900"
-            )}
-          >
-            <Navigation className="w-3.5 h-3.5 text-purple-600" />
-            <span>Address & Map</span>
-          </button>
-        </div>
+        {lat && lng && (
+          <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+            📍 Pinpoint Set
+          </span>
+        )}
       </div>
 
-      {/* MODE 1: EXHAUSTIVE SEPARATED LIST OF NEIGHBORHOODS & SUBURBS */}
-      {precision === 'approximate' ? (
-        <div className="space-y-3">
-          {/* Quick Filter Search & Category Tabs */}
-          <div className="space-y-2">
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600 pointer-events-none" />
-              <input
-                type="text"
-                value={filterSearch}
-                onChange={(e) => setFilterSearch(e.target.value)}
-                placeholder="Filter neighborhoods or suburbs (e.g. Ruzafa, L'Eliana, Bétera, Benimaclet, Torrent...)"
-                className="w-full pl-10 pr-9 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-xs sm:text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400"
-              />
-              {filterSearch && (
-                <button
-                  type="button"
-                  onClick={() => setFilterSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Sub-tabs: All / Quartiers (City) / Suburbs (Périphérie) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-xs">
-              <button
-                type="button"
-                onClick={() => setActiveTab('all')}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5 border shrink-0",
-                  activeTab === 'all'
-                    ? "bg-purple-600 text-white border-purple-600 shadow-2xs font-bold"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                )}
-              >
-                <Compass className="w-3.5 h-3.5" />
-                <span>All Locations ({VALENCIA_CITY_NEIGHBORHOODS.length + VALENCIA_SUBURBS.length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('neighborhoods')}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5 border shrink-0",
-                  activeTab === 'neighborhoods'
-                    ? "bg-purple-600 text-white border-purple-600 shadow-2xs font-bold"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                )}
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                <span>🏙️ Valencia City Neighborhoods ({VALENCIA_CITY_NEIGHBORHOODS.length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('suburbs')}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5 border shrink-0",
-                  activeTab === 'suburbs'
-                    ? "bg-purple-600 text-white border-purple-600 shadow-2xs font-bold"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                )}
-              >
-                <TreePine className="w-3.5 h-3.5" />
-                <span>🏡 Suburbs & Surrounding Towns ({VALENCIA_SUBURBS.length})</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Quick HTML Dropdown Select for Instant Keyboard / Direct Access */}
-          <div className="relative">
-            <select
-              value={location}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (!val) return;
-                const found = [...VALENCIA_CITY_NEIGHBORHOODS, ...VALENCIA_SUBURBS].find(i => i.name === val);
-                if (found) {
-                  handleSelectLocationItem(found);
-                } else {
-                  onChangeLocation(val);
-                  onChangeExactAddress(`${val}, Valencia`);
-                }
-              }}
-              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 cursor-pointer"
-            >
-              <option value="">-- Choose or scroll to your neighborhood / suburb --</option>
-              <optgroup label="🏙️ Valencia City Neighborhoods">
-                {VALENCIA_CITY_NEIGHBORHOODS.map(n => (
-                  <option key={n.name} value={n.name}>
-                    {n.name} {n.zone ? `(${n.zone})` : ''}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="🏡 Suburbs & Surrounding Towns (Metropolitan Area)">
-                {VALENCIA_SUBURBS.map(s => (
-                  <option key={s.name} value={s.name}>
-                    {s.name} {s.zone ? `(${s.zone})` : ''}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-          </div>
-
-          {/* Selected Location Pill */}
-          {location && (
-            <div className="flex items-center justify-between px-3.5 py-2 bg-purple-50 rounded-xl border border-purple-200 text-xs text-purple-900 font-medium">
-              <div className="flex items-center gap-2 truncate">
-                <Check className="w-4 h-4 text-purple-600 shrink-0 stroke-[2.5]" />
-                <span className="truncate">Selected area: <strong className="text-purple-950 font-bold">{location}</strong></span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  onChangeLocation('');
-                  onChangeExactAddress('');
-                }}
-                className="text-[11px] font-bold text-purple-700 hover:text-purple-900 hover:underline cursor-pointer shrink-0 ml-2"
-              >
-                Change
-              </button>
-            </div>
-          )}
-
-          {/* Structured Scrollable List with Headers separating Quartiers & Suburbs */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs max-h-72 overflow-y-auto divide-y divide-slate-100">
-            {/* SECTION 1: VALENCIA CITY NEIGHBORHOODS */}
-            {(activeTab === 'all' || activeTab === 'neighborhoods') && filteredNeighborhoods.length > 0 && (
-              <div>
-                <div className="sticky top-0 z-10 px-3.5 py-2 bg-slate-100/95 backdrop-blur-xs border-b border-slate-200/80 flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-purple-600" />
-                    Valencia City Neighborhoods
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-full border border-slate-200">
-                    {filteredNeighborhoods.length}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:gap-px sm:bg-slate-100">
-                  {filteredNeighborhoods.map((area) => {
-                    const isSelected = isCurrentSelection(area.name);
-                    return (
-                      <button
-                        key={area.name}
-                        type="button"
-                        onClick={() => handleSelectLocationItem(area)}
-                        className={cn(
-                          "w-full text-left px-3.5 py-2.5 transition-colors flex items-center justify-between gap-2 cursor-pointer bg-white",
-                          isSelected
-                            ? "bg-purple-50/90 text-purple-900 font-bold"
-                            : "hover:bg-slate-50 text-slate-800"
-                        )}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold truncate">{area.name}</span>
-                            {area.zone && (
-                              <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 shrink-0">
-                                {area.zone}
-                              </span>
-                            )}
-                          </div>
-                          {area.description && (
-                            <p className="text-[10px] text-slate-400 truncate mt-0.5">{area.description}</p>
-                          )}
-                        </div>
-                        {isSelected ? (
-                          <Check className="w-4 h-4 text-purple-600 shrink-0 stroke-[2.5]" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* SECTION 2: SUBURBS & SURROUNDING LOCALITIES */}
-            {(activeTab === 'all' || activeTab === 'suburbs') && filteredSuburbs.length > 0 && (
-              <div>
-                <div className="sticky top-0 z-10 px-3.5 py-2 bg-emerald-50/95 backdrop-blur-xs border-y border-emerald-100 flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <TreePine className="w-3.5 h-3.5 text-emerald-600" />
-                    Suburbs & Surrounding Towns
-                  </span>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded-full border border-emerald-200">
-                    {filteredSuburbs.length}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:gap-px sm:bg-slate-100">
-                  {filteredSuburbs.map((area) => {
-                    const isSelected = isCurrentSelection(area.name);
-                    return (
-                      <button
-                        key={area.name}
-                        type="button"
-                        onClick={() => handleSelectLocationItem(area)}
-                        className={cn(
-                          "w-full text-left px-3.5 py-2.5 transition-colors flex items-center justify-between gap-2 cursor-pointer bg-white",
-                          isSelected
-                            ? "bg-emerald-50 text-emerald-950 font-bold"
-                            : "hover:bg-slate-50 text-slate-800"
-                        )}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold truncate">{area.name}</span>
-                            {area.zone && (
-                              <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-emerald-100/70 text-emerald-800 shrink-0">
-                                {area.zone}
-                              </span>
-                            )}
-                          </div>
-                          {area.description && (
-                            <p className="text-[10px] text-slate-400 truncate mt-0.5">{area.description}</p>
-                          )}
-                        </div>
-                        {isSelected ? (
-                          <Check className="w-4 h-4 text-emerald-600 shrink-0 stroke-[2.5]" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {filteredNeighborhoods.length === 0 && filteredSuburbs.length === 0 && (
-              <div className="p-6 text-center text-slate-500">
-                <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-xs font-semibold text-slate-700">No locality found matching "{filterSearch}"</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">You can type any custom neighborhood name below.</p>
-              </div>
-            )}
-          </div>
-
-          {/* Or Type Custom Neighborhood */}
-          <div className="pt-0.5">
-            <div className="relative">
-              <Home className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600 pointer-events-none" />
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => {
-                  onChangeLocation(e.target.value);
-                  onChangeExactAddress(e.target.value ? `${e.target.value}, Valencia` : '');
-                }}
-                placeholder="Or type a specific urbanization or custom area (e.g. Torre en Conill, El Vedat...)"
-                className="w-full pl-10 pr-4 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-xs sm:text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400"
-              />
-            </div>
-          </div>
-
-          <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
-            <span>🛡️</span>
-            <span><strong>Privacy Protected</strong>: Only the neighborhood or town name is visible publicly on your ad.</span>
-          </p>
-        </div>
-      ) : (
-        /* MODE 2: EXACT ADDRESS WITH GOOGLE MAP & AUTOCOMPLETE */
-        <div className="space-y-3">
-          <div className="relative">
+      {/* SINGLE UNIFIED SEARCH WITH AUTOCOMPLETE & LOCATE ME */}
+      <div className="space-y-3">
+        {/* Search input with Locate Me GPS button */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600 pointer-events-none" />
             <input
               type="text"
@@ -710,7 +415,7 @@ export function MarketplaceLocationPicker({
               onFocus={() => {
                 if (predictions.length > 0) setShowDropdown(true);
               }}
-              placeholder="Search address or landmark with Google autocomplete..."
+              placeholder="Search exact street, area or landmark in Valencia..."
               className="w-full pl-10 pr-10 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-xs sm:text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400"
             />
             {query && (
@@ -755,71 +460,147 @@ export function MarketplaceLocationPicker({
             )}
           </div>
 
-          {/* Interactive Map Picker */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                <MousePointer2 className="w-3 h-3" />
-                Click on the map to place your marker:
-              </span>
-              {lat && lng && (
-                <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100">
-                  Location Set
+          {/* GPS Locate Me Button */}
+          <button
+            type="button"
+            onClick={handleLocateMe}
+            disabled={isLocating}
+            className="px-3.5 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-sm hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+            title="Detect my current location using GPS"
+          >
+            {isLocating ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <LocateFixed className="w-4 h-4 stroke-[2.5]" />
+            )}
+            <span className="hidden sm:inline">{isLocating ? 'Locating...' : 'Locate Me'}</span>
+          </button>
+        </div>
+
+        {/* Geolocation Error Alert if any */}
+        {geoError && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-700 text-xs">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span className="flex-1">{geoError}</span>
+            <button 
+              type="button" 
+              onClick={() => setGeoError(null)} 
+              className="p-0.5 hover:bg-rose-100 rounded text-rose-500 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Interactive Google Map with Pinpoint */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+            <span className="flex items-center gap-1.5">
+              <MousePointer2 className="w-3.5 h-3.5 text-purple-600" />
+              Click on the map or drag the pin to adjust position:
+            </span>
+          </div>
+          
+          <div className="h-44 sm:h-52 rounded-2xl overflow-hidden border border-slate-200 shadow-inner relative group">
+            <APIProvider apiKey={GOOGLE_MAPS_KEY} libraries={['places', 'marker']}>
+              <Map
+                defaultCenter={mapCenter}
+                center={mapCenter}
+                defaultZoom={lat && lng ? 15 : 13}
+                gestureHandling={'greedy'}
+                disableDefaultUI={true}
+                onClick={handleMapClick}
+                mapId="marketplace_picker_map_single"
+                className="w-full h-full cursor-crosshair"
+              >
+                {lat && lng && (
+                  <AdvancedMarker 
+                    position={{ lat, lng }} 
+                    draggable={true}
+                    onDragEnd={(e) => {
+                      if (e.latLng) {
+                        handleMapPinpoint(e.latLng.lat(), e.latLng.lng());
+                      }
+                    }}
+                  >
+                    <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white animate-bounce cursor-grab active:cursor-grabbing">
+                      <MapPin className="w-4 h-4 text-white" />
+                    </div>
+                  </AdvancedMarker>
+                )}
+              </Map>
+            </APIProvider>
+            {!lat && (
+              <div 
+                onClick={() => handleMapPinpoint(VALENCIA_CENTER.lat, VALENCIA_CENTER.lng)}
+                className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] flex items-center justify-center cursor-pointer hover:bg-slate-900/5 transition-colors"
+              >
+                 <div className="bg-white/95 px-4 py-2 rounded-full shadow-lg border border-slate-200 text-xs font-bold text-slate-700 flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-purple-600" />
+                    Click anywhere on the map to place your pin
+                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Real-time Address & Detected Area Display */}
+        {(exactAddress || location) && (
+          <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Check className="w-4 h-4 text-purple-600 shrink-0 stroke-[2.5]" />
+                <span className="text-xs font-semibold text-slate-800 truncate">
+                  {exactAddress || location}
+                </span>
+              </div>
+              {location && (
+                <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-lg text-[10px] font-bold border border-purple-200 shrink-0">
+                  {location}
                 </span>
               )}
             </div>
-            
-            <div className="h-48 sm:h-56 rounded-2xl overflow-hidden border border-slate-200 shadow-inner relative group">
-              <APIProvider apiKey={GOOGLE_MAPS_KEY} libraries={['places', 'marker']}>
-                <Map
-                  defaultCenter={lat && lng ? { lat, lng } : VALENCIA_CENTER}
-                  defaultZoom={13}
-                  gestureHandling={'greedy'}
-                  disableDefaultUI={true}
-                  onClick={handleMapClick}
-                  mapId="marketplace_picker_map"
-                >
-                  {lat && lng && (
-                    <AdvancedMarker 
-                      position={{ lat, lng }} 
-                      draggable={true}
-                      onDragEnd={(e) => {
-                        if (e.latLng) {
-                          handleMapClick({ detail: { latLng: { lat: e.latLng.lat(), lng: e.latLng.lng() } } } as any);
-                        }
-                      }}
-                    >
-                      <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white animate-bounce">
-                        <MapPin className="w-4 h-4 text-white" />
-                      </div>
-                    </AdvancedMarker>
-                  )}
-                </Map>
-              </APIProvider>
-              {!lat && (
-                <div className="absolute inset-0 pointer-events-none bg-slate-900/5 backdrop-blur-[1px] flex items-center justify-center">
-                   <div className="bg-white/90 px-4 py-2 rounded-full shadow-lg border border-slate-200 text-xs font-bold text-slate-700 flex items-center gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-purple-600" />
-                      Select location on map
-                   </div>
-                </div>
-              )}
-            </div>
           </div>
+        )}
 
-          {location && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 rounded-xl border border-purple-200/80 text-xs text-purple-900 font-medium">
-              <Check className="w-3.5 h-3.5 text-purple-600 shrink-0 stroke-[2.5]" />
-              <span className="truncate">Area detected: <strong>{location}</strong></span>
+        {/* PRIVACY CHECKBOX: HIDE EXACT ADDRESS & SHOW APPROXIMATE NEIGHBORHOOD */}
+        <div className={cn(
+          "p-3.5 rounded-xl border transition-all select-none cursor-pointer",
+          isApproximate 
+            ? "bg-emerald-50/70 border-emerald-200" 
+            : "bg-white border-slate-200"
+        )}>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isApproximate}
+              onChange={(e) => onChangePrecision(e.target.checked ? 'approximate' : 'exact')}
+              className="mt-0.5 w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 cursor-pointer accent-purple-600"
+            />
+            <div className="flex-1 text-xs">
+              <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                {isApproximate ? (
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <Building2 className="w-4 h-4 text-slate-500 shrink-0" />
+                )}
+                <span>Hide exact street address (show only approximate area on listing)</span>
+              </div>
+              <p className="text-[11px] mt-1 leading-relaxed text-slate-600">
+                {isApproximate ? (
+                  <span>
+                    🛡️ <strong>Privacy protected</strong>: Buyers will only see your approximate area/neighborhood (<strong>{location || 'Valencia'}</strong>) on the public listing.
+                  </span>
+                ) : (
+                  <span className="text-purple-700">
+                    🎯 <strong>Exact address visible</strong>: Buyers will see the full street address on the listing.
+                  </span>
+                )}
+              </p>
             </div>
-          )}
-
-          <p className="text-[11px] text-slate-500">
-            🎯 <strong>Exact Location</strong>: Perfect for setting a meeting point for pickup. 
-            Search above or click anywhere on the map.
-          </p>
+          </label>
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -4384,9 +4384,7 @@ export default function App() {
                     {/* Submit Button */}
                     {(() => {
                       const isPriceRequired = adCategory !== 'Jobs' && adCategory !== 'Services';
-                      const hasLocation = adLocationPrecision === 'exact'
-                        ? Boolean(adExactAddress.trim() || adLocation.trim())
-                        : Boolean(adLocation.trim());
+                      const hasLocation = Boolean(adExactAddress.trim() || adLocation.trim());
                       const hasHandover = Boolean(adPickup || adDeliveryAvailable);
                       const isPostDisabled = isUploading || !adTitle.trim() || (isPriceRequired && !adPrice.trim()) || !adDescription.trim() || !hasLocation || !hasHandover;
 
@@ -5125,9 +5123,9 @@ function AdDetailModal({
                   /* Phone number revealed */
                   <div className="p-4 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-purple-950 font-black text-base sm:text-lg">
-                        <Phone className="w-4 h-4 text-purple-600" />
-                        <span>{sellerPhone}</span>
+                      <div className="flex items-center gap-2 text-slate-800 font-normal text-base">
+                        <Phone className="w-4 h-4 text-purple-600 shrink-0" />
+                        <span className="font-normal">{sellerPhone}</span>
                       </div>
                       <button
                         type="button"
