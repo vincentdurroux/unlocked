@@ -115,7 +115,9 @@ import {
   Gem,
   Baby,
   Gamepad2,
-  WashingMachine
+  WashingMachine,
+  Truck,
+  Handshake
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad } from './services/marketplaceService';
@@ -139,7 +141,32 @@ import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
 import { LandingEventHighlightsCard } from './components/LandingEventHighlightsCard';
 import { HeaderWeatherWidget } from './components/HeaderWeatherWidget';
 import { RotatingCylinderWord } from './components/RotatingCylinderWord';
-import { MarketplaceLocationPicker } from './components/MarketplaceLocationPicker';
+import { MarketplaceLocationPicker, VALENCIA_AREAS, VALENCIA_CENTER, VALENCIA_CITY_NEIGHBORHOODS, VALENCIA_SUBURBS } from './components/MarketplaceLocationPicker';
+
+export const PHONE_COUNTRY_CODES = [
+  { code: '+34', flag: '🇪🇸', label: 'ES (+34)' },
+  { code: '+33', flag: '🇫🇷', label: 'FR (+33)' },
+  { code: '+44', flag: '🇬🇧', label: 'UK (+44)' },
+  { code: '+1', flag: '🇺🇸', label: 'US/CA (+1)' },
+  { code: '+49', flag: '🇩🇪', label: 'DE (+49)' },
+  { code: '+39', flag: '🇮🇹', label: 'IT (+39)' },
+  { code: '+31', flag: '🇳🇱', label: 'NL (+31)' },
+  { code: '+32', flag: '🇧🇪', label: 'BE (+32)' },
+  { code: '+41', flag: '🇨🇭', label: 'CH (+41)' },
+  { code: '+351', flag: '🇵🇹', label: 'PT (+351)' },
+  { code: '+353', flag: '🇮🇪', label: 'IE (+353)' },
+  { code: '+46', flag: '🇸🇪', label: 'SE (+46)' },
+  { code: '+47', flag: '🇳🇴', label: 'NO (+47)' },
+  { code: '+45', flag: '🇩🇰', label: 'DK (+45)' },
+  { code: '+48', flag: '🇵🇱', label: 'PL (+48)' },
+  { code: '+43', flag: '🇦🇹', label: 'AT (+43)' },
+  { code: '+61', flag: '🇦🇺', label: 'AU (+61)' },
+  { code: '+212', flag: '🇲🇦', label: 'MA (+212)' },
+  { code: '+54', flag: '🇦🇷', label: 'AR (+54)' },
+  { code: '+57', flag: '🇨🇴', label: 'CO (+57)' },
+  { code: '+52', flag: '🇲🇽', label: 'MX (+52)' },
+  { code: '+55', flag: '🇧🇷', label: 'BR (+55)' },
+];
 
 // Custom Tooth Icon matching screenshot
 const ToothIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -698,6 +725,32 @@ export const formatSellerName = (name?: string): string => {
   if (!name || !name.trim()) return 'Community Member';
   return name.trim();
 };
+
+const COUNTRY_DIAL_CODES = [
+  { code: '+34', country: 'Spain', flag: '🇪🇸' },
+  { code: '+33', country: 'France', flag: '🇫🇷' },
+  { code: '+44', country: 'United Kingdom', flag: '🇬🇧' },
+  { code: '+49', country: 'Germany', flag: '🇩🇪' },
+  { code: '+39', country: 'Italy', flag: '🇮🇹' },
+  { code: '+31', country: 'Netherlands', flag: '🇳🇱' },
+  { code: '+32', country: 'Belgium', flag: '🇧🇪' },
+  { code: '+351', country: 'Portugal', flag: '🇵🇹' },
+  { code: '+41', country: 'Switzerland', flag: '🇨🇭' },
+  { code: '+1', country: 'USA / Canada', flag: '🇺🇸' },
+  { code: '+353', country: 'Ireland', flag: '🇮🇪' },
+  { code: '+46', country: 'Sweden', flag: '🇸🇪' },
+  { code: '+47', country: 'Norway', flag: '🇳🇴' },
+  { code: '+45', country: 'Denmark', flag: '🇩🇰' },
+  { code: '+48', country: 'Poland', flag: '🇵🇱' },
+  { code: '+43', country: 'Austria', flag: '🇦🇹' },
+  { code: '+30', country: 'Greece', flag: '🇬🇷' },
+  { code: '+61', country: 'Australia', flag: '🇦🇺' },
+  { code: '+971', country: 'UAE', flag: '🇦🇪' },
+  { code: '+212', country: 'Morocco', flag: '🇲🇦' },
+  { code: '+55', country: 'Brazil', flag: '🇧🇷' },
+  { code: '+54', country: 'Argentina', flag: '🇦🇷' },
+  { code: '+52', country: 'Mexico', flag: '🇲🇽' },
+];
 
 const LANGUAGES_LIST = ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Russian', 'Chinese', 'Japanese', 'Arabic'];
 
@@ -2441,6 +2494,9 @@ export default function App() {
   const [adContractType, setAdContractType] = useState('Full-time');
   const [adSize, setAdSize] = useState('M');
   const [adPhone, setAdPhone] = useState('');
+  const [adPhoneCountryCode, setAdPhoneCountryCode] = useState('+34');
+  const [adPickup, setAdPickup] = useState(true);
+  const [adDeliveryAvailable, setAdDeliveryAvailable] = useState(false);
   const [adError, setAdError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2563,7 +2619,29 @@ export default function App() {
 
   const handlePostAd = async () => {
     const isPriceRequired = adCategory !== 'Jobs' && adCategory !== 'Services';
-    if (!adTitle || (isPriceRequired && !adPrice)) return;
+    if (!adTitle.trim()) {
+      setAdError('Listing title is required.');
+      return;
+    }
+    if (isPriceRequired && !adPrice.trim()) {
+      setAdError('Price is required.');
+      return;
+    }
+    if (!adDescription.trim()) {
+      setAdError('Description is required.');
+      return;
+    }
+    const hasLocation = adLocationPrecision === 'exact'
+      ? Boolean(adExactAddress.trim() || adLocation.trim())
+      : Boolean(adLocation.trim());
+    if (!hasLocation) {
+      setAdError('Location is required. Please choose an address or a neighborhood.');
+      return;
+    }
+    if (!adPickup && !adDeliveryAvailable) {
+      setAdError('Please select at least one option: Pick up, Delivery, or both.');
+      return;
+    }
     
     setIsUploading(true);
     setAdError(null);
@@ -2590,9 +2668,38 @@ export default function App() {
         sellerDisplayName = currentUser.email.split('@')[0];
       }
 
-      const finalLocation = adLocationPrecision === 'exact' && adExactAddress.trim()
-        ? (adLocation ? `${adLocation} · ${adExactAddress.trim()}` : adExactAddress.trim())
-        : (adLocation || 'Valencia');
+      const finalLocation = adLocationPrecision === 'exact'
+        ? (adExactAddress.trim() || adLocation.trim() || 'Valencia')
+        : (adLocation.trim() || 'Valencia');
+
+      let finalLat = adLat;
+      let finalLng = adLng;
+      if ((!finalLat || !finalLng) && adLocation.trim()) {
+        const areaMatch = VALENCIA_AREAS.find(a => 
+          adLocation.trim().toLowerCase().includes(a.name.toLowerCase())
+        );
+        if (areaMatch) {
+          finalLat = areaMatch.lat;
+          finalLng = areaMatch.lng;
+        }
+      }
+
+      let formattedPhone: string | undefined = undefined;
+      const rawPhone = adPhone.trim();
+      if (rawPhone) {
+        if (rawPhone.startsWith('+')) {
+          formattedPhone = rawPhone;
+        } else {
+          const cleanDigits = rawPhone.replace(/^0+/, '').replace(/\s+/g, ' ');
+          formattedPhone = `${adPhoneCountryCode} ${cleanDigits}`.trim();
+        }
+      }
+
+      const computedDelivery = (adPickup && adDeliveryAvailable)
+        ? 'Pick up & Delivery'
+        : adDeliveryAvailable
+          ? 'Delivery'
+          : 'Pick up';
 
       await marketplaceService.createAd({
         title: adTitle.trim(),
@@ -2601,17 +2708,18 @@ export default function App() {
         condition: adCondition,
         location: finalLocation,
         location_precision: adLocationPrecision,
-        exact_address: adExactAddress.trim() || undefined,
-        lat: adLat || undefined,
-        lng: adLng || undefined,
-        coordinates: adLat && adLng ? { lat: adLat, lng: adLng } : undefined,
+        exact_address: adLocationPrecision === 'exact' ? (adExactAddress.trim() || undefined) : undefined,
+        lat: finalLat || undefined,
+        lng: finalLng || undefined,
+        coordinates: finalLat && finalLng ? { lat: finalLat, lng: finalLng } : undefined,
         description: adDescription.trim(),
         type: adCategory === 'Real Estate' ? adHousingType : undefined,
         fuel_type: adCategory === 'Vehicles' ? adFuelType : undefined,
         property_type: adCategory === 'Real Estate' ? adPropertyType : undefined,
         contract_type: adCategory === 'Jobs' ? adContractType : undefined,
         size: adCategory === 'Clothing' ? adSize : undefined,
-        seller_phone: adPhone.trim() || undefined,
+        delivery: computedDelivery,
+        seller_phone: formattedPhone || undefined,
         seller_name: sellerDisplayName || 'Community Member',
         seller_image: sellerAvatar,
         user_id: currentUser?.id || undefined,
@@ -2623,7 +2731,7 @@ export default function App() {
       setAdTitle('');
       setAdPrice('');
       setAdCategory('School & Kids');
-      setAdCondition('Good');
+      setAdCondition('Used');
       setAdLocation('');
       setAdLocationPrecision('approximate');
       setAdExactAddress('');
@@ -2636,6 +2744,9 @@ export default function App() {
       setAdContractType('Full-time');
       setAdSize('M');
       setAdPhone('');
+      setAdPhoneCountryCode('+34');
+      setAdPickup(true);
+      setAdDeliveryAvailable(false);
       setAdError(null);
       setUploadedImageUrls([]);
       setShowAddAd(false);
@@ -2664,21 +2775,53 @@ export default function App() {
     setIsUploading(true);
     
     try {
-      const uploadPromises = (filesToUpload as File[]).map(async (file: File) => {
-        // Sanitize filename
-        const sanitizedName = file.name
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-zA-Z0-9.]/g, '_')
-          .replace(/_{2,}/g, '_');
+      const uploadPromises = filesToUpload.map(async (file: File, index: number) => {
+        try {
+          // Compress the image with browser-image-compression
+          let processedFile = file;
+          try {
+            processedFile = await compressImage(file);
+          } catch (compErr) {
+            console.warn('[handleImageUpload] Compression warning, using original file:', compErr);
+          }
 
-        const fileName = `${Date.now()}-${sanitizedName}`;
-        const path = `ads/${fileName}`;
-        return await storageService.uploadFile('images', path, file);
+          // Sanitize filename and create unique path
+          const sanitizedName = file.name
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9.]/g, '_')
+            .replace(/_{2,}/g, '_');
+
+          const randomKey = Math.random().toString(36).substring(2, 8);
+          const fileName = `${Date.now()}_${index}_${randomKey}_${sanitizedName}`;
+          const path = `ads/${fileName}`;
+
+          try {
+            return await storageService.uploadFile('images', path, processedFile);
+          } catch (storageErr) {
+            console.warn('[handleImageUpload] Storage upload failed, falling back to data URL:', storageErr);
+            // Fallback to data URL so the user's photos are never rejected or lost
+            return await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve((reader.result as string) || '');
+              reader.onerror = () => resolve('');
+              reader.readAsDataURL(processedFile);
+            });
+          }
+        } catch (itemErr) {
+          console.error(`[handleImageUpload] Error processing ${file.name}:`, itemErr);
+          return null;
+        }
       });
 
-      const newUrls = await Promise.all(uploadPromises);
-      setUploadedImageUrls(prev => [...prev, ...newUrls]);
+      const results = await Promise.all(uploadPromises);
+      const successfulUrls = results.filter((url): url is string => Boolean(url && url.length > 0));
+
+      if (successfulUrls.length > 0) {
+        setUploadedImageUrls(prev => [...prev, ...successfulUrls]);
+      } else {
+        alert('Could not upload photos. Please try again with smaller images.');
+      }
     } catch (error) {
       console.error('Upload failed:', error);
       alert('Failed to upload one or more images.');
@@ -3835,36 +3978,6 @@ export default function App() {
                   </div>
                 ) : (
                 <div className="space-y-5">
-                  {/* Connected Seller Indicator */}
-                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200/80">
-                    <div className="flex items-center gap-3 min-w-0">
-                      {userProfile?.avatar_url || currentUser?.user_metadata?.avatar_url ? (
-                        <img 
-                          src={userProfile?.avatar_url || currentUser?.user_metadata?.avatar_url} 
-                          alt="Seller Avatar" 
-                          className="w-10 h-10 rounded-full object-cover border border-purple-200 shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-purple-200/70 text-purple-900 flex items-center justify-center font-bold text-sm shrink-0">
-                          {(userProfile?.full_name || currentUser?.user_metadata?.full_name || currentUser?.email || 'U').charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Posting as seller</span>
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>
-                        </div>
-                        <h5 className="text-sm font-bold text-slate-900 truncate">
-                          {userProfile?.full_name || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Community Member'}
-                        </h5>
-                        <p className="text-[11px] text-slate-500 truncate">{currentUser?.email}</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-purple-700 bg-white px-2.5 py-1 rounded-full border border-purple-200 shrink-0 shadow-2xs">
-                      Linked to account
-                    </span>
-                  </div>
-
                   {/* Photo Section (Up to 8 Photos) */}
                   <div className="space-y-2.5 p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80">
                     <div className="flex justify-between items-center">
@@ -3952,7 +4065,7 @@ export default function App() {
                         <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
                         <input 
                           type="text" 
-                          placeholder="e.g. Lycée Français uniform set, Sezane silk dress, Vintage Peugeot bike, Oak desk..." 
+                          placeholder="British college uniform, bike,... others" 
                           value={adTitle}
                           onChange={(e) => setAdTitle(e.target.value)}
                           className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
@@ -4071,6 +4184,78 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* Delivery & Handover Options */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Handover & Delivery <span className="text-purple-600">*</span>
+                        </label>
+                        <span className="text-[11px] text-slate-400 font-medium">Pick up, Delivery, or both</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Pick up Button */}
+                        <button
+                          type="button"
+                          onClick={() => setAdPickup(prev => !prev)}
+                          className={cn(
+                            "p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1",
+                            adPickup
+                              ? "bg-purple-600 text-white border-purple-600 shadow-sm font-bold ring-2 ring-purple-600/20"
+                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 font-medium"
+                          )}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-lg leading-none">🛍️</span>
+                            <span className="text-sm font-bold">Pick up</span>
+                            {adPickup && <Check className="w-4 h-4 ml-0.5 stroke-[2.5]" />}
+                          </div>
+                          <span className={cn(
+                            "text-[10px]",
+                            adPickup ? "text-purple-100" : "text-slate-400"
+                          )}>
+                            In-person collection
+                          </span>
+                        </button>
+
+                        {/* Delivery Button */}
+                        <button
+                          type="button"
+                          onClick={() => setAdDeliveryAvailable(prev => !prev)}
+                          className={cn(
+                            "p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1",
+                            adDeliveryAvailable
+                              ? "bg-purple-600 text-white border-purple-600 shadow-sm font-bold ring-2 ring-purple-600/20"
+                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 font-medium"
+                          )}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-lg leading-none">🚚</span>
+                            <span className="text-sm font-bold">Delivery</span>
+                            {adDeliveryAvailable && <Check className="w-4 h-4 ml-0.5 stroke-[2.5]" />}
+                          </div>
+                          <span className={cn(
+                            "text-[10px]",
+                            adDeliveryAvailable ? "text-purple-100" : "text-slate-400"
+                          )}>
+                            Shipping / drop-off
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Helper status text */}
+                      <p className="text-[11px] mt-1.5 font-medium">
+                        {adPickup && adDeliveryAvailable ? (
+                          <span className="text-purple-700 font-semibold">✓ Both <strong>Pick up</strong> and <strong>Delivery</strong> are offered.</span>
+                        ) : adPickup ? (
+                          <span className="text-slate-500">✓ <strong>Pick up</strong> selected (buyer collects in person).</span>
+                        ) : adDeliveryAvailable ? (
+                          <span className="text-slate-500">✓ <strong>Delivery</strong> selected (seller delivers or ships).</span>
+                        ) : (
+                          <span className="text-rose-600 font-semibold">⚠ Please select at least one option (Pick up and/or Delivery).</span>
+                        )}
+                      </p>
+                    </div>
+
                     {/* Phone Number / WhatsApp (Optional) */}
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
@@ -4079,18 +4264,37 @@ export default function App() {
                         </label>
                         <span className="text-[11px] text-purple-700 font-semibold">Enables Direct WhatsApp button</span>
                       </div>
-                      <div className="relative">
-                        <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
-                        <input 
-                          type="tel" 
-                          placeholder="e.g. +34 612 345 678" 
-                          value={adPhone}
-                          onChange={(e) => setAdPhone(e.target.value)}
-                          className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
-                        />
+                      <div className="flex gap-2">
+                        {/* Dial code picker */}
+                        <div className="relative w-36 sm:w-44 shrink-0">
+                          <select
+                            value={adPhoneCountryCode}
+                            onChange={(e) => setAdPhoneCountryCode(e.target.value)}
+                            className="w-full pl-3 pr-8 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-xs sm:text-sm font-semibold text-slate-800 transition-all appearance-none cursor-pointer"
+                          >
+                            {PHONE_COUNTRY_CODES.map((c) => (
+                              <option key={c.code} value={c.code}>
+                                {c.flag} {c.label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                        </div>
+
+                        {/* Phone input */}
+                        <div className="relative flex-1">
+                          <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
+                          <input 
+                            type="tel" 
+                            placeholder={adPhoneCountryCode === '+34' ? "612 345 678" : "Phone number"} 
+                            value={adPhone}
+                            onChange={(e) => setAdPhone(e.target.value)}
+                            className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                          />
+                        </div>
                       </div>
                       <p className="text-[11px] text-slate-400 mt-1">
-                        If provided, buyers can call or contact you directly on WhatsApp. Otherwise, they contact you safely through in-app chat.
+                        If provided, buyers can call or contact you directly on WhatsApp with your selected international country code.
                       </p>
                     </div>
 
@@ -4113,7 +4317,7 @@ export default function App() {
                     {/* Description */}
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Description <span className="text-slate-400 font-normal normal-case">(optional)</span>
+                        Description <span className="text-purple-600">*</span>
                       </label>
                       <textarea 
                         placeholder="Describe your item (dimensions, condition, size, reason for selling, pickup details)..." 
@@ -4135,24 +4339,35 @@ export default function App() {
                     )}
 
                     {/* Submit Button */}
-                    <button 
-                      type="button"
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3.5 text-base font-bold rounded-2xl shadow-lg shadow-purple-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none cursor-pointer flex items-center justify-center gap-2" 
-                      onClick={handlePostAd}
-                      disabled={isUploading || !adTitle.trim() || !adPrice.trim()}
-                    >
-                      {isUploading ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          <span>Publishing listing...</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center gap-2">
-                          <Plus className="w-5 h-5 stroke-[2.5]" />
-                          <span>Publish Listing</span>
-                        </div>
-                      )}
-                    </button>
+                    {(() => {
+                      const isPriceRequired = adCategory !== 'Jobs' && adCategory !== 'Services';
+                      const hasLocation = adLocationPrecision === 'exact'
+                        ? Boolean(adExactAddress.trim() || adLocation.trim())
+                        : Boolean(adLocation.trim());
+                      const hasHandover = Boolean(adPickup || adDeliveryAvailable);
+                      const isPostDisabled = isUploading || !adTitle.trim() || (isPriceRequired && !adPrice.trim()) || !adDescription.trim() || !hasLocation || !hasHandover;
+
+                      return (
+                        <button 
+                          type="button"
+                          className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3.5 text-base font-bold rounded-2xl shadow-lg shadow-purple-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none cursor-pointer flex items-center justify-center gap-2" 
+                          onClick={handlePostAd}
+                          disabled={isPostDisabled}
+                        >
+                          {isUploading ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              <span>Publishing listing...</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-2">
+                              <Plus className="w-5 h-5 stroke-[2.5]" />
+                              <span>Publish Listing</span>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
                 )}
@@ -4168,6 +4383,10 @@ export default function App() {
               currentUser={currentUser}
               userProfile={userProfile}
               onAdDeleted={() => fetchAds()}
+              onAdUpdated={(updatedAd) => {
+                setSelectedAd(updatedAd);
+                fetchAds();
+              }}
               isFavorite={favoriteAdIds.includes(String(selectedAd.id))}
               onToggleFavorite={toggleFavoriteAd}
               onClose={() => setSelectedAd(null)}
@@ -4284,7 +4503,8 @@ function AdDetailModal({
   onRequireAuth,
   isFavorite,
   onToggleFavorite,
-  onAdDeleted
+  onAdDeleted,
+  onAdUpdated
 }: { 
   ad: Ad | any; 
   onClose: () => void;
@@ -4295,6 +4515,7 @@ function AdDetailModal({
   isFavorite?: boolean;
   onToggleFavorite?: (id: string | number) => void;
   onAdDeleted?: () => void;
+  onAdUpdated?: (updatedAd: Ad) => void;
 }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [direction, setDirection] = useState(0);
@@ -4304,6 +4525,28 @@ function AdDetailModal({
   const [phoneCopied, setPhoneCopied] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [currentStatus, setCurrentStatus] = useState<'available' | 'pending' | 'sold'>((ad.status as any) || 'available');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  useEffect(() => {
+    setCurrentStatus((ad.status as any) || 'available');
+  }, [ad.id, ad.status]);
+
+  const handleUpdateStatus = async (newStatus: 'available' | 'pending' | 'sold') => {
+    setIsUpdatingStatus(true);
+    try {
+      await marketplaceService.updateAdStatus(ad.id, newStatus);
+      setCurrentStatus(newStatus);
+      ad.status = newStatus;
+      onAdUpdated?.({ ...ad, status: newStatus });
+      onAdDeleted?.();
+    } catch (err) {
+      console.error('Failed to update status:', err);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
 
   const price = ad.price.includes('€') ? ad.price : `${ad.price}€`;
   const images = ad.images && ad.images.length > 0 ? ad.images : [ad.image_url || ad.image];
@@ -4316,6 +4559,21 @@ function AdDetailModal({
   let waNumber = cleanPhone;
   if (waNumber.length === 9 && (waNumber.startsWith('6') || waNumber.startsWith('7'))) {
     waNumber = `34${waNumber}`;
+  }
+
+  // Resolve map coordinates for exact or approximate area
+  const adLat = ad.lat || ad.coordinates?.lat;
+  const adLng = ad.lng || ad.coordinates?.lng;
+  let modalMapCenter = VALENCIA_CENTER;
+  if (adLat && adLng) {
+    modalMapCenter = { lat: Number(adLat), lng: Number(adLng) };
+  } else if (ad.location) {
+    const matched = VALENCIA_AREAS.find(a => 
+      ad.location.toLowerCase().includes(a.name.toLowerCase())
+    );
+    if (matched) {
+      modalMapCenter = { lat: matched.lat, lng: matched.lng };
+    }
   }
 
   const isOwner = currentUser?.id && (
@@ -4474,6 +4732,20 @@ function AdDetailModal({
 
             <div className="p-6 space-y-6">
             <div className="space-y-3">
+              {/* Notice banner for Sold or Pending */}
+              {currentStatus === 'sold' && (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2.5 text-rose-800 text-xs font-bold">
+                  <CheckCircle2 className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Cette annonce est marquée comme <strong>Vendu</strong>. Cet article n'est plus disponible.</span>
+                </div>
+              )}
+              {currentStatus === 'pending' && (
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-2.5 text-amber-800 text-xs font-bold">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Cette annonce est actuellement <strong>En attente</strong> (réservée ou en cours de remise).</span>
+                </div>
+              )}
+
               <div className="flex justify-between items-start gap-4">
                 <div>
                   <p className="text-xs font-bold text-purple-600 uppercase tracking-widest mb-1 flex items-center gap-1.5">
@@ -4487,17 +4759,6 @@ function AdDetailModal({
               </div>
               
               <div className="flex flex-wrap gap-2 pt-1">
-                {ad.location && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50/70 border border-purple-200/60 rounded-xl text-xs font-semibold text-purple-900">
-                    <MapPin className="w-3.5 h-3.5 text-purple-600" />
-                    <span>{ad.location}</span>
-                    {ad.location_precision === 'exact' ? (
-                      <span className="ml-1 text-[10px] font-bold text-purple-800 bg-purple-100 px-1.5 py-0.5 rounded-md">🎯 Exact</span>
-                    ) : (
-                      <span className="ml-1 text-[10px] font-medium text-purple-700/80 bg-purple-100/60 px-1.5 py-0.5 rounded-md">🌐 Area</span>
-                    )}
-                  </div>
-                )}
                 {ad.condition && ad.condition !== 'N/A' && (
                   <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-medium text-slate-600">
                     <Tag className="w-3.5 h-3.5" />
@@ -4533,6 +4794,17 @@ function AdDetailModal({
                     Size: {ad.size}
                   </div>
                 )}
+                {ad.delivery && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-medium text-slate-600">
+                    <span>
+                      {ad.delivery.toLowerCase().includes('pick') && ad.delivery.toLowerCase().includes('deliver')
+                        ? '🤝 Pick up & Delivery'
+                        : ad.delivery.toLowerCase().includes('deliver')
+                          ? '🚚 Delivery'
+                          : '🛍️ Pick up'}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-medium text-slate-600">
                   <Clock className="w-3.5 h-3.5" />
                   {formatRelativeTime(createdAt)}
@@ -4558,9 +4830,92 @@ function AdDetailModal({
                   </div>
                 </div>
                 <div className="text-right text-xs font-semibold text-slate-500">
-                  {ad.location || 'Valencia'}
+                  <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
+                    Seller
+                  </span>
                 </div>
               </div>
+
+              {/* Seller Status Controls (Visible only to the seller) */}
+              {isOwner && (
+                <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-purple-600" />
+                      <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">Statut de votre annonce</span>
+                    </div>
+                    <span className={cn(
+                      "text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider",
+                      currentStatus === 'sold'
+                        ? "bg-rose-100 text-rose-800 border border-rose-200"
+                        : currentStatus === 'pending'
+                          ? "bg-amber-100 text-amber-800 border border-amber-200"
+                          : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                    )}>
+                      {currentStatus === 'sold' ? '🏷️ Vendu' : currentStatus === 'pending' ? '⏳ En attente' : '✅ En ligne'}
+                    </span>
+                  </div>
+                  
+                  <p className="text-[11px] text-slate-600">
+                    En tant que vendeur, vous pouvez appliquer la mention <strong>Vendu</strong> ou <strong>En attente</strong> à votre annonce :
+                  </p>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      disabled={isUpdatingStatus}
+                      onClick={() => handleUpdateStatus('available')}
+                      className={cn(
+                        "py-2.5 px-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center",
+                        currentStatus === 'available'
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50"
+                      )}
+                    >
+                      <Check className="w-3.5 h-3.5 shrink-0" />
+                      <span>En ligne</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isUpdatingStatus}
+                      onClick={() => handleUpdateStatus('pending')}
+                      className={cn(
+                        "py-2.5 px-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center",
+                        currentStatus === 'pending'
+                          ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:border-amber-300 hover:bg-amber-50"
+                      )}
+                    >
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      <span>En attente</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isUpdatingStatus}
+                      onClick={() => handleUpdateStatus('sold')}
+                      className={cn(
+                        "py-2.5 px-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center",
+                        currentStatus === 'sold'
+                          ? "bg-rose-600 text-white border-rose-600 shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:border-rose-300 hover:bg-rose-50"
+                      )}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Vendu</span>
+                    </button>
+                  </div>
+
+                  <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Supprimer définitivement l'annonce
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -4570,73 +4925,77 @@ function AdDetailModal({
               </div>
             </div>
 
-            {/* Google Maps Location Preview (Clickable on map to open Google Maps) */}
-            {ad.location && (
-              <div className="space-y-2 pt-1">
-                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-purple-600" />
-                  <span>Location in Valencia</span>
-                </h4>
+            {/* Single Location & Map Section (Only displayed once) */}
+            {(ad.exact_address || ad.location) && (
+              <div className="space-y-2.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-purple-600" />
+                    <span>Location</span>
+                  </h4>
+                  <span className={cn(
+                    "text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1",
+                    ad.location_precision === 'exact' 
+                      ? "bg-purple-100 text-purple-800 border border-purple-200" 
+                      : "bg-slate-100 text-slate-700 border border-slate-200"
+                  )}>
+                    {ad.location_precision === 'exact' ? '🎯 Exact Address' : '🌐 Approximate Area'}
+                  </span>
+                </div>
 
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((ad.exact_address || ad.location) + ', Valencia, Spain')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block p-3 bg-slate-50 hover:bg-slate-100/90 rounded-2xl border border-slate-200/80 space-y-2.5 transition-all group cursor-pointer"
-                  title="Click to open location in Google Maps"
-                >
-                  <div className="flex items-start justify-between gap-2 text-xs">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-slate-800 group-hover:text-purple-700 transition-colors">{ad.location}</span>
-                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-purple-600 transition-colors" />
-                      </div>
-                      {ad.exact_address && ad.location_precision === 'exact' && (
-                        <p className="text-slate-500 text-[11px] mt-0.5">{ad.exact_address}</p>
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-0.5 min-w-0">
+                      <p className="text-sm font-bold text-slate-900 leading-snug">
+                        {ad.location_precision === 'exact'
+                          ? (ad.exact_address || ad.location)
+                          : (ad.location || 'Valencia')}
+                      </p>
+                      {ad.location_precision === 'approximate' && (
+                        <p className="text-[11px] text-slate-500">
+                          Approximate neighborhood for pickup / handover
+                        </p>
                       )}
                     </div>
-                    <span className={cn(
-                      "text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0",
-                      ad.location_precision === 'exact' ? "bg-purple-100 text-purple-800" : "bg-slate-200/80 text-slate-600"
-                    )}>
-                      {ad.location_precision === 'exact' ? '🎯 Exact spot' : '🌐 Approximate area'}
-                    </span>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((ad.exact_address || ad.location) + ', Valencia, Spain')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-purple-50 text-purple-700 rounded-xl text-xs font-bold border border-slate-200 transition-all shrink-0 shadow-2xs group"
+                      title="Open in Google Maps"
+                    >
+                      <span>Open Maps</span>
+                      <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                    </a>
                   </div>
 
-                  {Boolean((ad.lat && ad.lng) || (ad.coordinates?.lat && ad.coordinates?.lng)) && (
-                    <div className="h-36 sm:h-44 rounded-xl overflow-hidden border border-slate-200 shadow-2xs relative pointer-events-none">
-                      <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} libraries={['places', 'marker']}>
-                        <Map
-                          defaultCenter={{
-                            lat: Number(ad.lat || ad.coordinates?.lat),
-                            lng: Number(ad.lng || ad.coordinates?.lng)
-                          }}
-                          center={{
-                            lat: Number(ad.lat || ad.coordinates?.lat),
-                            lng: Number(ad.lng || ad.coordinates?.lng)
-                          }}
-                          defaultZoom={14}
-                          zoom={14}
-                          mapId="MARKETPLACE_AD_DETAIL_MAP"
-                          disableDefaultUI={true}
-                          zoomControl={false}
-                          className="w-full h-full"
-                        >
-                          <AdvancedMarker
-                            position={{
-                              lat: Number(ad.lat || ad.coordinates?.lat),
-                              lng: Number(ad.lng || ad.coordinates?.lng)
-                            }}
-                          >
-                            <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-                              <MapPin className="w-4 h-4 text-white" />
-                            </div>
-                          </AdvancedMarker>
-                        </Map>
-                      </APIProvider>
-                    </div>
-                  )}
-                </a>
+                  {/* Interactive / Visual Map */}
+                  <div className="h-44 sm:h-52 rounded-xl overflow-hidden border border-slate-200 shadow-2xs relative">
+                    <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} libraries={['places', 'marker']}>
+                      <Map
+                        defaultCenter={modalMapCenter}
+                        center={modalMapCenter}
+                        defaultZoom={ad.location_precision === 'exact' ? 15 : 13}
+                        zoom={ad.location_precision === 'exact' ? 15 : 13}
+                        mapId="MARKETPLACE_AD_DETAIL_MAP"
+                        disableDefaultUI={true}
+                        zoomControl={true}
+                        className="w-full h-full"
+                      >
+                        <AdvancedMarker position={modalMapCenter}>
+                          <div className={cn(
+                            "rounded-full flex items-center justify-center shadow-lg border-2 border-white",
+                            ad.location_precision === 'exact' 
+                              ? "w-8 h-8 bg-purple-600 animate-bounce" 
+                              : "w-9 h-9 bg-purple-600"
+                          )}>
+                            <MapPin className="w-4 h-4 text-white" />
+                          </div>
+                        </AdvancedMarker>
+                      </Map>
+                    </APIProvider>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -4848,6 +5207,38 @@ function AdDetailModal({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Delete Confirmation Modal for Owner */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-[120] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center">
+              <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-black text-slate-900 text-lg">Supprimer l'annonce ?</h4>
+                <p className="text-xs text-slate-500">Êtes-vous sûr de vouloir supprimer définitivement cette annonce ? Cette action ne peut pas être annulée.</p>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Supprimer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </motion.div>
 );
@@ -17750,36 +18141,15 @@ function MarketplaceView({
   ];
 
   // Valencia City Neighborhoods vs Surrounding Suburbs
-  const valenciaNeighborhoods = [
-    { label: 'Ruzafa', value: 'Ruzafa' },
-    { label: 'El Carmen / Ciutat Vella', value: 'El Carmen' },
-    { label: 'Eixample / Gran Vía', value: 'Eixample' },
-    { label: 'Benimaclet', value: 'Benimaclet' },
-    { label: 'Cabañal / Malvarrosa', value: 'Cabañal' },
-    { label: 'Campanar', value: 'Campanar' },
-    { label: 'Mestalla / Blasco Ibáñez', value: 'Mestalla' },
-    { label: 'Patraix', value: 'Patraix' },
-    { label: 'Quatre Carreres', value: 'Quatre Carreres' },
-    { label: 'Olivereta', value: 'Olivereta' },
-    { label: 'Extramurs', value: 'Extramurs' },
-    { label: 'Pla del Real', value: 'Pla del Real' }
-  ];
+  const valenciaNeighborhoods = VALENCIA_CITY_NEIGHBORHOODS.map(n => ({
+    label: n.zone ? `${n.name} (${n.zone})` : n.name,
+    value: n.name
+  }));
 
-  const valenciaSuburbs = [
-    { label: "L'Eliana", value: "L'Eliana" },
-    { label: 'Bétera', value: 'Bétera' },
-    { label: 'Rocafort', value: 'Rocafort' },
-    { label: 'Godella', value: 'Godella' },
-    { label: 'La Cañada', value: 'La Cañada' },
-    { label: 'Paterna', value: 'Paterna' },
-    { label: 'Moncada', value: 'Moncada' },
-    { label: 'Alboraya / Port Saplaya', value: 'Alboraya' },
-    { label: 'Puçol', value: 'Puçol' },
-    { label: 'Torrent', value: 'Torrent' },
-    { label: 'El Saler', value: 'El Saler' },
-    { label: 'Sagunto', value: 'Sagunto' },
-    { label: 'San Antonio de Benagéber', value: 'San Antonio' }
-  ];
+  const valenciaSuburbs = VALENCIA_SUBURBS.map(s => ({
+    label: s.zone ? `${s.name} (${s.zone})` : s.name,
+    value: s.name
+  }));
 
   // Robust category matcher supporting both curly/straight quotes and friendly aliases
   const matchCategory = (itemCategory?: string, targetCategory?: string) => {
@@ -18368,9 +18738,27 @@ function MarketplaceView({
                     <img
                       src={displayImage}
                       alt={ad.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                      className={cn(
+                        "w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out",
+                        ad.status === 'sold' && "grayscale-[40%] opacity-90"
+                      )}
                       loading="lazy"
                     />
+
+                    {/* Status Overlays */}
+                    {ad.status === 'sold' ? (
+                      <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-[1px] flex items-center justify-center p-3 pointer-events-none">
+                        <span className="px-3.5 py-1.5 bg-rose-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg flex items-center gap-1.5 border border-rose-400">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Vendu
+                        </span>
+                      </div>
+                    ) : ad.status === 'pending' ? (
+                      <div className="absolute top-3 left-3 z-10 pointer-events-none">
+                        <span className="px-2.5 py-1 bg-amber-500 text-white font-bold text-[11px] uppercase tracking-wider rounded-xl shadow-md flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> En attente
+                        </span>
+                      </div>
+                    ) : null}
 
                     {/* Distinctive Purple Price floating tag */}
                     <div className="absolute bottom-3 left-3 bg-purple-600 text-white font-extrabold text-sm sm:text-base px-3 py-1.5 rounded-xl shadow-md">
@@ -18378,7 +18766,7 @@ function MarketplaceView({
                     </div>
 
                     {/* Favorite save button */}
-                    <div className="absolute top-3 right-3 flex flex-col gap-2">
+                    <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
                       <button
                         type="button"
                         onClick={(e) => toggleSaveAd(String(ad.id), e)}
@@ -18478,15 +18866,44 @@ function MarketplaceView({
                   className="group bg-white rounded-2xl border border-slate-200/80 hover:border-purple-300 p-3 sm:p-4 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between cursor-pointer"
                 >
                   <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
-                    <img
-                      src={displayImage}
-                      alt={ad.title}
-                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 bg-slate-100"
-                      loading="lazy"
-                    />
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0">
+                      <img
+                        src={displayImage}
+                        alt={ad.title}
+                        className={cn(
+                          "w-full h-full rounded-xl object-cover bg-slate-100",
+                          ad.status === 'sold' && "grayscale-[40%] opacity-85"
+                        )}
+                        loading="lazy"
+                      />
+                      {ad.status === 'sold' && (
+                        <div className="absolute inset-0 bg-slate-950/45 rounded-xl flex items-center justify-center p-1 pointer-events-none">
+                          <span className="px-2 py-0.5 bg-rose-600 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-md shadow-sm">
+                            Vendu
+                          </span>
+                        </div>
+                      )}
+                      {ad.status === 'pending' && (
+                        <div className="absolute top-1 left-1 pointer-events-none">
+                          <span className="px-1.5 py-0.5 bg-amber-500 text-white font-bold text-[9px] uppercase tracking-wider rounded-md shadow-sm">
+                            En attente
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     <div className="space-y-1 min-w-0">
                       <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5 flex-wrap">
                         <span className="text-purple-600 font-bold">{ad.category}</span>
+                        {ad.status === 'sold' && (
+                          <span className="px-2 py-0.5 bg-rose-100 text-rose-800 font-extrabold text-[10px] uppercase tracking-wider rounded-md border border-rose-200">
+                            Vendu
+                          </span>
+                        )}
+                        {ad.status === 'pending' && (
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-bold text-[10px] uppercase tracking-wider rounded-md border border-amber-200">
+                            En attente
+                          </span>
+                        )}
                         {ad.condition && ad.condition !== 'N/A' && (
                           <>
                             <span aria-hidden="true" className="text-slate-300">·</span>
@@ -18888,6 +19305,7 @@ function ProfileView({
   const [loadingMyAds, setLoadingMyAds] = useState(false);
   const [deletingAdId, setDeletingAdId] = useState<string | null>(null);
   const [confirmDeleteAdId, setConfirmDeleteAdId] = useState<string | null>(null);
+  const [updatingStatusAdId, setUpdatingStatusAdId] = useState<string | null>(null);
 
   // Push Notifications state
   const [oneSignalAppId, setOneSignalAppId] = useState<string>(() => oneSignalService.getAppId());
@@ -19177,6 +19595,30 @@ function ProfileView({
       setLoadingMyAds(false);
     }
   }, [currentUser?.id, currentUser?.user_metadata?.full_name, userProfile?.full_name]);
+
+  const handleUpdateAdStatus = async (adId: string, newStatus: 'available' | 'pending' | 'sold') => {
+    setUpdatingStatusAdId(adId);
+    try {
+      await marketplaceService.updateAdStatus(adId, newStatus);
+      setMyAds(prev => prev.map(a => a.id === adId ? { ...a, status: newStatus } : a));
+      onAdDeleted?.(); // triggers parent refetch
+      setMsg({ 
+        type: 'success', 
+        text: newStatus === 'sold' 
+          ? 'Statut mis à jour : Vendu !' 
+          : newStatus === 'pending' 
+            ? 'Statut mis à jour : En attente !' 
+            : 'Statut mis à jour : En ligne !' 
+      });
+      setTimeout(() => setMsg(null), 3500);
+    } catch (err: any) {
+      console.error('Error updating ad status:', err);
+      setMsg({ type: 'error', text: err?.message || 'Impossible de mettre à jour le statut.' });
+      setTimeout(() => setMsg(null), 3500);
+    } finally {
+      setUpdatingStatusAdId(null);
+    }
+  };
 
   const handleDeleteAd = async (adId: string) => {
     setDeletingAdId(adId);
@@ -19771,37 +20213,105 @@ function ProfileView({
                           {myAds.map((ad) => {
                             const img = ad.image_url || (ad.images && ad.images[0]);
                             const isDeleting = deletingAdId === ad.id;
+                            const isUpdatingStatus = updatingStatusAdId === ad.id;
+                            const currentAdStatus = (ad.status as any) || 'available';
+
                             return (
-                              <div key={ad.id} className="p-3 bg-slate-50/80 rounded-2xl border border-slate-200 flex gap-3 items-center group">
-                                <div 
-                                  onClick={() => onSelectAd?.(ad)}
-                                  className="w-16 h-16 rounded-xl overflow-hidden bg-slate-200 shrink-0 cursor-pointer relative"
-                                >
-                                  {img ? (
-                                    <img src={img} alt={ad.title} className="w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                      <Shirt className="w-6 h-6" />
+                              <div key={ad.id} className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200 flex flex-col justify-between gap-3 group transition-all hover:bg-white hover:shadow-sm">
+                                <div className="flex gap-3 items-start">
+                                  <div 
+                                    onClick={() => onSelectAd?.(ad)}
+                                    className="w-16 h-16 rounded-xl overflow-hidden bg-slate-200 shrink-0 cursor-pointer relative"
+                                  >
+                                    {img ? (
+                                      <img src={img} alt={ad.title} className={cn("w-full h-full object-cover", currentAdStatus === 'sold' && "grayscale-[40%]")} />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                        <Shirt className="w-6 h-6" />
+                                      </div>
+                                    )}
+                                    {currentAdStatus === 'sold' && (
+                                      <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
+                                        <span className="text-[9px] font-black text-white uppercase bg-rose-600 px-1 py-0.5 rounded">Vendu</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div 
+                                    onClick={() => onSelectAd?.(ad)}
+                                    className="min-w-0 flex-1 cursor-pointer"
+                                  >
+                                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                                      <div className="text-xs font-extrabold text-purple-700">{ad.price}</div>
+                                      <span className={cn(
+                                        "text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
+                                        currentAdStatus === 'sold'
+                                          ? "bg-rose-100 text-rose-800 border border-rose-200"
+                                          : currentAdStatus === 'pending'
+                                            ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                            : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                      )}>
+                                        {currentAdStatus === 'sold' ? '🏷️ Vendu' : currentAdStatus === 'pending' ? '⏳ En attente' : '✅ En ligne'}
+                                      </span>
                                     </div>
-                                  )}
+                                    <h4 className="text-xs font-bold text-slate-900 truncate">{ad.title}</h4>
+                                    <p className="text-[11px] text-slate-500 truncate">{ad.location || 'Valencia'} · {ad.category}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteAdId(ad.id)}
+                                    disabled={isDeleting}
+                                    className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl border border-slate-200 transition-colors cursor-pointer shrink-0"
+                                    title="Delete item"
+                                  >
+                                    {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                  </button>
                                 </div>
-                                <div 
-                                  onClick={() => onSelectAd?.(ad)}
-                                  className="min-w-0 flex-1 cursor-pointer"
-                                >
-                                  <div className="text-xs font-extrabold text-purple-700 mb-0.5">{ad.price}</div>
-                                  <h4 className="text-xs font-bold text-slate-900 truncate">{ad.title}</h4>
-                                  <p className="text-[11px] text-slate-500 truncate">{ad.location || 'Valencia'} · {ad.category}</p>
+
+                                {/* Seller Quick Status Buttons */}
+                                <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between gap-1">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Statut :</span>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      disabled={isUpdatingStatus}
+                                      onClick={() => handleUpdateAdStatus(ad.id, 'available')}
+                                      className={cn(
+                                        "px-2 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer",
+                                        currentAdStatus === 'available'
+                                          ? "bg-emerald-600 text-white border-emerald-600"
+                                          : "bg-white text-slate-600 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                      )}
+                                    >
+                                      En ligne
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isUpdatingStatus}
+                                      onClick={() => handleUpdateAdStatus(ad.id, 'pending')}
+                                      className={cn(
+                                        "px-2 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer",
+                                        currentAdStatus === 'pending'
+                                          ? "bg-amber-500 text-white border-amber-500"
+                                          : "bg-white text-slate-600 border-slate-200 hover:bg-amber-50 hover:text-amber-700"
+                                      )}
+                                    >
+                                      En attente
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isUpdatingStatus}
+                                      onClick={() => handleUpdateAdStatus(ad.id, 'sold')}
+                                      className={cn(
+                                        "px-2 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer",
+                                        currentAdStatus === 'sold'
+                                          ? "bg-rose-600 text-white border-rose-600"
+                                          : "bg-white text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-700"
+                                      )}
+                                    >
+                                      Vendu
+                                    </button>
+                                  </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmDeleteAdId(ad.id)}
-                                  disabled={isDeleting}
-                                  className="p-2 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl border border-slate-200 transition-colors cursor-pointer shrink-0"
-                                  title="Delete item"
-                                >
-                                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                                </button>
                               </div>
                             );
                           })}

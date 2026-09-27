@@ -19,6 +19,8 @@ export interface Ad {
   property_type?: string;
   contract_type?: string;
   size?: string;
+  delivery?: 'Pick up only' | 'Delivery available' | 'Pick up or Delivery' | string;
+  status?: 'available' | 'pending' | 'sold';
   image_url: string;
   images?: string[];
   user_id?: string;
@@ -117,6 +119,12 @@ export const marketplaceService = {
           ? Number(rawItem.lng) 
           : (meta.lng !== undefined && meta.lng !== null ? Number(meta.lng) : undefined);
 
+        const finalImages = (rawItem.images && Array.isArray(rawItem.images) && rawItem.images.length > 0)
+          ? rawItem.images
+          : (meta.images && Array.isArray(meta.images) && meta.images.length > 0)
+            ? meta.images
+            : (rawItem.image_url ? [rawItem.image_url] : []);
+
         return {
           ...rawItem,
           description: desc,
@@ -133,6 +141,10 @@ export const marketplaceService = {
           property_type: rawItem.property_type || meta.property_type,
           contract_type: rawItem.contract_type || meta.contract_type,
           size: rawItem.size || meta.size,
+          delivery: rawItem.delivery || meta.delivery || undefined,
+          status: rawItem.status || meta.status || 'available',
+          images: finalImages,
+          image_url: finalImages[0] || rawItem.image_url || ''
         } as Ad;
       });
     } catch (error) {
@@ -164,6 +176,9 @@ export const marketplaceService = {
     } else if (ad.category === 'Clothing' && ad.size) {
       extraDetails.push(`Size: ${ad.size}`);
     }
+    if (ad.delivery) {
+      extraDetails.push(`Handover: ${ad.delivery}`);
+    }
     if (ad.exact_address) {
       extraDetails.push(`Exact Meeting/Pickup: ${ad.exact_address}`);
     }
@@ -176,7 +191,7 @@ export const marketplaceService = {
       }
     }
 
-    // Store seller_phone, seller_name, exact_address, coordinates in a hidden metadata comment block
+    // Store seller_phone, seller_name, exact_address, coordinates, delivery, images in a hidden metadata comment block
     // to guarantee 100% persistence in Supabase even if custom columns do not exist in the database table
     const meta: Record<string, any> = {};
     if (ad.seller_name) meta.seller_name = ad.seller_name;
@@ -191,6 +206,9 @@ export const marketplaceService = {
     if (ad.property_type) meta.property_type = ad.property_type;
     if (ad.contract_type) meta.contract_type = ad.contract_type;
     if (ad.size) meta.size = ad.size;
+    if (ad.delivery) meta.delivery = ad.delivery;
+    if (ad.status) meta.status = ad.status;
+    if (ad.images && Array.isArray(ad.images) && ad.images.length > 0) meta.images = ad.images;
 
     if (Object.keys(meta).length > 0) {
       finalDescription = `${finalDescription}\n\n<!-- unlocked_meta:${JSON.stringify(meta)} -->`.trim();
@@ -204,7 +222,7 @@ export const marketplaceService = {
       category: ad.category,
       condition: ad.condition || 'Good',
       location: ad.location || 'Valencia',
-      image_url: ad.image_url || '',
+      image_url: ad.image_url || (ad.images && ad.images[0]) || '',
     };
 
     if (ad.user_id) payload.user_id = ad.user_id;
@@ -215,6 +233,8 @@ export const marketplaceService = {
     if (ad.lng !== undefined && ad.lng !== null) payload.lng = ad.lng;
     if (ad.exact_address) payload.exact_address = ad.exact_address;
     if (ad.location_precision) payload.location_precision = ad.location_precision;
+    if (ad.delivery) payload.delivery = ad.delivery;
+    if (ad.status) payload.status = ad.status;
     if (ad.images && Array.isArray(ad.images) && ad.images.length > 0) {
       payload.images = ad.images;
     }
@@ -277,5 +297,61 @@ export const marketplaceService = {
       .eq('id', id);
 
     if (error) throw error;
+  },
+
+  async updateAdStatus(id: string, status: 'available' | 'pending' | 'sold') {
+    if (!isSupabaseConfigured) {
+      console.warn('Supabase not configured, mock updating status');
+      return;
+    }
+
+    try {
+      // 1. Fetch current ad to update metadata block in description
+      const { data: currentAd } = await supabase
+        .from('marketplace')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      let updatedDesc = currentAd?.description || '';
+      let meta: Record<string, any> = {};
+
+      const metaMatch = updatedDesc.match(/<!--\s*unlocked_meta:([\s\S]*?)\s*-->/);
+      if (metaMatch) {
+        try {
+          meta = JSON.parse(metaMatch[1]);
+          updatedDesc = updatedDesc.replace(metaMatch[0], '').trim();
+        } catch (e) {
+          console.warn('[Marketplace] Error parsing metadata on update:', e);
+        }
+      }
+
+      meta.status = status;
+      const finalDesc = `${updatedDesc}\n\n<!-- unlocked_meta:${JSON.stringify(meta)} -->`.trim();
+
+      // Try updating status column, with fallback to description only if column doesn't exist
+      try {
+        const { error: colError } = await supabase
+          .from('marketplace')
+          .update({
+            description: finalDesc,
+            status
+          })
+          .eq('id', id);
+
+        if (colError) throw colError;
+      } catch (colErr) {
+        // Fallback: update description containing metadata
+        await supabase
+          .from('marketplace')
+          .update({
+            description: finalDesc
+          })
+          .eq('id', id);
+      }
+    } catch (err) {
+      console.error('Error updating ad status:', err);
+      throw err;
+    }
   }
 };
