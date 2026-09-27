@@ -353,5 +353,54 @@ export const marketplaceService = {
       console.error('Error updating ad status:', err);
       throw err;
     }
+  },
+
+  async updateAd(id: string, ad: Partial<Ad>) {
+    if (!isSupabaseConfigured) {
+      console.warn('Supabase not configured, mock updating ad');
+      return ad;
+    }
+
+    const payload: Record<string, any> = {};
+    if (ad.title !== undefined) payload.title = ad.title;
+    if (ad.price !== undefined) payload.price = ad.price;
+    if (ad.category !== undefined) payload.category = ad.category;
+    if (ad.condition !== undefined) payload.condition = ad.condition;
+    if (ad.location !== undefined) payload.location = ad.location;
+    if (ad.description !== undefined) payload.description = ad.description;
+    if (ad.image_url !== undefined) payload.image_url = ad.image_url;
+    if (ad.images !== undefined) payload.images = ad.images;
+    if (ad.status !== undefined) payload.status = ad.status;
+    if (ad.seller_phone !== undefined) payload.seller_phone = ad.seller_phone;
+    if (ad.exact_address !== undefined) payload.exact_address = ad.exact_address;
+    if (ad.lat !== undefined) payload.lat = ad.lat;
+    if (ad.lng !== undefined) payload.lng = ad.lng;
+    if (ad.delivery !== undefined) payload.delivery = ad.delivery;
+
+    let currentPayload = { ...payload };
+    const maxRetries = 10;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const { data, error } = await supabase
+          .from('marketplace')
+          .update(currentPayload)
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
+      } catch (err: any) {
+        const errMsg = err?.message || JSON.stringify(err);
+        const match = errMsg.match(/Could not find the '([^']+)' column/i);
+        if (match && match[1] && match[1] in currentPayload) {
+          delete currentPayload[match[1]];
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error('Failed to update ad.');
   }
 };
