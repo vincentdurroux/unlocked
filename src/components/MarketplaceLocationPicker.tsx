@@ -488,7 +488,7 @@ export function MarketplaceLocationPicker({
                 )}
               >
                 <Building2 className="w-3.5 h-3.5" />
-                <span>🏙️ Quartiers de Valencia ({VALENCIA_CITY_NEIGHBORHOODS.length})</span>
+                <span>🏙️ Valencia City Neighborhoods ({VALENCIA_CITY_NEIGHBORHOODS.length})</span>
               </button>
               <button
                 type="button"
@@ -501,7 +501,7 @@ export function MarketplaceLocationPicker({
                 )}
               >
                 <TreePine className="w-3.5 h-3.5" />
-                <span>🏡 Suburbs & Localités ({VALENCIA_SUBURBS.length})</span>
+                <span>🏡 Suburbs & Surrounding Towns ({VALENCIA_SUBURBS.length})</span>
               </button>
             </div>
           </div>
@@ -524,14 +524,14 @@ export function MarketplaceLocationPicker({
               className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 cursor-pointer"
             >
               <option value="">-- Choose or scroll to your neighborhood / suburb --</option>
-              <optgroup label="🏙️ Quartiers de Valencia (City Neighborhoods)">
+              <optgroup label="🏙️ Valencia City Neighborhoods">
                 {VALENCIA_CITY_NEIGHBORHOODS.map(n => (
                   <option key={n.name} value={n.name}>
                     {n.name} {n.zone ? `(${n.zone})` : ''}
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="🏡 Suburbs & Localités autour de Valencia (Surrounding Towns)">
+              <optgroup label="🏡 Suburbs & Surrounding Towns (Metropolitan Area)">
                 {VALENCIA_SUBURBS.map(s => (
                   <option key={s.name} value={s.name}>
                     {s.name} {s.zone ? `(${s.zone})` : ''}
@@ -569,7 +569,7 @@ export function MarketplaceLocationPicker({
                 <div className="sticky top-0 z-10 px-3.5 py-2 bg-slate-100/95 backdrop-blur-xs border-b border-slate-200/80 flex items-center justify-between">
                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Building2 className="w-3.5 h-3.5 text-purple-600" />
-                    Quartiers de Valencia (City Neighborhoods)
+                    Valencia City Neighborhoods
                   </span>
                   <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded-full border border-slate-200">
                     {filteredNeighborhoods.length}
@@ -621,7 +621,7 @@ export function MarketplaceLocationPicker({
                 <div className="sticky top-0 z-10 px-3.5 py-2 bg-emerald-50/95 backdrop-blur-xs border-y border-emerald-100 flex items-center justify-between">
                   <span className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
                     <TreePine className="w-3.5 h-3.5 text-emerald-600" />
-                    Suburbs & Localités autour de Valencia (Surroundings)
+                    Suburbs & Surrounding Towns
                   </span>
                   <span className="text-[10px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded-full border border-emerald-200">
                     {filteredSuburbs.length}

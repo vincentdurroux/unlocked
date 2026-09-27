@@ -290,6 +290,54 @@ export function normalizeCategoryName(cat: string): string {
 }
 
 /**
+ * Format seller name privacy-friendly (e.g. "Vincent Durroux" -> "Vincent D.")
+ * matches chat formatting.
+ */
+export function formatSellerName(name?: string): string {
+  if (!name || typeof name !== 'string') return 'Community Member';
+  const trimmed = name.trim();
+  if (!trimmed) return 'Community Member';
+  
+  if (trimmed.includes('@')) {
+    const local = trimmed.split('@')[0];
+    return local.charAt(0).toUpperCase() + local.slice(1);
+  }
+  
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'Community Member';
+  if (parts.length === 1) return parts[0];
+  
+  const firstName = parts[0];
+  const lastInitial = parts[1].charAt(0).toUpperCase();
+  return `${firstName} ${lastInitial}.`;
+}
+
+/**
+ * Clean legacy handover/delivery bracketed tags from ad description.
+ */
+export function cleanAdDescription(desc?: string): string {
+  if (!desc) return '';
+  return desc
+    .replace(/\[\s*Details:\s*Handover:[^\]]*\]/gi, '')
+    .replace(/\[\s*Handover:[^\]]*\]/gi, '')
+    .replace(/\[\s*Delivery:[^\]]*\]/gi, '')
+    .replace(/\[\s*Details:[^\]]*\]/gi, '')
+    .trim();
+}
+
+/**
+ * Clean and format marketplace item price with € prefix (e.g. 55 -> €55, €55 -> €55).
+ */
+export function formatDisplayPrice(price?: string | number): string {
+  if (price === undefined || price === null || price === '') return 'Free';
+  const str = String(price).trim();
+  if (str.toLowerCase() === 'free' || str.toLowerCase() === 'gratuit' || str === '0') return 'Free';
+  const clean = str.replace(/€/g, '').trim();
+  if (!clean) return 'Free';
+  return `€${clean}`;
+}
+
+/**
  * Safely extracts a clean UUID or numeric ID from raw query/share parameters,
  * stripping any trailing promotional text, spaces, or newlines introduced by share sheets.
  */
@@ -720,11 +768,6 @@ const parseAnnouncement = (ann: any) => {
 };
 
 const GOOGLE_MAPS_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
-
-export const formatSellerName = (name?: string): string => {
-  if (!name || !name.trim()) return 'Community Member';
-  return name.trim();
-};
 
 const COUNTRY_DIAL_CODES = [
   { code: '+34', country: 'Spain', flag: '🇪🇸' },
@@ -2712,7 +2755,7 @@ export default function App() {
         lat: finalLat || undefined,
         lng: finalLng || undefined,
         coordinates: finalLat && finalLng ? { lat: finalLat, lng: finalLng } : undefined,
-        description: adDescription.trim(),
+        description: cleanAdDescription(adDescription.trim()),
         type: adCategory === 'Real Estate' ? adHousingType : undefined,
         fuel_type: adCategory === 'Vehicles' ? adFuelType : undefined,
         property_type: adCategory === 'Real Estate' ? adPropertyType : undefined,
@@ -2720,7 +2763,7 @@ export default function App() {
         size: adCategory === 'Clothing' ? adSize : undefined,
         delivery: computedDelivery,
         seller_phone: formattedPhone || undefined,
-        seller_name: sellerDisplayName || 'Community Member',
+        seller_name: formatSellerName(sellerDisplayName),
         seller_image: sellerAvatar,
         user_id: currentUser?.id || undefined,
         image_url: uploadedImageUrls[0] || '',
@@ -4548,7 +4591,7 @@ function AdDetailModal({
     }
   };
 
-  const price = ad.price.includes('€') ? ad.price : `${ad.price}€`;
+  const price = formatDisplayPrice(ad.price);
   const images = ad.images && ad.images.length > 0 ? ad.images : [ad.image_url || ad.image];
   const createdAt = 'created_at' in ad ? ad.created_at : new Date().toISOString();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -4602,6 +4645,24 @@ function AdDetailModal({
       scrollContainerRef.current.scrollTop = 0;
     }
   }, [ad.id]);
+
+  // Handle ESC key and arrows when viewing photo in full screen
+  useEffect(() => {
+    if (!isFullScreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullScreen(false);
+      } else if (e.key === 'ArrowLeft' && images.length > 1) {
+        setDirection(-1);
+        setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+      } else if (e.key === 'ArrowRight' && images.length > 1) {
+        setDirection(1);
+        setCurrentImageIndex((prev) => (prev + 1) % images.length);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullScreen, images.length]);
 
   const nextImage = (e?: any) => {
     e?.stopPropagation();
@@ -4736,13 +4797,13 @@ function AdDetailModal({
               {currentStatus === 'sold' && (
                 <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2.5 text-rose-800 text-xs font-bold">
                   <CheckCircle2 className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>Cette annonce est marquée comme <strong>Vendu</strong>. Cet article n'est plus disponible.</span>
+                  <span>This listing is marked as <strong>Sold</strong>. This item is no longer available.</span>
                 </div>
               )}
               {currentStatus === 'pending' && (
                 <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-2.5 text-amber-800 text-xs font-bold">
                   <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Cette annonce est actuellement <strong>En attente</strong> (réservée ou en cours de remise).</span>
+                  <span>This listing is currently <strong>Pending</strong> (reserved or handover in progress).</span>
                 </div>
               )}
 
@@ -4842,7 +4903,7 @@ function AdDetailModal({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-purple-600" />
-                      <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">Statut de votre annonce</span>
+                      <span className="text-xs font-bold text-purple-950 uppercase tracking-wider">Your Listing Status</span>
                     </div>
                     <span className={cn(
                       "text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider",
@@ -4852,12 +4913,12 @@ function AdDetailModal({
                           ? "bg-amber-100 text-amber-800 border border-amber-200"
                           : "bg-emerald-100 text-emerald-800 border border-emerald-200"
                     )}>
-                      {currentStatus === 'sold' ? '🏷️ Vendu' : currentStatus === 'pending' ? '⏳ En attente' : '✅ En ligne'}
+                      {currentStatus === 'sold' ? '🏷️ Sold' : currentStatus === 'pending' ? '⏳ Pending' : '✅ Active'}
                     </span>
                   </div>
                   
                   <p className="text-[11px] text-slate-600">
-                    En tant que vendeur, vous pouvez appliquer la mention <strong>Vendu</strong> ou <strong>En attente</strong> à votre annonce :
+                    As the seller, you can mark your listing as <strong>Active</strong>, <strong>Pending</strong>, or <strong>Sold</strong>:
                   </p>
 
                   <div className="grid grid-cols-3 gap-2">
@@ -4873,7 +4934,7 @@ function AdDetailModal({
                       )}
                     >
                       <Check className="w-3.5 h-3.5 shrink-0" />
-                      <span>En ligne</span>
+                      <span>Active</span>
                     </button>
                     <button
                       type="button"
@@ -4887,7 +4948,7 @@ function AdDetailModal({
                       )}
                     >
                       <Clock className="w-3.5 h-3.5 shrink-0" />
-                      <span>En attente</span>
+                      <span>Pending</span>
                     </button>
                     <button
                       type="button"
@@ -4901,7 +4962,7 @@ function AdDetailModal({
                       )}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                      <span>Vendu</span>
+                      <span>Sold</span>
                     </button>
                   </div>
 
@@ -4911,7 +4972,7 @@ function AdDetailModal({
                       onClick={() => setShowDeleteConfirm(true)}
                       className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1.5 cursor-pointer transition-colors"
                     >
-                      <Trash2 className="w-3.5 h-3.5" /> Supprimer définitivement l'annonce
+                      <Trash2 className="w-3.5 h-3.5" /> Permanently delete listing
                     </button>
                   </div>
                 </div>
@@ -4921,7 +4982,7 @@ function AdDetailModal({
             <div className="space-y-3">
               <h4 className="font-bold text-slate-900">Description</h4>
               <div className="markdown-body text-slate-700 text-sm leading-relaxed">
-                <SimpleMarkdown isPlain={true}>{ad.description || "No description provided for this item."}</SimpleMarkdown>
+                <SimpleMarkdown isPlain={true}>{cleanAdDescription(ad.description) || "No description provided for this item."}</SimpleMarkdown>
               </div>
             </div>
 
@@ -5160,22 +5221,48 @@ function AdDetailModal({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
+              className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center select-none"
               onClick={() => setIsFullScreen(false)}
             >
-              <button 
-                onClick={(e) => { e.stopPropagation(); setIsFullScreen(false); }}
-                className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all z-[110]"
+              {/* Top Navigation & Close Bar respecting Safe Area insets on mobile */}
+              <div 
+                className="absolute z-[120] flex items-center justify-between pointer-events-auto"
+                style={{ 
+                  top: 'calc(16px + env(safe-area-inset-top, 16px))', 
+                  left: 'calc(16px + env(safe-area-inset-left, 16px))', 
+                  right: 'calc(16px + env(safe-area-inset-right, 16px))' 
+                }}
               >
-                <X className="w-6 h-6" />
-              </button>
+                {/* Image counter */}
+                <div className="px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-xs font-bold tracking-wider">
+                  {currentImageIndex + 1} / {images.length}
+                </div>
 
-              <div className="relative w-full h-full flex items-center justify-center p-4 no-swipe">
+                {/* Highly Visible Close Button */}
+                <button 
+                  type="button"
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setIsFullScreen(false); 
+                  }}
+                  className="px-4 py-2 bg-white text-slate-900 hover:bg-slate-100 font-black text-xs rounded-full shadow-2xl flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all border border-slate-200"
+                  title="Close photo viewer (ESC)"
+                >
+                  <X className="w-4 h-4 text-slate-900 stroke-[3]" />
+                  <span>Close</span>
+                </button>
+              </div>
+
+              {/* Main Photo Display */}
+              <div 
+                className="relative w-full h-full flex items-center justify-center p-4 sm:p-12 no-swipe"
+                onClick={() => setIsFullScreen(false)}
+              >
                 <motion.img
                   key={currentImageIndex}
-                  initial={{ scale: 0.9, opacity: 0, x: direction * 200 }}
+                  initial={{ scale: 0.92, opacity: 0, x: direction * 150 }}
                   animate={{ scale: 1, opacity: 1, x: 0 }}
-                  exit={{ scale: 0.9, opacity: 0, x: -direction * 200 }}
+                  exit={{ scale: 0.92, opacity: 0, x: -direction * 150 }}
                   transition={{ x: { type: "spring", stiffness: 300, damping: 30 }, opacity: { duration: 0.2 } }}
                   drag={images.length > 1 ? "x" : false}
                   dragConstraints={{ left: 0, right: 0 }}
@@ -5183,26 +5270,38 @@ function AdDetailModal({
                   onDragEnd={onDragEnd}
                   src={images[currentImageIndex]}
                   alt={ad.title}
-                  className="max-w-full max-h-full object-contain shadow-2xl cursor-grab active:cursor-grabbing select-none"
+                  className="max-w-full max-h-[85vh] object-contain shadow-2xl cursor-grab active:cursor-grabbing select-none rounded-xl"
                   onClick={(e) => e.stopPropagation()}
                 />
 
                 {images.length > 1 && (
                   <>
                     <button 
+                      type="button"
                       onClick={(e) => { e.stopPropagation(); prevImage(); }}
-                      className="absolute left-6 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 backdrop-blur-xl rounded-full text-white transition-all"
+                      className="absolute left-4 sm:left-8 top-1/2 -translate-y-1/2 p-3 sm:p-4 bg-black/60 hover:bg-black/80 backdrop-blur-xl rounded-full text-white border border-white/20 transition-all cursor-pointer z-[110]"
+                      title="Previous photo"
                     >
-                      <ChevronLeft className="w-8 h-8" />
+                      <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8" />
                     </button>
                     <button 
+                      type="button"
                       onClick={(e) => { e.stopPropagation(); nextImage(); }}
-                      className="absolute right-6 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 backdrop-blur-xl rounded-full text-white transition-all"
+                      className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 p-3 sm:p-4 bg-black/60 hover:bg-black/80 backdrop-blur-xl rounded-full text-white border border-white/20 transition-all cursor-pointer z-[110]"
+                      title="Next photo"
                     >
-                      <ChevronRight className="w-8 h-8" />
+                      <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
                     </button>
                   </>
                 )}
+
+                {/* Bottom Dismiss Hint */}
+                <div 
+                  className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[11px] text-white/70 bg-black/50 px-3 py-1 rounded-full backdrop-blur-xs pointer-events-none"
+                  style={{ bottom: 'calc(16px + env(safe-area-inset-bottom, 16px))' }}
+                >
+                  Tap background or press ESC to exit
+                </div>
               </div>
             </motion.div>
           )}
@@ -18749,13 +18848,13 @@ function MarketplaceView({
                     {ad.status === 'sold' ? (
                       <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-[1px] flex items-center justify-center p-3 pointer-events-none">
                         <span className="px-3.5 py-1.5 bg-rose-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg flex items-center gap-1.5 border border-rose-400">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Vendu
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Sold
                         </span>
                       </div>
                     ) : ad.status === 'pending' ? (
                       <div className="absolute top-3 left-3 z-10 pointer-events-none">
                         <span className="px-2.5 py-1 bg-amber-500 text-white font-bold text-[11px] uppercase tracking-wider rounded-xl shadow-md flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> En attente
+                          <Clock className="w-3 h-3" /> Pending
                         </span>
                       </div>
                     ) : null}
@@ -18824,7 +18923,7 @@ function MarketplaceView({
 
                       {/* Brief description */}
                       <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                        {ad.description}
+                        {cleanAdDescription(ad.description)}
                       </p>
                     </div>
 
@@ -18879,14 +18978,14 @@ function MarketplaceView({
                       {ad.status === 'sold' && (
                         <div className="absolute inset-0 bg-slate-950/45 rounded-xl flex items-center justify-center p-1 pointer-events-none">
                           <span className="px-2 py-0.5 bg-rose-600 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-md shadow-sm">
-                            Vendu
+                            Sold
                           </span>
                         </div>
                       )}
                       {ad.status === 'pending' && (
                         <div className="absolute top-1 left-1 pointer-events-none">
                           <span className="px-1.5 py-0.5 bg-amber-500 text-white font-bold text-[9px] uppercase tracking-wider rounded-md shadow-sm">
-                            En attente
+                            Pending
                           </span>
                         </div>
                       )}
@@ -18896,12 +18995,12 @@ function MarketplaceView({
                         <span className="text-purple-600 font-bold">{ad.category}</span>
                         {ad.status === 'sold' && (
                           <span className="px-2 py-0.5 bg-rose-100 text-rose-800 font-extrabold text-[10px] uppercase tracking-wider rounded-md border border-rose-200">
-                            Vendu
+                            Sold
                           </span>
                         )}
                         {ad.status === 'pending' && (
                           <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-bold text-[10px] uppercase tracking-wider rounded-md border border-amber-200">
-                            En attente
+                            Pending
                           </span>
                         )}
                         {ad.condition && ad.condition !== 'N/A' && (
@@ -18921,7 +19020,7 @@ function MarketplaceView({
                         {ad.title}
                       </h3>
                       <p className="text-xs text-slate-500 line-clamp-1 max-w-xl">
-                        {ad.description}
+                        {cleanAdDescription(ad.description)}
                       </p>
                     </div>
                   </div>
@@ -19605,15 +19704,15 @@ function ProfileView({
       setMsg({ 
         type: 'success', 
         text: newStatus === 'sold' 
-          ? 'Statut mis à jour : Vendu !' 
+          ? 'Status updated: Sold!' 
           : newStatus === 'pending' 
-            ? 'Statut mis à jour : En attente !' 
-            : 'Statut mis à jour : En ligne !' 
+            ? 'Status updated: Pending!' 
+            : 'Status updated: Active!' 
       });
       setTimeout(() => setMsg(null), 3500);
     } catch (err: any) {
       console.error('Error updating ad status:', err);
-      setMsg({ type: 'error', text: err?.message || 'Impossible de mettre à jour le statut.' });
+      setMsg({ type: 'error', text: err?.message || 'Failed to update status.' });
       setTimeout(() => setMsg(null), 3500);
     } finally {
       setUpdatingStatusAdId(null);
@@ -20232,7 +20331,7 @@ function ProfileView({
                                     )}
                                     {currentAdStatus === 'sold' && (
                                       <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
-                                        <span className="text-[9px] font-black text-white uppercase bg-rose-600 px-1 py-0.5 rounded">Vendu</span>
+                                        <span className="text-[9px] font-black text-white uppercase bg-rose-600 px-1 py-0.5 rounded">Sold</span>
                                       </div>
                                     )}
                                   </div>
@@ -20241,7 +20340,7 @@ function ProfileView({
                                     className="min-w-0 flex-1 cursor-pointer"
                                   >
                                     <div className="flex items-center justify-between gap-1 mb-0.5">
-                                      <div className="text-xs font-extrabold text-purple-700">{ad.price}</div>
+                                      <div className="text-xs font-extrabold text-purple-700">{formatDisplayPrice(ad.price)}</div>
                                       <span className={cn(
                                         "text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
                                         currentAdStatus === 'sold'
@@ -20250,7 +20349,7 @@ function ProfileView({
                                             ? "bg-amber-100 text-amber-800 border border-amber-200"
                                             : "bg-emerald-100 text-emerald-800 border border-emerald-200"
                                       )}>
-                                        {currentAdStatus === 'sold' ? '🏷️ Vendu' : currentAdStatus === 'pending' ? '⏳ En attente' : '✅ En ligne'}
+                                        {currentAdStatus === 'sold' ? '🏷️ Sold' : currentAdStatus === 'pending' ? '⏳ Pending' : '✅ Active'}
                                       </span>
                                     </div>
                                     <h4 className="text-xs font-bold text-slate-900 truncate">{ad.title}</h4>
@@ -20269,7 +20368,7 @@ function ProfileView({
 
                                 {/* Seller Quick Status Buttons */}
                                 <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between gap-1">
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Statut :</span>
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status:</span>
                                   <div className="flex items-center gap-1">
                                     <button
                                       type="button"
@@ -20282,7 +20381,7 @@ function ProfileView({
                                           : "bg-white text-slate-600 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700"
                                       )}
                                     >
-                                      En ligne
+                                      Active
                                     </button>
                                     <button
                                       type="button"
@@ -20295,7 +20394,7 @@ function ProfileView({
                                           : "bg-white text-slate-600 border-slate-200 hover:bg-amber-50 hover:text-amber-700"
                                       )}
                                     >
-                                      En attente
+                                      Pending
                                     </button>
                                     <button
                                       type="button"
@@ -20308,7 +20407,7 @@ function ProfileView({
                                           : "bg-white text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-700"
                                       )}
                                     >
-                                      Vendu
+                                      Sold
                                     </button>
                                   </div>
                                 </div>
