@@ -16,11 +16,29 @@ import {
   APIProvider,
   Map,
   AdvancedMarker,
+  Pin,
+  useMap,
   MapMouseEvent
 } from '@vis.gl/react-google-maps';
 
 export const VALENCIA_CENTER = { lat: 39.4699, lng: -0.3763 };
 export const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+
+function MapCenterHandler({ lat, lng }: { lat: number | null; lng: number | null }) {
+  const map = useMap();
+  const lastCoordRef = useRef<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (!map || !lat || !lng) return;
+    const prev = lastCoordRef.current;
+    if (!prev || Math.abs(prev.lat - lat) > 0.0001 || Math.abs(prev.lng - lng) > 0.0001) {
+      lastCoordRef.current = { lat, lng };
+      map.panTo({ lat, lng });
+    }
+  }, [map, lat, lng]);
+
+  return null;
+}
 
 export interface LocationItem {
   name: string;
@@ -504,8 +522,7 @@ export function MarketplaceLocationPicker({
           <div className="h-44 sm:h-52 rounded-2xl overflow-hidden border border-slate-200 shadow-inner relative group">
             <APIProvider apiKey={GOOGLE_MAPS_KEY} libraries={['places', 'marker']}>
               <Map
-                defaultCenter={mapCenter}
-                center={mapCenter}
+                defaultCenter={VALENCIA_CENTER}
                 defaultZoom={lat && lng ? 15 : 13}
                 gestureHandling={'greedy'}
                 disableDefaultUI={true}
@@ -513,19 +530,30 @@ export function MarketplaceLocationPicker({
                 mapId="marketplace_picker_map_single"
                 className="w-full h-full cursor-crosshair"
               >
+                <MapCenterHandler lat={lat} lng={lng} />
                 {lat && lng && (
                   <AdvancedMarker 
                     position={{ lat, lng }} 
                     draggable={true}
+                    title="Drag to adjust exact location"
                     onDragEnd={(e) => {
+                      let newLat: number | null = null;
+                      let newLng: number | null = null;
                       if (e.latLng) {
-                        handleMapPinpoint(e.latLng.lat(), e.latLng.lng());
+                        newLat = typeof e.latLng.lat === 'function' ? e.latLng.lat() : (e.latLng as any).lat;
+                        newLng = typeof e.latLng.lng === 'function' ? e.latLng.lng() : (e.latLng as any).lng;
+                      }
+                      if (newLat !== null && newLng !== null && !isNaN(newLat) && !isNaN(newLng)) {
+                        handleMapPinpoint(newLat, newLng);
                       }
                     }}
                   >
-                    <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white animate-bounce cursor-grab active:cursor-grabbing">
-                      <MapPin className="w-4 h-4 text-white" />
-                    </div>
+                    <Pin 
+                      background="#7e22ce" 
+                      glyphColor="#ffffff" 
+                      borderColor="#ffffff" 
+                      scale={1.25} 
+                    />
                   </AdvancedMarker>
                 )}
               </Map>
