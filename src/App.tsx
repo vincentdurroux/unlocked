@@ -2465,6 +2465,7 @@ export default function App() {
     setAdSize(ad.size || 'M');
     setAdPhone(ad.seller_phone || '');
     setUploadedImageUrls(ad.images && ad.images.length > 0 ? ad.images : (ad.image_url ? [ad.image_url] : []));
+    setActiveView('marketplace');
     setShowAddAd(true);
   };
 
@@ -3599,7 +3600,8 @@ export default function App() {
                   onToggleFavoriteAd={toggleFavoriteAd}
                   allAds={ads}
                   events={events}
-                  onOpenCreateAd={() => setShowAddAd(true)}
+                  onOpenCreateAd={handleOpenCreateAd}
+                  onEditAd={handleEditAd}
                   onSelectAd={(ad) => setSelectedAd(ad)}
                   onAdDeleted={() => fetchAds()}
                 />
@@ -4504,6 +4506,7 @@ export default function App() {
                 setSelectedAd(updatedAd);
                 fetchAds();
               }}
+              onEditAd={handleEditAd}
               isFavorite={favoriteAdIds.includes(String(selectedAd.id))}
               onToggleFavorite={toggleFavoriteAd}
               onClose={() => setSelectedAd(null)}
@@ -4621,7 +4624,8 @@ function AdDetailModal({
   isFavorite,
   onToggleFavorite,
   onAdDeleted,
-  onAdUpdated
+  onAdUpdated,
+  onEditAd
 }: { 
   ad: Ad | any; 
   onClose: () => void;
@@ -4633,6 +4637,7 @@ function AdDetailModal({
   onToggleFavorite?: (id: string | number) => void;
   onAdDeleted?: () => void;
   onAdUpdated?: (updatedAd: Ad) => void;
+  onEditAd?: (ad: any) => void;
 }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [direction, setDirection] = useState(0);
@@ -5041,6 +5046,16 @@ function AdDetailModal({
                   </div>
 
                   <div className="pt-2 border-t border-purple-200/60 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onEditAd?.(ad);
+                      }}
+                      className="text-xs font-bold text-purple-700 hover:text-purple-800 hover:underline flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" /> Edit listing
+                    </button>
                     <button
                       type="button"
                       onClick={() => setShowDeleteConfirm(true)}
@@ -20394,7 +20409,10 @@ function ProfileView({
                             return (
                               <div 
                                 key={ad.id} 
-                                onClick={() => onSelectAd?.(ad)}
+                                onClick={() => {
+                                  setActiveSubPage(null);
+                                  onSelectAd?.(ad);
+                                }}
                                 className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200 flex flex-col justify-between gap-3 group transition-all hover:bg-white hover:shadow-sm cursor-pointer"
                               >
                                 <div className="flex gap-3 items-start">
@@ -20432,7 +20450,10 @@ function ProfileView({
                                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                                     <button
                                       type="button"
-                                      onClick={() => onEditAd?.(ad)}
+                                      onClick={() => {
+                                        setActiveSubPage(null);
+                                        onEditAd?.(ad);
+                                      }}
                                       className="p-1.5 bg-white hover:bg-purple-50 text-slate-400 hover:text-purple-600 rounded-xl border border-slate-200 transition-colors cursor-pointer"
                                       title="Edit item"
                                     >
@@ -20451,7 +20472,7 @@ function ProfileView({
                                 </div>
 
                                 {/* Seller Quick Status Buttons */}
-                                <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between gap-1">
+                                <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between gap-1" onClick={(e) => e.stopPropagation()}>
                                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status:</span>
                                   <div className="flex items-center gap-1">
                                     <button
