@@ -1505,10 +1505,9 @@ export function AdminEventsManager({
           </div>
         </div>
 
-        {/* Category Filter Pills with count */}
+        {/* Category Filter Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar pt-1 border-t border-slate-100">
           {COMMON_CATEGORIES.map(cat => {
-            const count = categoryCounts[cat.value] || 0;
             const isSelected = selectedCategory === cat.value;
             return (
               <button
@@ -1523,12 +1522,6 @@ export function AdminEventsManager({
                 )}
               >
                 <span>{cat.label}</span>
-                <span className={cn(
-                  "text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold",
-                  isSelected ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
-                )}>
-                  {count}
-                </span>
               </button>
             );
           })}
