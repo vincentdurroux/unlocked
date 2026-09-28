@@ -2438,7 +2438,7 @@ export default function App() {
     setEditingAd(null);
     setAdTitle('');
     setAdPrice('');
-    setAdCategory('School & Kids');
+    setAdCategory('School & Uniforms');
     setAdCondition('Used');
     setAdLocation('');
     setAdLocationPrecision('approximate');
@@ -4220,53 +4220,42 @@ export default function App() {
                       </div>
                     </div>
                     
-                    {/* Category Selection: 15 Modern Chips */}
+                    {/* Category Selection: Dropdown */}
                     <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                          Category <span className="text-purple-600">*</span>
-                        </label>
-                        <span className="text-[11px] text-slate-400 font-medium">Select 1 category</span>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
-                        {[
-                          { id: 'School & Uniforms', label: 'School & Uniforms', icon: GraduationCap, emoji: '🎒' },
-                          { id: 'Women’s Clothing', label: 'Women’s Clothing', icon: Shirt, emoji: '👗' },
-                          { id: 'Men’s Clothing', label: 'Men’s Clothing', icon: Shirt, emoji: '👔' },
-                          { id: 'Kids’ Clothing', label: 'Kids’ Clothing', icon: Smile, emoji: '🧒' },
-                          { id: 'Shoes', label: 'Shoes', icon: Footprints, emoji: '👟' },
-                          { id: 'Jewellery & Accessories', label: 'Jewellery & Accessories', icon: Gem, emoji: '💍' },
-                          { id: 'Sports & Outdoors', label: 'Sports & Outdoors', icon: Bike, emoji: '🚴' },
-                          { id: 'Baby & Nursery', label: 'Baby & Nursery', icon: Baby, emoji: '👶' },
-                          { id: 'Toys & Games', label: 'Toys & Games', icon: Gamepad2, emoji: '🎲' },
-                          { id: 'Electronics', label: 'Electronics', icon: Smartphone, emoji: '💻' },
-                          { id: 'Home Décor & Furniture', label: 'Home Décor & Furniture', icon: Armchair, emoji: '🛋️' },
-                          { id: 'Appliances', label: 'Appliances', icon: WashingMachine, emoji: '☕' },
-                          { id: 'Cars & Vehicles', label: 'Cars & Vehicles', icon: Car, emoji: '🚗' },
-                          { id: 'Books & Media', label: 'Books & Media', icon: BookOpen, emoji: '📚' },
-                          { id: 'Other', label: 'Other', icon: Package, emoji: '✨' },
-                        ].map((cat) => {
-                          const IconComp = cat.icon;
-                          const isSelected = adCategory === cat.id;
-                          return (
-                            <button
-                              key={cat.id}
-                              type="button"
-                              onClick={() => {
-                                setAdCategory(cat.id);
-                              }}
-                              className={cn(
-                                "flex items-center gap-2 p-2.5 rounded-xl border text-left transition-all cursor-pointer",
-                                isSelected
-                                  ? "bg-purple-600 text-white border-purple-600 shadow-2xs font-bold"
-                                  : "bg-slate-50 border-slate-200/90 text-slate-700 hover:bg-slate-100 hover:border-slate-300 font-medium"
-                              )}
-                            >
-                              <span className="text-base leading-none shrink-0">{cat.emoji}</span>
-                              <span className="text-xs leading-tight line-clamp-1 truncate">{cat.label}</span>
-                            </button>
-                          );
-                        })}
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                        Category <span className="text-purple-600">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={adCategory}
+                          onChange={(e) => setAdCategory(e.target.value)}
+                          className="w-full pl-10 pr-10 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-semibold text-slate-900 transition-all cursor-pointer appearance-none"
+                        >
+                          <option value="" disabled>Select a category...</option>
+                          {[
+                            { id: 'School & Uniforms', label: 'School & Uniforms', emoji: '🎒' },
+                            { id: 'Women’s Clothing', label: 'Women’s Clothing', emoji: '👗' },
+                            { id: 'Men’s Clothing', label: 'Men’s Clothing', emoji: '👔' },
+                            { id: 'Kids’ Clothing', label: 'Kids’ Clothing', emoji: '🧒' },
+                            { id: 'Shoes', label: 'Shoes', emoji: '👟' },
+                            { id: 'Jewellery & Accessories', label: 'Jewellery & Accessories', emoji: '💍' },
+                            { id: 'Sports & Outdoors', label: 'Sports & Outdoors', emoji: '🚴' },
+                            { id: 'Baby & Nursery', label: 'Baby & Nursery', emoji: '👶' },
+                            { id: 'Toys & Games', label: 'Toys & Games', emoji: '🎲' },
+                            { id: 'Electronics', label: 'Electronics', emoji: '💻' },
+                            { id: 'Home Décor & Furniture', label: 'Home Décor & Furniture', emoji: '🛋️' },
+                            { id: 'Appliances', label: 'Appliances', emoji: '☕' },
+                            { id: 'Cars & Vehicles', label: 'Cars & Vehicles', emoji: '🚗' },
+                            { id: 'Books & Media', label: 'Books & Media', emoji: '📚' },
+                            { id: 'Other', label: 'Other', emoji: '✨' },
+                          ].map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.emoji} {cat.label}
+                            </option>
+                          ))}
+                        </select>
+                        <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600 pointer-events-none" />
+                        <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>
                     </div>
 
