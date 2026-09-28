@@ -293,18 +293,128 @@ export function HomeViewSkeleton() {
       <div className="space-y-6">
         <div className="h-8 w-64 bg-slate-200 rounded-xl" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-72 bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-              <div className="w-10 h-10 bg-slate-200 rounded-xl" />
-              <div className="h-6 w-3/4 bg-slate-200 rounded-lg" />
-              <div className="space-y-2 pt-2">
-                <div className="h-3 w-full bg-slate-100 rounded" />
-                <div className="h-3 w-5/6 bg-slate-100 rounded" />
-              </div>
+          <DiscoverCardProSkeleton />
+          <DiscoverCardEventSkeleton />
+          <DiscoverCardGuideSkeleton />
+          <div className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 shadow-sm animate-pulse h-full min-h-[340px]">
+            <div className="h-6 w-32 bg-amber-100 rounded-full mb-4" />
+            <div className="space-y-3 flex-1">
+              <div className="h-4 w-full bg-slate-150 rounded" />
+              <div className="h-4 w-5/6 bg-slate-150 rounded" />
+              <div className="h-4 w-3/4 bg-slate-150 rounded" />
             </div>
-          ))}
+            <div className="h-10 w-full bg-amber-200/60 rounded-xl mt-4" />
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+/**
+ * Skeleton for Card 1 in Discover on Unlocked (Meet a local Pro)
+ */
+export function DiscoverCardProSkeleton() {
+  return (
+    <div className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 shadow-sm animate-pulse h-full min-h-[340px] space-y-4">
+      {/* Top Tag */}
+      <div className="flex justify-center">
+        <div className="h-6 w-36 bg-blue-100/70 rounded-full" />
+      </div>
+
+      {/* Pro Avatar and Info */}
+      <div className="flex flex-col items-center justify-center space-y-3 flex-1 py-2">
+        <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl md:rounded-3xl bg-gradient-to-tr from-slate-200 via-slate-150 to-slate-200 shadow-xs" />
+        <div className="space-y-1.5 w-full flex flex-col items-center">
+          <div className="h-4.5 w-32 bg-slate-200 rounded-lg" />
+          <div className="h-3 w-20 bg-slate-150 rounded-md" />
+        </div>
+        {/* Badges */}
+        <div className="flex gap-1.5 justify-center pt-1 w-full">
+          <div className="h-5 w-16 bg-slate-100 rounded-lg" />
+          <div className="h-5 w-20 bg-slate-100 rounded-lg" />
+        </div>
+        {/* Rating stars */}
+        <div className="flex gap-1 justify-center pt-1">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="w-3.5 h-3.5 bg-amber-100 rounded-xs" />
+          ))}
+          <div className="w-6 h-3.5 bg-slate-150 rounded-xs ml-1" />
+        </div>
+      </div>
+
+      {/* Footer line */}
+      <div className="pt-3 border-t border-slate-100 flex items-center justify-center">
+        <div className="h-3.5 w-28 bg-slate-150 rounded-md" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Skeleton for Card 2 in Discover on Unlocked (Event Highlights)
+ */
+export function DiscoverCardEventSkeleton() {
+  return (
+    <div className="flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-white border border-slate-100 shadow-sm animate-pulse h-full min-h-[340px] space-y-4">
+      <div className="space-y-4">
+        {/* Header Badge */}
+        <div className="flex items-center justify-between">
+          <div className="h-6 w-36 bg-orange-100/80 rounded-xl" />
+          <div className="h-4 w-10 bg-slate-150 rounded-md" />
+        </div>
+
+        {/* Media / Date Box */}
+        <div className="rounded-2xl bg-gradient-to-tr from-orange-100/50 via-slate-100 to-slate-200 p-4 space-y-2">
+          <div className="h-5 w-28 bg-orange-200/90 rounded-lg" />
+          <div className="h-4 w-40 bg-slate-200 rounded-md" />
+        </div>
+
+        {/* Event Title & Excerpt */}
+        <div className="space-y-2 text-left pt-1">
+          <div className="h-5 w-4/5 bg-slate-200 rounded-lg" />
+          <div className="h-3.5 w-full bg-slate-100 rounded-md" />
+          <div className="h-3.5 w-2/3 bg-slate-100 rounded-md" />
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+        <div className="h-3.5 w-24 bg-slate-150 rounded-md" />
+        <div className="h-3.5 w-20 bg-orange-200/70 rounded-md" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Skeleton for Card 3 in Discover on Unlocked (Guide of the Week)
+ */
+export function DiscoverCardGuideSkeleton() {
+  return (
+    <div className="flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-white border border-slate-100 shadow-sm animate-pulse h-full min-h-[340px] space-y-4">
+      <div className="space-y-4">
+        {/* Header Badge */}
+        <div className="flex items-center justify-between">
+          <div className="h-6 w-32 bg-emerald-100/80 rounded-xl" />
+        </div>
+
+        {/* Image Box */}
+        <div className="aspect-[16/10] w-full rounded-2xl bg-gradient-to-tr from-emerald-100/40 via-slate-100 to-slate-200" />
+
+        {/* Guide Title & Excerpt */}
+        <div className="space-y-2 text-left pt-1">
+          <div className="h-5 w-3/4 bg-slate-200 rounded-lg" />
+          <div className="h-3.5 w-full bg-slate-100 rounded-md" />
+          <div className="h-3.5 w-5/6 bg-slate-100 rounded-md" />
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
+        <div className="h-3.5 w-24 bg-emerald-200/70 rounded-md" />
+      </div>
+    </div>
+  );
+}
+

@@ -142,6 +142,14 @@ import { LandingEventHighlightsCard } from './components/LandingEventHighlightsC
 import { HeaderWeatherWidget } from './components/HeaderWeatherWidget';
 import { RotatingCylinderWord } from './components/RotatingCylinderWord';
 import { MarketplaceLocationPicker, VALENCIA_AREAS, VALENCIA_CENTER, VALENCIA_CITY_NEIGHBORHOODS, VALENCIA_SUBURBS } from './components/MarketplaceLocationPicker';
+import { 
+  DiscoverCardProSkeleton, 
+  DiscoverCardGuideSkeleton, 
+  EventCardSkeletonGrid, 
+  DirectoryProCardSkeletonGrid, 
+  MarketplaceCardSkeletonGrid, 
+  GuideCardSkeletonList 
+} from './components/CardSkeletons';
 
 export const PHONE_COUNTRY_CODES = [
   { code: '+34', flag: '🇪🇸', label: 'ES (+34)' },
@@ -2213,6 +2221,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [activeView, initialProId, initialEventId, initialGuideId, selectedPost, selectedAd, showMessagesModal, currentUser]);
   const [ads, setAds] = useState<Ad[]>([]);
+  const [adsLoading, setAdsLoading] = useState(true);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
   const [readAnnouncementIds, setReadAnnouncementIds] = useState<string[]>(() => {
@@ -2327,7 +2336,9 @@ export default function App() {
     } catch (_) {}
   };
   const [events, setEvents] = useState<Event[]>(isSupabaseConfigured ? [] : MOCK_EVENTS);
+  const [eventsLoading, setEventsLoading] = useState(isSupabaseConfigured);
   const [guideCategories, setGuideCategories] = useState<any[]>([]);
+  const [guidesLoading, setGuidesLoading] = useState(true);
   const allArticles = useMemo(() => {
     const map = new globalThis.Map<string, any>();
     const mockArticles = (MOCK_GUIDE_CATEGORIES_DATA.flatMap(cat => 
@@ -2367,12 +2378,15 @@ export default function App() {
     let active = true;
     const loadGuides = async () => {
       try {
+        setGuidesLoading(true);
         const raw = await guideService.getGuideCategories();
         if (active) {
           setGuideCategories(raw || []);
         }
       } catch (err) {
         console.error('Failed to load guides at root:', err);
+      } finally {
+        if (active) setGuidesLoading(false);
       }
     };
     loadGuides();
@@ -2597,6 +2611,7 @@ export default function App() {
 
   const refetchEvents = React.useCallback(async () => {
     try {
+      setEventsLoading(true);
       const data = await eventService.getEvents();
       if (data && data.length > 0) {
         setEvents(data);
@@ -2606,6 +2621,8 @@ export default function App() {
     } catch (err) {
       console.error('Failed to load events:', err);
       if (!isSupabaseConfigured) setEvents(MOCK_EVENTS);
+    } finally {
+      setEventsLoading(false);
     }
   }, []);
 
@@ -2651,10 +2668,13 @@ export default function App() {
 
   const fetchAds = async () => {
     try {
+      setAdsLoading(true);
       const data = await marketplaceService.getAds();
       setAds(data);
     } catch (error) {
       console.error('Error fetching ads:', error);
+    } finally {
+      setAdsLoading(false);
     }
   };
 
@@ -3509,7 +3529,10 @@ export default function App() {
               >
                 <HomeView 
                   allPros={allPros}
+                  prosLoading={prosLoading}
                   events={events}
+                  eventsLoading={eventsLoading}
+                  guidesLoading={guidesLoading}
                   onNavigate={handleNavigate}
                   userProfile={userProfile}
                   currentUser={currentUser}
@@ -3547,6 +3570,7 @@ export default function App() {
                 {activeView === 'explore' && (
                   <ExploreView 
                     allPros={allPros}
+                    loading={prosLoading}
                     onNavigate={handleNavigate} 
                     initialProId={initialProId}
                     initialSearch={initialSearch}
@@ -3570,6 +3594,7 @@ export default function App() {
                   onModalClose={() => setInitialEventId(null)}
                   scrollToTop={scrollToTop}
                   events={events}
+                  loading={eventsLoading}
                   favoriteEventIds={favoriteEventIds}
                   onToggleFavoriteEvent={toggleFavoriteEvent}
                 />
@@ -3730,6 +3755,7 @@ export default function App() {
                   favoriteAdIds={favoriteAdIds}
                   onToggleFavoriteAd={toggleFavoriteAd}
                   onAdDeleted={() => fetchAds()}
+                  loading={adsLoading}
                 />
               )}
               {/* MessagesView moved to modal */}
@@ -11708,7 +11734,10 @@ function HomeView({
   announcement,
   onContactAdmin,
   favoriteProIds = [],
-  onToggleFavoritePro
+  onToggleFavoritePro,
+  prosLoading = false,
+  eventsLoading = false,
+  guidesLoading = false
 }: { 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   allPros: Professional[], 
@@ -11737,7 +11766,10 @@ function HomeView({
   },
   onContactAdmin?: () => void,
   favoriteProIds?: string[],
-  onToggleFavoritePro?: (proId: string | number) => void
+  onToggleFavoritePro?: (proId: string | number) => void,
+  prosLoading?: boolean,
+  eventsLoading?: boolean,
+  guidesLoading?: boolean
 }) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [localSearch, setLocalSearch] = useState('');
@@ -12025,7 +12057,11 @@ function HomeView({
               section1Items.push({ type: 'testimony', data: t });
             });
 
-            if (section1Items.length === 0) return null;
+            if (prosLoading || (allPros.length === 0 && isSupabaseConfigured)) {
+              return <DiscoverCardProSkeleton />;
+            }
+
+            if (section1Items.length === 0) return prosLoading ? <DiscoverCardProSkeleton /> : null;
 
             const activeIndex = sec1Idx % section1Items.length;
             const currentItem = section1Items[activeIndex];
@@ -12056,7 +12092,7 @@ function HomeView({
               }
             }
 
-            if (!proToShow) return null;
+            if (!proToShow) return prosLoading ? <DiscoverCardProSkeleton /> : null;
 
             const isCardProExpanded = expandedLandingProId === String(proToShow.id);
 
@@ -12243,10 +12279,15 @@ function HomeView({
             events={events}
             highlightedEventIds={highlightedEventIds}
             onNavigate={onNavigate}
+            loading={eventsLoading}
           />
 
           {/* Card 3: Guide Highlight */}
           {(() => {
+            if (guidesLoading || (allArticles.length === 0 && isSupabaseConfigured)) {
+              return <DiscoverCardGuideSkeleton />;
+            }
+
             const dbHighlightedArticles = allArticles.filter(art => (art.is_highlighted === true || (art.is_highlighted as any) === 'true' || (art.is_highlighted as any) === 1) && art.isOnline !== false);
             
             // Filter online articles and sort stably by id
@@ -12266,7 +12307,7 @@ function HomeView({
               section3Items = allArticles.filter(art => highlightedArticleIds.includes(String(art.id)) && art.isOnline !== false);
             }
 
-            if (section3Items.length === 0) return null;
+            if (section3Items.length === 0) return guidesLoading ? <DiscoverCardGuideSkeleton /> : null;
 
             const activeIndex = sec3Idx % section3Items.length;
             const featuredArticle = section3Items[activeIndex];
@@ -13870,7 +13911,8 @@ function ExploreView({
   usersWhoBlockedMe = [], 
   isActive = false,
   favoriteProIds = [],
-  onToggleFavoritePro
+  onToggleFavoritePro,
+  loading = false
 }: { 
   allPros: Professional[], 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
@@ -13885,7 +13927,8 @@ function ExploreView({
   usersWhoBlockedMe?: string[],
   isActive?: boolean,
   favoriteProIds?: string[],
-  onToggleFavoritePro?: (proId: string | number) => void
+  onToggleFavoritePro?: (proId: string | number) => void,
+  loading?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState(initialSearch || '');
@@ -14896,7 +14939,11 @@ function ExploreView({
           {/* List View below the map */}
           <LayoutGroup>
             <div id="pro-cards-list" className="grid grid-cols-1 md:grid-cols-2 gap-6 scroll-mt-28">
-              {filteredPros.length > 0 ? (
+              {loading && filteredPros.length === 0 ? (
+                <div className="col-span-full">
+                  <DirectoryProCardSkeletonGrid count={6} />
+                </div>
+              ) : filteredPros.length > 0 ? (
                 filteredPros.map((pro, index) => {
                   const isExpanded = String(expandedProId) === String(pro.id);
                   return (
@@ -16914,21 +16961,24 @@ function EventsView({
   scrollToTop, 
   events: propEvents,
   favoriteEventIds = [],
-  onToggleFavoriteEvent
+  onToggleFavoriteEvent,
+  loading: propLoading
 }: { 
   initialEventId?: string | null, 
   onModalClose?: () => void, 
   scrollToTop?: () => void, 
   events?: Event[],
   favoriteEventIds?: string[],
-  onToggleFavoriteEvent?: (eventId: string) => void
+  onToggleFavoriteEvent?: (eventId: string) => void,
+  loading?: boolean
 }) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId || null);
   const [events, setEvents] = useState<Event[]>(() => {
     const list = propEvents && propEvents.length > 0 ? propEvents : (isSupabaseConfigured ? [] : MOCK_EVENTS);
     return list.filter(ev => !isEventExpired(ev));
   });
-  const [loading, setLoading] = useState(!propEvents || propEvents.length === 0);
+  const [internalLoading, setInternalLoading] = useState(!propEvents || propEvents.length === 0);
+  const loading = propLoading !== undefined ? propLoading : internalLoading;
   const [sharedEventId, setSharedEventId] = useState<string | null>(null);
 
   // Category filter state
@@ -16941,7 +16991,7 @@ function EventsView({
   useEffect(() => {
     if (propEvents && propEvents.length > 0) {
       setEvents(propEvents.filter(ev => !isEventExpired(ev)));
-      setLoading(false);
+      setInternalLoading(false);
       return;
     }
 
@@ -16957,7 +17007,7 @@ function EventsView({
         console.error('Failed to load events:', err);
         setEvents(MOCK_EVENTS.filter(ev => !isEventExpired(ev)));
       } finally {
-        setLoading(false);
+        setInternalLoading(false);
       }
     };
     loadEvents();
@@ -17241,10 +17291,7 @@ function EventsView({
 
       {/* Events Grid or Loading / Empty States */}
       {loading && events.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 space-y-4">
-          <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-          <p className="text-slate-400 font-medium">Discovering best events in Valencia...</p>
-        </div>
+        <EventCardSkeletonGrid count={6} />
       ) : filteredEvents.length === 0 ? (
         <div className="p-12 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 space-y-4">
           <div className="w-14 h-14 mx-auto rounded-2xl bg-white shadow-sm flex items-center justify-center text-slate-400">
@@ -17933,9 +17980,12 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
 
   if (loading) {
     return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] space-y-3">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-        <p className="text-slate-500 font-medium text-sm">Loading guides...</p>
+      <div className="p-6 max-w-7xl mx-auto space-y-6 pt-12 pb-32">
+        <div className="space-y-2">
+          <div className="h-8 w-48 bg-slate-200 rounded-xl animate-pulse" />
+          <div className="h-4 w-72 bg-slate-150 rounded-lg animate-pulse" />
+        </div>
+        <GuideCardSkeletonList count={4} />
       </div>
     );
   }
@@ -18248,7 +18298,8 @@ function MarketplaceView({
   onNavigate,
   favoriteAdIds,
   onToggleFavoriteAd,
-  onAdDeleted
+  onAdDeleted,
+  loading = false
 }: { 
   onAddAd: () => void; 
   ads: Ad[]; 
@@ -18259,6 +18310,7 @@ function MarketplaceView({
   favoriteAdIds?: string[];
   onToggleFavoriteAd?: (id: string | number) => void;
   onAdDeleted?: () => void;
+  loading?: boolean;
 }) {
   useEffect(() => {
     scrollToTop?.();
@@ -18643,7 +18695,7 @@ function MarketplaceView({
   };
 
   return (
-    <div className="p-4 md:p-10 pt-3 md:pt-5 space-y-6 pb-32 max-w-7xl mx-auto">
+    <div className="p-4 md:p-10 pt-6 sm:pt-8 md:pt-10 space-y-6 pb-32 max-w-7xl mx-auto">
       {/* Modern, Clean Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
         <div>
@@ -18701,47 +18753,29 @@ function MarketplaceView({
           )}
         </div>
 
-        {/* 15 Category Filter Chips (Directly in same filter toolbar) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none -mx-2 px-2 sm:mx-0 sm:px-0">
-          {categories.map((cat) => {
-            const Icon = cat.icon;
-            const isSelected = selectedCategory === cat.id;
-            const count = categoryCounts[cat.id] ?? 0;
-
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setSelectedCategory(cat.id)}
-                className={cn(
-                  "px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all cursor-pointer shrink-0 border",
-                  isSelected
-                    ? "bg-purple-600 text-white border-purple-600 shadow-2xs font-bold"
-                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
-                )}
-              >
-                <span className="text-sm leading-none">{cat.emoji}</span>
-                <span>{cat.label}</span>
-                {count > 0 && (
-                  <span
-                    className={cn(
-                      "text-[10px] font-bold px-1.5 py-0.2 rounded-full transition-colors ml-0.5",
-                      isSelected
-                        ? "bg-white/25 text-white"
-                        : "bg-slate-200/80 text-slate-600"
-                    )}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Secondary Controls Bar: Location, Dynamic Price Range, Condition, Sort */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
+        {/* Controls Bar: Category, Location, Dynamic Price Range, Condition, Sort */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 border-t border-slate-100">
           <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            {/* Category Select Dropdown */}
+            <div className="relative">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="pl-8 pr-8 py-2 bg-slate-50 text-slate-800 text-xs font-semibold rounded-xl border border-slate-200 shadow-2xs hover:bg-white outline-none cursor-pointer appearance-none max-w-[210px] truncate"
+              >
+                {categories.map((cat) => {
+                  const count = categoryCounts[cat.id] ?? 0;
+                  return (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.emoji} {cat.label} {count > 0 ? `(${count})` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              <Tag className="w-3.5 h-3.5 text-purple-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
             {/* Location Select */}
             <div className="relative">
               <select
@@ -18907,7 +18941,9 @@ function MarketplaceView({
       </div>
 
       {/* Ads Container (Grid or List View) */}
-      {filteredAds.length > 0 ? (
+      {loading && ads.length === 0 ? (
+        <MarketplaceCardSkeletonGrid count={6} />
+      ) : filteredAds.length > 0 ? (
         viewMode === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAds.map((ad) => {

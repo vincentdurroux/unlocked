@@ -11,16 +11,19 @@ import {
   getEventStartDate 
 } from '../utils/eventFormatter';
 import { cn } from '../lib/utils';
+import { DiscoverCardEventSkeleton } from './CardSkeletons';
 
 interface LandingEventHighlightsCardProps {
   events: Event[];
   highlightedEventIds?: string[];
   onNavigate: (view: string, params?: { eventId?: string }) => void;
+  loading?: boolean;
 }
 
 export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProps> = ({
   events,
   onNavigate,
+  loading = false,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -76,7 +79,9 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     return () => clearInterval(interval);
   }, [count, isPaused, currentIndex]);
 
-  if (count === 0) return null;
+  if (count === 0 || loading) {
+    return <DiscoverCardEventSkeleton />;
+  }
 
   const currentEvent = monthlyEvents[currentIndex % count];
   const categoryBadges = getCategoryBadges(currentEvent.category);

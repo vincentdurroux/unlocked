@@ -7,12 +7,25 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 // For simplicity, let's assume we want a clean way to handle this.
 
 export function useProfessionals(fallbackData: any[] = []) {
-  const [professionals, setProfessionals] = useState<any[]>(fallbackData);
-  const [loading, setLoading] = useState(true);
+  const [professionals, setProfessionals] = useState<any[]>(() => {
+    try {
+      const cached = localStorage.getItem('unlocked_cached_professionals');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (_) {}
+    return fallbackData;
+  });
+  const [loading, setLoading] = useState(professionals.length === 0);
   const [error, setError] = useState<Error | null>(null);
 
   async function loadPros() {
-    setLoading(true);
+    if (professionals.length === 0) {
+      setLoading(true);
+    }
     try {
       if (!isSupabaseConfigured) {
         setProfessionals([]);
@@ -21,11 +34,20 @@ export function useProfessionals(fallbackData: any[] = []) {
       }
 
       const data = await proService.getProfessionals();
-      setProfessionals(data || []);
+      if (data && data.length > 0) {
+        setProfessionals(data);
+        try {
+          localStorage.setItem('unlocked_cached_professionals', JSON.stringify(data));
+        } catch (_) {}
+      } else {
+        setProfessionals(data || []);
+      }
     } catch (err) {
       console.error('Failed to load professionals from Supabase:', err);
       setError(err instanceof Error ? err : new Error('Unknown error'));
-      setProfessionals([]);
+      if (professionals.length === 0) {
+        setProfessionals([]);
+      }
     } finally {
       setLoading(false);
     }
