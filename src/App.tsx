@@ -89,6 +89,7 @@ import {
   Bike,
   MessageSquare,
   Check,
+  CheckCheck,
   MoreHorizontal,
   Eye,
   EyeOff,
@@ -120,7 +121,7 @@ import {
   Handshake
 } from 'lucide-react';
 import { storageService } from './lib/storage';
-import { marketplaceService, Ad } from './services/marketplaceService';
+import { marketplaceService, Ad, AdDraft } from './services/marketplaceService';
 import { compressImage } from './services/imageService';
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -2430,11 +2431,148 @@ export default function App() {
     }
   }, [allArticles]);
 
+  // Form states for Ad
+  const [adTitle, setAdTitle] = useState('');
+  const [adPrice, setAdPrice] = useState('');
+  const [adCategory, setAdCategory] = useState('School & Uniforms');
+  const [adCondition, setAdCondition] = useState('Used');
+  const [adLocation, setAdLocation] = useState('');
+  const [adLocationPrecision, setAdLocationPrecision] = useState<'approximate' | 'exact'>('approximate');
+  const [adExactAddress, setAdExactAddress] = useState('');
+  const [adLat, setAdLat] = useState<number | null>(null);
+  const [adLng, setAdLng] = useState<number | null>(null);
+  const [adDescription, setAdDescription] = useState('');
+  const [adHousingType, setAdHousingType] = useState<'Rent' | 'Sale'>('Rent');
+  const [adFuelType, setAdFuelType] = useState('Petrol');
+  const [adPropertyType, setAdPropertyType] = useState('Apartment');
+  const [adContractType, setAdContractType] = useState('Full-time');
+  const [adSize, setAdSize] = useState('M');
+  const [adPhone, setAdPhone] = useState('');
+  const [adPhoneCountryCode, setAdPhoneCountryCode] = useState('+34');
+  const [adPickup, setAdPickup] = useState(true);
+  const [adDeliveryAvailable, setAdDeliveryAvailable] = useState(false);
+  const [adError, setAdError] = useState<string | null>(null);
+
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
   const [editingAd, setEditingAd] = useState<any | null>(null);
+  const [adDrafts, setAdDrafts] = useState<AdDraft[]>(() => marketplaceService.getDrafts(currentUser?.id));
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
 
-  const handleOpenCreateAd = () => {
+  useEffect(() => {
+    setAdDrafts(marketplaceService.getDrafts(currentUser?.id));
+  }, [currentUser?.id]);
+
+  const saveCurrentFormAsDraft = React.useCallback(() => {
+    const hasContent = Boolean(
+      adTitle.trim() || 
+      adDescription.trim() || 
+      (adPrice.trim() && adPrice.trim() !== 'Free') || 
+      uploadedImageUrls.length > 0 || 
+      adLocation.trim() || 
+      adExactAddress.trim() ||
+      adPhone.trim() ||
+      editingAd
+    );
+
+    if (!hasContent) return null;
+
+    const draftId = currentDraftId || `draft_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const draftObj: AdDraft = {
+      id: draftId,
+      title: adTitle.trim() || 'Untitled Draft',
+      description: adDescription.trim() || '',
+      price: adPrice.trim() || '',
+      category: adCategory || 'School & Uniforms',
+      condition: adCondition || 'Used',
+      location: adLocation.trim() || '',
+      location_precision: adLocationPrecision || 'approximate',
+      exact_address: adExactAddress.trim() || '',
+      lat: adLat,
+      lng: adLng,
+      type: adHousingType,
+      fuel_type: adFuelType,
+      property_type: adPropertyType,
+      contract_type: adContractType,
+      size: adSize,
+      delivery_pickup: adPickup,
+      delivery_available: adDeliveryAvailable,
+      phone: adPhone,
+      phone_country_code: adPhoneCountryCode,
+      images: uploadedImageUrls,
+      editing_ad_id: editingAd?.id || null,
+      saved_at: new Date().toISOString()
+    };
+
+    const updated = marketplaceService.saveDraft(draftObj, currentUser?.id);
+    setAdDrafts(updated);
+    setCurrentDraftId(draftId);
+    return draftObj;
+  }, [
+    adTitle, adDescription, adPrice, adCategory, adCondition, adLocation,
+    adLocationPrecision, adExactAddress, adLat, adLng, adHousingType,
+    adFuelType, adPropertyType, adContractType, adSize, adPickup,
+    adDeliveryAvailable, adPhone, adPhoneCountryCode, uploadedImageUrls,
+    editingAd, currentDraftId, currentUser?.id
+  ]);
+
+  const handleCloseAddAd = (discard = false) => {
+    if (!discard) {
+      const saved = saveCurrentFormAsDraft();
+      if (saved) {
+        setGlobalAlert({
+          type: 'info',
+          text: 'Draft saved to My Account > My items'
+        });
+      }
+    }
+    setShowAddAd(false);
+    setCurrentDraftId(null);
+    setEditingAd(null);
+  };
+
+  const handleDeleteDraft = (draftId: string) => {
+    const updated = marketplaceService.deleteDraft(draftId, currentUser?.id);
+    setAdDrafts(updated);
+    if (currentDraftId === draftId) {
+      setCurrentDraftId(null);
+    }
+    setGlobalAlert({
+      type: 'info',
+      text: 'Draft deleted'
+    });
+  };
+
+  const handleOpenCreateAd = (draftToResume?: AdDraft) => {
+    if (draftToResume) {
+      setCurrentDraftId(draftToResume.id);
+      setEditingAd(draftToResume.editing_ad_id ? ads.find(a => a.id === draftToResume.editing_ad_id) || null : null);
+      setAdTitle(draftToResume.title === 'Untitled Draft' ? '' : (draftToResume.title || ''));
+      setAdPrice(draftToResume.price || '');
+      setAdCategory(draftToResume.category || 'School & Uniforms');
+      setAdCondition(draftToResume.condition || 'Used');
+      setAdLocation(draftToResume.location || '');
+      setAdLocationPrecision(draftToResume.location_precision || 'approximate');
+      setAdExactAddress(draftToResume.exact_address || '');
+      setAdLat(draftToResume.lat || null);
+      setAdLng(draftToResume.lng || null);
+      setAdDescription(draftToResume.description || '');
+      setAdHousingType((draftToResume.type as any) || 'Rent');
+      setAdFuelType(draftToResume.fuel_type || 'Petrol');
+      setAdPropertyType(draftToResume.property_type || 'Apartment');
+      setAdContractType(draftToResume.contract_type || 'Full-time');
+      setAdSize(draftToResume.size || 'M');
+      setAdPhone(draftToResume.phone || '');
+      setAdPhoneCountryCode(draftToResume.phone_country_code || '+34');
+      setAdPickup(draftToResume.delivery_pickup ?? true);
+      setAdDeliveryAvailable(draftToResume.delivery_available ?? false);
+      setAdError(null);
+      setUploadedImageUrls(draftToResume.images || []);
+      setShowAddAd(true);
+      return;
+    }
+
+    setCurrentDraftId(null);
     setEditingAd(null);
     setAdTitle('');
     setAdPrice('');
@@ -2461,6 +2599,7 @@ export default function App() {
   };
 
   const handleEditAd = (ad: any) => {
+    setCurrentDraftId(null);
     setEditingAd(ad);
     setAdTitle(ad.title || '');
     setAdPrice(ad.price || '');
@@ -2584,28 +2723,6 @@ export default function App() {
   const [recommendationSent, setRecommendationSent] = useState(false);
   const [isSubmittingPro, setIsSubmittingPro] = useState(false);
   const [proError, setProError] = useState<string | null>(null);
-
-  // Form states for Ad
-  const [adTitle, setAdTitle] = useState('');
-  const [adPrice, setAdPrice] = useState('');
-  const [adCategory, setAdCategory] = useState('School & Kids');
-  const [adCondition, setAdCondition] = useState('Used');
-  const [adLocation, setAdLocation] = useState('');
-  const [adLocationPrecision, setAdLocationPrecision] = useState<'approximate' | 'exact'>('approximate');
-  const [adExactAddress, setAdExactAddress] = useState('');
-  const [adLat, setAdLat] = useState<number | null>(null);
-  const [adLng, setAdLng] = useState<number | null>(null);
-  const [adDescription, setAdDescription] = useState('');
-  const [adHousingType, setAdHousingType] = useState<'Rent' | 'Sale'>('Rent');
-  const [adFuelType, setAdFuelType] = useState('Petrol');
-  const [adPropertyType, setAdPropertyType] = useState('Apartment');
-  const [adContractType, setAdContractType] = useState('Full-time');
-  const [adSize, setAdSize] = useState('M');
-  const [adPhone, setAdPhone] = useState('');
-  const [adPhoneCountryCode, setAdPhoneCountryCode] = useState('+34');
-  const [adPickup, setAdPickup] = useState(true);
-  const [adDeliveryAvailable, setAdDeliveryAvailable] = useState(false);
-  const [adError, setAdError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -2867,10 +2984,17 @@ export default function App() {
         });
       }
       
+      // Clear active draft if publishing succeeded
+      if (currentDraftId) {
+        const updated = marketplaceService.deleteDraft(currentDraftId, currentUser?.id);
+        setAdDrafts(updated);
+        setCurrentDraftId(null);
+      }
+
       // Reset form
       setAdTitle('');
       setAdPrice('');
-      setAdCategory('School & Kids');
+      setAdCategory('School & Uniforms');
       setAdCondition('Used');
       setAdLocation('');
       setAdLocationPrecision('approximate');
@@ -3625,7 +3749,10 @@ export default function App() {
                   onToggleFavoriteAd={toggleFavoriteAd}
                   allAds={ads}
                   events={events}
+                  adDrafts={adDrafts}
                   onOpenCreateAd={handleOpenCreateAd}
+                  onResumeDraft={handleOpenCreateAd}
+                  onDeleteDraft={handleDeleteDraft}
                   onEditAd={handleEditAd}
                   onSelectAd={(ad) => setSelectedAd(ad)}
                   onAdDeleted={() => fetchAds()}
@@ -3767,14 +3894,14 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-2 sm:p-4"
               onClick={() => setShowMessagesModal(false)}
             >
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full md:max-w-4xl h-[70vh] md:h-[75vh] bg-white rounded-[32px] overflow-hidden shadow-2xl relative"
+                className="w-full max-w-5xl h-[90vh] sm:h-[84vh] bg-white rounded-[28px] sm:rounded-[32px] overflow-hidden shadow-2xl relative border border-slate-200/80"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MessagesView 
@@ -4059,7 +4186,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/70 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain touch-pan-y" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
-              onClick={() => setShowAddAd(false)}
+              onClick={() => handleCloseAddAd(false)}
             >
               <div className="min-h-full flex items-start justify-center p-3 sm:p-6 py-6">
                 <motion.div 
@@ -4077,18 +4204,30 @@ export default function App() {
                       <Tag className="w-5 h-5 stroke-[2.2]" />
                     </div>
                     <div>
-                      <h2 className="text-xl sm:text-2xl font-black font-display text-slate-900 tracking-tight">Post an Ad</h2>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl sm:text-2xl font-black font-display text-slate-900 tracking-tight">
+                          {editingAd ? 'Edit Listing' : 'Post an Ad'}
+                        </h2>
+                        {currentDraftId && (
+                          <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold rounded-full uppercase tracking-wider flex items-center gap-1">
+                            <FileText className="w-3 h-3" /> Draft
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-slate-500 mt-0.5">List items for sale, trade, or free in Valencia</p>
                     </div>
                   </div>
-                  <button 
-                    type="button"
-                    onClick={() => setShowAddAd(false)}
-                    className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 rounded-full transition-colors cursor-pointer"
-                    aria-label="Close"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button 
+                      type="button"
+                      onClick={() => handleCloseAddAd(false)}
+                      className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 rounded-full transition-colors cursor-pointer"
+                      aria-label="Save draft and close"
+                      title="Save draft and close"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {!currentUser ? (
@@ -4474,7 +4613,7 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* Submit Button */}
+                    {/* Action Buttons & Draft Hint */}
                     {(() => {
                       const isPriceRequired = adCategory !== 'Jobs' && adCategory !== 'Services';
                       const hasLocation = Boolean(adExactAddress.trim() || adLocation.trim());
@@ -4482,24 +4621,43 @@ export default function App() {
                       const isPostDisabled = isUploading || !adTitle.trim() || (isPriceRequired && !adPrice.trim()) || !adDescription.trim() || !hasLocation || !hasHandover;
 
                       return (
-                        <button 
-                          type="button"
-                          className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3.5 text-base font-bold rounded-2xl shadow-lg shadow-purple-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none cursor-pointer flex items-center justify-center gap-2" 
-                          onClick={handlePostAd}
-                          disabled={isPostDisabled}
-                        >
-                          {isUploading ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <Loader2 className="w-5 h-5 animate-spin" />
-                              <span>Publishing listing...</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center gap-2">
-                              <Plus className="w-5 h-5 stroke-[2.5]" />
-                              <span>Publish Listing</span>
-                            </div>
-                          )}
-                        </button>
+                        <div className="space-y-3 pt-1">
+                          <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                            <button 
+                              type="button"
+                              className="w-full sm:flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3.5 text-sm sm:text-base font-bold rounded-2xl shadow-lg shadow-purple-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none cursor-pointer flex items-center justify-center gap-2" 
+                              onClick={handlePostAd}
+                              disabled={isPostDisabled}
+                            >
+                              {isUploading ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <Loader2 className="w-5 h-5 animate-spin" />
+                                  <span>Publishing listing...</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center gap-2">
+                                  <Plus className="w-5 h-5 stroke-[2.5]" />
+                                  <span>Publish Listing</span>
+                                </div>
+                              )}
+                            </button>
+
+                            <button 
+                              type="button"
+                              onClick={() => handleCloseAddAd(false)}
+                              className="w-full sm:w-auto px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 shrink-0"
+                              title="Save current work as draft and exit"
+                            >
+                              <FileText className="w-4 h-4 text-purple-600" />
+                              <span>Save as Draft</span>
+                            </button>
+                          </div>
+
+                          <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100/80 flex items-center gap-2 text-slate-600 text-xs">
+                            <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
+                            <span>Leaving or closing this page will automatically save your draft in <strong>My Account &gt; My items</strong>.</span>
+                          </div>
+                        </div>
                       );
                     })()}
                   </div>
@@ -15524,27 +15682,60 @@ function MessagesView({
     }
   };
 
-  // Filter conversations matching search string
+  // Filter conversations matching search string and unread filter
+  const [chatListFilter, setChatListFilter] = useState<'all' | 'unread'>('all');
+  const [showEmojiBar, setShowEmojiBar] = useState(false);
+
   const filteredConversations = conversations.filter(conv => {
     const otherName = conv.otherUser?.full_name || '';
-    return otherName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = otherName.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+    if (chatListFilter === 'unread') {
+      return unreadConversations.includes(conv.id);
+    }
+    return true;
   });
 
+  const unreadCount = conversations.filter(c => unreadConversations.includes(c.id)).length;
+
+  // Format date grouping label
+  const formatMessageDateGroup = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    if (isToday) return 'Today';
+    if (isYesterday) return 'Yesterday';
+    return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
   return (
-    <div className="h-full w-full bg-white overflow-hidden flex relative">
+    <div className="h-full w-full bg-white overflow-hidden flex relative font-sans select-text">
       {/* Visual Alerts Overlay container */}
       <AnimatePresence>
         {viewAlert && (
           <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] max-w-md w-[90%] bg-slate-900 text-white rounded-2xl px-5 py-3.5 shadow-xl flex items-center justify-between gap-3 text-sm font-medium"
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] max-w-md w-[92%] bg-slate-900/95 backdrop-blur-md text-white rounded-2xl px-5 py-3.5 shadow-2xl flex items-center justify-between gap-3 text-xs font-semibold border border-white/10"
           >
-            <span>{viewAlert.text}</span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              {viewAlert.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              ) : viewAlert.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              ) : (
+                <Info className="w-4 h-4 text-blue-400 flex-shrink-0" />
+              )}
+              <span className="truncate">{viewAlert.text}</span>
+            </div>
             <button 
               onClick={() => setViewAlert(null)}
-              className="p-1.5 hover:bg-white/10 rounded-full transition-colors text-slate-350"
+              className="p-1 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white flex-shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -15554,45 +15745,133 @@ function MessagesView({
 
       {/* LEFT SIDEBAR - List of conversations */}
       <div className={cn(
-        "w-full md:w-80 border-r border-slate-100 flex flex-col transition-all duration-200 bg-white",
+        "w-full md:w-84 lg:w-96 border-r border-slate-100 flex flex-col transition-all duration-200 bg-slate-50/50",
         selectedChat ? "hidden md:flex" : "flex"
       )}>
-        <div className="p-5 border-b border-slate-100 space-y-3">
+        {/* Header */}
+        <div className="p-4 sm:p-5 border-b border-slate-100 bg-white space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-900 font-display">Private Messages</h2>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-brand-blue/10 flex items-center justify-center text-brand-blue">
+                <MessageSquare className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-black text-slate-900 font-display flex items-center gap-2">
+                  Messages
+                  {conversations.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-extrabold">
+                      {conversations.length}
+                    </span>
+                  )}
+                </h2>
+              </div>
+            </div>
             <button 
               onClick={() => onClose ? onClose() : onNavigate?.('back' as any)}
-              className="p-1 px-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all flex items-center gap-1.5"
+              className="p-1.5 px-2.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold"
+              title="Close chat"
             >
-              <span className="text-[10px] font-bold uppercase tracking-wider">Close</span>
+              <span>Close</span>
               <X className="w-4 h-4" />
             </button>
           </div>
-          <p className="text-[10px] text-slate-500 bg-slate-50 border border-slate-100 p-2.5 rounded-xl leading-relaxed">
-            To start a private conversation with a community member, click on the chat icon next to their name in the testimonials section of a professional's profile.
+
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input 
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search conversations..."
+              className="w-full pl-9 pr-8 py-2 bg-slate-100/80 hover:bg-slate-100 focus:bg-white text-xs font-medium text-slate-800 placeholder-slate-400 rounded-xl border border-transparent focus:border-brand-blue/30 focus:ring-2 focus:ring-brand-blue/10 outline-none transition-all"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Filter tabs: All vs Unread */}
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <button
+              onClick={() => setChatListFilter('all')}
+              className={cn(
+                "flex-1 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5",
+                chatListFilter === 'all'
+                  ? "bg-brand-blue text-white shadow-sm"
+                  : "bg-slate-100/70 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              )}
+            >
+              <span>All</span>
+              <span className={cn("text-[10px] px-1.5 py-0.2 rounded-full", chatListFilter === 'all' ? "bg-white/20 text-white" : "bg-slate-200/60 text-slate-600")}>
+                {conversations.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setChatListFilter('unread')}
+              className={cn(
+                "flex-1 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5",
+                chatListFilter === 'unread'
+                  ? "bg-brand-blue text-white shadow-sm"
+                  : "bg-slate-100/70 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              )}
+            >
+              <span>Unread</span>
+              {unreadCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+              )}
+              <span className={cn("text-[10px] px-1.5 py-0.2 rounded-full", chatListFilter === 'unread' ? "bg-white/20 text-white" : "bg-slate-200/60 text-slate-600")}>
+                {unreadCount}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Tip info card */}
+        <div className="px-4 py-2.5 bg-gradient-to-r from-blue-50/60 to-indigo-50/60 border-b border-blue-100/40">
+          <p className="text-[11px] text-blue-900/80 font-medium leading-relaxed flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
+            <span>Connect with community members from reviews on pro profiles.</span>
           </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+        {/* Conversation items list */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 divide-y divide-transparent">
           {loadingConversations ? (
-            <div className="p-8 text-center space-y-3">
+            <div className="py-16 text-center space-y-3">
               <Loader2 className="w-6 h-6 text-brand-blue animate-spin mx-auto" />
-              <p className="text-xs text-slate-500">Loading conversations...</p>
+              <p className="text-xs font-semibold text-slate-400">Loading your conversations...</p>
             </div>
           ) : filteredConversations.length === 0 ? (
-            <div className="p-8 text-center space-y-2">
-              <p className="text-sm font-bold text-slate-400">No messages</p>
+            <div className="py-16 px-6 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                <MessageSquare className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-slate-700">
+                  {searchQuery ? "No matching conversations" : chatListFilter === 'unread' ? "No unread messages" : "No messages yet"}
+                </p>
+                <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs mx-auto">
+                  {searchQuery ? "Try searching for a different name." : "Start a private conversation by clicking the message icon next to member reviews."}
+                </p>
+              </div>
             </div>
           ) : (
             filteredConversations.map(conv => {
               const otherUserObj = conv.otherUser;
               const otherName = otherUserObj?.full_name || 'Anonymous Member';
               const displayedName = formatName(otherName);
-              const otherAvatar = otherUserObj?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayedName)}&background=random`;
+              const otherAvatar = otherUserObj?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayedName)}&background=0a192f&color=fff`;
               const isBlockedByMe = blockedUsers.includes(otherUserObj?.id || '');
               const isBlockedMe = usersWhoBlockedMe.includes(otherUserObj?.id || '');
               const isBlockedLocally = isBlockedByMe || isBlockedMe;
               const isUnread = unreadConversations.includes(conv.id);
+              const isSelected = selectedChat?.id === conv.id;
 
               return (
                 <div 
@@ -15613,44 +15892,52 @@ function MessagesView({
                     }
                   }}
                   className={cn(
-                    "p-4 flex gap-3 cursor-pointer transition-all border-l-4 relative",
-                    selectedChat?.id === conv.id ? "bg-brand-blue/5 border-brand-blue" : "hover:bg-slate-50 border-transparent"
+                    "p-3 rounded-2xl flex items-center gap-3 cursor-pointer transition-all relative select-none",
+                    isSelected 
+                      ? "bg-white shadow-md shadow-slate-200/60 border border-brand-blue/30 ring-2 ring-brand-blue/10" 
+                      : "hover:bg-white/80 border border-transparent"
                   )}
                 >
                   <div className="relative flex-shrink-0">
-                    <img src={otherAvatar} alt="" className="w-11 h-11 rounded-full object-cover border border-slate-100" />
-                    {isBlockedLocally && (
-                      <div className="absolute -bottom-1 -right-1 bg-rose-500 text-white p-0.5 rounded-full border border-white">
-                        <Ban className="w-3 h-3" />
+                    <img 
+                      src={otherAvatar} 
+                      alt="" 
+                      className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm" 
+                    />
+                    {isBlockedLocally ? (
+                      <div className="absolute -bottom-0.5 -right-0.5 bg-rose-500 text-white p-0.5 rounded-full border-2 border-white shadow-sm">
+                        <Ban className="w-2.5 h-2.5" />
                       </div>
+                    ) : (
+                      <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white shadow-xs" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start">
-                      <h4 className={cn("text-sm truncate", isUnread ? "font-black text-slate-900" : "font-bold text-slate-700")}>
+                    <div className="flex justify-between items-baseline mb-0.5">
+                      <h4 className={cn("text-xs truncate", isUnread ? "font-black text-slate-900" : "font-bold text-slate-800")}>
                         {displayedName}
                       </h4>
-                      <span className="text-[9px] text-slate-400">
+                      <span className="text-[10px] font-semibold text-slate-400 flex-shrink-0 ml-2">
                         {conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : ''}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between mt-1">
+                    <div className="flex items-center justify-between gap-2">
                       {conv.is_blocked ? (
-                        <span className="text-[10px] bg-slate-900 text-white px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
+                        <span className="text-[9px] bg-slate-900 text-white px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
                           <Lock className="w-2.5 h-2.5" />
                           Chat Blocked
                         </span>
                       ) : isBlockedByMe ? (
-                        <span className="text-[10px] bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">Blocked</span>
+                        <span className="text-[9px] bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded-md font-extrabold uppercase tracking-wider">Blocked</span>
                       ) : isBlockedMe ? (
-                        <span className="text-[10px] bg-slate-50 text-slate-400 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">Unavailable</span>
+                        <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">Unavailable</span>
                       ) : (
-                        <p className={cn("text-xs truncate", isUnread ? "font-bold text-brand-blue" : "text-slate-500")}>
-                          {isUnread ? "New messages" : "Click to open chat"}
+                        <p className={cn("text-[11px] truncate", isUnread ? "font-bold text-brand-blue" : "text-slate-500 font-medium")}>
+                          {isUnread ? "New messages received" : "Click to view messages"}
                         </p>
                       )}
                       {isUnread && (
-                        <span className="w-2 h-2 rounded-full bg-rose-500 shadow-sm" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-brand-blue shadow-sm flex-shrink-0 animate-pulse" />
                       )}
                     </div>
                   </div>
@@ -15663,70 +15950,77 @@ function MessagesView({
 
       {/* RIGHT PANEL - Actual chat window */}
       <div className={cn(
-        "flex-1 flex flex-col bg-slate-50/20 transition-all duration-200",
+        "flex-1 flex flex-col bg-slate-50/40 transition-all duration-200",
         selectedChat ? "flex" : "hidden md:flex bg-white items-center justify-center text-center p-8"
       )}>
         {selectedChat ? (
           <>
             {/* Conversations Header */}
-            <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shadow-sm relative z-30">
+            <div className="px-4 py-3 sm:px-6 bg-white border-b border-slate-100 flex items-center justify-between shadow-xs relative z-30">
               <div className="flex items-center gap-3">
                 <button 
                   onClick={handleCloseChat}
-                  className="md:hidden p-2 -ml-2 text-slate-400 hover:text-brand-blue transition-colors"
+                  className="md:hidden p-2 -ml-2 text-slate-500 hover:text-brand-blue hover:bg-slate-50 rounded-xl transition-all flex items-center gap-1 text-xs font-bold"
                 >
                   <ChevronLeft className="w-5 h-5" />
+                  <span>Back</span>
                 </button>
                 <div className="relative">
                   <img 
-                     src={selectedChat.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(formatName(selectedChat.otherUser?.full_name))}&background=random`} 
+                     src={selectedChat.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(formatName(selectedChat.otherUser?.full_name))}&background=0a192f&color=fff`} 
                      alt="" 
-                     className="w-10 h-10 rounded-full object-cover border border-slate-100" 
+                     className="w-10 h-10 rounded-full object-cover border-2 border-slate-100 shadow-sm" 
                   />
+                  <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-slate-900">{formatName(selectedChat.otherUser?.full_name)}</h4>
-                  {(blockedUsers.includes(selectedChat.otherUser?.id || '') || usersWhoBlockedMe.includes(selectedChat.otherUser?.id || '')) && (
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-black text-slate-900 font-display">{formatName(selectedChat.otherUser?.full_name)}</h4>
+                    <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 bg-blue-50 text-brand-blue rounded-md tracking-wider">Community</span>
+                  </div>
+                  {(blockedUsers.includes(selectedChat.otherUser?.id || '') || usersWhoBlockedMe.includes(selectedChat.otherUser?.id || '')) ? (
                     <div className="flex items-center gap-1 mt-0.5">
                       {blockedUsers.includes(selectedChat.otherUser?.id || '') ? (
-                        <span className="text-[9px] bg-rose-50 text-rose-500 font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md">Blocked by you</span>
+                        <span className="text-[9px] bg-rose-50 text-rose-600 font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md">Blocked by you</span>
                       ) : (
                         <span className="text-[9px] bg-slate-100 text-slate-500 font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded-md">Unavailable</span>
                       )}
                     </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 font-medium">Direct discussion</p>
                   )}
                 </div>
               </div>
 
               {/* Action options - Dropdown with block & report */}
-              <div className="relative">
+              <div className="relative flex items-center gap-1">
                 <button 
                   onClick={() => setShowOptionsDropdown(prev => !prev)}
-                  className="p-2.5 bg-slate-50 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
-                  title="Options Menu"
+                  className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
+                  title="Discussion options"
                 >
                   <MoreHorizontal className="w-5 h-5" />
                 </button>
 
                 {/* Dropdown Box */}
                 {showOptionsDropdown && (
-                  <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl border border-slate-150 shadow-xl py-2 z-40">
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl border border-slate-150 shadow-2xl py-2 z-40 animate-in fade-in zoom-in-95 duration-150">
                     <button 
                       onClick={() => {
                         setShowOptionsDropdown(false);
                         setShowReportModal(true);
                       }}
-                      className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors font-medium"
+                      className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors font-bold"
                     >
                       <Flag className="w-4 h-4 text-amber-500" />
-                      Report this member
+                      Report inappropriate behavior
                     </button>
                     <button 
                       onClick={() => {
                         setShowOptionsDropdown(false);
                         setShowBlockModal(true);
                       }}
-                      className="w-full text-left px-4 py-2 text-sm text-rose-600 hover:bg-rose-50/50 flex items-center gap-2.5 transition-colors font-medium border-t border-slate-50"
+                      className="w-full text-left px-4 py-2.5 text-xs text-rose-600 hover:bg-rose-50/50 flex items-center gap-2.5 transition-colors font-bold border-t border-slate-100"
                     >
                       <Ban className="w-4 h-4 text-rose-500" />
                       {blockedUsers.includes(selectedChat.otherUser?.id || '') ? 'Unblock member' : 'Block member'}
@@ -15739,13 +16033,13 @@ function MessagesView({
             {/* Chat Messages Log */}
             <div 
               ref={messagesContainerRef}
-              className="flex-1 p-4 md:p-6 space-y-4 overflow-y-auto bg-slate-50/40" 
+              className="flex-1 p-4 sm:p-6 space-y-4 overflow-y-auto bg-gradient-to-b from-slate-50/60 to-slate-100/40" 
               onScroll={handleScroll}
             >
               {loadingMessages ? (
                 <div className="h-full flex flex-col items-center justify-center space-y-2">
-                  <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
-                  <p className="text-xs text-slate-400">Loading conversation...</p>
+                  <Loader2 className="w-7 h-7 text-brand-blue animate-spin" />
+                  <p className="text-xs font-semibold text-slate-400">Loading conversation history...</p>
                 </div>
               ) : (() => {
                 const visibleMsgs = messages.filter(msg => {
@@ -15755,45 +16049,95 @@ function MessagesView({
                 
                 if (visibleMsgs.length === 0) {
                   return (
-                    <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2">
-                      <MessageSquare className="w-8 h-8 text-slate-300" />
-                      <p className="text-sm font-bold text-slate-500">No messages yet</p>
-                      <p className="text-xs text-slate-400 max-w-xs leading-relaxed">Engage in a respectful and constructive conversation regarding their review!</p>
+                    <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4 max-w-md mx-auto">
+                      <div className="w-16 h-16 rounded-3xl bg-blue-50 text-brand-blue flex items-center justify-center shadow-inner">
+                        <MessageSquare className="w-8 h-8" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <h4 className="text-base font-black text-slate-800 font-display">Start a conversation</h4>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Say hello and discuss recommendations, experiences, or events in the city.
+                        </p>
+                      </div>
+
+                      {/* Icebreaker prompts */}
+                      <div className="w-full space-y-2 pt-2">
+                        <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Quick Starters</p>
+                        <div className="flex flex-col gap-2">
+                          {[
+                            "👋 Hi there! I'd love to ask about your recommendation.",
+                            "✨ Great review! Thanks for sharing your experience.",
+                            "💬 Hello! Are you available for a quick question?"
+                          ].map((promptText, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => {
+                                setNewMessage(promptText);
+                              }}
+                              className="text-left text-xs font-medium text-slate-700 bg-white hover:bg-brand-blue hover:text-white p-2.5 px-3.5 rounded-xl border border-slate-200/80 shadow-xs transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                            >
+                              {promptText}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   );
                 }
                 
-                return visibleMsgs.map((msg) => {
+                // Group messages by date
+                let lastDateHeader = '';
+
+                return visibleMsgs.map((msg, idx) => {
                   const isSentByMe = msg.sender_id === currentUser?.id;
-                  
+                  const dateHeader = formatMessageDateGroup(msg.created_at);
+                  const showDateDivider = dateHeader !== lastDateHeader;
+                  lastDateHeader = dateHeader;
+
                   return (
-                    <div 
-                      key={msg.id} 
-                      className={cn("flex", isSentByMe ? "justify-end" : "justify-start")}
-                    >
-                      <div className={cn(
-                        "p-4 rounded-2xl max-w-[85%] md:max-w-sm text-sm shadow-sm leading-relaxed",
-                        isSentByMe 
-                          ? "bg-brand-blue text-white rounded-tr-none" 
-                          : "bg-white text-slate-700 border border-slate-100 rounded-tl-none"
-                      )}>
-                        <p className="break-words white-space-pre-wrap">{msg.content}</p>
-                        <span className={cn(
-                          "block text-[9px] mt-1.5 text-right font-medium",
-                          isSentByMe ? "text-blue-150" : "text-slate-400"
+                    <React.Fragment key={msg.id || idx}>
+                      {showDateDivider && (
+                        <div className="flex items-center justify-center my-3">
+                          <span className="px-3 py-1 rounded-full bg-slate-200/70 text-slate-600 text-[10px] font-extrabold uppercase tracking-wider backdrop-blur-xs shadow-2xs">
+                            {dateHeader}
+                          </span>
+                        </div>
+                      )}
+                      <div className={cn("flex items-end gap-2", isSentByMe ? "justify-end" : "justify-start")}>
+                        {!isSentByMe && (
+                          <img 
+                            src={selectedChat.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(formatName(selectedChat.otherUser?.full_name))}&background=0a192f&color=fff`}
+                            alt=""
+                            className="w-7 h-7 rounded-full object-cover border border-slate-200 flex-shrink-0 mb-1"
+                          />
+                        )}
+                        <div className={cn(
+                          "p-3.5 sm:p-4 rounded-2xl max-w-[85%] md:max-w-md text-xs sm:text-sm leading-relaxed shadow-sm transition-all",
+                          isSentByMe 
+                            ? "bg-gradient-to-br from-brand-blue to-blue-600 text-white rounded-br-xs shadow-brand-blue/15" 
+                            : "bg-white text-slate-800 border border-slate-100 rounded-bl-xs shadow-slate-100"
                         )}>
-                          {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-                        </span>
+                          <p className="break-words whitespace-pre-wrap">{msg.content}</p>
+                          <div className={cn(
+                            "flex items-center justify-end gap-1 mt-1.5 text-[9px] font-semibold",
+                            isSentByMe ? "text-blue-100" : "text-slate-400"
+                          )}>
+                            <span>{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</span>
+                            {isSentByMe && (
+                              <CheckCheck className={cn("w-3 h-3", msg.is_read ? "text-cyan-300" : "text-blue-200")} />
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    </React.Fragment>
                   );
                 });
               })()}
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Box section (Conditional blockers) */}
-            <div className="p-4 bg-white border-t border-slate-100 pb-6 md:pb-4">
+            {/* Input Box section (Conditional blockers & Rich Input) */}
+            <div className="p-3 sm:p-4 bg-white border-t border-slate-100 relative">
               {userProfile?.chat_enabled === false ? (
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center text-slate-500 text-xs font-bold leading-relaxed shadow-sm">
                   You have disabled chat participation. Enable it in Profile &gt; Settings to send and receive messages.
@@ -15816,18 +16160,18 @@ function MessagesView({
                   {blockedUsers.includes(selectedChat.otherUser?.id || '') && (
                     <button 
                       onClick={() => setShowBlockModal(true)}
-                      className="mt-1 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl border border-white/20 text-[10px] shadow-sm uppercase tracking-wider transition-all"
+                      className="mt-1 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl border border-white/20 text-[10px] shadow-sm uppercase tracking-wider transition-all cursor-pointer font-bold"
                     >
                       Unblock to resume
                     </button>
                   )}
                 </div>
               ) : blockedUsers.includes(selectedChat.otherUser?.id || '') ? (
-                <div className="bg-rose-50/50 border border-rose-100 rounded-2xl p-4 text-center text-rose-600 text-xs font-bold flex flex-col items-center justify-center gap-1.5 shadow-sm">
-                  <span>You have blocked this member. Unblock them from the options menu to resume the discussion.</span>
+                <div className="bg-rose-50/70 border border-rose-100 rounded-2xl p-4 text-center text-rose-600 text-xs font-bold flex flex-col items-center justify-center gap-1.5 shadow-sm">
+                  <span>You have blocked this member. Unblock them to resume the discussion.</span>
                   <button 
                     onClick={() => setShowBlockModal(true)}
-                    className="mt-1 bg-white hover:bg-rose-50 text-rose-500 hover:text-rose-600 px-3.5 py-1.5 rounded-xl border border-rose-200 text-[10px] shadow-sm uppercase tracking-wider transition-all"
+                    className="mt-1 bg-white hover:bg-rose-50 text-rose-600 px-4 py-1.5 rounded-xl border border-rose-200 text-[10px] shadow-xs uppercase tracking-wider transition-all font-extrabold cursor-pointer"
                   >
                     Unblock Now
                   </button>
@@ -15837,28 +16181,69 @@ function MessagesView({
                   This member does not accept private messages anymore or is currently unavailable.
                 </div>
               ) : (
-                <form onSubmit={handleSendMessage} className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type your private message..."
-                    disabled={isSending}
-                    className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-brand-blue/20 outline-none font-medium text-slate-700 transition-all disabled:opacity-60"
-                  />
-                  <button 
-                    type="submit"
-                    onClick={handleSendMessage}
-                    disabled={!newMessage.trim() || isSending}
-                    className="bg-brand-blue text-white p-2.5 rounded-xl shadow-lg shadow-brand-blue/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 cursor-pointer"
+                <div className="space-y-2">
+                  {/* Quick emoji reaction bar */}
+                  {showEmojiBar && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="flex items-center gap-1 bg-slate-50 border border-slate-100 p-1.5 rounded-xl shadow-xs"
+                    >
+                      {['👍', '❤️', '😊', '🙌', '✨', '👋', '🙏', '🔥'].map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => {
+                            setNewMessage(prev => prev + emoji);
+                          }}
+                          className="w-8 h-8 rounded-lg hover:bg-white active:scale-125 transition-all text-base flex items-center justify-center cursor-pointer"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+
+                  <form 
+                    onSubmit={handleSendMessage} 
+                    className="flex items-center gap-2 bg-slate-100/70 hover:bg-slate-100 focus-within:bg-white focus-within:ring-2 focus-within:ring-brand-blue/20 focus-within:border-brand-blue/30 border border-transparent rounded-2xl p-1.5 px-3 transition-all"
                   >
-                    {isSending ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <ArrowRight className="w-5 h-5" />
-                    )}
-                  </button>
-                </form>
+                    <button
+                      type="button"
+                      onClick={() => setShowEmojiBar(prev => !prev)}
+                      className={cn(
+                        "p-2 rounded-xl transition-all text-slate-400 hover:text-slate-600 hover:bg-slate-200/50",
+                        showEmojiBar && "text-brand-blue bg-blue-50"
+                      )}
+                      title="Quick emojis"
+                    >
+                      <Smile className="w-5 h-5" />
+                    </button>
+
+                    <input 
+                      type="text" 
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      placeholder="Write your message..."
+                      disabled={isSending}
+                      className="flex-1 bg-transparent border-none text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 outline-none transition-all disabled:opacity-60 py-2"
+                    />
+
+                    <button 
+                      type="submit"
+                      disabled={!newMessage.trim() || isSending}
+                      className="bg-brand-blue text-white p-2.5 rounded-xl shadow-md shadow-brand-blue/25 hover:bg-blue-600 active:scale-95 transition-all disabled:opacity-40 disabled:scale-100 cursor-pointer flex-shrink-0"
+                      title="Send message"
+                    >
+                      {isSending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                    </button>
+                  </form>
+                </div>
               )}
             </div>
           </>
@@ -15867,9 +16252,9 @@ function MessagesView({
             <div className="w-20 h-20 bg-brand-blue/10 rounded-full flex items-center justify-center animate-bounce-slow">
               <MessageCircle className="w-10 h-10 text-brand-blue" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-lg font-bold text-slate-900">Your Private Conversations</h3>
-              <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-black text-slate-900 font-display">Your Private Conversations</h3>
+              <p className="text-xs text-slate-400 max-w-xs leading-relaxed font-medium">
                 Connect with authentic community members by clicking on the chat message icon next to their reviews on wellness professional profiles.
               </p>
             </div>
@@ -15884,13 +16269,13 @@ function MessagesView({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[210] flex items-center justify-center p-4"
           >
             <motion.div 
                initial={{ scale: 0.95, y: 15 }}
                animate={{ scale: 1, y: 0 }}
                exit={{ scale: 0.95, y: 15 }}
-               className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl relative"
+               className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl relative border border-slate-100"
             >
               <button 
                 onClick={() => setShowReportModal(false)}
@@ -15904,7 +16289,7 @@ function MessagesView({
                   <Flag className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900 font-display">Report Inappropriate Behavior</h3>
+                  <h3 className="text-lg font-black text-slate-900 font-display">Report Inappropriate Behavior</h3>
                   <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                     Help us keep our community safe and friendly by reporting any inappropriate behavior or harassment.
                   </p>
@@ -15916,7 +16301,7 @@ function MessagesView({
                     <select 
                       value={reportReason} 
                       onChange={(e) => setReportReason(e.target.value)} 
-                      className="w-full px-4 py-2 bg-white border border-slate-200 focus:ring-2 focus:ring-brand-blue/20 rounded-xl text-xs font-medium text-slate-700 outline-none"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-brand-blue/20 rounded-xl text-xs font-semibold text-slate-700 outline-none"
                     >
                       <option value="harassment">Harassment or disrespectful behavior</option>
                       <option value="spam">Spam / Unsolicited advertising</option>
@@ -15933,7 +16318,7 @@ function MessagesView({
                       onChange={(e) => setReportDetails(e.target.value)}
                       rows={4}
                       placeholder="Describe the situation in a few sentences..."
-                      className="w-full px-4 py-3 bg-white border border-slate-200 focus:ring-2 focus:ring-brand-blue/20 rounded-xl text-xs font-medium text-slate-700 outline-none transition-all resize-none font-sans"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-brand-blue/20 rounded-xl text-xs font-medium text-slate-700 outline-none transition-all resize-none font-sans"
                     />
                   </div>
                 </div>
@@ -15941,16 +16326,16 @@ function MessagesView({
                 <div className="grid grid-cols-2 gap-3 pt-4">
                   <button 
                     onClick={() => setShowReportModal(false)}
-                    className="py-3 bg-white hover:bg-slate-50 text-slate-550 rounded-xl text-xs font-bold border border-slate-200 transition-all"
+                    className="py-3 bg-white hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold border border-slate-200 transition-all cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={handleSendReport}
                     disabled={isActionLoading}
-                    className="py-3 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-brand-blue/20 transition-all disabled:opacity-50"
+                    className="py-3 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-brand-blue/20 transition-all disabled:opacity-50 cursor-pointer"
                   >
-                    {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit'}
+                    {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit Report'}
                   </button>
                 </div>
               </div>
@@ -15966,23 +16351,23 @@ function MessagesView({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[210] flex items-center justify-center p-4"
           >
             <motion.div 
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl relative"
+              className="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl relative border border-slate-100"
             >
               <div className="space-y-4 text-center">
                 <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center mx-auto">
                   <Ban className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 font-display">
+                  <h3 className="text-base font-black text-slate-900 font-display">
                     {blockedUsers.includes(selectedChat.otherUser?.id || '') ? 'Unblock this member?' : 'Block this member?'}
                   </h3>
-                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed font-medium">
                     {blockedUsers.includes(selectedChat.otherUser?.id || '') 
                       ? `By unblocking ${formatName(selectedChat.otherUser?.full_name)}, you will be able to message them and receive their messages again.`
                       : `By blocking ${formatName(selectedChat.otherUser?.full_name)}, you will stop all direct communication and will no longer receive or send any messages.`}
@@ -15992,7 +16377,7 @@ function MessagesView({
                 <div className="grid grid-cols-2 gap-3 pt-3">
                   <button 
                     onClick={() => setShowBlockModal(false)}
-                    className="py-2.5 bg-white hover:bg-slate-50 text-slate-550 rounded-xl text-xs font-bold border border-slate-200 transition-all"
+                    className="py-2.5 bg-white hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold border border-slate-200 transition-all cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -16000,7 +16385,7 @@ function MessagesView({
                     onClick={executeBlockToggle}
                     disabled={isActionLoading}
                     className={cn(
-                      "py-2.5 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all disabled:opacity-50",
+                      "py-2.5 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all disabled:opacity-50 cursor-pointer",
                       blockedUsers.includes(selectedChat.otherUser?.id || '') 
                         ? "bg-brand-blue hover:bg-blue-600 shadow-brand-blue/15" 
                         : "bg-rose-600 hover:bg-rose-700 shadow-rose-600/15"
@@ -19469,7 +19854,10 @@ function ProfileView({
   onToggleFavoriteAd,
   allAds = [],
   events = [],
+  adDrafts = [],
   onOpenCreateAd,
+  onResumeDraft,
+  onDeleteDraft,
   onEditAd,
   onSelectAd,
   onAdDeleted
@@ -19491,7 +19879,10 @@ function ProfileView({
   onToggleFavoriteAd?: (id: string | number) => void,
   allAds?: Ad[],
   events?: Event[],
-  onOpenCreateAd?: () => void,
+  adDrafts?: AdDraft[],
+  onOpenCreateAd?: (draft?: AdDraft) => void,
+  onResumeDraft?: (draft: AdDraft) => void,
+  onDeleteDraft?: (draftId: string) => void,
   onEditAd?: (ad: Ad) => void,
   onSelectAd?: (ad: Ad) => void,
   onAdDeleted?: () => void
@@ -20323,8 +20714,12 @@ function ProfileView({
                     <Shirt className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-lg font-black text-slate-800 leading-none">{myAds.length}</div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">My Items</div>
+                    <div className="text-lg font-black text-slate-800 leading-none">
+                      {myAds.length + (adDrafts?.length || 0)}
+                    </div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                      My Items{adDrafts && adDrafts.length > 0 ? ` (${adDrafts.length} draft)` : ''}
+                    </div>
                   </div>
                 </button>
 
@@ -20399,11 +20794,104 @@ function ProfileView({
                         </button>
                       </div>
 
+                      {/* Drafts Section */}
+                      {adDrafts && adDrafts.length > 0 && (
+                        <div className="space-y-3 pb-3 border-b border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                <span>Saved Drafts ({adDrafts.length})</span>
+                              </h4>
+                            </div>
+                            <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                              Unpublished
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            {adDrafts.map((draft) => {
+                              const img = (draft.images && draft.images[0]) || null;
+                              return (
+                                <div 
+                                  key={draft.id}
+                                  onClick={() => {
+                                    setActiveSubPage(null);
+                                    onResumeDraft ? onResumeDraft(draft) : onOpenCreateAd?.(draft);
+                                  }}
+                                  className="p-3.5 bg-amber-50/40 hover:bg-amber-50/80 rounded-2xl border border-amber-200/80 flex flex-col justify-between gap-3 group transition-all cursor-pointer shadow-2xs hover:shadow-md"
+                                >
+                                  <div className="flex gap-3 items-start">
+                                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-amber-100/60 border border-amber-200/60 shrink-0 relative flex items-center justify-center">
+                                      {img ? (
+                                        <img src={img} alt={draft.title} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <FileText className="w-6 h-6 text-amber-500" />
+                                      )}
+                                      <span className="absolute top-1 left-1 px-1.5 py-0.5 bg-amber-600 text-white text-[8px] font-black uppercase rounded tracking-wider">
+                                        Draft
+                                      </span>
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                                        <span className="text-xs font-extrabold text-amber-800">
+                                          {draft.price ? formatDisplayPrice(draft.price) : 'Price not set'}
+                                        </span>
+                                        <span className="text-[9px] text-slate-400 font-medium truncate">
+                                          {formatRelativeTime(draft.saved_at)}
+                                        </span>
+                                      </div>
+                                      <h4 className="text-xs font-bold text-slate-900 truncate">
+                                        {draft.title || 'Untitled Listing'}
+                                      </h4>
+                                      <p className="text-[11px] text-slate-500 truncate">
+                                        {draft.category || 'General'} · {draft.location || 'Valencia'}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveSubPage(null);
+                                          onResumeDraft ? onResumeDraft(draft) : onOpenCreateAd?.(draft);
+                                        }}
+                                        className="p-1.5 bg-white hover:bg-amber-100 text-amber-700 rounded-xl border border-amber-200 transition-colors cursor-pointer"
+                                        title="Resume editing"
+                                      >
+                                        <Edit2 className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => onDeleteDraft?.(draft.id)}
+                                        className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                                        title="Delete draft"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <div className="pt-2 border-t border-amber-200/60 flex items-center justify-between text-[11px]">
+                                    <span className="text-amber-800 font-semibold flex items-center gap-1">
+                                      <RotateCcw className="w-3 h-3 text-amber-600" />
+                                      Click to resume
+                                    </span>
+                                    <span className="text-amber-700 font-bold group-hover:translate-x-0.5 transition-transform">
+                                      Edit & Publish →
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {loadingMyAds ? (
                         <div className="py-12 flex justify-center text-slate-400">
                           <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
                         </div>
-                      ) : myAds.length === 0 ? (
+                      ) : myAds.length === 0 && (!adDrafts || adDrafts.length === 0) ? (
                         <div className="py-12 text-center space-y-3 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 p-6">
                           <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto">
                             <Shirt className="w-6 h-6" />
@@ -20424,7 +20912,13 @@ function ProfileView({
                           </button>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-3">
+                          {adDrafts && adDrafts.length > 0 && myAds.length > 0 && (
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 pt-1">
+                              Published Listings ({myAds.length})
+                            </h4>
+                          )}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {myAds.map((ad) => {
                             const img = ad.image_url || (ad.images && ad.images[0]);
                             const isDeleting = deletingAdId === ad.id;
@@ -20544,6 +21038,7 @@ function ProfileView({
                               </div>
                             );
                           })}
+                          </div>
                         </div>
                       )}
                     </div>

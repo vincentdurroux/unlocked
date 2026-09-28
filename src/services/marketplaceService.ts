@@ -29,6 +29,32 @@ export interface Ad {
   seller_phone?: string;
 }
 
+export interface AdDraft {
+  id: string;
+  title: string;
+  description: string;
+  price: string;
+  category: string;
+  condition: string;
+  location: string;
+  location_precision?: 'approximate' | 'exact';
+  exact_address?: string;
+  lat?: number | null;
+  lng?: number | null;
+  type?: string;
+  fuel_type?: string;
+  property_type?: string;
+  contract_type?: string;
+  size?: string;
+  delivery_pickup?: boolean;
+  delivery_available?: boolean;
+  phone?: string;
+  phone_country_code?: string;
+  images: string[];
+  editing_ad_id?: string | null;
+  saved_at: string;
+}
+
 export const marketplaceService = {
   async getAds(): Promise<Ad[]> {
     if (!isSupabaseConfigured) {
@@ -402,5 +428,60 @@ export const marketplaceService = {
       }
     }
     throw new Error('Failed to update ad.');
+  },
+
+  getDrafts(userId?: string): AdDraft[] {
+    try {
+      const key = `unlocked_ad_drafts_${userId || 'guest'}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.warn('[Marketplace] Failed to read drafts:', e);
+      return [];
+    }
+  },
+
+  saveDraft(draft: AdDraft, userId?: string): AdDraft[] {
+    try {
+      const key = `unlocked_ad_drafts_${userId || 'guest'}`;
+      const existing = this.getDrafts(userId);
+      const index = existing.findIndex(d => d.id === draft.id);
+      let updated: AdDraft[];
+      if (index >= 0) {
+        updated = [...existing];
+        updated[index] = { ...draft, saved_at: new Date().toISOString() };
+      } else {
+        updated = [{ ...draft, saved_at: new Date().toISOString() }, ...existing];
+      }
+      localStorage.setItem(key, JSON.stringify(updated));
+      return updated;
+    } catch (e) {
+      console.warn('[Marketplace] Failed to save draft:', e);
+      return [];
+    }
+  },
+
+  deleteDraft(draftId: string, userId?: string): AdDraft[] {
+    try {
+      const key = `unlocked_ad_drafts_${userId || 'guest'}`;
+      const existing = this.getDrafts(userId);
+      const updated = existing.filter(d => d.id !== draftId);
+      localStorage.setItem(key, JSON.stringify(updated));
+      return updated;
+    } catch (e) {
+      console.warn('[Marketplace] Failed to delete draft:', e);
+      return [];
+    }
+  },
+
+  clearDrafts(userId?: string): void {
+    try {
+      const key = `unlocked_ad_drafts_${userId || 'guest'}`;
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn('[Marketplace] Failed to clear drafts:', e);
+    }
   }
 };
