@@ -247,7 +247,7 @@ export const chatService = {
         .from('messages')
         .update({ is_read: true })
         .eq('conversation_id', conversationId)
-        .or(`and(receiver_id.eq.${userId},sender_id.neq.${userId}),and(receiver_id.is.null,sender_id.neq.${userId})`);
+        .neq('sender_id', userId);
 
       if (error) {
         console.warn('Error marking messages as read in Supabase:', error);

@@ -38,6 +38,8 @@ export interface Profile {
   favorite_event_ids?: string[];
   favorite_pro_ids?: string[];
   favorite_ad_ids?: string[];
+  read_announcement_ids?: string[];
+  dismissed_announcement_ids?: string[];
 }
 
 export const authService = {

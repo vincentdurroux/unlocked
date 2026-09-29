@@ -2018,15 +2018,18 @@ export default function App() {
         .from('messages')
         .select('conversation_id')
         .eq('is_read', false)
-        .or(`receiver_id.eq.${currentUser.id},and(receiver_id.is.null,sender_id.neq.${currentUser.id})`)
+        .neq('sender_id', currentUser.id)
         .in('conversation_id', convs.map(c => c.id));
 
       if (!unreadError && unreadMessages) {
         const unreadIds = Array.from(new Set(unreadMessages.map(m => m.conversation_id)));
         setUnreadConversations(unreadIds);
       } else {
+        const cloudChatLastRead = currentUser.user_metadata?.chat_last_read || {};
         const unreadIds = convs.filter(conv => {
-          const lastRead = localStorage.getItem(`chat_last_read_${conv.id}`);
+          const lastRead = cloudChatLastRead[conv.id] || 
+            localStorage.getItem(`chat_last_read_${currentUser.id}_${conv.id}`) ||
+            localStorage.getItem(`chat_last_read_${conv.id}`);
           if (!lastRead) return true;
           return new Date(conv.last_message_at).getTime() > new Date(lastRead).getTime();
         }).map(c => c.id);
@@ -2244,6 +2247,97 @@ export default function App() {
   });
   const [toastNotification, setToastNotification] = useState<InAppNotification | null>(null);
 
+  // Synchronize read and dismissed notifications across devices whenever currentUser or userProfile changes
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // 1. Gather all read notification IDs from Cloud (user_metadata, profile) and LocalStorage
+    const cloudMetaRead = Array.isArray(currentUser.user_metadata?.read_announcements)
+      ? currentUser.user_metadata.read_announcements
+      : [];
+    const cloudProfileRead = Array.isArray((userProfile as any)?.read_announcement_ids)
+      ? (userProfile as any).read_announcement_ids
+      : [];
+    let localUserRead: string[] = [];
+    try {
+      const s = localStorage.getItem(`unlocked_read_announcements_${currentUser.id}`);
+      if (s) localUserRead = JSON.parse(s);
+    } catch (_) {}
+    let legacyRead: string[] = [];
+    try {
+      const s = localStorage.getItem('unlocked_read_announcements');
+      if (s) legacyRead = JSON.parse(s);
+    } catch (_) {}
+
+    const mergedRead = Array.from(new Set([
+      ...readAnnouncementIds,
+      ...cloudMetaRead.map(String),
+      ...cloudProfileRead.map(String),
+      ...localUserRead.map(String),
+      ...legacyRead.map(String)
+    ]));
+
+    // 2. Gather all dismissed notification IDs
+    const cloudMetaDismissed = Array.isArray(currentUser.user_metadata?.dismissed_announcements)
+      ? currentUser.user_metadata.dismissed_announcements
+      : [];
+    const cloudProfileDismissed = Array.isArray((userProfile as any)?.dismissed_announcement_ids)
+      ? (userProfile as any).dismissed_announcement_ids
+      : [];
+    let localUserDismissed: string[] = [];
+    try {
+      const s = localStorage.getItem(`unlocked_dismissed_announcements_${currentUser.id}`);
+      if (s) localUserDismissed = JSON.parse(s);
+    } catch (_) {}
+    let legacyDismissed: string[] = [];
+    try {
+      const s = localStorage.getItem('unlocked_dismissed_announcements');
+      if (s) legacyDismissed = JSON.parse(s);
+    } catch (_) {}
+
+    const mergedDismissed = Array.from(new Set([
+      ...dismissedNotificationIds,
+      ...cloudMetaDismissed.map(String),
+      ...cloudProfileDismissed.map(String),
+      ...localUserDismissed.map(String),
+      ...legacyDismissed.map(String)
+    ]));
+
+    // Update state if newly synced IDs are found
+    if (mergedRead.length !== readAnnouncementIds.length || mergedRead.some(id => !readAnnouncementIds.includes(id))) {
+      setReadAnnouncementIds(mergedRead);
+    }
+    if (mergedDismissed.length !== dismissedNotificationIds.length || mergedDismissed.some(id => !dismissedNotificationIds.includes(id))) {
+      setDismissedNotificationIds(mergedDismissed);
+    }
+
+    // Persist to user-scoped local storage
+    try {
+      localStorage.setItem(`unlocked_read_announcements_${currentUser.id}`, JSON.stringify(mergedRead));
+      localStorage.setItem(`unlocked_dismissed_announcements_${currentUser.id}`, JSON.stringify(mergedDismissed));
+    } catch (_) {}
+
+    // If local device had read items not yet in cloud user metadata, sync up to user account in Supabase
+    const needsMetaReadSync = mergedRead.length > cloudMetaRead.length;
+    const needsMetaDismissSync = mergedDismissed.length > cloudMetaDismissed.length;
+    if (needsMetaReadSync || needsMetaDismissSync) {
+      supabase.auth.updateUser({
+        data: {
+          read_announcements: mergedRead,
+          dismissed_announcements: mergedDismissed
+        }
+      }).catch(err => {
+        console.warn('[Sync] Non-fatal notification metadata sync notice:', err);
+      });
+
+      authService.updateProfile({
+        id: currentUser.id,
+        read_announcement_ids: mergedRead,
+        dismissed_announcement_ids: mergedDismissed
+      } as any).catch(() => {});
+    }
+  }, [currentUser?.id, userProfile]);
+
   const fetchAnnouncementsFromDb = async () => {
     if (!isSupabaseConfigured) return;
     try {
@@ -2343,38 +2437,132 @@ export default function App() {
     }).length;
   }, [announcementsList, readAnnouncementIds, dismissedNotificationIds]);
 
-  const handleMarkAnnouncementAsRead = (id: string) => {
-    const updated = Array.from(new Set([...readAnnouncementIds, String(id)]));
+  const handleMarkAnnouncementAsRead = async (id: string) => {
+    const strId = String(id);
+    const updated = Array.from(new Set([...readAnnouncementIds, strId]));
     setReadAnnouncementIds(updated);
+
     try {
+      if (currentUser?.id) {
+        localStorage.setItem(`unlocked_read_announcements_${currentUser.id}`, JSON.stringify(updated));
+      }
       localStorage.setItem('unlocked_read_announcements', JSON.stringify(updated));
     } catch (_) {}
+
+    if (currentUser?.id) {
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            read_announcements: updated
+          }
+        });
+        if (currentUser.user_metadata) {
+          currentUser.user_metadata.read_announcements = updated;
+        }
+        await authService.updateProfile({
+          id: currentUser.id,
+          read_announcement_ids: updated
+        });
+      } catch (err) {
+        console.warn('Error syncing read announcement to cloud account:', err);
+      }
+    }
   };
 
-  const handleMarkAllAnnouncementsAsRead = () => {
+  const handleMarkAllAnnouncementsAsRead = async () => {
     const allIds = announcementsList.map(a => String(a.id));
     const updated = Array.from(new Set([...readAnnouncementIds, ...allIds]));
     setReadAnnouncementIds(updated);
+
     try {
+      if (currentUser?.id) {
+        localStorage.setItem(`unlocked_read_announcements_${currentUser.id}`, JSON.stringify(updated));
+      }
       localStorage.setItem('unlocked_read_announcements', JSON.stringify(updated));
     } catch (_) {}
+
+    if (currentUser?.id) {
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            read_announcements: updated
+          }
+        });
+        if (currentUser.user_metadata) {
+          currentUser.user_metadata.read_announcements = updated;
+        }
+        await authService.updateProfile({
+          id: currentUser.id,
+          read_announcement_ids: updated
+        });
+      } catch (err) {
+        console.warn('Error syncing all read announcements to cloud account:', err);
+      }
+    }
   };
 
-  const handleDismissNotification = (id: string) => {
-    const updated = Array.from(new Set([...dismissedNotificationIds, String(id)]));
+  const handleDismissNotification = async (id: string) => {
+    const strId = String(id);
+    const updated = Array.from(new Set([...dismissedNotificationIds, strId]));
     setDismissedNotificationIds(updated);
+
     try {
+      if (currentUser?.id) {
+        localStorage.setItem(`unlocked_dismissed_announcements_${currentUser.id}`, JSON.stringify(updated));
+      }
       localStorage.setItem('unlocked_dismissed_announcements', JSON.stringify(updated));
     } catch (_) {}
+
+    if (currentUser?.id) {
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            dismissed_announcements: updated
+          }
+        });
+        if (currentUser.user_metadata) {
+          currentUser.user_metadata.dismissed_announcements = updated;
+        }
+        await authService.updateProfile({
+          id: currentUser.id,
+          dismissed_announcement_ids: updated
+        });
+      } catch (err) {
+        console.warn('Error syncing dismissed notification to cloud account:', err);
+      }
+    }
   };
 
-  const handleClearAllNotifications = () => {
+  const handleClearAllNotifications = async () => {
     const allIds = announcementsList.map(a => String(a.id));
     const updated = Array.from(new Set([...dismissedNotificationIds, ...allIds]));
     setDismissedNotificationIds(updated);
+
     try {
+      if (currentUser?.id) {
+        localStorage.setItem(`unlocked_dismissed_announcements_${currentUser.id}`, JSON.stringify(updated));
+      }
       localStorage.setItem('unlocked_dismissed_announcements', JSON.stringify(updated));
     } catch (_) {}
+
+    if (currentUser?.id) {
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            dismissed_announcements: updated
+          }
+        });
+        if (currentUser.user_metadata) {
+          currentUser.user_metadata.dismissed_announcements = updated;
+        }
+        await authService.updateProfile({
+          id: currentUser.id,
+          dismissed_announcement_ids: updated
+        });
+      } catch (err) {
+        console.warn('Error syncing cleared notifications to cloud account:', err);
+      }
+    }
   };
   const [events, setEvents] = useState<Event[]>(isSupabaseConfigured ? [] : MOCK_EVENTS);
   const [eventsLoading, setEventsLoading] = useState(isSupabaseConfigured);
@@ -6525,7 +6713,7 @@ function AdminView({
         });
       } else if (pushNotice) {
         setMsg({
-          type: 'info',
+          type: 'success',
           text: `Announcement published in-app! (Mobile push note: ${pushNotice})`
         });
       } else {
