@@ -599,19 +599,21 @@ export function InAppNotificationCenter({
                     </div>
                   </div>
 
-                  {/* Actions (Unread Indicator Dot & Dismiss Button) */}
-                  <div className="flex flex-col items-end justify-between shrink-0 self-stretch py-0.5">
+                  {/* Actions (Unread Indicator Dot & Delete Button) */}
+                  <div className="flex flex-col items-end justify-between shrink-0 self-stretch py-0.5 ml-1">
                     {onDismissNotification && (
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          e.preventDefault();
                           onDismissNotification(String(item.id));
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all cursor-pointer"
-                        title="Dismiss notification"
-                        aria-label="Dismiss notification"
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-all cursor-pointer opacity-70 sm:opacity-0 sm:group-hover:opacity-100 hover:!opacity-100"
+                        title="Delete notification"
+                        aria-label="Delete notification"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                     {unread && (
