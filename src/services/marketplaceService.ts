@@ -27,6 +27,10 @@ export interface Ad {
   seller_name?: string;
   seller_image?: string;
   seller_phone?: string;
+  is_halloween?: boolean;
+  halloween_mode?: 'sale' | 'swap' | 'giveaway';
+  halloween_trade_for?: string;
+  halloween_category?: 'costumes' | 'decor' | 'accessories' | 'treats' | 'other';
 }
 
 export interface AdDraft {
@@ -53,6 +57,10 @@ export interface AdDraft {
   images: string[];
   editing_ad_id?: string | null;
   saved_at: string;
+  is_halloween?: boolean;
+  halloween_mode?: 'sale' | 'swap' | 'giveaway';
+  halloween_trade_for?: string;
+  halloween_category?: 'costumes' | 'decor' | 'accessories' | 'treats' | 'other';
 }
 
 export const marketplaceService = {
@@ -151,6 +159,17 @@ export const marketplaceService = {
             ? meta.images
             : (rawItem.image_url ? [rawItem.image_url] : []);
 
+        const is_halloween = Boolean(
+          rawItem.is_halloween || 
+          meta.is_halloween || 
+          meta.event === 'halloween' || 
+          rawItem.category === 'Halloween Special' ||
+          (rawItem.title && /halloween/i.test(rawItem.title))
+        );
+
+        const halloween_mode = meta.halloween_mode || 
+          (rawItem.price && (rawItem.price.toLowerCase().includes('swap') || rawItem.price.toLowerCase().includes('échange')) ? 'swap' : 'sale');
+
         return {
           ...rawItem,
           description: desc,
@@ -170,7 +189,11 @@ export const marketplaceService = {
           delivery: rawItem.delivery || meta.delivery || undefined,
           status: rawItem.status || meta.status || 'available',
           images: finalImages,
-          image_url: finalImages[0] || rawItem.image_url || ''
+          image_url: finalImages[0] || rawItem.image_url || '',
+          is_halloween,
+          halloween_mode: rawItem.halloween_mode || halloween_mode,
+          halloween_trade_for: rawItem.halloween_trade_for || meta.halloween_trade_for,
+          halloween_category: rawItem.halloween_category || meta.halloween_category
         } as Ad;
       });
     } catch (error) {
@@ -235,6 +258,10 @@ export const marketplaceService = {
     if (ad.delivery) meta.delivery = ad.delivery;
     if (ad.status) meta.status = ad.status;
     if (ad.images && Array.isArray(ad.images) && ad.images.length > 0) meta.images = ad.images;
+    if (ad.is_halloween) meta.is_halloween = true;
+    if (ad.halloween_mode) meta.halloween_mode = ad.halloween_mode;
+    if (ad.halloween_trade_for) meta.halloween_trade_for = ad.halloween_trade_for;
+    if (ad.halloween_category) meta.halloween_category = ad.halloween_category;
 
     if (Object.keys(meta).length > 0) {
       finalDescription = `${finalDescription}\n\n<!-- unlocked_meta:${JSON.stringify(meta)} -->`.trim();

@@ -119,7 +119,9 @@ import {
   Gamepad2,
   WashingMachine,
   Truck,
-  Handshake
+  Handshake,
+  Ghost,
+  ArrowLeftRight
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad, AdDraft } from './services/marketplaceService';
@@ -143,6 +145,7 @@ import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
 import { LandingEventHighlightsCard } from './components/LandingEventHighlightsCard';
 import { HeaderWeatherWidget } from './components/HeaderWeatherWidget';
 import { RotatingCylinderWord } from './components/RotatingCylinderWord';
+import { HalloweenMarketplaceSection } from './components/HalloweenMarketplaceSection';
 import { MarketplaceLocationPicker, VALENCIA_AREAS, VALENCIA_CENTER, VALENCIA_CITY_NEIGHBORHOODS, VALENCIA_SUBURBS } from './components/MarketplaceLocationPicker';
 import { 
   DiscoverCardProSkeleton, 
@@ -2825,6 +2828,10 @@ export default function App() {
   const [adPhoneCountryCode, setAdPhoneCountryCode] = useState('+34');
   const [adPickup, setAdPickup] = useState(true);
   const [adDeliveryAvailable, setAdDeliveryAvailable] = useState(false);
+  const [adIsHalloween, setAdIsHalloween] = useState(false);
+  const [adHalloweenMode, setAdHalloweenMode] = useState<'sale' | 'swap' | 'giveaway'>('sale');
+  const [adHalloweenTradeFor, setAdHalloweenTradeFor] = useState('');
+  const [adHalloweenCategory, setAdHalloweenCategory] = useState<'costumes' | 'decor' | 'accessories' | 'treats' | 'other'>('costumes');
   const [adError, setAdError] = useState<string | null>(null);
 
   const [isUploading, setIsUploading] = useState(false);
@@ -2992,7 +2999,46 @@ export default function App() {
     setAdSize(ad.size || 'M');
     setAdPhone(ad.seller_phone || '');
     setUploadedImageUrls(ad.images && ad.images.length > 0 ? ad.images : (ad.image_url ? [ad.image_url] : []));
+    setAdIsHalloween(Boolean(ad.is_halloween || ad.category === 'Halloween Special' || (ad.title && /halloween/i.test(ad.title))));
+    setAdHalloweenMode(ad.halloween_mode || (ad.price && (ad.price.toLowerCase().includes('swap') || ad.price.toLowerCase().includes('échange')) ? 'swap' : 'sale'));
+    setAdHalloweenTradeFor(ad.halloween_trade_for || '');
+    setAdHalloweenCategory(ad.halloween_category || 'costumes');
     setActiveView('marketplace');
+    setShowAddAd(true);
+  };
+
+  const handleOpenAddHalloweenAd = () => {
+    if (!currentUser) {
+      handleNavigate('login');
+      return;
+    }
+    setCurrentDraftId(null);
+    setEditingAd(null);
+    setAdTitle('');
+    setAdPrice('');
+    setAdCategory('Halloween Special');
+    setAdCondition('Like New');
+    setAdLocation('');
+    setAdLocationPrecision('approximate');
+    setAdExactAddress('');
+    setAdLat(null);
+    setAdLng(null);
+    setAdDescription('');
+    setAdHousingType('Rent');
+    setAdFuelType('Petrol');
+    setAdPropertyType('Apartment');
+    setAdContractType('Full-time');
+    setAdSize('M');
+    setAdPhone('');
+    setAdPhoneCountryCode('+34');
+    setAdPickup(true);
+    setAdDeliveryAvailable(false);
+    setAdIsHalloween(true);
+    setAdHalloweenMode('swap');
+    setAdHalloweenTradeFor('');
+    setAdHalloweenCategory('costumes');
+    setUploadedImageUrls([]);
+    setAdError(null);
     setShowAddAd(true);
   };
 
@@ -3327,7 +3373,11 @@ export default function App() {
           seller_phone: formattedPhone || undefined,
           image_url: uploadedImageUrls[0] || '',
           images: uploadedImageUrls,
-          status: editingAd.status || 'available'
+          status: editingAd.status || 'available',
+          is_halloween: adIsHalloween,
+          halloween_mode: adIsHalloween ? adHalloweenMode : undefined,
+          halloween_trade_for: (adIsHalloween && adHalloweenMode === 'swap' && adHalloweenTradeFor.trim()) ? adHalloweenTradeFor.trim() : undefined,
+          halloween_category: adIsHalloween ? adHalloweenCategory : undefined
         });
         setEditingAd(null);
       } else {
@@ -3354,7 +3404,11 @@ export default function App() {
           seller_image: sellerAvatar,
           user_id: currentUser?.id || undefined,
           image_url: uploadedImageUrls[0] || '',
-          images: uploadedImageUrls
+          images: uploadedImageUrls,
+          is_halloween: adIsHalloween,
+          halloween_mode: adIsHalloween ? adHalloweenMode : undefined,
+          halloween_trade_for: (adIsHalloween && adHalloweenMode === 'swap' && adHalloweenTradeFor.trim()) ? adHalloweenTradeFor.trim() : undefined,
+          halloween_category: adIsHalloween ? adHalloweenCategory : undefined
         });
       }
       
@@ -3385,6 +3439,10 @@ export default function App() {
       setAdPhoneCountryCode('+34');
       setAdPickup(true);
       setAdDeliveryAvailable(false);
+      setAdIsHalloween(false);
+      setAdHalloweenMode('sale');
+      setAdHalloweenTradeFor('');
+      setAdHalloweenCategory('costumes');
       setAdError(null);
       setUploadedImageUrls([]);
       setShowAddAd(false);
@@ -4273,7 +4331,8 @@ export default function App() {
                       return;
                     }
                     setShowAddAd(true);
-                  }} 
+                  }}
+                  onAddHalloweenAd={handleOpenAddHalloweenAd}
                   ads={ads} 
                   onSelectAd={setSelectedAd} 
                   scrollToTop={scrollToTop}
@@ -4772,6 +4831,7 @@ export default function App() {
                         >
                           <option value="" disabled>Select a category...</option>
                           {[
+                            { id: 'Halloween Special', label: 'Halloween Special (Swap & Sale)', emoji: '🎃' },
                             { id: 'School & Uniforms', label: 'School & Uniforms', emoji: '🎒' },
                             { id: 'Women’s Clothing', label: 'Women’s Clothing', emoji: '👗' },
                             { id: 'Men’s Clothing', label: 'Men’s Clothing', emoji: '👔' },
@@ -4796,6 +4856,149 @@ export default function App() {
                         <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600 pointer-events-none" />
                         <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>
+                    </div>
+
+                    {/* Halloween Event Participation Card */}
+                    <div className={cn(
+                      "p-4 rounded-2xl border transition-all duration-200",
+                      adIsHalloween || adCategory === 'Halloween Special'
+                        ? "bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-slate-50 border-orange-400/50 shadow-xs"
+                        : "bg-slate-50/70 border-slate-200/80"
+                    )}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="text-xl shrink-0">🎃</span>
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                              <span>Join the Halloween Event</span>
+                              <span className="text-[10px] font-semibold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full border border-orange-200">
+                                Valencia Swap & Sale
+                              </span>
+                            </h4>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                              Spotlight this listing in the Halloween section (costumes, decor, swap, or sale).
+                            </p>
+                          </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                          <input 
+                            type="checkbox" 
+                            checked={adIsHalloween || adCategory === 'Halloween Special'} 
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setAdIsHalloween(checked);
+                              if (checked && adCategory !== 'Halloween Special') {
+                                setAdCategory('Halloween Special');
+                              }
+                            }} 
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                        </label>
+                      </div>
+
+                      {(adIsHalloween || adCategory === 'Halloween Special') && (
+                        <div className="mt-3.5 pt-3.5 border-t border-orange-200/80 space-y-3 animate-in fade-in duration-200">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                              Listing Type
+                            </label>
+                            <div className="grid grid-cols-3 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAdHalloweenMode('swap');
+                                  if (!adPrice.includes('Swap') && !adPrice.includes('Trade')) {
+                                    setAdPrice(adPrice ? `${adPrice} or Swap` : 'Swap / Trade');
+                                  }
+                                }}
+                                className={cn(
+                                  "px-2.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center",
+                                  adHalloweenMode === 'swap'
+                                    ? "bg-amber-500 text-slate-950 border-amber-600 shadow-xs"
+                                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                                )}
+                              >
+                                <ArrowLeftRight className="w-3.5 h-3.5" />
+                                <span>Swap / Trade</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setAdHalloweenMode('sale')}
+                                className={cn(
+                                  "px-2.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center",
+                                  adHalloweenMode === 'sale'
+                                    ? "bg-orange-600 text-white border-orange-700 shadow-xs"
+                                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                                )}
+                              >
+                                <Tag className="w-3.5 h-3.5" />
+                                <span>For Sale</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAdHalloweenMode('giveaway');
+                                  setAdPrice('Free');
+                                  setAdCondition('Free');
+                                }}
+                                className={cn(
+                                  "px-2.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center",
+                                  adHalloweenMode === 'giveaway'
+                                    ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
+                                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                                )}
+                              >
+                                <Gift className="w-3.5 h-3.5" />
+                                <span>Free Giveaway</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {adHalloweenMode === 'swap' && (
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                                What are you looking to trade for? (Optional)
+                              </label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Pirate or superhero costume (8-10 yrs), or autumn decor" 
+                                value={adHalloweenTradeFor}
+                                onChange={(e) => setAdHalloweenTradeFor(e.target.value)}
+                                className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 outline-none text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                              />
+                            </div>
+                          )}
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                              Halloween Sub-category
+                            </label>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                              {[
+                                { id: 'costumes', label: '🧙 Costumes' },
+                                { id: 'decor', label: '🎃 Decor' },
+                                { id: 'accessories', label: '🦇 Accessories' },
+                                { id: 'treats', label: '🍬 Treats & Bags' },
+                              ].map((item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => setAdHalloweenCategory(item.id as any)}
+                                  className={cn(
+                                    "px-2 py-1.5 rounded-lg text-xs font-medium border text-center transition-colors cursor-pointer",
+                                    adHalloweenCategory === item.id
+                                      ? "bg-orange-100 text-orange-900 border-orange-300 font-bold"
+                                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                                  )}
+                                >
+                                  {item.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Price & Condition */}
@@ -5456,6 +5659,39 @@ function AdDetailModal({
                 <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-2.5 text-amber-800 text-xs font-bold">
                   <Clock className="w-4 h-4 text-amber-600 shrink-0" />
                   <span>This listing is currently <strong>Pending</strong> (reserved or handover in progress).</span>
+                </div>
+              )}
+
+              {/* Halloween Event Highlight in Detail Modal */}
+              {Boolean(ad.is_halloween || ad.category === 'Halloween Special' || (ad.title && /halloween/i.test(ad.title))) && (
+                <div className="p-3.5 bg-gradient-to-r from-orange-50 via-amber-50/70 to-orange-50 border border-orange-300 rounded-2xl flex items-center justify-between gap-3 text-orange-950 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-2xl shrink-0">🎃</span>
+                    <div>
+                      <p className="font-bold text-orange-900 flex items-center gap-2">
+                        <span>Halloween Special Event · Valencia Swap & Sale</span>
+                      </p>
+                      <p className="text-[11px] text-orange-800/90 mt-0.5">
+                        {ad.halloween_mode === 'swap'
+                          ? `Offered for trade/swap. ${ad.halloween_trade_for ? `Looking for: ${ad.halloween_trade_for}` : 'Send a message to propose an exchange!'}`
+                          : ad.halloween_mode === 'giveaway'
+                            ? 'Offered as a free neighborhood gift!'
+                            : 'Pre-loved Halloween item for the local community.'}
+                      </p>
+                    </div>
+                  </div>
+                  {ad.halloween_mode === 'swap' && (
+                    <span className="px-2.5 py-1 bg-amber-500 text-slate-950 font-extrabold text-[10px] uppercase rounded-lg shrink-0 flex items-center gap-1 shadow-xs">
+                      <ArrowLeftRight className="w-3 h-3 stroke-[2.5]" />
+                      Swap / Trade
+                    </span>
+                  )}
+                  {ad.halloween_mode === 'giveaway' && (
+                    <span className="px-2.5 py-1 bg-emerald-600 text-white font-extrabold text-[10px] uppercase rounded-lg shrink-0 flex items-center gap-1 shadow-xs">
+                      <Gift className="w-3 h-3 stroke-[2.5]" />
+                      Free
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -19151,7 +19387,8 @@ function MarketplaceView({
   favoriteAdIds,
   onToggleFavoriteAd,
   onAdDeleted,
-  loading = false
+  loading = false,
+  onAddHalloweenAd
 }: { 
   onAddAd: () => void; 
   ads: Ad[]; 
@@ -19163,6 +19400,7 @@ function MarketplaceView({
   onToggleFavoriteAd?: (id: string | number) => void;
   onAdDeleted?: () => void;
   loading?: boolean;
+  onAddHalloweenAd?: () => void;
 }) {
   useEffect(() => {
     scrollToTop?.();
@@ -19215,6 +19453,7 @@ function MarketplaceView({
 
   const categories = [
     { id: 'All', label: 'All Items', icon: Sparkles, emoji: '✨' },
+    { id: 'Halloween Special', label: 'Halloween Special', icon: Ghost, emoji: '🎃' },
     { id: 'School & Uniforms', label: 'School & Uniforms', icon: GraduationCap, emoji: '🎒' },
     { id: 'Women’s Clothing', label: 'Women’s Clothing', icon: Shirt, emoji: '👗' },
     { id: 'Men’s Clothing', label: 'Men’s Clothing', icon: Shirt, emoji: '👔' },
@@ -19250,6 +19489,7 @@ function MarketplaceView({
     const a = itemCategory.toLowerCase().replace(/['’]/g, "'").replace(/&amp;/g, '&').trim();
     const b = targetCategory.toLowerCase().replace(/['’]/g, "'").replace(/&amp;/g, '&').trim();
     if (a === b) return true;
+    if (b === "halloween special" && (a === "halloween special" || a.includes("halloween") || a.includes("spooky"))) return true;
     if (b === "women's clothing" && (a === "clothing" || a.includes("women"))) return true;
     if (b === "men's clothing" && (a === "clothing" || a.includes("men"))) return true;
     if (b === "kids' clothing" && (a === "school & kids" || a.includes("kid"))) return true;
@@ -19279,6 +19519,13 @@ function MarketplaceView({
 
   // Category-specific price ranges without editorial comments
   const categoryPriceRangesMap: Record<string, { id: string; label: string; min?: number; max?: number }[]> = {
+    'Halloween Special': [
+      { id: 'all', label: 'All Prices' },
+      { id: 'hw_free', label: 'Free / Giveaway', max: 0.1 },
+      { id: 'hw_under_10', label: '< €10', max: 10 },
+      { id: 'hw_10_25', label: '€10 - €25', min: 10, max: 25 },
+      { id: 'hw_25_plus', label: '€25+', min: 25 },
+    ],
     'School & Uniforms': [
       { id: 'all', label: 'All Prices' },
       { id: 'sc_free', label: 'Free', max: 0.1 },
@@ -19580,6 +19827,26 @@ function MarketplaceView({
           <span>Post an Ad</span>
         </button>
       </div>
+
+      {/* Special Seasonal Event: Halloween Community Swap & Spooky Market */}
+      <HalloweenMarketplaceSection
+        ads={ads}
+        onSelectAd={onSelectAd}
+        onOpenPostHalloweenAd={() => {
+          if (!currentUser) {
+            onNavigate?.('login');
+            return;
+          }
+          if (onAddHalloweenAd) {
+            onAddHalloweenAd();
+          } else {
+            onAddAd();
+          }
+        }}
+        currentUser={currentUser}
+        favoriteAdIds={effectiveSavedIds}
+        onToggleFavoriteAd={(id) => toggleSaveAd(String(id), { stopPropagation: () => {} } as any)}
+      />
 
       {/* Unified Search & Filters Card */}
       <div className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3.5">
