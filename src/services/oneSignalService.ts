@@ -142,7 +142,7 @@ class OneSignalService {
     const isDefault = appId === '10a14311-a42a-4681-9682-ce965d80ae75';
     if (!isDefault) return true;
     const hostname = window.location.hostname;
-    return hostname.endsWith('mycityunlocked.app') || hostname === 'localhost' || hostname === '127.0.0.1';
+    return hostname.endsWith('mycityunlocked.app') || hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('run.app') || hostname.includes('web.app');
   }
 
   /**

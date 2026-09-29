@@ -2339,8 +2339,11 @@ export default function App() {
     }
   }, [currentUser?.id, userProfile]);
 
+  const isFetchingAnnouncementsRef = useRef(false);
+
   const fetchAnnouncementsFromDb = async () => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || isFetchingAnnouncementsRef.current) return;
+    isFetchingAnnouncementsRef.current = true;
     try {
       let list: any[] = [];
       const { data: annData, error: annError } = await supabase
@@ -2434,11 +2437,14 @@ export default function App() {
         const latest = list[0];
         const isLocallyRead = readAnnouncementIds.includes(String(latest.id));
         const isDismissed = dismissedNotificationIds.includes(String(latest.id));
-        const isUnread = (latest.type === 'chat' || String(latest.id).startsWith('chat-'))
-          ? (latest.is_read === false)
-          : (!isLocallyRead && !isDismissed);
+        const isChat = latest.type === 'chat' || String(latest.id).startsWith('chat-');
+        const isUnread = isChat ? (latest.is_read === false) : (!isLocallyRead && !isDismissed);
         const lastToastSeen = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('unlocked_last_toast_seen') : null;
-        if (isUnread && String(latest.id) !== lastToastSeen) {
+        
+        // Don't show intrusive popup toast if user is already reading/chatting in messages view
+        const shouldShowToast = isChat ? (activeView !== 'messages') : true;
+
+        if (shouldShowToast && isUnread && String(latest.id) !== lastToastSeen) {
           setToastNotification(latest);
           try {
             sessionStorage.setItem('unlocked_last_toast_seen', String(latest.id));
@@ -2451,6 +2457,8 @@ export default function App() {
       }
     } catch (err) {
       console.warn('Error fetching announcements from Supabase:', err);
+    } finally {
+      isFetchingAnnouncementsRef.current = false;
     }
   };
 
@@ -3849,9 +3857,10 @@ export default function App() {
         </AnimatePresence>
 
         {/* Live In-App Toast Banner */}
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {toastNotification && (
             <InAppToastBanner
+              key={String(toastNotification.id)}
               notification={toastNotification}
               onDismiss={() => setToastNotification(null)}
               onClickToast={() => {
