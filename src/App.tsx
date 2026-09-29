@@ -3984,7 +3984,11 @@ export default function App() {
                 } else if (item.type === 'marketplace' || item.type === 'ad') {
                   handleNavigate('marketplace');
                 } else {
-                  setShowNotificationsModal(true);
+                  if (!currentUser) {
+                    handleNavigate('login');
+                  } else {
+                    setShowNotificationsModal(true);
+                  }
                 }
               }}
             />
@@ -4077,7 +4081,14 @@ export default function App() {
             {/* Notification Bell Button */}
             <div className="relative">
               <button 
-                onClick={() => setShowNotificationsModal(!showNotificationsModal)}
+                onClick={() => {
+                  if (!currentUser) {
+                    setShowNotificationsModal(false);
+                    handleNavigate('login');
+                    return;
+                  }
+                  setShowNotificationsModal(!showNotificationsModal);
+                }}
                 aria-label="Notifications"
                 className="relative w-12 h-12 bg-transparent active:scale-95 transition-all flex items-center justify-center shrink-0 ml-2 group cursor-pointer border-0 p-0 outline-none overflow-visible"
               >
@@ -4129,7 +4140,7 @@ export default function App() {
               </button>
 
               <AnimatePresence>
-                {showNotificationsModal && (
+                {showNotificationsModal && currentUser && (
                   <InAppNotificationCenter 
                     isOpen={showNotificationsModal}
                     onClose={() => setShowNotificationsModal(false)}
