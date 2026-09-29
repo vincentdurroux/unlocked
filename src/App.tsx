@@ -2557,22 +2557,34 @@ export default function App() {
       } catch (_) {}
     }
 
-    // 3. Native iOS wrappers (WKWebView messageHandlers & Capacitor Plugins)
+    // 3. Native iOS App Store wrappers (Capacitor, Cordova, & WKWebView messageHandlers)
     try {
       if (typeof window !== 'undefined') {
         const w = window as any;
-        if (w.webkit?.messageHandlers?.setAppBadge) {
-          w.webkit.messageHandlers.setAppBadge.postMessage(unreadCount);
-        } else if (w.webkit?.messageHandlers?.setBadge) {
-          w.webkit.messageHandlers.setBadge.postMessage(unreadCount);
-        } else if (w.webkit?.messageHandlers?.badge) {
-          w.webkit.messageHandlers.badge.postMessage(unreadCount);
-        } else if (w.Capacitor?.Plugins?.Badge) {
-          if (unreadCount > 0) {
-            w.Capacitor.Plugins.Badge.set({ count: unreadCount });
+        const count = Math.max(0, unreadCount);
+
+        // Capacitor Badge Plugin
+        if (w.Capacitor?.Plugins?.Badge) {
+          if (count > 0) {
+            w.Capacitor.Plugins.Badge.set({ count });
           } else {
             w.Capacitor.Plugins.Badge.clear();
           }
+        }
+
+        // Cordova Badge Plugin
+        if (w.cordova?.plugins?.notification?.badge) {
+          w.cordova.plugins.notification.badge.set(count);
+        }
+
+        // WKWebView Message Handlers (Swift / Objective-C iOS App Wrapper)
+        const handlers = w.webkit?.messageHandlers;
+        if (handlers) {
+          if (handlers.setAppBadge) handlers.setAppBadge.postMessage(count);
+          if (handlers.setBadge) handlers.setBadge.postMessage(count);
+          if (handlers.badge) handlers.badge.postMessage(count);
+          if (handlers.updateBadge) handlers.updateBadge.postMessage(count);
+          if (handlers.appBadge) handlers.appBadge.postMessage(count);
         }
       }
     } catch (_) {}

@@ -320,7 +320,10 @@ export function InAppNotificationCenter({
   const displayedList = showOlder ? filteredList : filteredList.slice(0, 7);
 
   const isIOS = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const isStandalone = typeof window !== 'undefined' && (
+  const isNativeApp = typeof window !== 'undefined' && (
+    Boolean((window as any).webkit?.messageHandlers) ||
+    Boolean((window as any).Capacitor) ||
+    Boolean((window as any).cordova) ||
     window.matchMedia('(display-mode: standalone)').matches ||
     (window.navigator as any).standalone === true
   );
@@ -395,7 +398,7 @@ export function InAppNotificationCenter({
         </div>
 
         {/* iOS PWA Badging Tip Banner */}
-        {isIOS && !isStandalone && (
+        {isIOS && !isNativeApp && (
           <div className="mx-4 mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50/80 border border-blue-100 rounded-2xl flex items-start gap-2.5 text-blue-900">
             <span className="text-base shrink-0 leading-none mt-0.5">📲</span>
             <div className="flex-1 text-[11px] leading-snug">
