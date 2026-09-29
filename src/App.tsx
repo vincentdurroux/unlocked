@@ -1537,11 +1537,14 @@ export default function App() {
     lockOrientation();
   }, []);
 
-  // Global OneSignal SDK initialization
+  // Global OneSignal SDK initialization (deferred to optimize startup speed)
   useEffect(() => {
-    oneSignalService.init(currentUser?.id).catch((err) => {
-      console.warn('[OneSignal] Global initialization error:', err);
-    });
+    const timer = setTimeout(() => {
+      oneSignalService.init(currentUser?.id).catch((err) => {
+        console.warn('[OneSignal] Global initialization error:', err);
+      });
+    }, 400);
+    return () => clearTimeout(timer);
   }, [currentUser?.id]);
 
   const mainRef = useRef<HTMLElement>(null);
@@ -3835,9 +3838,26 @@ export default function App() {
   }, []);
 
   const loadProfile = async (userId: string, event?: string) => {
+    // 1. Instant local cache recovery to unblock UI immediately
+    try {
+      const cached = localStorage.getItem('unlocked_cached_profile_' + userId);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed.id === userId) {
+          setUserProfile(parsed);
+          setAuthLoading(false);
+        }
+      }
+    } catch (_) {}
+
     try {
       const profile = await authService.getProfile(userId);
-      setUserProfile(profile);
+      if (profile) {
+        setUserProfile(profile);
+        try {
+          localStorage.setItem('unlocked_cached_profile_' + userId, JSON.stringify(profile));
+        } catch (_) {}
+      }
       
       console.log(`[Onboarding Check] Profile for User ${userId}:`, { 
         exists: !!profile, 
@@ -3859,27 +3879,30 @@ export default function App() {
         return;
       }
 
-      if (!profile) {
+      if (!profile && !userProfile) {
         console.log('[Onboarding] Profile missing, forcing flow.');
         setActiveView('complete-profile');
+        setAuthLoading(false);
         return;
       }
 
-      const createdDate = profile.created_at ? new Date(profile.created_at).getTime() : 0;
-      const updatedDate = profile.updated_at ? new Date(profile.updated_at).getTime() : 0;
-      const isVeryNew = (new Date().getTime() - createdDate) < 1800000; // 30 minutes
-      const isUntouched = Math.abs(updatedDate - createdDate) < 5000; // 5 seconds margin
-      
-      if (!profile.full_name || event === 'SIGNED_UP' || (isVeryNew && isUntouched)) {
-        console.log('[Onboarding] Fresh untouched profile detected, showing setup.');
-        setActiveView('complete-profile');
-      } else {
-        if (initialViewRef.current && initialViewRef.current !== 'login' && initialViewRef.current !== 'complete-profile') {
-          console.log(`[Auth] Restoring preferred view from saved state: ${initialViewRef.current}`);
-          setActiveView(initialViewRef.current);
-          initialViewRef.current = null; // Reset to prevent double-restores later
-        } else if (activeViewRef.current === 'login' || activeViewRef.current === 'complete-profile') {
-          setActiveView('home');
+      if (profile) {
+        const createdDate = profile.created_at ? new Date(profile.created_at).getTime() : 0;
+        const updatedDate = profile.updated_at ? new Date(profile.updated_at).getTime() : 0;
+        const isVeryNew = (new Date().getTime() - createdDate) < 1800000; // 30 minutes
+        const isUntouched = Math.abs(updatedDate - createdDate) < 5000; // 5 seconds margin
+        
+        if (!profile.full_name || event === 'SIGNED_UP' || (isVeryNew && isUntouched)) {
+          console.log('[Onboarding] Fresh untouched profile detected, showing setup.');
+          setActiveView('complete-profile');
+        } else {
+          if (initialViewRef.current && initialViewRef.current !== 'login' && initialViewRef.current !== 'complete-profile') {
+            console.log(`[Auth] Restoring preferred view from saved state: ${initialViewRef.current}`);
+            setActiveView(initialViewRef.current);
+            initialViewRef.current = null; // Reset to prevent double-restores later
+          } else if (activeViewRef.current === 'login' || activeViewRef.current === 'complete-profile') {
+            setActiveView('home');
+          }
         }
       }
     } catch (err) {
@@ -3997,7 +4020,7 @@ export default function App() {
 
       {authLoading ? (
         <div className="flex-1 bg-white">
-           <div />
+          <div />
         </div>
       ) : (
         <>
@@ -6012,11 +6035,11 @@ function AdDetailModal({
                   </h4>
                   <span className={cn(
                     "text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1",
-                    ad.location_precision === 'exact' 
+                    currentUser && ad.location_precision === 'exact' 
                       ? "bg-purple-100 text-purple-800 border border-purple-200" 
                       : "bg-slate-100 text-slate-700 border border-slate-200"
                   )}>
-                    {ad.location_precision === 'exact' ? '🎯 Exact Address' : '🌐 Approximate Area'}
+                    {currentUser && ad.location_precision === 'exact' ? '🎯 Exact Address' : '🌐 Approximate Area'}
                   </span>
                 </div>
 
@@ -6024,18 +6047,20 @@ function AdDetailModal({
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-0.5 min-w-0">
                       <p className="text-sm font-bold text-slate-900 leading-snug">
-                        {ad.location_precision === 'exact'
+                        {currentUser && ad.location_precision === 'exact'
                           ? (ad.exact_address || ad.location)
                           : (ad.location || 'Valencia')}
                       </p>
-                      {ad.location_precision === 'approximate' && (
+                      {(!currentUser || ad.location_precision === 'approximate') && (
                         <p className="text-[11px] text-slate-500">
-                          Approximate neighborhood for pickup / handover
+                          {!currentUser 
+                            ? "Approximate neighborhood shown (log in to view exact seller address)"
+                            : "Approximate neighborhood for pickup / handover"}
                         </p>
                       )}
                     </div>
                     <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((ad.exact_address || ad.location) + ', Valencia, Spain')}`}
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((currentUser ? (ad.exact_address || ad.location) : (ad.location || 'Valencia')) + ', Valencia, Spain')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-purple-50 text-purple-700 rounded-xl text-xs font-bold border border-slate-200 transition-all shrink-0 shadow-2xs group"
@@ -6046,14 +6071,30 @@ function AdDetailModal({
                     </a>
                   </div>
 
+                  {!currentUser && (ad.exact_address || ad.location_precision === 'exact') && (
+                    <div className="p-3 bg-purple-50/90 border border-purple-200/90 rounded-xl flex items-center justify-between gap-2.5 text-xs text-purple-950 font-medium">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Lock className="w-4 h-4 text-purple-600 shrink-0" />
+                        <span className="truncate font-semibold">Exact address is reserved for signed-in members.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={onRequireAuth}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-bold rounded-lg text-[11px] shrink-0 transition-all cursor-pointer shadow-xs"
+                      >
+                        Sign in to view
+                      </button>
+                    </div>
+                  )}
+
                   {/* Interactive / Visual Map */}
                   <div className="h-44 sm:h-52 rounded-xl overflow-hidden border border-slate-200 shadow-2xs relative">
                     <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''} libraries={['places', 'marker']}>
                       <Map
                         defaultCenter={modalMapCenter}
                         center={modalMapCenter}
-                        defaultZoom={ad.location_precision === 'exact' ? 15 : 13}
-                        zoom={ad.location_precision === 'exact' ? 15 : 13}
+                        defaultZoom={currentUser && ad.location_precision === 'exact' ? 15 : 13}
+                        zoom={currentUser && ad.location_precision === 'exact' ? 15 : 13}
                         mapId="MARKETPLACE_AD_DETAIL_MAP"
                         disableDefaultUI={true}
                         zoomControl={true}
@@ -6062,7 +6103,7 @@ function AdDetailModal({
                         <AdvancedMarker position={modalMapCenter}>
                           <div className={cn(
                             "rounded-full flex items-center justify-center shadow-lg border-2 border-white",
-                            ad.location_precision === 'exact' 
+                            currentUser && ad.location_precision === 'exact' 
                               ? "w-8 h-8 bg-purple-600 animate-bounce" 
                               : "w-9 h-9 bg-purple-600"
                           )}>
