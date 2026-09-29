@@ -254,12 +254,12 @@ export function formatNotificationTime(dateString?: string): string {
     const diffHours = Math.floor(diffMin / 60);
     const diffDays = Math.floor(diffHours / 24);
 
-    if (diffSec < 45) return 'Just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    if (diffSec < 45) return "À l'instant";
+    if (diffMin < 60) return `Il y a ${diffMin} min`;
+    if (diffHours < 24) return `Il y a ${diffHours} h`;
+    if (diffDays === 1) return 'Hier';
+    if (diffDays < 7) return `Il y a ${diffDays} j`;
+    return date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
   } catch {
     return '';
   }
@@ -271,6 +271,8 @@ interface InAppNotificationCenterProps {
   announcements: InAppNotification[];
   readIds: string[];
   dismissedIds?: string[];
+  currentUser?: any;
+  isGuest?: boolean;
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead?: () => void;
   onDismissNotification?: (id: string) => void;
@@ -285,6 +287,8 @@ export function InAppNotificationCenter({
   announcements,
   readIds,
   dismissedIds = [],
+  currentUser,
+  isGuest = false,
   onMarkAsRead,
   onMarkAllAsRead,
   onDismissNotification,
@@ -328,6 +332,8 @@ export function InAppNotificationCenter({
     (window.navigator as any).standalone === true
   );
 
+  const isUserNotSignedIn = !currentUser || isGuest;
+
   if (!isOpen) return null;
 
   return (
@@ -358,30 +364,30 @@ export function InAppNotificationCenter({
         <div className="p-4 sm:p-5 border-b border-slate-100/80 flex items-center justify-between bg-white rounded-t-3xl z-10 gap-2">
           <div className="flex items-center gap-2.5">
             <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Notifications</h3>
-            {unreadList.length > 0 && (
+            {!isUserNotSignedIn && unreadList.length > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-xs font-bold border border-rose-200">
-                {unreadList.length} new
+                {unreadList.length} nouvelle{unreadList.length > 1 ? 's' : ''}
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-1.5">
-            {unreadList.length > 0 && onMarkAllAsRead && (
+            {!isUserNotSignedIn && unreadList.length > 0 && onMarkAllAsRead && (
               <button
                 onClick={onMarkAllAsRead}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-                title="Mark all as read"
+                title="Tout marquer comme lu"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Mark all read</span>
+                <span className="hidden sm:inline">Tout lire</span>
               </button>
             )}
 
-            {activeNotifications.length > 0 && onClearAll && (
+            {!isUserNotSignedIn && activeNotifications.length > 0 && onClearAll && (
               <button
                 onClick={onClearAll}
                 className="flex items-center gap-1 px-2 py-1 rounded-xl text-xs font-semibold text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                title="Clear all"
+                title="Tout effacer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -390,273 +396,303 @@ export function InAppNotificationCenter({
             <button
               onClick={onClose}
               className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-              aria-label="Close"
+              aria-label="Fermer"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* iOS PWA Badging Tip Banner */}
-        {isIOS && !isNativeApp && (
-          <div className="mx-4 mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50/80 border border-blue-100 rounded-2xl flex items-start gap-2.5 text-blue-900">
-            <span className="text-base shrink-0 leading-none mt-0.5">📲</span>
-            <div className="flex-1 text-[11px] leading-snug">
-              <strong className="font-bold text-blue-950 block mb-0.5">Pastille d'icône iOS (Écran d'accueil) :</strong>
-              Pour afficher la pastille rouge des notifications non lues sur votre iPhone, ajoutez l'application à l'écran d'accueil (<span className="font-semibold text-blue-700">Partager ➔ Sur l'écran d'accueil</span>).
+        {/* Content Body: Guest Login Required Card OR Logged-In Notifications List */}
+        {isUserNotSignedIn ? (
+          <div className="py-10 px-6 text-center flex flex-col items-center my-2">
+            <div className="w-14 h-14 rounded-3xl bg-blue-50 border border-blue-100 flex items-center justify-center mb-4 text-blue-600 shadow-xs">
+              <Bell className="w-7 h-7 stroke-[2]" />
             </div>
-          </div>
-        )}
-
-        {/* Filter Tabs */}
-        <div className="flex items-center px-4 py-2 border-b border-slate-100 bg-slate-50/50 gap-2">
-          <button
-            onClick={() => setFilter('all')}
-            className={cn(
-              "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer",
-              filter === 'all' 
-                ? "bg-white text-slate-900 shadow-xs border border-slate-200/80" 
-                : "text-slate-500 hover:text-slate-800"
-            )}
-          >
-            All ({activeNotifications.length})
-          </button>
-          <button
-            onClick={() => setFilter('unread')}
-            className={cn(
-              "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
-              filter === 'unread' 
-                ? "bg-white text-blue-600 shadow-xs border border-blue-200/80" 
-                : "text-slate-500 hover:text-slate-800"
-            )}
-          >
-            Unread
-            {unreadList.length > 0 && (
-              <span className="w-2 h-2 rounded-full bg-rose-500" />
-            )}
-          </button>
-        </div>
-
-        {/* Notification List Body */}
-        <div className="overflow-y-auto divide-y divide-slate-100/80 p-2 sm:p-3 space-y-1">
-          {displayedList.length === 0 ? (
-            <div className="py-12 px-4 text-center text-slate-400 flex flex-col items-center">
-              <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-3">
-                <Bell className="w-6 h-6 text-slate-300" />
-              </div>
-              <p className="text-sm font-bold text-slate-700 mb-1">
-                {filter === 'unread' ? "You're all caught up!" : "No notifications yet"}
-              </p>
-              <p className="text-xs text-slate-400 max-w-xs">
-                {filter === 'unread' 
-                  ? "You have read all your recent notifications and alerts." 
-                  : "Important updates, recommendations, and events will appear here."}
-              </p>
-            </div>
-          ) : (
-            displayedList.map((item) => {
-              const unread = isItemUnread(item);
-              const itemData = getInAppNotificationIconData(item.icon, item.type);
-              const IconComp = itemData.icon;
-
-              let title = item.title && item.title.toLowerCase() !== 'notification' && item.title.toLowerCase() !== 'announcement'
-                ? item.title
-                : (item.type === 'recommendation_request' 
-                    ? `Looking for a ${item.pro_category || 'professional'}` 
-                    : 'Announcement');
-
-              if (title.toLowerCase().startsWith('message from ')) {
-                const rawSender = title.slice(13).trim();
-                title = `Message from ${formatName(rawSender)}`;
-              }
-
-              const description = item.content || item.notes || item.message || '';
-              const timeString = formatNotificationTime(item.created_at || item.updated_at);
-
-              return (
-                <div
-                  key={String(item.id)}
-                  onClick={() => {
-                    onMarkAsRead(String(item.id));
-                    if (isRecommendProNotification(item)) {
-                      onClose();
-                      if (onAddPro) {
-                        onAddPro();
-                      } else if (onNavigate) {
-                        onNavigate('explore');
-                      }
-                    } else if (isGuideNotification(item)) {
-                      onClose();
-                      if (onNavigate) {
-                        const targetGuideId = extractGuideIdFromNotification(item);
-                        onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
-                      }
-                    } else if (item.type === 'event' && onNavigate) {
-                      onClose();
-                      onNavigate('events', item.target_id ? { eventId: String(item.target_id) } : undefined);
-                    } else if ((item.type === 'chat' || item.type === 'message') && onNavigate) {
-                      onClose();
-                      onNavigate('messages', item.target_id ? { chat: { id: String(item.target_id) } } : undefined);
-                    } else if ((item.type === 'marketplace' || item.type === 'ad') && onNavigate) {
-                      onClose();
-                      onNavigate('marketplace');
-                    } else if (item.cta_link && onNavigate) {
-                      onClose();
-                      if (item.cta_link.startsWith('http://') || item.cta_link.startsWith('https://')) {
-                        window.open(item.cta_link, '_blank', 'noopener,noreferrer');
-                      } else if (item.cta_link.includes('guide')) {
-                        const targetGuideId = extractGuideIdFromNotification(item);
-                        onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
-                      } else if (item.cta_link.includes('event')) {
-                        onNavigate('events');
-                      }
-                    }
-                  }}
-                  className={cn(
-                    "p-3 rounded-2xl transition-all cursor-pointer flex items-start gap-3 relative group border",
-                    unread 
-                      ? "bg-blue-50/40 hover:bg-blue-50/70 border-blue-100/70" 
-                      : "bg-white hover:bg-slate-50/80 border-transparent"
-                  )}
-                >
-                  {/* Category Icon */}
-                  <div className={cn(
-                    "w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-xs border transition-transform group-hover:scale-105",
-                    itemData.bgColor,
-                    itemData.textColor,
-                    itemData.borderColor
-                  )}>
-                    <IconComp className="w-5 h-5 stroke-[2.2]" />
-                  </div>
-
-                  {/* Notification Content */}
-                  <div className="flex-1 min-w-0 pr-1">
-                    <div className="flex items-center justify-between gap-1.5 mb-0.5">
-                      <h4 className={cn(
-                        "text-xs sm:text-sm font-bold leading-snug break-words",
-                        unread ? "text-slate-900 font-extrabold" : "text-slate-800"
-                      )}>
-                        {title}
-                      </h4>
-                      {timeString && (
-                        <span className="text-[10px] text-slate-400 font-medium shrink-0">
-                          {timeString}
-                        </span>
-                      )}
-                    </div>
-
-                    {description && (
-                      <p className={cn(
-                        "text-xs leading-relaxed break-words",
-                        unread ? "text-slate-700 font-medium" : "text-slate-500"
-                      )}>
-                        {description}
-                      </p>
-                    )}
-
-                    {/* Interactive CTAs */}
-                    <div className="flex items-center gap-2 mt-2">
-                      {(item.cta_type === 'recommend_pro' || isRecommendProNotification(item)) && onAddPro && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onMarkAsRead(String(item.id));
-                            onClose();
-                            onAddPro();
-                          }}
-                          className="px-2.5 py-1 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                        >
-                          <UserPlus className="w-3 h-3" />
-                          <span>Recommend Pro</span>
-                        </button>
-                      )}
-
-                      {item.type === 'event' && onNavigate && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onMarkAsRead(String(item.id));
-                            onClose();
-                            onNavigate('events', item.target_id ? { eventId: String(item.target_id) } : undefined);
-                          }}
-                          className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                        >
-                          <Calendar className="w-3 h-3" />
-                          <span>View Event</span>
-                        </button>
-                      )}
-
-                      {(item.type === 'guide' || isGuideNotification(item)) && onNavigate && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onMarkAsRead(String(item.id));
-                            onClose();
-                            const targetGuideId = extractGuideIdFromNotification(item);
-                            onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
-                          }}
-                          className="px-2.5 py-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                        >
-                          <BookOpen className="w-3 h-3" />
-                          <span>Read Guide</span>
-                        </button>
-                      )}
-
-                      {(item.type === 'chat' || item.type === 'message') && onNavigate && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onMarkAsRead(String(item.id));
-                            onClose();
-                            onNavigate('messages', item.target_id ? { chat: { id: String(item.target_id) } } : undefined);
-                          }}
-                          className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                        >
-                          <MessageCircle className="w-3 h-3" />
-                          <span>Reply</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions (Unread Indicator Dot & Delete Button) */}
-                  <div className="flex flex-col items-end justify-between shrink-0 self-stretch py-0.5 ml-1">
-                    {onDismissNotification && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          onDismissNotification(String(item.id));
-                        }}
-                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-all cursor-pointer opacity-70 sm:opacity-0 sm:group-hover:opacity-100 hover:!opacity-100"
-                        title="Delete notification"
-                        aria-label="Delete notification"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    {unread && (
-                      <span className="w-2 h-2 rounded-full bg-blue-600 ring-4 ring-blue-100 mt-auto" />
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Older Notifications Toggle */}
-        {filteredList.length > 7 && !showOlder && (
-          <div className="p-3 bg-slate-50/80 border-t border-slate-100 text-center rounded-b-3xl">
+            <h4 className="text-base sm:text-lg font-bold text-slate-900 mb-1.5">
+              Connexion requise
+            </h4>
+            <p className="text-xs text-slate-500 max-w-xs leading-relaxed mb-6">
+              Connectez-vous ou créez un compte pour accéder à votre centre de notifications personnalisées, vos messages et alertes en direct.
+            </p>
             <button
-              onClick={() => setShowOlder(true)}
-              className="text-xs font-bold text-slate-600 hover:text-blue-600 flex items-center justify-center gap-1 mx-auto transition-colors cursor-pointer"
+              onClick={() => {
+                onClose();
+                if (onNavigate) onNavigate('login');
+              }}
+              className="w-full max-w-xs py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-xs rounded-2xl shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
             >
-              <span>View older notifications ({filteredList.length - 7} more)</span>
-              <ChevronDown className="w-4 h-4" />
+              <span>Se connecter / S'inscrire</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
           </div>
+        ) : (
+          <>
+            {/* iOS PWA Badging Tip Banner */}
+            {isIOS && !isNativeApp && (
+              <div className="mx-4 mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50/80 border border-blue-100 rounded-2xl flex items-start gap-2.5 text-blue-900">
+                <span className="text-base shrink-0 leading-none mt-0.5">📲</span>
+                <div className="flex-1 text-[11px] leading-snug">
+                  <strong className="font-bold text-blue-950 block mb-0.5">Pastille d'icône iOS (Écran d'accueil) :</strong>
+                  Pour afficher la pastille rouge des notifications non lues sur votre iPhone, ajoutez l'application à l'écran d'accueil (<span className="font-semibold text-blue-700">Partager ➔ Sur l'écran d'accueil</span>).
+                </div>
+              </div>
+            )}
+
+            {/* Filter Tabs */}
+            <div className="flex items-center px-4 py-2 border-b border-slate-100 bg-slate-50/50 gap-2">
+              <button
+                onClick={() => setFilter('all')}
+                className={cn(
+                  "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                  filter === 'all' 
+                    ? "bg-white text-slate-900 shadow-xs border border-slate-200/80" 
+                    : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Toutes ({activeNotifications.length})
+              </button>
+              <button
+                onClick={() => setFilter('unread')}
+                className={cn(
+                  "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                  filter === 'unread' 
+                    ? "bg-white text-blue-600 shadow-xs border border-blue-200/80" 
+                    : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                Non lues
+                {unreadList.length > 0 && (
+                  <span className="w-2 h-2 rounded-full bg-rose-500" />
+                )}
+              </button>
+            </div>
+
+            {/* Notification List Body */}
+            <div className="overflow-y-auto divide-y divide-slate-100/80 p-2 sm:p-3 space-y-1">
+              {displayedList.length === 0 ? (
+                <div className="py-12 px-4 text-center text-slate-400 flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-3">
+                    <Bell className="w-6 h-6 text-slate-300" />
+                  </div>
+                  <p className="text-sm font-bold text-slate-700 mb-1">
+                    {filter === 'unread' ? "Vous êtes à jour !" : "Aucune notification pour le moment"}
+                  </p>
+                  <p className="text-xs text-slate-400 max-w-xs">
+                    {filter === 'unread' 
+                      ? "Vous avez lu toutes vos notifications et alertes récentes." 
+                      : "Les mises à jour importantes, recommandations et événements s'afficheront ici."}
+                  </p>
+                </div>
+              ) : (
+                displayedList.map((item) => {
+                  const unread = isItemUnread(item);
+                  const itemData = getInAppNotificationIconData(item.icon, item.type);
+                  const IconComp = itemData.icon;
+
+                  let title = item.title && item.title.toLowerCase() !== 'notification' && item.title.toLowerCase() !== 'announcement'
+                    ? item.title
+                    : (item.type === 'recommendation_request' 
+                        ? `Recherche d'un ${item.pro_category || 'professionnel'}` 
+                        : 'Annonce');
+
+                  if (title.toLowerCase().startsWith('message from ')) {
+                    const rawSender = title.slice(13).trim();
+                    title = `Message de ${formatName(rawSender)}`;
+                  } else if (title.toLowerCase().startsWith('recommendation request:')) {
+                    const rawCat = title.slice(23).trim();
+                    title = `Recherche de pro : ${rawCat || 'Professionnel'}`;
+                  }
+
+                  const description = item.content || item.notes || item.message || '';
+                  const timeString = formatNotificationTime(item.created_at || item.updated_at);
+
+                  return (
+                    <div
+                      key={String(item.id)}
+                      onClick={() => {
+                        onMarkAsRead(String(item.id));
+                        if (isRecommendProNotification(item)) {
+                          onClose();
+                          if (onAddPro) {
+                            onAddPro();
+                          } else if (onNavigate) {
+                            onNavigate('explore');
+                          }
+                        } else if (isGuideNotification(item)) {
+                          onClose();
+                          if (onNavigate) {
+                            const targetGuideId = extractGuideIdFromNotification(item);
+                            onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
+                          }
+                        } else if (item.type === 'event' && onNavigate) {
+                          onClose();
+                          onNavigate('events', item.target_id ? { eventId: String(item.target_id) } : undefined);
+                        } else if ((item.type === 'chat' || item.type === 'message') && onNavigate) {
+                          onClose();
+                          onNavigate('messages', item.target_id ? { chat: { id: String(item.target_id) } } : undefined);
+                        } else if ((item.type === 'marketplace' || item.type === 'ad') && onNavigate) {
+                          onClose();
+                          onNavigate('marketplace');
+                        } else if (item.cta_link && onNavigate) {
+                          onClose();
+                          if (item.cta_link.startsWith('http://') || item.cta_link.startsWith('https://')) {
+                            window.open(item.cta_link, '_blank', 'noopener,noreferrer');
+                          } else if (item.cta_link.includes('guide')) {
+                            const targetGuideId = extractGuideIdFromNotification(item);
+                            onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
+                          } else if (item.cta_link.includes('event')) {
+                            onNavigate('events');
+                          }
+                        }
+                      }}
+                      className={cn(
+                        "p-3 rounded-2xl transition-all cursor-pointer flex items-start gap-3 relative group border",
+                        unread 
+                          ? "bg-blue-50/40 hover:bg-blue-50/70 border-blue-100/70" 
+                          : "bg-white hover:bg-slate-50/80 border-transparent"
+                      )}
+                    >
+                      {/* Category Icon */}
+                      <div className={cn(
+                        "w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-xs border transition-transform group-hover:scale-105",
+                        itemData.bgColor,
+                        itemData.textColor,
+                        itemData.borderColor
+                      )}>
+                        <IconComp className="w-5 h-5 stroke-[2.2]" />
+                      </div>
+
+                      {/* Notification Content */}
+                      <div className="flex-1 min-w-0 pr-1">
+                        <div className="flex items-center justify-between gap-1.5 mb-0.5">
+                          <h4 className={cn(
+                            "text-xs sm:text-sm font-bold leading-snug break-words",
+                            unread ? "text-slate-900 font-extrabold" : "text-slate-800"
+                          )}>
+                            {title}
+                          </h4>
+                          {timeString && (
+                            <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                              {timeString}
+                            </span>
+                          )}
+                        </div>
+
+                        {description && (
+                          <p className={cn(
+                            "text-xs leading-relaxed break-words",
+                            unread ? "text-slate-700 font-medium" : "text-slate-500"
+                          )}>
+                            {description}
+                          </p>
+                        )}
+
+                        {/* Interactive CTAs */}
+                        <div className="flex items-center gap-2 mt-2">
+                          {(item.cta_type === 'recommend_pro' || isRecommendProNotification(item)) && onAddPro && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMarkAsRead(String(item.id));
+                                onClose();
+                                onAddPro();
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <UserPlus className="w-3 h-3" />
+                              <span>Recommander un pro</span>
+                            </button>
+                          )}
+
+                          {item.type === 'event' && onNavigate && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMarkAsRead(String(item.id));
+                                onClose();
+                                onNavigate('events', item.target_id ? { eventId: String(item.target_id) } : undefined);
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <Calendar className="w-3 h-3" />
+                              <span>Voir l'événement</span>
+                            </button>
+                          )}
+
+                          {(item.type === 'guide' || isGuideNotification(item)) && onNavigate && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMarkAsRead(String(item.id));
+                                onClose();
+                                const targetGuideId = extractGuideIdFromNotification(item);
+                                onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <BookOpen className="w-3 h-3" />
+                              <span>Lire le guide</span>
+                            </button>
+                          )}
+
+                          {(item.type === 'chat' || item.type === 'message') && onNavigate && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMarkAsRead(String(item.id));
+                                onClose();
+                                onNavigate('messages', item.target_id ? { chat: { id: String(item.target_id) } } : undefined);
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <MessageCircle className="w-3 h-3" />
+                              <span>Répondre</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions (Unread Indicator Dot & Delete Button) */}
+                      <div className="flex flex-col items-end justify-between shrink-0 self-stretch py-0.5 ml-1">
+                        {onDismissNotification && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              onDismissNotification(String(item.id));
+                            }}
+                            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-all cursor-pointer opacity-70 sm:opacity-0 sm:group-hover:opacity-100 hover:!opacity-100"
+                            title="Supprimer la notification"
+                            aria-label="Supprimer la notification"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {unread && (
+                          <span className="w-2 h-2 rounded-full bg-blue-600 ring-4 ring-blue-100 mt-auto" />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Older Notifications Toggle */}
+            {filteredList.length > 7 && !showOlder && (
+              <div className="p-3 bg-slate-50/80 border-t border-slate-100 text-center rounded-b-3xl">
+                <button
+                  onClick={() => setShowOlder(true)}
+                  className="text-xs font-bold text-slate-600 hover:text-blue-600 flex items-center justify-center gap-1 mx-auto transition-colors cursor-pointer"
+                >
+                  <span>Voir les notifications plus anciennes ({filteredList.length - 7} de plus)</span>
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </motion.div>
     </>
@@ -714,7 +750,7 @@ export function InAppToastBanner({
       <div className="flex-1 min-w-0 pr-1">
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md">
-            New
+            Nouveau
           </span>
           <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
             {title}
