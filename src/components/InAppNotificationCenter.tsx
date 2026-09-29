@@ -223,6 +223,10 @@ export function InAppNotificationCenter({
 
   // Determine unread status per item
   const isItemUnread = (item: InAppNotification) => {
+    // For chat notifications, recent unread messages take priority
+    if (item.type === 'chat' || String(item.id).startsWith('chat-')) {
+      return item.is_read === false;
+    }
     const isLocallyRead = readIds.includes(String(item.id));
     if (isLocallyRead) return false;
     if (item.is_read === true) return false;

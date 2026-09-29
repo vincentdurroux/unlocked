@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { oneSignalService } from './oneSignalService';
 
 export interface Conversation {
   id: string;
@@ -263,6 +264,7 @@ export const chatService = {
 
     // Security: Check if conversation is blocked or users have blocked each other
     let otherId = '';
+    let senderProfile: any = null;
     try {
       const { data: conv } = await supabase
         .from('conversations')
@@ -278,17 +280,25 @@ export const chatService = {
         otherId = conv.participant_1 === senderId ? conv.participant_2 : conv.participant_1;
         
         // Final secure bidirectional check
-        const [
-          { data: blocks1 }, 
-          { data: blocks2 },
-          { data: senderProfile, error: senderError },
-          { data: receiverProfile, error: receiverError }
-        ] = await Promise.all([
+        let blocks1: any = null;
+        let blocks2: any = null;
+        let senderError: any = null;
+        let receiverError: any = null;
+        let receiverProfile: any = null;
+
+        const [b1Res, b2Res, sRes, rRes] = await Promise.all([
           supabase.from('user_blocks').select('id').eq('blocker_id', senderId).eq('blocked_id', otherId).maybeSingle(),
           supabase.from('user_blocks').select('id').eq('blocker_id', otherId).eq('blocked_id', senderId).maybeSingle(),
-          supabase.from('profiles').select('chat_enabled').eq('id', senderId).maybeSingle(),
+          supabase.from('profiles').select('full_name, chat_enabled').eq('id', senderId).maybeSingle(),
           supabase.from('profiles').select('chat_enabled').eq('id', otherId).maybeSingle()
         ]);
+
+        blocks1 = b1Res.data;
+        blocks2 = b2Res.data;
+        senderProfile = sRes.data;
+        senderError = sRes.error;
+        receiverProfile = rRes.data;
+        receiverError = rRes.error;
 
         if (blocks1 || blocks2) {
           throw new Error('This discussion is blocked.');
@@ -322,6 +332,24 @@ export const chatService = {
       .from('conversations')
       .update({ last_message_at: new Date().toISOString() })
       .eq('id', conversationId);
+
+    // Trigger Push Notification to recipient with iOS badge increment
+    if (otherId) {
+      try {
+        const senderName = senderProfile?.full_name || 'Unlocked Member';
+        const truncatedContent = content.length > 90 ? content.substring(0, 90) + '…' : content;
+        oneSignalService.sendServerNotification(
+          `Message from ${senderName}`,
+          truncatedContent,
+          `/#messages`,
+          [otherId]
+        ).catch(pushErr => {
+          console.warn('[ChatService] Push notification trigger notice:', pushErr);
+        });
+      } catch (err) {
+        console.warn('[ChatService] Failed to send push notification:', err);
+      }
+    }
 
     return data as Message;
   },

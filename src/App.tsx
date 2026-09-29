@@ -2114,6 +2114,7 @@ export default function App() {
         (payload) => {
           console.log('[Realtime-Unread] Message received for user:', payload);
           fetchAndCheckUnread();
+          fetchAnnouncementsFromDb();
         }
       )
       .on(
@@ -2412,6 +2413,11 @@ export default function App() {
                 });
               }
 
+              const unreadChatNotifIds = chatNotifications.filter(c => !c.is_read).map(c => String(c.id));
+              if (unreadChatNotifIds.length > 0) {
+                setReadAnnouncementIds(prev => prev.filter(id => !unreadChatNotifIds.includes(id)));
+              }
+
               list = [...list, ...chatNotifications];
             }
           }
@@ -2423,13 +2429,16 @@ export default function App() {
       list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setAnnouncementsList(list);
 
-      // Check if there is a fresh unread notification to show an in-app toast preview
+      // Check if there is a fresh unread notification (announcement or chat message) to show an in-app toast preview
       if (list.length > 0) {
         const latest = list[0];
         const isLocallyRead = readAnnouncementIds.includes(String(latest.id));
         const isDismissed = dismissedNotificationIds.includes(String(latest.id));
+        const isUnread = (latest.type === 'chat' || String(latest.id).startsWith('chat-'))
+          ? (latest.is_read === false)
+          : (!isLocallyRead && !isDismissed);
         const lastToastSeen = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('unlocked_last_toast_seen') : null;
-        if (!isLocallyRead && !isDismissed && String(latest.id) !== lastToastSeen) {
+        if (isUnread && String(latest.id) !== lastToastSeen) {
           setToastNotification(latest);
           try {
             sessionStorage.setItem('unlocked_last_toast_seen', String(latest.id));
@@ -2463,44 +2472,85 @@ export default function App() {
       })
       .subscribe();
 
+    const pollInterval = setInterval(() => {
+      fetchAnnouncementsFromDb();
+    }, 30000);
+
     return () => {
+      clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
   }, [isSupabaseConfigured, currentUser?.id]);
 
-  const hasUnreadAnnouncements = useMemo(() => {
-    if (announcementsList.length === 0) return false;
-    return announcementsList.some(item => {
-      if (dismissedNotificationIds.includes(String(item.id))) return false;
-      const isLocallyRead = readAnnouncementIds.includes(String(item.id));
-      const isDbRead = item.is_read === true || item.status === 'processed' || item.status === 'refused';
-      return !isLocallyRead && !isDbRead;
-    });
-  }, [announcementsList, readAnnouncementIds, dismissedNotificationIds]);
-
   const unreadCount = useMemo(() => {
-    if (announcementsList.length === 0) return 0;
-    return announcementsList.filter(item => {
-      if (dismissedNotificationIds.includes(String(item.id))) return false;
-      const isLocallyRead = readAnnouncementIds.includes(String(item.id));
+    // 1. Unread items from general announcements and recommendations
+    const unreadAnnouncements = (announcementsList || []).filter(item => {
+      if (!item) return false;
+      const strId = String(item.id);
+      // Skip chat items here, as their unread status is authoritative from unreadConversations
+      if (strId.startsWith('chat-')) return false;
+      if (dismissedNotificationIds.includes(strId)) return false;
+      const isLocallyRead = readAnnouncementIds.includes(strId);
       const isDbRead = item.is_read === true || item.status === 'processed' || item.status === 'refused';
       return !isLocallyRead && !isDbRead;
     }).length;
-  }, [announcementsList, readAnnouncementIds, dismissedNotificationIds]);
 
-  // Synchronize App Icon Badge on iOS (PWA standalone on home screen) & desktop
+    // 2. Unread chat conversations (any conversation with a new unread message)
+    const unreadChats = (unreadConversations || []).length;
+
+    return unreadAnnouncements + unreadChats;
+  }, [announcementsList, readAnnouncementIds, dismissedNotificationIds, unreadConversations]);
+
+  const hasUnreadAnnouncements = useMemo(() => {
+    return unreadCount > 0;
+  }, [unreadCount]);
+
+  // Synchronize App Icon Badge on iOS (PWA standalone on home screen, native WebKit wrappers, Capacitor, desktop)
   useEffect(() => {
+    // 1. Standard Web Badging API (iOS Safari 16.4+ standalone / PWA)
     if (typeof navigator !== 'undefined') {
       try {
         if ('setAppBadge' in navigator) {
           if (unreadCount > 0) {
-            (navigator as any).setAppBadge(unreadCount).catch(() => {});
+            (navigator as any).setAppBadge(unreadCount).catch((err: any) => {
+              console.warn('[Badge] navigator.setAppBadge notice:', err);
+            });
           } else {
             (navigator as any).clearAppBadge().catch(() => {});
           }
         }
       } catch (_) {}
+
+      // 2. Service Worker Badging
+      try {
+        if (navigator.serviceWorker?.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'SET_APP_BADGE',
+            count: unreadCount
+          });
+        }
+      } catch (_) {}
     }
+
+    // 3. Native iOS wrappers (WKWebView messageHandlers & Capacitor Plugins)
+    try {
+      if (typeof window !== 'undefined') {
+        const w = window as any;
+        if (w.webkit?.messageHandlers?.setAppBadge) {
+          w.webkit.messageHandlers.setAppBadge.postMessage(unreadCount);
+        } else if (w.webkit?.messageHandlers?.setBadge) {
+          w.webkit.messageHandlers.setBadge.postMessage(unreadCount);
+        } else if (w.webkit?.messageHandlers?.badge) {
+          w.webkit.messageHandlers.badge.postMessage(unreadCount);
+        } else if (w.Capacitor?.Plugins?.Badge) {
+          if (unreadCount > 0) {
+            w.Capacitor.Plugins.Badge.set({ count: unreadCount });
+          } else {
+            w.Capacitor.Plugins.Badge.clear();
+          }
+        }
+      }
+    } catch (_) {}
   }, [unreadCount]);
 
   const handleMarkAnnouncementAsRead = async (id: string) => {
@@ -3903,42 +3953,49 @@ export default function App() {
                 aria-label="Notifications"
                 className="relative w-12 h-12 bg-transparent active:scale-95 transition-all flex items-center justify-center shrink-0 ml-2 group cursor-pointer border-0 p-0 outline-none overflow-visible"
               >
-                {/* Custom-designed golden bell with hardware-accelerated animation */}
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 24 24" 
-                  className={cn(
-                    "w-9 h-9 transition-all duration-300 group-hover:rotate-12 group-hover:scale-105 relative z-0",
-                    unreadCount > 0 ? "animate-scintillate" : "filter drop-shadow-[0_2px_4px_rgba(217,119,6,0.25)]"
-                  )}
-                >
-                  <defs>
-                    <linearGradient id="premiumBellGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#FFE066" />
-                      <stop offset="40%" stopColor="#FFB300" />
-                      <stop offset="100%" stopColor="#F59E0B" />
-                    </linearGradient>
-                    <linearGradient id="premiumClapperGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="#F59E0B" />
-                      <stop offset="100%" stopColor="#D97706" />
-                    </linearGradient>
-                  </defs>
-                  {/* Bell Body */}
-                  <path 
-                    d="M12 2.25c-1.1 0-2 .9-2 2v.45c-2.82.57-5 3.06-5 6.05v4.5c0 .65-.28 1.25-.78 1.68l-.47.41c-.6.53-.22 1.54.59 1.54h15.32c.81 0 1.19-1.01.59-1.54l-.47-.41a2.24 2.24 0 0 1-.78-1.68v-4.5c0-2.99-2.18-5.48-5-6.05v-.45c0-1.1-.9-2-2-2z" 
-                    fill="url(#premiumBellGrad)" 
-                  />
-                  {/* Bell Clapper */}
-                  <path 
-                    d="M9.5 19.38c.4 1.5 1.76 2.62 3.5 2.62s3.1-1.12 3.5-2.62h-7z" 
-                    fill="url(#premiumClapperGrad)" 
-                  />
-                </svg>
+                {/* Custom-designed golden bell with hardware-accelerated ringing animation */}
+                <div className={cn(
+                  "relative flex items-center justify-center transition-all duration-300 origin-top",
+                  unreadCount > 0 ? "animate-bell-ring" : "group-hover:rotate-12 group-hover:scale-105"
+                )}>
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    viewBox="0 0 24 24" 
+                    className={cn(
+                      "w-9 h-9 relative z-0",
+                      unreadCount > 0 
+                        ? "filter drop-shadow-[0_2px_6px_rgba(245,158,11,0.45)]" 
+                        : "filter drop-shadow-[0_2px_4px_rgba(217,119,6,0.25)]"
+                    )}
+                  >
+                    <defs>
+                      <linearGradient id="premiumBellGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#FFE066" />
+                        <stop offset="40%" stopColor="#FFB300" />
+                        <stop offset="100%" stopColor="#F59E0B" />
+                      </linearGradient>
+                      <linearGradient id="premiumClapperGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#F59E0B" />
+                        <stop offset="100%" stopColor="#D97706" />
+                      </linearGradient>
+                    </defs>
+                    {/* Bell Body */}
+                    <path 
+                      d="M12 2.25c-1.1 0-2 .9-2 2v.45c-2.82.57-5 3.06-5 6.05v4.5c0 .65-.28 1.25-.78 1.68l-.47.41c-.6.53-.22 1.54.59 1.54h15.32c.81 0 1.19-1.01.59-1.54l-.47-.41a2.24 2.24 0 0 1-.78-1.68v-4.5c0-2.99-2.18-5.48-5-6.05v-.45c0-1.1-.9-2-2-2z" 
+                      fill="url(#premiumBellGrad)" 
+                    />
+                    {/* Bell Clapper */}
+                    <path 
+                      d="M9.5 19.38c.4 1.5 1.76 2.62 3.5 2.62s3.1-1.12 3.5-2.62h-7z" 
+                      fill="url(#premiumClapperGrad)" 
+                    />
+                  </svg>
+                </div>
                 
-                {/* Red badge containing the unread count */}
+                {/* Solid red badge (pastille rouge) without blinking or white ring */}
                 {unreadCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 z-20 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-600 text-white text-[8.5px] sm:text-[9px] font-extrabold shadow-md shadow-rose-600/30 ring-2 ring-white">
-                    {unreadCount}
+                  <span className="absolute top-1 right-1 z-20 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-600 text-white text-[8.5px] sm:text-[9px] font-extrabold shadow-sm shadow-rose-600/30 pointer-events-none">
+                    {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
               </button>

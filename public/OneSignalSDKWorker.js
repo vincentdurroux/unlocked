@@ -75,3 +75,28 @@ self.addEventListener('fetch', (event) => {
       })
   );
 });
+
+// Sync Home Screen App Badge on iOS and desktop via Service Worker
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SET_APP_BADGE') {
+    const count = Number(event.data.count) || 0;
+    if ('setAppBadge' in self.navigator) {
+      if (count > 0) {
+        self.navigator.setAppBadge(count).catch(() => {});
+      } else {
+        self.navigator.clearAppBadge().catch(() => {});
+      }
+    }
+  }
+});
+
+// Update badge when a push notification is delivered in background
+self.addEventListener('push', (event) => {
+  try {
+    const data = event.data ? event.data.json() : {};
+    const badge = data.badge || data.custom?.a?.badge;
+    if (typeof badge === 'number' && 'setAppBadge' in self.navigator) {
+      event.waitUntil(self.navigator.setAppBadge(badge).catch(() => {}));
+    }
+  } catch (_) {}
+});
