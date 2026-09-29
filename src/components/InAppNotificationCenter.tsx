@@ -328,18 +328,17 @@ export function InAppNotificationCenter({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.12 }}
-        className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-xs cursor-default" 
+        transition={{ duration: 0.15 }}
+        className="fixed inset-0 z-40 bg-slate-900/25 cursor-default" 
         onClick={onClose} 
       />
 
       {/* Main Notification Popover */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.92, y: -10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.92, y: -10 }}
-        transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-        style={{ transformOrigin: 'calc(100% - 24px) 0px' }}
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.15, ease: "easeOut" }}
         className="absolute top-full right-0 mt-3 w-[calc(100vw-32px)] sm:w-[480px] bg-white rounded-3xl shadow-2xl z-50 border border-slate-100 flex flex-col overflow-hidden max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -674,10 +673,10 @@ export function InAppToastBanner({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -12, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -12, scale: 0.98 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
       onClick={onClickToast}
       className="fixed top-20 right-4 sm:right-6 max-w-[420px] w-[calc(100vw-32px)] bg-white rounded-2xl shadow-xl border border-slate-200 p-3.5 z-50 flex items-start gap-3 cursor-pointer group hover:border-blue-300 transition-colors"
     >
