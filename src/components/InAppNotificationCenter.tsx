@@ -319,6 +319,12 @@ export function InAppNotificationCenter({
   const filteredList = filter === 'unread' ? unreadList : activeNotifications;
   const displayedList = showOlder ? filteredList : filteredList.slice(0, 7);
 
+  const isIOS = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = typeof window !== 'undefined' && (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any).standalone === true
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -387,6 +393,17 @@ export function InAppNotificationCenter({
             </button>
           </div>
         </div>
+
+        {/* iOS PWA Badging Tip Banner */}
+        {isIOS && !isStandalone && (
+          <div className="mx-4 mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50/80 border border-blue-100 rounded-2xl flex items-start gap-2.5 text-blue-900">
+            <span className="text-base shrink-0 leading-none mt-0.5">📲</span>
+            <div className="flex-1 text-[11px] leading-snug">
+              <strong className="font-bold text-blue-950 block mb-0.5">Pastille d'icône iOS (Écran d'accueil) :</strong>
+              Pour afficher la pastille rouge des notifications non lues sur votre iPhone, ajoutez l'application à l'écran d'accueil (<span className="font-semibold text-blue-700">Partager ➔ Sur l'écran d'accueil</span>).
+            </div>
+          </div>
+        )}
 
         {/* Filter Tabs */}
         <div className="flex items-center px-4 py-2 border-b border-slate-100 bg-slate-50/50 gap-2">

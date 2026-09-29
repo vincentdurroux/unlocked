@@ -2527,6 +2527,11 @@ export default function App() {
 
   // Synchronize App Icon Badge on iOS (PWA standalone on home screen, native WebKit wrappers, Capacitor, desktop)
   useEffect(() => {
+    // 0. Update Document Title
+    if (typeof document !== 'undefined') {
+      document.title = unreadCount > 0 ? `(${unreadCount}) Unlocked` : 'Unlocked';
+    }
+
     // 1. Standard Web Badging API (iOS Safari 16.4+ standalone / PWA)
     if (typeof navigator !== 'undefined') {
       try {
