@@ -2,29 +2,17 @@
   "packageId": "app.mycityunlocked.twa",
   "host": "mycityunlocked.app",
   "name": "Unlocked",
-  "launcherName": "Unlocked",
-  "display": "standalone",
-  "themeColor": "#FFFFFF",
-  "navigationColor": "#FFFFFF",
-  "backgroundColor": "#FFFFFF",
-  "enableNotifications": true,
+  "shortName": "Unlocked",
   "startUrl": "/",
+  "themeColor": "#ffffff",
+  "themeColorDark": "#ffffff",
+  "backgroundColor": "#ffffff",
+  "backgroundColorDark": "#ffffff",
+  "enableNotifications": true,
+  "splashScreenFadeOutDuration": 0,
+  "shortcuts": [],
   "iconUrl": "https://mycityunlocked.app/logo2.png",
   "maskableIconUrl": "https://mycityunlocked.app/logo2.png",
-  "splashScreenFadeOutDuration": 0,
-  "signingKey": {
-    "path": "./android.keystore",
-    "alias": "android"
-  },
-  "appVersionName": "1.0.0",
-  "appVersionCode": 1,
-  "shortcuts": [],
-  "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://mycityunlocked.app/manifest.json",
-  "fallbackType": "customtabs",
-  "features": {
-    "locationDelegation": {
-      "enabled": true
-    }
-  }
+  "generatorApp": "bubblewrap-cli"
 }
