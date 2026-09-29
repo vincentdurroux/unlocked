@@ -3352,10 +3352,19 @@ export default function App() {
           ? 'Delivery'
           : 'Pick up';
 
+      let finalPrice = adPrice.trim();
+      if (adIsHalloween || adCategory === 'Halloween Special') {
+        if (adHalloweenMode === 'swap') {
+          finalPrice = 'Swap';
+        } else if (adHalloweenMode === 'giveaway') {
+          finalPrice = 'Free';
+        }
+      }
+
       if (editingAd) {
         await marketplaceService.updateAd(editingAd.id, {
           title: adTitle.trim(),
-          price: adPrice.trim(),
+          price: finalPrice,
           category: adCategory,
           condition: adCondition,
           location: finalLocation,
@@ -3383,7 +3392,7 @@ export default function App() {
       } else {
         await marketplaceService.createAd({
           title: adTitle.trim(),
-          price: adPrice.trim(),
+          price: finalPrice,
           category: adCategory,
           condition: adCondition,
           location: finalLocation,
@@ -4908,9 +4917,7 @@ export default function App() {
                                 type="button"
                                 onClick={() => {
                                   setAdHalloweenMode('swap');
-                                  if (!adPrice.includes('Swap') && !adPrice.includes('Trade')) {
-                                    setAdPrice(adPrice ? `${adPrice} or Swap` : 'Swap / Trade');
-                                  }
+                                  setAdPrice('Swap');
                                 }}
                                 className={cn(
                                   "px-2.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center",
@@ -4924,7 +4931,12 @@ export default function App() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setAdHalloweenMode('sale')}
+                                onClick={() => {
+                                  setAdHalloweenMode('sale');
+                                  if (adPrice === 'Swap' || adPrice === 'Free') {
+                                    setAdPrice('');
+                                  }
+                                }}
                                 className={cn(
                                   "px-2.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center",
                                   adHalloweenMode === 'sale'
@@ -5002,44 +5014,7 @@ export default function App() {
                     </div>
 
                     {/* Price & Condition */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                            Price <span className="text-purple-600">*</span>
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (adPrice === 'Free') {
-                                setAdPrice('');
-                              } else {
-                                setAdPrice('Free');
-                                setAdCondition('Free');
-                              }
-                            }}
-                            className={cn(
-                              "text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-colors cursor-pointer",
-                              adPrice === 'Free' 
-                                ? "bg-purple-100 text-purple-800 border-purple-300"
-                                : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-purple-50 hover:text-purple-700"
-                            )}
-                          >
-                            {adPrice === 'Free' ? '✓ Free / Giveaway' : 'Make it Free (€0)'}
-                          </button>
-                        </div>
-                        <div className="relative">
-                          <Euro className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
-                          <input 
-                            type="text" 
-                            placeholder="e.g. 35€ (or Free)" 
-                            value={adPrice}
-                            onChange={(e) => setAdPrice(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
-                          />
-                        </div>
-                      </div>
-
+                    {(adIsHalloween || adCategory === 'Halloween Special') && (adHalloweenMode === 'swap' || adHalloweenMode === 'giveaway') ? (
                       <div>
                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                           Condition
@@ -5060,7 +5035,67 @@ export default function App() {
                           <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                              Price <span className="text-purple-600">*</span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (adPrice === 'Free') {
+                                  setAdPrice('');
+                                } else {
+                                  setAdPrice('Free');
+                                  setAdCondition('Free');
+                                }
+                              }}
+                              className={cn(
+                                "text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-colors cursor-pointer",
+                                adPrice === 'Free' 
+                                  ? "bg-purple-100 text-purple-800 border-purple-300"
+                                  : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-purple-50 hover:text-purple-700"
+                              )}
+                            >
+                              {adPrice === 'Free' ? '✓ Free / Giveaway' : 'Make it Free (€0)'}
+                            </button>
+                          </div>
+                          <div className="relative">
+                            <Euro className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
+                            <input 
+                              type="text" 
+                              placeholder="e.g. 35€ (or Free)" 
+                              value={adPrice}
+                              onChange={(e) => setAdPrice(e.target.value)}
+                              className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                            Condition
+                          </label>
+                          <div className="relative">
+                            <Award className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
+                            <select 
+                              value={adCondition}
+                              onChange={(e) => setAdCondition(e.target.value)}
+                              className="w-full pl-10 pr-9 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-medium text-slate-900 transition-all appearance-none cursor-pointer"
+                            >
+                              <option value="New">New</option>
+                              <option value="Like New">Like New</option>
+                              <option value="Used">Used</option>
+                              <option value="Fair">Fair</option>
+                              <option value="Free">Free</option>
+                            </select>
+                            <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Delivery & Handover Options */}
                     <div>
