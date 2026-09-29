@@ -3952,14 +3952,14 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-2 sm:p-4"
+              className="fixed inset-x-0 top-[calc(env(safe-area-inset-top,0px)+58px)] bottom-[calc(env(safe-area-inset-bottom,0px)+64px)] xl:top-[64px] xl:bottom-6 z-35 flex items-center justify-center p-2 sm:p-4 bg-slate-900/40 backdrop-blur-xs"
               onClick={() => setShowMessagesModal(false)}
             >
               <motion.div 
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                initial={{ opacity: 0, scale: 0.97, y: 8 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full max-w-5xl h-[90vh] sm:h-[84vh] bg-white rounded-[28px] sm:rounded-[32px] overflow-hidden shadow-2xl relative border border-slate-200/80"
+                exit={{ opacity: 0, scale: 0.97, y: 8 }}
+                className="w-full max-w-4xl h-full max-h-[660px] bg-white rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl relative border border-slate-200/90 flex flex-col min-h-0"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MessagesView 
@@ -6340,6 +6340,15 @@ function AdminView({
   const [annFormIsActive, setAnnFormIsActive] = useState(true);
   const [annFormCtaType, setAnnFormCtaType] = useState('');
   const [annFormIcon, setAnnFormIcon] = useState('megaphone');
+  const [annFormSendPush, setAnnFormSendPush] = useState(false);
+  const [pushConfirmModal, setPushConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    annId?: string;
+    isFormSubmit?: boolean;
+  } | null>(null);
+  const [pushingAnnId, setPushingAnnId] = useState<string | null>(null);
   const [savingAnn, setSavingAnn] = useState(false);
   const [deletingAnnId, setDeletingAnnId] = useState<string | null>(null);
   const [editingAnnId, setEditingAnnId] = useState<string | null>(null);
@@ -6454,8 +6463,7 @@ function AdminView({
     }
   };
 
-  const handleSaveAnnouncement = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeSaveAnnouncement = async (sendPush: boolean) => {
     if (!annFormContent.trim()) {
       setMsg({ type: 'error', text: 'Please fill in the message.' });
       return;
@@ -6477,7 +6485,6 @@ function AdminView({
           })
           .eq('id', editingAnnId);
         if (error) throw error;
-        setMsg({ type: 'success', text: 'Announcement updated successfully.' });
       } else {
         const { error } = await supabase
           .from('announcements')
@@ -6490,7 +6497,42 @@ function AdminView({
             }
           ]);
         if (error) throw error;
-        setMsg({ type: 'success', text: 'Announcement published successfully!' });
+      }
+
+      let pushSuccess = false;
+      let pushNotice = '';
+
+      if (sendPush && annFormIsActive) {
+        try {
+          await oneSignalService.sendServerNotification(
+            annFormTitle.trim() || 'Unlocked Valencia',
+            annFormContent.trim(),
+            '/'
+          );
+          pushSuccess = true;
+        } catch (pushErr: any) {
+          console.warn('Push notification send error:', pushErr);
+          pushNotice = pushErr.message || 'Push service unavailable';
+        }
+      }
+
+      if (pushSuccess) {
+        setMsg({
+          type: 'success',
+          text: editingAnnId
+            ? 'Announcement updated & Push notification broadcasted to all subscribed devices! 📱'
+            : 'Announcement published & Push notification broadcasted to all subscribed devices! 📱'
+        });
+      } else if (pushNotice) {
+        setMsg({
+          type: 'info',
+          text: `Announcement published in-app! (Mobile push note: ${pushNotice})`
+        });
+      } else {
+        setMsg({
+          type: 'success',
+          text: editingAnnId ? 'Announcement updated successfully in-app.' : 'Announcement published successfully in-app!'
+        });
       }
       
       // Reset form
@@ -6499,8 +6541,10 @@ function AdminView({
       setAnnFormIsActive(true);
       setAnnFormCtaType('');
       setAnnFormIcon('megaphone');
+      setAnnFormSendPush(false);
       setEditingAnnId(null);
       setShowAnnForm(false);
+      setPushConfirmModal(null);
       
       // Refresh
       fetchAdminAnnouncements();
@@ -6512,6 +6556,62 @@ function AdminView({
       setMsg({ type: 'error', text: 'Error saving announcement: ' + err.message });
     } finally {
       setSavingAnn(false);
+    }
+  };
+
+  const handleSaveAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!annFormContent.trim()) {
+      setMsg({ type: 'error', text: 'Please fill in the message.' });
+      return;
+    }
+
+    if (annFormSendPush && annFormIsActive) {
+      setPushConfirmModal({
+        isOpen: true,
+        title: annFormTitle.trim() || 'Unlocked Valencia',
+        message: annFormContent.trim(),
+        isFormSubmit: true
+      });
+    } else {
+      executeSaveAnnouncement(false);
+    }
+  };
+
+  const handleSendDirectPush = (ann: any) => {
+    if (!ann) return;
+    const title = ann.title && ann.title !== 'Announcement' ? ann.title : 'Unlocked Valencia';
+    const message = ann.content || '';
+    if (!message) return;
+
+    setPushConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      annId: ann.id,
+      isFormSubmit: false
+    });
+  };
+
+  const executeDirectPush = async (title: string, message: string, annId?: string) => {
+    if (annId) {
+      setPushingAnnId(annId);
+    }
+    try {
+      await oneSignalService.sendServerNotification(title, message, '/');
+      setMsg({
+        type: 'success',
+        text: '📱 Push notification successfully broadcasted to all subscribed devices!'
+      });
+      setPushConfirmModal(null);
+    } catch (err: any) {
+      console.error('Error broadcasting announcement push:', err);
+      setMsg({
+        type: 'error',
+        text: 'Error sending push notification: ' + (err.message || 'Check OneSignal configuration')
+      });
+    } finally {
+      setPushingAnnId(null);
     }
   };
 
@@ -6543,6 +6643,7 @@ function AdminView({
     setAnnFormIsActive(ann.is_active !== false);
     setAnnFormCtaType(ann.cta_type || '');
     setAnnFormIcon(ann.icon || ann.type || 'megaphone');
+    setAnnFormSendPush(false);
     setEditingAnnId(ann.id);
     setShowAnnForm(true);
   };
@@ -10691,6 +10792,19 @@ function AdminView({
 
               <div className="space-y-4">
                 <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
+                    Title / Notification Heading (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. New Community Update, Flash Event, Maintenance"
+                    value={annFormTitle}
+                    onChange={(e) => setAnnFormTitle(e.target.value)}
+                    className="w-full text-xs px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-150 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 text-slate-800 font-medium"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Message (one line preferred)</label>
                   <textarea
                     required
@@ -10756,8 +10870,28 @@ function AdminView({
                     className="w-4 h-4 rounded border-slate-300 text-yellow-600 focus:ring-yellow-500"
                   />
                   <div>
-                    <label htmlFor="annFormIsActive" className="text-xs font-bold text-slate-700 block cursor-pointer">Activate Announcement</label>
-                    <p className="text-[10px] text-slate-400 font-medium">The announcement will instantly appear in the users dropdown banner.</p>
+                    <label htmlFor="annFormIsActive" className="text-xs font-bold text-slate-700 block cursor-pointer">Activate In-App Announcement</label>
+                    <p className="text-[10px] text-slate-400 font-medium">The announcement will instantly appear in the notification bell and top dropdown banner.</p>
+                  </div>
+                </div>
+
+                {/* Instant Mobile Push Option */}
+                <div className="flex items-start gap-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/80 p-4 rounded-xl border border-blue-200">
+                  <input
+                    type="checkbox"
+                    id="annFormSendPush"
+                    checked={annFormSendPush}
+                    onChange={(e) => setAnnFormSendPush(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded border-blue-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="annFormSendPush" className="text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer">
+                      <Bell className="w-3.5 h-3.5 text-blue-600" />
+                      Also broadcast instant Mobile Push Notification (OneSignal)
+                    </label>
+                    <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                      If enabled, a confirmation prompt will appear before broadcasting a lock-screen push alert to all subscribed members on iOS, Android, and Web.
+                    </p>
                   </div>
                 </div>
 
@@ -10881,6 +11015,27 @@ function AdminView({
                         </div>
 
                         <div className="flex items-center gap-2 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-100 shrink-0">
+                          {isActive && (
+                            <button
+                              type="button"
+                              disabled={pushingAnnId === ann.id}
+                              onClick={() => handleSendDirectPush(ann)}
+                              title="Broadcast instant Push Notification to subscribed mobile devices"
+                              className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-blue-200/70 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                              {pushingAnnId === ann.id ? (
+                                <>
+                                  <div className="w-3 h-3 border-2 border-blue-700 border-t-transparent rounded-full animate-spin" />
+                                  <span>Sending...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Bell className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Push Mobile</span>
+                                </>
+                              )}
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleEditAnnouncementClick(ann)}
@@ -10912,6 +11067,81 @@ function AdminView({
               )}
             </div>
           )}
+
+          {/* Mobile Push Broadcast Confirmation Modal */}
+          <AnimatePresence>
+            {pushConfirmModal?.isOpen && (
+              <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 text-left"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-xs">
+                      <Bell className="w-6 h-6 stroke-[2.2]" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-base font-bold text-slate-900 font-display">
+                        Confirm Mobile Push Broadcast?
+                      </h3>
+                      <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                        This action will immediately trigger a push notification alert on the mobile lock screens and browsers of all subscribed members.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2 text-left">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                        {pushConfirmModal.title || 'Unlocked Valencia'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium">Notification Preview</span>
+                    </div>
+                    <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                      {pushConfirmModal.message}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2.5 pt-2">
+                    <button
+                      type="button"
+                      disabled={savingAnn || !!pushingAnnId}
+                      onClick={() => setPushConfirmModal(null)}
+                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={savingAnn || !!pushingAnnId}
+                      onClick={() => {
+                        if (pushConfirmModal.isFormSubmit) {
+                          executeSaveAnnouncement(true);
+                        } else {
+                          executeDirectPush(pushConfirmModal.title, pushConfirmModal.message, pushConfirmModal.annId);
+                        }
+                      }}
+                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md shadow-blue-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {(savingAnn || pushingAnnId) ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Broadcasting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Confirm & Send Push</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
         </div>
       ) : dashboardCategory === 'analytics' ? (
         <AdminAnalytics />
@@ -15615,7 +15845,7 @@ function MessagesView({
   };
 
   return (
-    <div className="h-full w-full bg-white overflow-hidden flex relative font-sans select-text">
+    <div className="h-full w-full bg-white overflow-hidden flex relative font-sans select-text min-h-0">
       {/* Visual Alerts Overlay container */}
       <AnimatePresence>
         {viewAlert && (
@@ -15647,11 +15877,11 @@ function MessagesView({
 
       {/* LEFT SIDEBAR - List of conversations */}
       <div className={cn(
-        "w-full md:w-84 lg:w-96 border-r border-slate-100 flex flex-col transition-all duration-200 bg-slate-50/50",
+        "w-full md:w-84 lg:w-96 border-r border-slate-100 flex flex-col transition-all duration-200 bg-slate-50/50 min-h-0 h-full",
         selectedChat ? "hidden md:flex" : "flex"
       )}>
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 bg-white space-y-3">
+        <div className="p-3.5 sm:p-4 border-b border-slate-100 bg-white space-y-2.5 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-brand-blue/10 flex items-center justify-center text-brand-blue">
@@ -15735,7 +15965,7 @@ function MessagesView({
         </div>
 
         {/* Tip info card */}
-        <div className="px-4 py-2.5 bg-gradient-to-r from-blue-50/60 to-indigo-50/60 border-b border-blue-100/40">
+        <div className="px-4 py-2.5 bg-gradient-to-r from-blue-50/60 to-indigo-50/60 border-b border-blue-100/40 shrink-0">
           <p className="text-[11px] text-blue-900/80 font-medium leading-relaxed flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
             <span>Connect with community members from reviews on pro profiles.</span>
@@ -15743,7 +15973,7 @@ function MessagesView({
         </div>
 
         {/* Conversation items list */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1 divide-y divide-transparent">
+        <div className="flex-1 overflow-y-auto min-h-0 p-2 space-y-1 divide-y divide-transparent">
           {loadingConversations ? (
             <div className="py-16 text-center space-y-3">
               <Loader2 className="w-6 h-6 text-brand-blue animate-spin mx-auto" />
@@ -15858,27 +16088,27 @@ function MessagesView({
         {selectedChat ? (
           <>
             {/* Conversations Header */}
-            <div className="px-4 py-3 sm:px-6 bg-white border-b border-slate-100 flex items-center justify-between shadow-xs relative z-30">
-              <div className="flex items-center gap-3">
+            <div className="px-3.5 py-2.5 sm:px-6 sm:py-3 bg-white border-b border-slate-100 flex items-center justify-between shadow-xs relative z-30 shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                 <button 
                   onClick={handleCloseChat}
-                  className="md:hidden p-2 -ml-2 text-slate-500 hover:text-brand-blue hover:bg-slate-50 rounded-xl transition-all flex items-center gap-1 text-xs font-bold"
+                  className="md:hidden p-1.5 -ml-1 text-slate-500 hover:text-brand-blue hover:bg-slate-50 rounded-xl transition-all flex items-center gap-1 text-xs font-bold shrink-0"
                 >
                   <ChevronLeft className="w-5 h-5" />
                   <span>Back</span>
                 </button>
-                <div className="relative">
+                <div className="relative shrink-0">
                   <img 
                      src={selectedChat.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(formatName(selectedChat.otherUser?.full_name))}&background=0a192f&color=fff`} 
                      alt="" 
-                     className="w-10 h-10 rounded-full object-cover border-2 border-slate-100 shadow-sm" 
+                     className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-slate-100 shadow-sm" 
                   />
-                  <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white" />
+                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-black text-slate-900 font-display">{formatName(selectedChat.otherUser?.full_name)}</h4>
-                    <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 bg-blue-50 text-brand-blue rounded-md tracking-wider">Community</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="text-xs sm:text-sm font-black text-slate-900 font-display truncate">{formatName(selectedChat.otherUser?.full_name)}</h4>
+                    <span className="text-[8px] sm:text-[9px] font-extrabold uppercase px-1.5 py-0.5 bg-blue-50 text-brand-blue rounded-md tracking-wider shrink-0">Community</span>
                   </div>
                   {(blockedUsers.includes(selectedChat.otherUser?.id || '') || usersWhoBlockedMe.includes(selectedChat.otherUser?.id || '')) ? (
                     <div className="flex items-center gap-1 mt-0.5">
@@ -15889,19 +16119,26 @@ function MessagesView({
                       )}
                     </div>
                   ) : (
-                    <p className="text-[10px] text-slate-400 font-medium">Direct discussion</p>
+                    <p className="text-[10px] text-slate-400 font-medium truncate">Direct discussion</p>
                   )}
                 </div>
               </div>
 
-              {/* Action options - Dropdown with block & report */}
-              <div className="relative flex items-center gap-1">
+              {/* Action options - Dropdown with block & report, plus Close button */}
+              <div className="relative flex items-center gap-1 shrink-0">
                 <button 
                   onClick={() => setShowOptionsDropdown(prev => !prev)}
-                  className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
+                  className="p-1.5 sm:p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
                   title="Discussion options"
                 >
                   <MoreHorizontal className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => onClose ? onClose() : onNavigate?.('back' as any)}
+                  className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
+                  title="Close chat"
+                >
+                  <X className="w-5 h-5" />
                 </button>
 
                 {/* Dropdown Box */}
@@ -16039,7 +16276,7 @@ function MessagesView({
             </div>
 
             {/* Input Box section (Conditional blockers & Rich Input) */}
-            <div className="p-3 sm:p-4 bg-white border-t border-slate-100 relative">
+            <div className="p-2.5 sm:p-3 bg-white border-t border-slate-100 relative shrink-0">
               {userProfile?.chat_enabled === false ? (
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center text-slate-500 text-xs font-bold leading-relaxed shadow-sm">
                   You have disabled chat participation. Enable it in Profile &gt; Settings to send and receive messages.
