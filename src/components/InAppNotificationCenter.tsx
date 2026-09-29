@@ -674,19 +674,12 @@ export function InAppToastBanner({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -16, scale: 0.98 }}
+      initial={{ opacity: 0, y: -12, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -16, scale: 0.98 }}
-      transition={{ duration: 0.18, ease: "easeOut" }}
-      style={{
-        transform: 'translateZ(0)',
-        WebkitTransform: 'translateZ(0)',
-        WebkitBackfaceVisibility: 'hidden',
-        backfaceVisibility: 'hidden',
-        willChange: 'transform, opacity'
-      }}
+      exit={{ opacity: 0, y: -12, scale: 0.98 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
       onClick={onClickToast}
-      className="fixed top-20 right-4 sm:right-6 max-w-[420px] w-[calc(100vw-32px)] bg-white rounded-2xl shadow-xl border border-slate-200 p-3.5 z-50 flex items-start gap-3 cursor-pointer group hover:border-blue-300 transition-all"
+      className="fixed top-20 right-4 sm:right-6 max-w-[420px] w-[calc(100vw-32px)] bg-white rounded-2xl shadow-xl border border-slate-200 p-3.5 z-50 flex items-start gap-3 cursor-pointer group hover:border-blue-300 transition-colors"
     >
       <div className={cn(
         "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border",

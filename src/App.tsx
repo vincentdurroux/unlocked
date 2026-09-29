@@ -2450,20 +2450,21 @@ export default function App() {
         const isDismissed = dismissedNotificationIds.includes(String(latest.id));
         const isChat = latest.type === 'chat' || String(latest.id).startsWith('chat-');
         const isUnread = isChat ? (latest.is_read === false) : (!isLocallyRead && !isDismissed);
-        const lastToastSeen = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('unlocked_last_toast_seen') : null;
+        const seenToastKey = `unlocked_seen_toast_${latest.id}`;
+        const hasSeenToast = typeof localStorage !== 'undefined' ? Boolean(localStorage.getItem(seenToastKey)) : false;
         
         // Don't show intrusive popup toast if user is already reading/chatting in messages view
         const shouldShowToast = isChat ? (activeView !== 'messages') : true;
 
-        if (shouldShowToast && isUnread && String(latest.id) !== lastToastSeen) {
+        if (shouldShowToast && isUnread && !hasSeenToast) {
           setToastNotification(latest);
           try {
-            sessionStorage.setItem('unlocked_last_toast_seen', String(latest.id));
+            localStorage.setItem(seenToastKey, '1');
           } catch (_) {}
-          // Auto-dismiss after 6.5s
+          // Auto-dismiss after 6s
           setTimeout(() => {
             setToastNotification((prev) => (prev && String(prev.id) === String(latest.id) ? null : prev));
-          }, 6500);
+          }, 6000);
         }
       }
     } catch (err) {
@@ -3937,7 +3938,14 @@ export default function App() {
             <InAppToastBanner
               key={String(toastNotification.id)}
               notification={toastNotification}
-              onDismiss={() => setToastNotification(null)}
+              onDismiss={() => {
+                if (toastNotification) {
+                  try {
+                    localStorage.setItem(`unlocked_seen_toast_${toastNotification.id}`, '1');
+                  } catch (_) {}
+                }
+                setToastNotification(null);
+              }}
               onClickToast={() => {
                 const item = toastNotification;
                 handleMarkAnnouncementAsRead(String(item.id));
@@ -12756,17 +12764,16 @@ function HomeView({
                 {currentUser ? (userProfile?.full_name ? `Hello ${userProfile.full_name.split(' ')[0]}, 👋` : 'Hello, 👋') : 'Hello Guest, 👋'}
               </h2>
               {unreadConversations.length > 0 && (
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
+                <button
+                  type="button"
                   onClick={() => onNavigate('messages' as any)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-rose-50 border border-rose-100 shadow-sm active:scale-95 transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-50 hover:bg-rose-100/80 border border-rose-100 shadow-xs active:scale-95 transition-transform cursor-pointer"
                 >
                   <MessageCircle className="w-4 h-4 text-rose-500" />
                   <span className="text-[10px] font-black text-rose-600 uppercase tracking-wider">
                     {unreadConversations.length} new
                   </span>
-                </motion.button>
+                </button>
               )}
             </div>
 
