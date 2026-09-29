@@ -2373,6 +2373,53 @@ export default function App() {
         list = [...list, ...mappedRecs];
       }
 
+      // 3. Fetch recent incoming chat conversations/messages for the logged-in member
+      if (currentUser?.id) {
+        try {
+          const userConvs = await chatService.getUserConversations(currentUser.id);
+          if (userConvs && userConvs.length > 0) {
+            const convIds = userConvs.map(c => c.id);
+            const { data: convMessages, error: msgError } = await supabase
+              .from('messages')
+              .select('id, conversation_id, sender_id, receiver_id, content, is_read, created_at')
+              .neq('sender_id', currentUser.id)
+              .in('conversation_id', convIds)
+              .order('created_at', { ascending: false });
+
+            if (!msgError && convMessages && convMessages.length > 0) {
+              const processedConvs = new Set<string>();
+              const chatNotifications: any[] = [];
+
+              for (const msg of convMessages) {
+                if (processedConvs.has(msg.conversation_id)) continue;
+                processedConvs.add(msg.conversation_id);
+
+                const conv = userConvs.find(c => c.id === msg.conversation_id);
+                const senderName = conv?.otherUser?.full_name || 'Community Member';
+                const hasUnread = convMessages.some(m => m.conversation_id === msg.conversation_id && !m.is_read);
+
+                chatNotifications.push({
+                  id: `chat-${msg.conversation_id}`,
+                  title: `Message from ${senderName}`,
+                  content: msg.content ? (msg.content.length > 95 ? msg.content.substring(0, 95) + '…' : msg.content) : 'Sent you a message.',
+                  created_at: msg.created_at || new Date().toISOString(),
+                  type: 'chat',
+                  icon: 'chat',
+                  target_id: msg.conversation_id,
+                  is_read: !hasUnread,
+                  user_email: conv?.otherUser?.email,
+                  pro_name: senderName
+                });
+              }
+
+              list = [...list, ...chatNotifications];
+            }
+          }
+        } catch (chatNotifErr) {
+          console.warn('Error fetching chat notifications for notification center:', chatNotifErr);
+        }
+      }
+
       list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setAnnouncementsList(list);
 
@@ -2403,19 +2450,23 @@ export default function App() {
     if (!isSupabaseConfigured) return;
 
     const channel = supabase
-      .channel('public:announcements_and_recs')
+      .channel('public:announcements_recs_and_messages')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
         fetchAnnouncementsFromDb();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pro_recommendations' }, () => {
         fetchAnnouncementsFromDb();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+        fetchAnnouncementsFromDb();
+        fetchAndCheckUnread();
+      })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [isSupabaseConfigured]);
+  }, [isSupabaseConfigured, currentUser?.id]);
 
   const hasUnreadAnnouncements = useMemo(() => {
     if (announcementsList.length === 0) return false;
@@ -2437,10 +2488,36 @@ export default function App() {
     }).length;
   }, [announcementsList, readAnnouncementIds, dismissedNotificationIds]);
 
+  // Synchronize App Icon Badge on iOS (PWA standalone on home screen) & desktop
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      try {
+        if ('setAppBadge' in navigator) {
+          if (unreadCount > 0) {
+            (navigator as any).setAppBadge(unreadCount).catch(() => {});
+          } else {
+            (navigator as any).clearAppBadge().catch(() => {});
+          }
+        }
+      } catch (_) {}
+    }
+  }, [unreadCount]);
+
   const handleMarkAnnouncementAsRead = async (id: string) => {
     const strId = String(id);
     const updated = Array.from(new Set([...readAnnouncementIds, strId]));
     setReadAnnouncementIds(updated);
+
+    // If this is a chat notification, also mark the conversation's messages as read
+    if (strId.startsWith('chat-') && currentUser?.id) {
+      const convId = strId.replace('chat-', '');
+      chatService.markMessagesAsRead(convId, currentUser.id);
+      setUnreadConversations(prev => prev.filter(cId => cId !== convId));
+      setAnnouncementsList(prev => prev.map(item => {
+        if (item.id === strId) return { ...item, is_read: true };
+        return item;
+      }));
+    }
 
     try {
       if (currentUser?.id) {
@@ -2473,6 +2550,17 @@ export default function App() {
     const allIds = announcementsList.map(a => String(a.id));
     const updated = Array.from(new Set([...readAnnouncementIds, ...allIds]));
     setReadAnnouncementIds(updated);
+
+    // If there are chat notifications in the list, mark their conversations as read in database
+    if (currentUser?.id) {
+      announcementsList.forEach(item => {
+        if (String(item.id).startsWith('chat-') && item.target_id) {
+          chatService.markMessagesAsRead(String(item.target_id), currentUser.id);
+        }
+      });
+      setUnreadConversations([]);
+      setAnnouncementsList(prev => prev.map(item => ({ ...item, is_read: true })));
+    }
 
     try {
       if (currentUser?.id) {
@@ -15633,6 +15721,18 @@ function MessagesView({
 
         // Handle initialChat trigger if present
         if (initialChat) {
+          // If conversation ID matches an existing user conversation, select it directly
+          if (initialChat.id) {
+            const matched = userConvs.find(c => c.id === initialChat.id);
+            if (matched) {
+              setConversations(userConvs);
+              setSelectedChat(matched);
+              setLoadingConversations(false);
+              onClearInitial?.();
+              return;
+            }
+          }
+
           // If it's already a full conversation object, just select it
           if (initialChat.id && initialChat.participant_1 && initialChat.participant_2) {
             setConversations(userConvs);

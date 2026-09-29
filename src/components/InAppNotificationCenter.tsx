@@ -382,7 +382,7 @@ export function InAppNotificationCenter({
                       onNavigate('explore');
                     } else if ((item.type === 'chat' || item.type === 'message') && onNavigate) {
                       onClose();
-                      onNavigate('messages');
+                      onNavigate('messages', item.target_id ? { chat: { id: String(item.target_id) } } : undefined);
                     } else if ((item.type === 'marketplace' || item.type === 'ad') && onNavigate) {
                       onClose();
                       onNavigate('classifieds');
@@ -474,6 +474,21 @@ export function InAppNotificationCenter({
                         >
                           <BookOpen className="w-3 h-3" />
                           <span>Read Guide</span>
+                        </button>
+                      )}
+
+                      {(item.type === 'chat' || item.type === 'message') && onNavigate && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onMarkAsRead(String(item.id));
+                            onClose();
+                            onNavigate('messages', item.target_id ? { chat: { id: String(item.target_id) } } : undefined);
+                          }}
+                          className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                        >
+                          <MessageCircle className="w-3 h-3" />
+                          <span>Reply</span>
                         </button>
                       )}
                     </div>

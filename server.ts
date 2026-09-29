@@ -1173,7 +1173,9 @@ FOR EACH REAL EVENT FOUND:
         app_id: appId,
         headings: { en: title || "Unlocked Valencia" },
         contents: { en: message || "You have a new update!" },
-        url: url || "/"
+        url: url || "/",
+        ios_badgeType: "Increase",
+        ios_badgeCount: 1
       };
 
       if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
