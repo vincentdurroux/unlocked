@@ -19,6 +19,9 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
   onSubscribed
 }) => {
   useEffect(() => {
+    // If the user is not signed up or signed in, do not request push permissions or trigger notification prompt
+    if (!currentUserId) return;
+
     // Exécuté uniquement côté client dans le navigateur
     if (typeof window === 'undefined' || !('Notification' in window)) return;
 

@@ -303,44 +303,75 @@ class OneSignalService {
    * without any preceding network fetch delays (which cause modern mobile browsers to drop user activation).
    */
   async subscribe(userId?: string): Promise<boolean> {
-    // 1. Browser check
-    if (typeof window === 'undefined' || !('Notification' in window)) {
+    if (typeof window === 'undefined') return false;
+
+    const windowAny = window as any;
+
+    // 1. Check Native iOS Wrappers & Capacitor Plugins
+    try {
+      if (windowAny.Capacitor?.Plugins?.PushNotifications) {
+        const permRes = await windowAny.Capacitor.Plugins.PushNotifications.requestPermissions();
+        if (permRes.receive === 'granted') {
+          await windowAny.Capacitor.Plugins.PushNotifications.register();
+          return true;
+        }
+      }
+      const handlers = windowAny.webkit?.messageHandlers;
+      if (handlers) {
+        if (handlers.requestNotificationPermission) handlers.requestNotificationPermission.postMessage({});
+        if (handlers.requestPushPermission) handlers.requestPushPermission.postMessage({});
+        if (handlers.registerForPush) handlers.registerForPush.postMessage({});
+      }
+    } catch (e) {
+      console.warn('[OneSignal] Native permission attempt:', e);
+    }
+
+    // 2. Browser check
+    if (!('Notification' in window)) {
       console.info('[OneSignal] Push notifications not supported in this browser.');
       return false;
     }
 
-    // 2. Permission already denied in browser settings
+    // 3. Permission already denied in browser settings
     if (Notification.permission === 'denied') {
       console.info('[OneSignal] Notification permission is currently denied.');
       return false;
     }
 
-    // 3. REQUEST PERMISSION IMMEDIATELY (native system prompt)
-    // Directly invoke Notification.requestPermission() within the user gesture event frame
-    // so mobile browsers (iOS/Android) and desktop browsers present the generic system message immediately.
+    // 4. REQUEST PERMISSION IMMEDIATELY (native system prompt)
     let currentPerm: NotificationPermission = Notification.permission;
 
     if (currentPerm !== 'granted') {
       try {
-        if (typeof Notification.requestPermission === 'function') {
-          const reqPromise = Notification.requestPermission();
-          if (reqPromise && typeof (reqPromise as any).then === 'function') {
-            currentPerm = await reqPromise;
-          } else {
-            currentPerm = await new Promise<NotificationPermission>((resolve) => {
-              Notification.requestPermission(resolve);
-            });
-          }
+        const windowOS = windowAny.OneSignal;
+        if (windowOS?.Notifications?.requestPermission) {
+          await windowOS.Notifications.requestPermission();
+          currentPerm = Notification.permission;
         }
-      } catch (e) {
-        // Fallback for older browsers using callback syntax
+      } catch (_) {}
+
+      if (currentPerm !== 'granted') {
         try {
-          if (Notification.requestPermission) {
-            currentPerm = await new Promise<NotificationPermission>((resolve) => {
-              Notification.requestPermission(resolve);
-            });
+          if (typeof Notification.requestPermission === 'function') {
+            const reqPromise = Notification.requestPermission();
+            if (reqPromise && typeof (reqPromise as any).then === 'function') {
+              currentPerm = await reqPromise;
+            } else {
+              currentPerm = await new Promise<NotificationPermission>((resolve) => {
+                Notification.requestPermission(resolve);
+              });
+            }
           }
-        } catch (_) {}
+        } catch (e) {
+          // Fallback for older browsers using callback syntax
+          try {
+            if (Notification.requestPermission) {
+              currentPerm = await new Promise<NotificationPermission>((resolve) => {
+                Notification.requestPermission(resolve);
+              });
+            }
+          } catch (_) {}
+        }
       }
 
       if (currentPerm !== 'granted') {

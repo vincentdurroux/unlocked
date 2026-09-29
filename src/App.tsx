@@ -20877,12 +20877,24 @@ function ProfileView({
             const subId = await oneSignalService.getSubscriptionId();
             setOneSignalSubId(subId);
             setPushFeedback({ type: 'success', text: 'Notifications activées avec succès !' });
+          } else if (pushNotificationService.isIOSInBrowser()) {
+            setIsPushSubscribed(false);
+            setPushFeedback({
+              type: 'info',
+              text: "Sur iPhone / iPad en navigateur Web, Apple exige d'ajouter l'application à l'écran d'accueil pour autoriser les notifications. Cliquez sur Partager ⎋ ➔ « Sur l'écran d'accueil »."
+            });
           } else if (currentPerm === 'denied') {
             setIsPushSubscribed(false);
-            setPushFeedback({ type: 'error', text: 'Les notifications sont bloquées dans les paramètres de votre navigateur ou de votre téléphone.' });
+            setPushFeedback({
+              type: 'error',
+              text: "Les notifications sont bloquées dans les Réglages. Sur votre téléphone : Réglages ➔ Unlocked (ou Safari/Chrome) ➔ Notifications ➔ Autoriser."
+            });
           } else {
             setIsPushSubscribed(false);
-            setPushFeedback({ type: 'info', text: 'Autorisation des notifications non accordée ou annulée.' });
+            setPushFeedback({
+              type: 'info',
+              text: 'Autorisation non accordée. Si la demande ne s\'est pas affichée, vérifiez les Réglages de notifications de votre appareil.'
+            });
           }
         }
       } else {
