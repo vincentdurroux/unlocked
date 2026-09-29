@@ -4163,10 +4163,11 @@ export default function App() {
               </button>
 
               <AnimatePresence>
-                {showNotificationsModal && currentUser && (
+                {showNotificationsModal && (
                   <InAppNotificationCenter 
                     isOpen={showNotificationsModal}
                     onClose={() => setShowNotificationsModal(false)}
+                    currentUser={currentUser}
                     announcements={announcementsList}
                     readIds={readAnnouncementIds}
                     dismissedIds={dismissedNotificationIds}
