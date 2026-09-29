@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { oneSignalService } from './oneSignalService';
 
 export interface SupabaseProfessional {
   id: string;
@@ -670,6 +671,14 @@ export const proService = {
       console.log('[proService] Submitting recommendation payload:', JSON.stringify(payload, null, 2));
       const { data, error } = await supabase.from('recommendations').insert([payload]);
       if (error) throw error;
+
+      // Broadcast Push Notification for Control Center
+      try {
+        const title = `Recherche de pro : ${recommendation.pro_category || 'Professionnel'}`;
+        const notesClean = recommendation.notes || `Nouvelle demande de recommandation pour un ${recommendation.pro_category}.`;
+        oneSignalService.sendServerNotification(title, notesClean, '/').catch(() => {});
+      } catch (_) {}
+
       return data;
     } catch (err: any) {
       console.warn('[proService] Error submitting recommendation, trying fallback:', err);

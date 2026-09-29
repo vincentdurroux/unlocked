@@ -1169,11 +1169,25 @@ FOR EACH REAL EVENT FOUND:
         });
       }
 
+      const titleStr = title || "Unlocked";
+      const messageStr = message || "Nouvelle notification Unlocked";
+
       const payload: any = {
         app_id: appId,
-        headings: { en: title || "Unlocked Valencia" },
-        contents: { en: message || "You have a new update!" },
+        headings: {
+          en: titleStr,
+          fr: titleStr,
+          es: titleStr
+        },
+        contents: {
+          en: messageStr,
+          fr: messageStr,
+          es: messageStr
+        },
         url: url || "/",
+        priority: 10,
+        android_visibility: 1,
+        android_accent_color: "2563EB",
         ios_badgeType: "Increase",
         ios_badgeCount: 1
       };
