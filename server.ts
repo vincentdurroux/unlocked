@@ -1226,6 +1226,7 @@ FOR EACH REAL EVENT FOUND:
   // Digital Asset Links for Android TWA (removes Chrome Custom Tab URL bar)
   app.get("/.well-known/assetlinks.json", (req, res) => {
     res.setHeader("Content-Type", "application/json");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     const distAssetlinks = path.join(process.cwd(), "dist", ".well-known", "assetlinks.json");
     const publicAssetlinks = path.join(process.cwd(), "public", ".well-known", "assetlinks.json");
     if (fs.existsSync(distAssetlinks)) {

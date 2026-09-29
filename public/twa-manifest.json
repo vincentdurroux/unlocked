@@ -11,7 +11,7 @@
   "startUrl": "/",
   "iconUrl": "https://mycityunlocked.app/logo2.png",
   "maskableIconUrl": "https://mycityunlocked.app/logo2.png",
-  "splashScreenFadeOutDuration": 300,
+  "splashScreenFadeOutDuration": 0,
   "signingKey": {
     "path": "./android.keystore",
     "alias": "android"
