@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Papa from 'papaparse';
 import { parseProfessionalCSV, rowToPro, detectColumnMappings, parseEventCSV, detectEventColumnMappings, rowToEvent } from './utils/csvParser';
 import { Logo } from './components/Logo';
-import { InAppNotificationCenter, InAppToastBanner, type InAppNotification } from './components/InAppNotificationCenter';
+import { InAppNotificationCenter, InAppToastBanner, type InAppNotification, isRecommendProNotification, isGuideNotification, extractGuideIdFromNotification } from './components/InAppNotificationCenter';
 import { getCategoryWithEmoji, parseDescriptionSections, renderFormattedContent } from './components/AdminAiEventSearch';
 
 const AdminAiEventSearch = React.lazy(() => import('./components/AdminAiEventSearch').then(m => ({ default: m.AdminAiEventSearch })));
@@ -969,9 +969,13 @@ function getAuthorDisplayName(author: string | null | undefined): string {
 
 function formatName(name: string | null | undefined): string {
   if (!name) return '';
-  const cleanName = name.includes('|') ? name.split('|')[0] : name;
-  const rawName = cleanName.trim();
-  const parts = rawName.split(/\s+/);
+  let cleanName = name.includes('|') ? name.split('|')[0] : name;
+  cleanName = cleanName.trim();
+  if (cleanName.includes('@')) {
+    const prefix = cleanName.split('@')[0];
+    cleanName = prefix.replace(/[._-]/g, ' ');
+  }
+  const parts = cleanName.trim().split(/\s+/).filter(Boolean);
   if (parts.length > 1) {
     const first = parts[0];
     const last = parts[parts.length - 1];
@@ -979,7 +983,10 @@ function formatName(name: string | null | undefined): string {
     const formattedLastInitial = last.charAt(0).toUpperCase() + '.';
     return `${formattedFirst} ${formattedLastInitial}`;
   }
-  return rawName.charAt(0).toUpperCase() + rawName.slice(1);
+  if (parts.length === 1) {
+    return parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+  }
+  return '';
 }
 
 function formatRelativeTime(dateString: string | undefined) {
@@ -2402,7 +2409,8 @@ export default function App() {
                 processedConvs.add(msg.conversation_id);
 
                 const conv = userConvs.find(c => c.id === msg.conversation_id);
-                const senderName = conv?.otherUser?.full_name || 'Community Member';
+                const rawSenderName = conv?.otherUser?.full_name || conv?.otherUser?.email || 'Community Member';
+                const senderName = formatName(rawSenderName);
                 const hasUnread = convMessages.some(m => m.conversation_id === msg.conversation_id && !m.is_read);
 
                 chatNotifications.push({
@@ -3931,9 +3939,28 @@ export default function App() {
               notification={toastNotification}
               onDismiss={() => setToastNotification(null)}
               onClickToast={() => {
-                handleMarkAnnouncementAsRead(String(toastNotification.id));
+                const item = toastNotification;
+                handleMarkAnnouncementAsRead(String(item.id));
                 setToastNotification(null);
-                setShowNotificationsModal(true);
+                
+                if (isRecommendProNotification(item)) {
+                  if (!currentUser) {
+                    handleNavigate('login');
+                  } else {
+                    setShowAddPro(true);
+                  }
+                } else if (isGuideNotification(item)) {
+                  const targetGuideId = extractGuideIdFromNotification(item);
+                  handleNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
+                } else if (item.type === 'event') {
+                  handleNavigate('events', item.target_id ? { eventId: String(item.target_id) } : undefined);
+                } else if (item.type === 'chat' || item.type === 'message') {
+                  handleNavigate('messages', item.target_id ? { chat: { id: String(item.target_id) } } : undefined);
+                } else if (item.type === 'marketplace' || item.type === 'ad') {
+                  handleNavigate('marketplace');
+                } else {
+                  setShowNotificationsModal(true);
+                }
               }}
             />
           )}
@@ -4835,7 +4862,18 @@ export default function App() {
                       <div className="relative">
                         <select
                           value={adCategory}
-                          onChange={(e) => setAdCategory(e.target.value)}
+                          onChange={(e) => {
+                            const newCat = e.target.value;
+                            setAdCategory(newCat);
+                            if (newCat === 'Halloween Special') {
+                              setAdIsHalloween(true);
+                            } else {
+                              setAdIsHalloween(false);
+                              if (adPrice === 'Swap') {
+                                setAdPrice('');
+                              }
+                            }
+                          }}
                           className="w-full pl-10 pr-10 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none text-sm font-semibold text-slate-900 transition-all cursor-pointer appearance-none"
                         >
                           <option value="" disabled>Select a category...</option>
@@ -4896,8 +4934,17 @@ export default function App() {
                             onChange={(e) => {
                               const checked = e.target.checked;
                               setAdIsHalloween(checked);
-                              if (checked && adCategory !== 'Halloween Special') {
-                                setAdCategory('Halloween Special');
+                              if (checked) {
+                                if (adCategory !== 'Halloween Special') {
+                                  setAdCategory('Halloween Special');
+                                }
+                              } else {
+                                if (adCategory === 'Halloween Special') {
+                                  setAdCategory('School & Uniforms');
+                                }
+                                if (adPrice === 'Swap') {
+                                  setAdPrice('');
+                                }
                               }
                             }} 
                             className="sr-only peer"
@@ -19054,12 +19101,25 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
 
   useEffect(() => {
     if (initialGuideId && articles.length > 0) {
-      const foundArticle = articles.find(art => String(art.id) === String(initialGuideId));
+      const foundArticle = articles.find(art => 
+        String(art.id).toLowerCase() === String(initialGuideId).toLowerCase() ||
+        (art.title && art.title.toLowerCase().includes(String(initialGuideId).toLowerCase()))
+      );
         
       if (foundArticle) {
-        setSelectedArticleId(initialGuideId);
+        setSelectedArticleId(foundArticle.id);
+        if (selectedCategory && foundArticle.categoryId !== selectedCategory) {
+          setSelectedCategory(null);
+          setIsNavigatedMode(false);
+        }
+        setSearchQuery('');
         setTimeout(() => {
-          document.getElementById(`guide-card-${initialGuideId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          const el = document.getElementById(`guide-card-${foundArticle.id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else {
+            document.getElementById('all-guides-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
         }, 150);
       }
     }

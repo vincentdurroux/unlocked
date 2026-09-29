@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { formatName } from '../lib/utils';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -161,6 +162,84 @@ export function getInAppNotificationIconData(iconId?: string, type?: string) {
     return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'marketplace')!;
   }
   return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'megaphone')!;
+}
+
+export function isRecommendProNotification(item?: InAppNotification | null): boolean {
+  if (!item) return false;
+  if (item.type === 'recommendation_request' || item.type === 'recommendation') return true;
+  if (item.cta_type === 'recommend_pro') return true;
+  if (item.icon === 'recommendation') return true;
+  
+  const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
+  if (
+    text.includes('recommend a pro') || 
+    text.includes('recommend pro') || 
+    text.includes('recommander un pro') || 
+    text.includes('recommandation pro') || 
+    text.includes('pro recommendation') || 
+    text.includes('looking for a pro') || 
+    text.includes('looking for a professional') ||
+    text.includes('recherche un pro') ||
+    text.includes('recommendation request')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isGuideNotification(item?: InAppNotification | null): boolean {
+  if (!item) return false;
+  if (item.type === 'guide' || item.icon === 'guide') return true;
+  if (item.cta_type === 'guide') return true;
+  if (item.cta_link && (item.cta_link.includes('guide') || item.cta_link.includes('guides'))) return true;
+
+  const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
+  if (
+    text.includes('guide') || 
+    text.includes('nie') || 
+    text.includes('empadronamiento') || 
+    text.includes('padrón') || 
+    text.includes('padron') ||
+    text.includes('expat guide') || 
+    text.includes('valencia guide') || 
+    text.includes('settle into')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function extractGuideIdFromNotification(item?: InAppNotification | null): string | undefined {
+  if (!item) return undefined;
+  if (item.target_id && (item.type === 'guide' || item.icon === 'guide')) {
+    return String(item.target_id);
+  }
+  
+  // Check cta_link for guideId=... or /guides/...
+  if (item.cta_link) {
+    const match = item.cta_link.match(/[?&]guideId=([^&#]+)/) || item.cta_link.match(/\/guides\/([^/?#]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  if (item.target_id && String(item.target_id).trim()) {
+    return String(item.target_id).trim();
+  }
+
+  const textToScan = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
+  
+  if (textToScan.includes('nie') || textToScan.includes('foreigner identity') || textToScan.includes('tie')) return 'nie-1';
+  if (textToScan.includes('empadronamiento') || textToScan.includes('padrón') || textToScan.includes('padron')) return 'emp-1';
+  if (textToScan.includes('house') || textToScan.includes('housing') || textToScan.includes('home') || textToScan.includes('rent') || textToScan.includes('apartment') || textToScan.includes('logement') || textToScan.includes('ruzafa') || textToScan.includes('cabanyal')) return 'h-1';
+  if (textToScan.includes('bank') || textToScan.includes('banking') || textToScan.includes('account') || textToScan.includes('banque')) return 'b-1';
+  if (textToScan.includes('school') || textToScan.includes('education') || textToScan.includes('école') || textToScan.includes('kindergarten') || textToScan.includes('colegio')) return 'edu-1';
+  if (textToScan.includes('tax') || textToScan.includes('beckham') || textToScan.includes('impôt') || textToScan.includes('autonomo') || textToScan.includes('autónomo')) return 'tax-1';
+  if (textToScan.includes('health') || textToScan.includes('sip') || textToScan.includes('doctor') || textToScan.includes('santé') || textToScan.includes('médical') || textToScan.includes('hospital')) return 'health-1';
+  if (textToScan.includes('transport') || textToScan.includes('metro') || textToScan.includes('valenbisi') || textToScan.includes('driving') || textToScan.includes('emt')) return 'trans-1';
+  if (textToScan.includes('pet') || textToScan.includes('dog') || textToScan.includes('cat') || textToScan.includes('veterinarian') || textToScan.includes('animaux')) return 'pet-1';
+
+  return undefined;
 }
 
 export function formatNotificationTime(dateString?: string): string {
@@ -361,11 +440,16 @@ export function InAppNotificationCenter({
               const itemData = getInAppNotificationIconData(item.icon, item.type);
               const IconComp = itemData.icon;
 
-              const title = item.title && item.title.toLowerCase() !== 'notification' && item.title.toLowerCase() !== 'announcement'
+              let title = item.title && item.title.toLowerCase() !== 'notification' && item.title.toLowerCase() !== 'announcement'
                 ? item.title
                 : (item.type === 'recommendation_request' 
                     ? `Looking for a ${item.pro_category || 'professional'}` 
                     : 'Announcement');
+
+              if (title.toLowerCase().startsWith('message from ')) {
+                const rawSender = title.slice(13).trim();
+                title = `Message from ${formatName(rawSender)}`;
+              }
 
               const description = item.content || item.notes || item.message || '';
               const timeString = formatNotificationTime(item.created_at || item.updated_at);
@@ -375,21 +459,38 @@ export function InAppNotificationCenter({
                   key={String(item.id)}
                   onClick={() => {
                     onMarkAsRead(String(item.id));
-                    if (item.type === 'event' && onNavigate) {
+                    if (isRecommendProNotification(item)) {
                       onClose();
-                      onNavigate('events');
-                    } else if (item.type === 'guide' && onNavigate) {
+                      if (onAddPro) {
+                        onAddPro();
+                      } else if (onNavigate) {
+                        onNavigate('explore');
+                      }
+                    } else if (isGuideNotification(item)) {
                       onClose();
-                      onNavigate('guides');
-                    } else if ((item.type === 'recommendation_request' || item.type === 'recommendation') && onNavigate) {
+                      if (onNavigate) {
+                        const targetGuideId = extractGuideIdFromNotification(item);
+                        onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
+                      }
+                    } else if (item.type === 'event' && onNavigate) {
                       onClose();
-                      onNavigate('explore');
+                      onNavigate('events', item.target_id ? { eventId: String(item.target_id) } : undefined);
                     } else if ((item.type === 'chat' || item.type === 'message') && onNavigate) {
                       onClose();
                       onNavigate('messages', item.target_id ? { chat: { id: String(item.target_id) } } : undefined);
                     } else if ((item.type === 'marketplace' || item.type === 'ad') && onNavigate) {
                       onClose();
-                      onNavigate('classifieds');
+                      onNavigate('marketplace');
+                    } else if (item.cta_link && onNavigate) {
+                      onClose();
+                      if (item.cta_link.startsWith('http://') || item.cta_link.startsWith('https://')) {
+                        window.open(item.cta_link, '_blank', 'noopener,noreferrer');
+                      } else if (item.cta_link.includes('guide')) {
+                        const targetGuideId = extractGuideIdFromNotification(item);
+                        onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
+                      } else if (item.cta_link.includes('event')) {
+                        onNavigate('events');
+                      }
                     }
                   }}
                   className={cn(
@@ -436,7 +537,7 @@ export function InAppNotificationCenter({
 
                     {/* Interactive CTAs */}
                     <div className="flex items-center gap-2 mt-2">
-                      {item.cta_type === 'recommend_pro' && onAddPro && (
+                      {(item.cta_type === 'recommend_pro' || isRecommendProNotification(item)) && onAddPro && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -457,7 +558,7 @@ export function InAppNotificationCenter({
                             e.stopPropagation();
                             onMarkAsRead(String(item.id));
                             onClose();
-                            onNavigate('events');
+                            onNavigate('events', item.target_id ? { eventId: String(item.target_id) } : undefined);
                           }}
                           className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
                         >
@@ -466,13 +567,14 @@ export function InAppNotificationCenter({
                         </button>
                       )}
 
-                      {item.type === 'guide' && onNavigate && (
+                      {(item.type === 'guide' || isGuideNotification(item)) && onNavigate && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             onMarkAsRead(String(item.id));
                             onClose();
-                            onNavigate('guides');
+                            const targetGuideId = extractGuideIdFromNotification(item);
+                            onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
                           }}
                           className="px-2.5 py-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
                         >
@@ -557,11 +659,16 @@ export function InAppToastBanner({
   const itemData = getInAppNotificationIconData(notification.icon, notification.type);
   const IconComp = itemData.icon;
 
-  const title = notification.title && notification.title.toLowerCase() !== 'notification' && notification.title.toLowerCase() !== 'announcement'
+  let title = notification.title && notification.title.toLowerCase() !== 'notification' && notification.title.toLowerCase() !== 'announcement'
     ? notification.title
     : (notification.type === 'recommendation_request' 
         ? `Looking for a ${notification.pro_category || 'professional'}` 
         : 'New Notification');
+
+  if (title.toLowerCase().startsWith('message from ')) {
+    const rawSender = title.slice(13).trim();
+    title = `Message from ${formatName(rawSender)}`;
+  }
 
   const description = notification.content || notification.notes || notification.message || '';
 

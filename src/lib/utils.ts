@@ -7,8 +7,13 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatName(name: string | null | undefined): string {
   if (!name) return '';
-  const rawName = name.trim();
-  const parts = rawName.split(/\s+/);
+  let cleanName = name.includes('|') ? name.split('|')[0] : name;
+  cleanName = cleanName.trim();
+  if (cleanName.includes('@')) {
+    const prefix = cleanName.split('@')[0];
+    cleanName = prefix.replace(/[._-]/g, ' ');
+  }
+  const parts = cleanName.trim().split(/\s+/).filter(Boolean);
   if (parts.length > 1) {
     const first = parts[0];
     const last = parts[parts.length - 1];
@@ -16,5 +21,8 @@ export function formatName(name: string | null | undefined): string {
     const formattedLastInitial = last.charAt(0).toUpperCase() + '.';
     return `${formattedFirst} ${formattedLastInitial}`;
   }
-  return rawName.charAt(0).toUpperCase() + rawName.slice(1);
+  if (parts.length === 1) {
+    return parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+  }
+  return '';
 }
