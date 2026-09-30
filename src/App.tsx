@@ -20825,6 +20825,7 @@ function ProfileView({
   const [loadingMyAds, setLoadingMyAds] = useState(false);
   const [deletingAdId, setDeletingAdId] = useState<string | null>(null);
   const [confirmDeleteAdId, setConfirmDeleteAdId] = useState<string | null>(null);
+  const [confirmDeleteDraftId, setConfirmDeleteDraftId] = useState<string | null>(null);
   const [updatingStatusAdId, setUpdatingStatusAdId] = useState<string | null>(null);
 
   // Push Notifications state
@@ -21809,6 +21810,39 @@ function ProfileView({
                                 </div>
                               );
                             })}
+                          </div>
+                        </div>
+                      )}
+
+                      {confirmDeleteDraftId && (
+                        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+                          <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center">
+                            <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+                              <Trash2 className="w-6 h-6" />
+                            </div>
+                            <div className="space-y-1">
+                              <h4 className="font-black text-slate-900 text-lg">Delete Draft?</h4>
+                              <p className="text-xs text-slate-500">Are you sure you want to delete this saved draft? This cannot be undone.</p>
+                            </div>
+                            <div className="flex gap-2 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteDraftId(null)}
+                                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onDeleteDraft?.(confirmDeleteDraftId);
+                                  setConfirmDeleteDraftId(null);
+                                }}
+                                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )}
