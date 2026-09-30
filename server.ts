@@ -1196,7 +1196,7 @@ FOR EACH REAL EVENT FOUND:
         payload.include_aliases = { external_id: targetUserIds };
         payload.target_channel = "push";
       } else {
-        payload.included_segments = ["Subscribed Users"];
+        payload.included_segments = ["Total Subscriptions", "Subscribed Users"];
       }
 
       const oneSignalRes = await fetch("https://onesignal.com/api/v1/notifications", {

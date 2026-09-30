@@ -14,6 +14,36 @@ class OneSignalService {
   private currentAppId = '';
   private subscriptionObservers = new Set<PushSubscriptionObserver>();
   private observerBound = false;
+  private nativeSubscriptionId: string | null = null;
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      const windowAny = window as any;
+      windowAny.setNativeOneSignalSubscriptionId = (id: string) => {
+        if (id && typeof id === 'string') {
+          this.nativeSubscriptionId = id;
+          this.notifyObservers(id);
+          console.log('[OneSignal] Native iOS subscription ID registered:', id);
+        }
+      };
+
+      window.addEventListener('OneSignalSubscriptionReady', (e: any) => {
+        const id = e.detail?.id || e.detail?.subscriptionId || e.detail?.playerId;
+        if (id) {
+          this.nativeSubscriptionId = id;
+          this.notifyObservers(id);
+        }
+      });
+
+      window.addEventListener('native-onesignal-subscription', (e: any) => {
+        const id = e.detail?.id || e.detail?.subscriptionId || e.detail?.playerId;
+        if (id) {
+          this.nativeSubscriptionId = id;
+          this.notifyObservers(id);
+        }
+      });
+    }
+  }
 
   /**
    * Device and platform detection for App Store / Play Store
@@ -265,6 +295,7 @@ class OneSignalService {
    */
   async isSubscribed(): Promise<boolean> {
     if (typeof window === 'undefined') return false;
+    if (this.nativeSubscriptionId) return true;
     try {
       if (!this.isInitialized) {
         await this.init();
@@ -286,6 +317,7 @@ class OneSignalService {
    */
   async getSubscriptionId(): Promise<string | null> {
     if (typeof window === 'undefined') return null;
+    if (this.nativeSubscriptionId) return this.nativeSubscriptionId;
     try {
       if (!this.isInitialized) {
         await this.init();
@@ -313,14 +345,20 @@ class OneSignalService {
         const permRes = await windowAny.Capacitor.Plugins.PushNotifications.requestPermissions();
         if (permRes.receive === 'granted') {
           await windowAny.Capacitor.Plugins.PushNotifications.register();
+          if (userId) await this.loginUser(userId);
           return true;
         }
       }
       const handlers = windowAny.webkit?.messageHandlers;
       if (handlers) {
-        if (handlers.requestNotificationPermission) handlers.requestNotificationPermission.postMessage({});
-        if (handlers.requestPushPermission) handlers.requestPushPermission.postMessage({});
-        if (handlers.registerForPush) handlers.registerForPush.postMessage({});
+        let sent = false;
+        if (handlers.requestNotificationPermission) { handlers.requestNotificationPermission.postMessage({}); sent = true; }
+        if (handlers.requestPushPermission) { handlers.requestPushPermission.postMessage({}); sent = true; }
+        if (handlers.registerForPush) { handlers.registerForPush.postMessage({}); sent = true; }
+        if (userId) {
+          await this.loginUser(userId);
+        }
+        if (sent) return true;
       }
     } catch (e) {
       console.warn('[OneSignal] Native permission attempt:', e);
@@ -488,16 +526,30 @@ class OneSignalService {
    * Associate Supabase User ID with OneSignal User
    */
   async loginUser(userId: string, tags?: Record<string, string>): Promise<void> {
+    const dev = this.getDeviceInfo();
+    const combinedTags: Record<string, string> = {
+      platform: dev.platform,
+      is_mobile: dev.isMobile ? 'true' : 'false',
+      is_standalone: dev.isStandalone ? 'true' : 'false',
+      ...(tags || {})
+    };
+
+    // Forward to native iOS WKWebView if running inside Xcode wrapper
+    try {
+      const handlers = typeof window !== 'undefined' ? (window as any).webkit?.messageHandlers : null;
+      if (handlers?.oneSignalLogin) {
+        handlers.oneSignalLogin.postMessage({ userId, tags: combinedTags });
+      }
+      if (handlers?.setExternalUserId) {
+        handlers.setExternalUserId.postMessage(userId);
+      }
+    } catch (e) {
+      console.warn('[OneSignal] Native user login message failed:', e);
+    }
+
     if (!this.isInitialized) return;
     try {
       await OneSignal.login(userId);
-      const dev = this.getDeviceInfo();
-      const combinedTags: Record<string, string> = {
-        platform: dev.platform,
-        is_mobile: dev.isMobile ? 'true' : 'false',
-        is_standalone: dev.isStandalone ? 'true' : 'false',
-        ...(tags || {})
-      };
       await OneSignal.User.addTags(combinedTags);
       console.log('[OneSignal] Logged in user with ID:', userId, combinedTags);
     } catch (err) {
@@ -509,6 +561,16 @@ class OneSignalService {
    * Log out user from OneSignal
    */
   async logoutUser(): Promise<void> {
+    try {
+      const handlers = typeof window !== 'undefined' ? (window as any).webkit?.messageHandlers : null;
+      if (handlers?.oneSignalLogout) {
+        handlers.oneSignalLogout.postMessage({});
+      }
+      if (handlers?.removeExternalUserId) {
+        handlers.removeExternalUserId.postMessage({});
+      }
+    } catch (_) {}
+
     if (!this.isInitialized) return;
     try {
       await OneSignal.logout();

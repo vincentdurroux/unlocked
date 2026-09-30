@@ -7079,12 +7079,25 @@ function AdminView({
   const [annFormCtaType, setAnnFormCtaType] = useState('');
   const [annFormIcon, setAnnFormIcon] = useState('megaphone');
   const [annFormSendPush, setAnnFormSendPush] = useState(false);
+  const [allUsersList, setAllUsersList] = useState<any[]>([]);
+  const [loadingUsersList, setLoadingUsersList] = useState(false);
+  const [annPushTargetMode, setAnnPushTargetMode] = useState<'all' | 'specific'>('all');
+  const [annPushSelectedUserId, setAnnPushSelectedUserId] = useState('');
+  const [showDirectPushModal, setShowDirectPushModal] = useState(false);
+  const [directPushTargetUserId, setDirectPushTargetUserId] = useState('');
+  const [directPushTitle, setDirectPushTitle] = useState('');
+  const [directPushMessage, setDirectPushMessage] = useState('');
+  const [directPushUrl, setDirectPushUrl] = useState('/');
+  const [sendingDirectPush, setSendingDirectPush] = useState(false);
+  const [directPushUserSearch, setDirectPushUserSearch] = useState('');
+
   const [pushConfirmModal, setPushConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
     message: string;
     annId?: string;
     isFormSubmit?: boolean;
+    targetUserName?: string | null;
   } | null>(null);
   const [pushingAnnId, setPushingAnnId] = useState<string | null>(null);
   const [savingAnn, setSavingAnn] = useState(false);
@@ -7242,10 +7255,15 @@ function AdminView({
 
       if (sendPush && annFormIsActive) {
         try {
+          const targetUserIds = (annPushTargetMode === 'specific' && annPushSelectedUserId)
+            ? [annPushSelectedUserId]
+            : undefined;
+
           await oneSignalService.sendServerNotification(
             annFormTitle.trim() || 'Unlocked Valencia',
             annFormContent.trim(),
-            '/'
+            '/',
+            targetUserIds
           );
           pushSuccess = true;
         } catch (pushErr: any) {
@@ -7254,12 +7272,18 @@ function AdminView({
         }
       }
 
+      const targetUserName = annPushTargetMode === 'specific' && annPushSelectedUserId
+        ? allUsersList.find(u => u.id === annPushSelectedUserId)?.full_name || 'selected user'
+        : null;
+
       if (pushSuccess) {
         setMsg({
           type: 'success',
-          text: editingAnnId
-            ? 'Announcement updated & Push notification broadcasted to all subscribed devices! 📱'
-            : 'Announcement published & Push notification broadcasted to all subscribed devices! 📱'
+          text: targetUserName
+            ? `Announcement saved & Push notification sent to ${targetUserName}! 📱`
+            : editingAnnId
+              ? 'Announcement updated & Push notification broadcasted to all subscribed devices! 📱'
+              : 'Announcement published & Push notification broadcasted to all subscribed devices! 📱'
         });
       } else if (pushNotice) {
         setMsg({
@@ -7280,6 +7304,8 @@ function AdminView({
       setAnnFormCtaType('');
       setAnnFormIcon('megaphone');
       setAnnFormSendPush(false);
+      setAnnPushTargetMode('all');
+      setAnnPushSelectedUserId('');
       setEditingAnnId(null);
       setShowAnnForm(false);
       setPushConfirmModal(null);
@@ -7297,6 +7323,66 @@ function AdminView({
     }
   };
 
+  const fetchAllUsers = async () => {
+    setLoadingUsersList(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, avatar_url')
+        .order('full_name', { ascending: true });
+      if (!error && data) {
+        setAllUsersList(data);
+      }
+    } catch (err) {
+      console.warn('Error loading users for push targeting:', err);
+    } finally {
+      setLoadingUsersList(false);
+    }
+  };
+
+  const handleSendDirectPushToUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!directPushTargetUserId) {
+      setMsg({ type: 'error', text: 'Please select which member should receive the push notification.' });
+      return;
+    }
+    if (!directPushMessage.trim()) {
+      setMsg({ type: 'error', text: 'Please write a notification message.' });
+      return;
+    }
+
+    setSendingDirectPush(true);
+    try {
+      const recipient = allUsersList.find(u => u.id === directPushTargetUserId);
+      const recipientName = recipient?.full_name || recipient?.email || 'Member';
+
+      await oneSignalService.sendServerNotification(
+        directPushTitle.trim() || 'Unlocked Valencia',
+        directPushMessage.trim(),
+        directPushUrl.trim() || '/',
+        [directPushTargetUserId]
+      );
+
+      setMsg({
+        type: 'success',
+        text: `📱 Push notification successfully sent to ${recipientName}!`
+      });
+      setShowDirectPushModal(false);
+      setDirectPushTitle('');
+      setDirectPushMessage('');
+      setDirectPushTargetUserId('');
+      setDirectPushUrl('/');
+    } catch (err: any) {
+      console.error('Error sending direct user push:', err);
+      setMsg({
+        type: 'error',
+        text: 'Failed to send push notification: ' + (err?.message || 'Check OneSignal configuration')
+      });
+    } finally {
+      setSendingDirectPush(false);
+    }
+  };
+
   const handleSaveAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!annFormContent.trim()) {
@@ -7305,11 +7391,19 @@ function AdminView({
     }
 
     if (annFormSendPush && annFormIsActive) {
+      if (annPushTargetMode === 'specific' && !annPushSelectedUserId) {
+        setMsg({ type: 'error', text: 'Please select which member should receive the push notification.' });
+        return;
+      }
+      const targetUser = annPushTargetMode === 'specific'
+        ? allUsersList.find(u => u.id === annPushSelectedUserId)
+        : null;
       setPushConfirmModal({
         isOpen: true,
         title: annFormTitle.trim() || 'Unlocked Valencia',
         message: annFormContent.trim(),
-        isFormSubmit: true
+        isFormSubmit: true,
+        targetUserName: targetUser ? (targetUser.full_name || targetUser.email) : null
       });
     } else {
       executeSaveAnnouncement(false);
@@ -7382,8 +7476,11 @@ function AdminView({
     setAnnFormCtaType(ann.cta_type || '');
     setAnnFormIcon(ann.icon || ann.type || 'megaphone');
     setAnnFormSendPush(false);
+    setAnnPushTargetMode('all');
+    setAnnPushSelectedUserId('');
     setEditingAnnId(ann.id);
     setShowAnnForm(true);
+    if (allUsersList.length === 0) fetchAllUsers();
   };
 
   const handlePreviewArticle = () => {
@@ -7823,6 +7920,7 @@ function AdminView({
       fetchGuides();
     } else if (dashboardCategory === 'announcements') {
       fetchAdminAnnouncements();
+      fetchAllUsers();
     }
   }, [dashboardCategory]);
 
@@ -11490,20 +11588,36 @@ function AdminView({
               <p className="text-xs text-slate-400 font-medium">Publish one-line announcements for all users.</p>
             </div>
             {!showAnnForm && (
-              <button
-                onClick={() => {
-                  setAnnFormTitle('');
-                  setAnnFormContent('');
-                  setAnnFormIsActive(true);
-                  setAnnFormCtaType('');
-                  setEditingAnnId(null);
-                  setShowAnnForm(true);
-                }}
-                className="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 active:scale-95 text-slate-900 text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-md shadow-yellow-500/10 flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Publish announcement
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDirectPushModal(true);
+                    if (allUsersList.length === 0) fetchAllUsers();
+                  }}
+                  className="px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider rounded-xl transition-all border border-blue-200/80 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Send className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Direct Push to Member</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setAnnFormTitle('');
+                    setAnnFormContent('');
+                    setAnnFormIsActive(true);
+                    setAnnFormCtaType('');
+                    setAnnPushTargetMode('all');
+                    setAnnPushSelectedUserId('');
+                    setEditingAnnId(null);
+                    setShowAnnForm(true);
+                    if (allUsersList.length === 0) fetchAllUsers();
+                  }}
+                  className="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 active:scale-95 text-slate-900 text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-md shadow-yellow-500/10 flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Publish announcement
+                </button>
+              </div>
             )}
           </div>
 
@@ -11614,23 +11728,115 @@ function AdminView({
                 </div>
 
                 {/* Instant Mobile Push Option */}
-                <div className="flex items-start gap-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/80 p-4 rounded-xl border border-blue-200">
-                  <input
-                    type="checkbox"
-                    id="annFormSendPush"
-                    checked={annFormSendPush}
-                    onChange={(e) => setAnnFormSendPush(e.target.checked)}
-                    className="w-4 h-4 mt-0.5 rounded border-blue-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                  />
-                  <div className="flex-1">
-                    <label htmlFor="annFormSendPush" className="text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer">
-                      <Bell className="w-3.5 h-3.5 text-blue-600" />
-                      Also broadcast instant Mobile Push Notification (OneSignal)
-                    </label>
-                    <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                      If enabled, a confirmation prompt will appear before broadcasting a lock-screen push alert to all subscribed members on iOS, Android, and Web.
-                    </p>
+                <div className="bg-gradient-to-r from-blue-50/90 to-indigo-50/80 p-4 rounded-2xl border border-blue-200 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      id="annFormSendPush"
+                      checked={annFormSendPush}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setAnnFormSendPush(checked);
+                        if (checked && allUsersList.length === 0) fetchAllUsers();
+                      }}
+                      className="w-4 h-4 mt-0.5 rounded border-blue-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <label htmlFor="annFormSendPush" className="text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer">
+                        <Bell className="w-3.5 h-3.5 text-blue-600" />
+                        Also send instant Mobile Push Notification to users' phones (OneSignal)
+                      </label>
+                      <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                        If enabled, an alert will be sent to the phone's lock screen via OneSignal.
+                      </p>
+                    </div>
                   </div>
+
+                  {annFormSendPush && (
+                    <div className="pt-3 border-t border-blue-200/80 space-y-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block mb-1.5">
+                          Target Audience for this Mobile Push:
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setAnnPushTargetMode('all')}
+                            className={cn(
+                              "p-2.5 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 cursor-pointer",
+                              annPushTargetMode === 'all'
+                                ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                            )}
+                          >
+                            <span>📢</span>
+                            <div>
+                              <div className="leading-tight">All Users</div>
+                              <div className={cn("text-[9px] font-normal", annPushTargetMode === 'all' ? "text-blue-100" : "text-slate-400")}>
+                                Broadcast to all
+                              </div>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAnnPushTargetMode('specific');
+                              if (allUsersList.length === 0) fetchAllUsers();
+                            }}
+                            className={cn(
+                              "p-2.5 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 cursor-pointer",
+                              annPushTargetMode === 'specific'
+                                ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                            )}
+                          >
+                            <span>🎯</span>
+                            <div>
+                              <div className="leading-tight">Specific User</div>
+                              <div className={cn("text-[9px] font-normal", annPushTargetMode === 'specific' ? "text-blue-100" : "text-slate-400")}>
+                                Single recipient
+                              </div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {annPushTargetMode === 'specific' && (
+                        <div className="space-y-1.5 bg-white p-3 rounded-xl border border-blue-200 shadow-2xs">
+                          <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                            <User className="w-3.5 h-3.5 text-blue-600" />
+                            Select Member to Receive Mobile Push:
+                          </label>
+                          {loadingUsersList ? (
+                            <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                              Loading registered members...
+                            </div>
+                          ) : (
+                            <select
+                              value={annPushSelectedUserId}
+                              onChange={(e) => setAnnPushSelectedUserId(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            >
+                              <option value="">-- Choose a user ({allUsersList.length} members found) --</option>
+                              {allUsersList.map(u => (
+                                <option key={u.id} value={u.id}>
+                                  {u.full_name || 'Member'} — {u.email || u.id}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {annPushSelectedUserId && (
+                            <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
+                              <CheckCircle2 className="w-3 h-3 shrink-0" />
+                              Only this user will receive the lock-screen mobile push alert.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-150">
@@ -11753,27 +11959,6 @@ function AdminView({
                         </div>
 
                         <div className="flex items-center gap-2 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-100 shrink-0">
-                          {isActive && (
-                            <button
-                              type="button"
-                              disabled={pushingAnnId === ann.id}
-                              onClick={() => handleSendDirectPush(ann)}
-                              title="Broadcast instant Push Notification to subscribed mobile devices"
-                              className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-blue-200/70 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                            >
-                              {pushingAnnId === ann.id ? (
-                                <>
-                                  <div className="w-3 h-3 border-2 border-blue-700 border-t-transparent rounded-full animate-spin" />
-                                  <span>Sending...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Bell className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>Push Mobile</span>
-                                </>
-                              )}
-                            </button>
-                          )}
                           <button
                             type="button"
                             onClick={() => handleEditAnnouncementClick(ann)}
@@ -11822,10 +12007,14 @@ function AdminView({
                     </div>
                     <div className="space-y-1">
                       <h3 className="text-base font-bold text-slate-900 font-display">
-                        Confirm Mobile Push Broadcast?
+                        {pushConfirmModal.targetUserName ? `Send Mobile Push to ${pushConfirmModal.targetUserName}?` : 'Confirm Mobile Push Broadcast?'}
                       </h3>
                       <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                        This action will immediately trigger a push notification alert on the mobile lock screens and browsers of all subscribed members.
+                        {pushConfirmModal.targetUserName ? (
+                          <>This action will immediately trigger a push notification alert on the mobile phone of <strong className="text-slate-800">{pushConfirmModal.targetUserName}</strong>.</>
+                        ) : (
+                          <>This action will immediately trigger a push notification alert on the mobile lock screens and browsers of all subscribed members.</>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -11866,16 +12055,170 @@ function AdminView({
                       {(savingAnn || pushingAnnId) ? (
                         <>
                           <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Broadcasting...</span>
+                          <span>Sending...</span>
                         </>
                       ) : (
                         <>
                           <Send className="w-3.5 h-3.5" />
-                          <span>Confirm & Send Push</span>
+                          <span>{pushConfirmModal.targetUserName ? `Send to ${pushConfirmModal.targetUserName}` : 'Broadcast Now'}</span>
                         </>
                       )}
                     </button>
                   </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Direct Push Notification to a Specific User Modal */}
+          <AnimatePresence>
+            {showDirectPushModal && (
+              <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 text-left"
+                >
+                  <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
+                        <Send className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-bold font-display text-slate-900">
+                          Send Direct Push Notification
+                        </h3>
+                        <p className="text-xs text-slate-500 font-medium">
+                          Deliver an instant lock-screen alert directly to a specific user's phone.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowDirectPushModal(false)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSendDirectPushToUser} className="space-y-4">
+                    {/* User Selection */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                        <span>Recipient Member *</span>
+                        {allUsersList.length > 0 && (
+                          <span className="text-[10px] text-slate-400 font-normal">
+                            {allUsersList.length} members available
+                          </span>
+                        )}
+                      </label>
+                      {loadingUsersList ? (
+                        <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                          Loading members list...
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
+                            <input
+                              type="text"
+                              value={directPushUserSearch}
+                              onChange={(e) => setDirectPushUserSearch(e.target.value)}
+                              placeholder="Search member by name or email..."
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            />
+                          </div>
+                          <select
+                            value={directPushTargetUserId}
+                            onChange={(e) => setDirectPushTargetUserId(e.target.value)}
+                            size={4}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 overflow-y-auto"
+                          >
+                            <option value="" disabled>-- Select a member --</option>
+                            {allUsersList
+                              .filter(u => {
+                                if (!directPushUserSearch) return true;
+                                const q = directPushUserSearch.toLowerCase();
+                                return (u.full_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
+                              })
+                              .map(u => (
+                                <option key={u.id} value={u.id} className="py-1 px-1.5 rounded hover:bg-blue-50 cursor-pointer">
+                                  {u.full_name || 'Member'} — {u.email || u.id}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Title */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">Notification Title</label>
+                      <input
+                        type="text"
+                        value={directPushTitle}
+                        onChange={(e) => setDirectPushTitle(e.target.value)}
+                        placeholder="e.g. Unlocked Valencia"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </div>
+
+                    {/* Message */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">Notification Message *</label>
+                      <textarea
+                        rows={3}
+                        required
+                        value={directPushMessage}
+                        onChange={(e) => setDirectPushMessage(e.target.value)}
+                        placeholder="Type the message that will pop up on their phone screen..."
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+                      />
+                    </div>
+
+                    {/* Link */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">Deep Link URL (optional)</label>
+                      <input
+                        type="text"
+                        value={directPushUrl}
+                        onChange={(e) => setDirectPushUrl(e.target.value)}
+                        placeholder="/#messages or /#events"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center justify-end gap-2.5 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowDirectPushModal(false)}
+                        className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={sendingDirectPush || !directPushTargetUserId || !directPushMessage.trim()}
+                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md shadow-blue-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {sendingDirectPush ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Sending...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Send Push Alert</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
                 </motion.div>
               </div>
             )}
