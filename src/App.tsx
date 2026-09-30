@@ -1545,6 +1545,15 @@ export default function App() {
       });
     }, 400);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Synchronize authenticated user with OneSignal (assigns external_id in OneSignal on Web, iOS and native wrappers)
+  useEffect(() => {
+    if (currentUser?.id) {
+      oneSignalService.loginUser(currentUser.id).catch((err) => {
+        console.warn('[OneSignal] User synchronization error:', err);
+      });
+    }
   }, [currentUser?.id]);
 
   const mainRef = useRef<HTMLElement>(null);
@@ -3726,6 +3735,7 @@ export default function App() {
         }
         setCurrentUser(session.user);
         loadProfile(session.user.id, event);
+        oneSignalService.loginUser(session.user.id).catch(() => {});
       } else {
         setCurrentUser(null);
         setUserProfile(null);
@@ -3757,6 +3767,7 @@ export default function App() {
         if (keepSignedIn) {
           setCurrentUser(user);
           loadProfile(user.id);
+          oneSignalService.loginUser(user.id).catch(() => {});
         } else {
           authService.signOut().catch(() => {});
           setCurrentUser(null);

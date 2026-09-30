@@ -11,13 +11,21 @@ interface OneSignalVerificationDialogProps {
  * Honors the user's preference to rely exclusively on the generic native system notification prompt,
  * without displaying intrusive custom banners or popups.
  */
-export const OneSignalVerificationDialog: React.FC<OneSignalVerificationDialogProps> = () => {
+export const OneSignalVerificationDialog: React.FC<OneSignalVerificationDialogProps> = ({ userId }) => {
   const observerRef = useRef<((id: string) => void) | null>(null);
+
+  useEffect(() => {
+    if (userId) {
+      oneSignalService.loginUser(userId).catch(() => {});
+    }
+  }, [userId]);
 
   useEffect(() => {
     observerRef.current = (id: string) => {
       if (oneSignalService.isRealServerAssignedId(id)) {
-        // Observers notified in background
+        if (userId) {
+          oneSignalService.loginUser(userId).catch(() => {});
+        }
       }
     };
 
@@ -31,7 +39,7 @@ export const OneSignalVerificationDialog: React.FC<OneSignalVerificationDialogPr
       unsubscribe();
       observerRef.current = null;
     };
-  }, []);
+  }, [userId]);
 
   // Return null to keep only the generic native system notification prompt, as requested by the user
   return null;

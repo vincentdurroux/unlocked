@@ -171,8 +171,8 @@ class OneSignalService {
     if (typeof window === 'undefined') return true;
     const isDefault = appId === '10a14311-a42a-4681-9682-ce965d80ae75';
     if (!isDefault) return true;
-    const hostname = window.location.hostname;
-    return hostname.endsWith('mycityunlocked.app') || hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('run.app') || hostname.includes('web.app');
+    const hostname = window.location.hostname || '';
+    return !hostname || hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('mycityunlocked.app') || hostname.includes('run.app') || hostname.includes('web.app') || hostname.includes('capacitor') || hostname.includes('ionic');
   }
 
   /**
@@ -523,9 +523,12 @@ class OneSignalService {
   }
 
   /**
-   * Associate Supabase User ID with OneSignal User
+   * Associate Supabase User ID with OneSignal User (Sets External ID in OneSignal)
    */
   async loginUser(userId: string, tags?: Record<string, string>): Promise<void> {
+    if (!userId || typeof userId !== 'string' || !userId.trim()) return;
+    const cleanUserId = userId.trim();
+
     const dev = this.getDeviceInfo();
     const combinedTags: Record<string, string> = {
       platform: dev.platform,
@@ -534,26 +537,82 @@ class OneSignalService {
       ...(tags || {})
     };
 
-    // Forward to native iOS WKWebView if running inside Xcode wrapper
-    try {
-      const handlers = typeof window !== 'undefined' ? (window as any).webkit?.messageHandlers : null;
-      if (handlers?.oneSignalLogin) {
-        handlers.oneSignalLogin.postMessage({ userId, tags: combinedTags });
+    const windowAny = typeof window !== 'undefined' ? (window as any) : null;
+
+    // 1. Forward to native iOS WKWebView if running inside an Xcode Swift / Obj-C wrapper
+    if (windowAny) {
+      try {
+        const handlers = windowAny.webkit?.messageHandlers;
+        if (handlers) {
+          if (handlers.oneSignalLogin) handlers.oneSignalLogin.postMessage({ userId: cleanUserId, tags: combinedTags });
+          if (handlers.setExternalUserId) handlers.setExternalUserId.postMessage(cleanUserId);
+          if (handlers.setExternalId) handlers.setExternalId.postMessage(cleanUserId);
+          if (handlers.login) handlers.login.postMessage(cleanUserId);
+          if (handlers.oneSignal) handlers.oneSignal.postMessage({ action: 'login', userId: cleanUserId, tags: combinedTags });
+          if (handlers.setUser) handlers.setUser.postMessage({ id: cleanUserId });
+        }
+      } catch (e) {
+        console.warn('[OneSignal] Native iOS WKWebView message failed:', e);
       }
-      if (handlers?.setExternalUserId) {
-        handlers.setExternalUserId.postMessage(userId);
+
+      // 2. Capacitor / Cordova native plugins
+      try {
+        if (windowAny.OneSignalPlugin?.login) {
+          await windowAny.OneSignalPlugin.login(cleanUserId);
+        } else if (windowAny.OneSignalPlugin?.setExternalUserId) {
+          await windowAny.OneSignalPlugin.setExternalUserId(cleanUserId);
+        }
+        if (windowAny.Capacitor?.Plugins?.OneSignal?.login) {
+          await windowAny.Capacitor.Plugins.OneSignal.login(cleanUserId);
+        } else if (windowAny.Capacitor?.Plugins?.OneSignalPlugin?.login) {
+          await windowAny.Capacitor.Plugins.OneSignalPlugin.login(cleanUserId);
+        }
+        if (windowAny.plugins?.OneSignal?.login) {
+          await windowAny.plugins.OneSignal.login(cleanUserId);
+        } else if (windowAny.plugins?.OneSignal?.setExternalUserId) {
+          await windowAny.plugins.OneSignal.setExternalUserId(cleanUserId);
+        }
+      } catch (capErr) {
+        console.warn('[OneSignal] Capacitor plugin login error:', capErr);
       }
-    } catch (e) {
-      console.warn('[OneSignal] Native user login message failed:', e);
     }
 
-    if (!this.isInitialized) return;
+    // 3. Ensure OneSignal Web SDK is initialized
+    if (!this.isInitialized) {
+      await this.init(cleanUserId);
+    }
+
+    // 4. Web SDK login & tagging
     try {
-      await OneSignal.login(userId);
-      await OneSignal.User.addTags(combinedTags);
-      console.log('[OneSignal] Logged in user with ID:', userId, combinedTags);
+      if (OneSignal?.login) {
+        await OneSignal.login(cleanUserId);
+      } else if (windowAny?.OneSignal?.login) {
+        await windowAny.OneSignal.login(cleanUserId);
+      } else if (windowAny?.OneSignal?.setExternalUserId) {
+        await windowAny.OneSignal.setExternalUserId(cleanUserId);
+      }
+
+      if (OneSignal?.User?.addTags) {
+        await OneSignal.User.addTags(combinedTags);
+      } else if (windowAny?.OneSignal?.User?.addTags) {
+        await windowAny.OneSignal.User.addTags(combinedTags);
+      } else if (windowAny?.OneSignal?.sendTags) {
+        await windowAny.OneSignal.sendTags(combinedTags);
+      }
+      console.log('[OneSignal] Successfully set External ID in OneSignal:', cleanUserId, combinedTags);
     } catch (err) {
-      console.warn('[OneSignal] Error logging in user:', err);
+      console.warn('[OneSignal] Error setting External ID in OneSignal Web SDK:', err);
+    }
+
+    // 5. Sync player / subscription ID to Supabase profiles
+    const subId = this.getCurrentSubscriptionId() || windowAny?.OneSignal?.User?.PushSubscription?.id || this.nativeSubscriptionId;
+    if (subId && cleanUserId && isSupabaseConfigured) {
+      try {
+        await supabase.from('profiles').update({
+          onesignal_player_id: subId,
+          updated_at: new Date().toISOString()
+        } as any).eq('id', cleanUserId);
+      } catch (_) {}
     }
   }
 
@@ -561,19 +620,30 @@ class OneSignalService {
    * Log out user from OneSignal
    */
   async logoutUser(): Promise<void> {
-    try {
-      const handlers = typeof window !== 'undefined' ? (window as any).webkit?.messageHandlers : null;
-      if (handlers?.oneSignalLogout) {
-        handlers.oneSignalLogout.postMessage({});
-      }
-      if (handlers?.removeExternalUserId) {
-        handlers.removeExternalUserId.postMessage({});
-      }
-    } catch (_) {}
+    const windowAny = typeof window !== 'undefined' ? (window as any) : null;
+    if (windowAny) {
+      try {
+        const handlers = windowAny.webkit?.messageHandlers;
+        if (handlers?.oneSignalLogout) handlers.oneSignalLogout.postMessage({});
+        if (handlers?.removeExternalUserId) handlers.removeExternalUserId.postMessage({});
+        if (handlers?.logout) handlers.logout.postMessage({});
+        if (handlers?.oneSignal) handlers.oneSignal.postMessage({ action: 'logout' });
+      } catch (_) {}
+
+      try {
+        if (windowAny.OneSignalPlugin?.logout) await windowAny.OneSignalPlugin.logout();
+        if (windowAny.Capacitor?.Plugins?.OneSignal?.logout) await windowAny.Capacitor.Plugins.OneSignal.logout();
+        if (windowAny.plugins?.OneSignal?.logout) await windowAny.plugins.OneSignal.logout();
+      } catch (_) {}
+    }
 
     if (!this.isInitialized) return;
     try {
-      await OneSignal.logout();
+      if (OneSignal?.logout) {
+        await OneSignal.logout();
+      } else if (windowAny?.OneSignal?.logout) {
+        await windowAny.OneSignal.logout();
+      }
       console.log('[OneSignal] Logged out user');
     } catch (err) {
       console.warn('[OneSignal] Error logging out user:', err);
