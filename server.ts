@@ -1141,83 +1141,36 @@ FOR EACH REAL EVENT FOUND:
     }
   });
 
-  // Persistent OneSignal configuration helper
-  const ONESIGNAL_CONFIG_PATH = path.join(process.cwd(), "onesignal.config.json");
-  const getDynamicOneSignalConfig = () => {
-    let fileConfig: any = {};
-    try {
-      if (fs.existsSync(ONESIGNAL_CONFIG_PATH)) {
-        fileConfig = JSON.parse(fs.readFileSync(ONESIGNAL_CONFIG_PATH, "utf-8"));
-      }
-    } catch (_) {}
+  // Secure OneSignal configuration endpoint (Server-side secrets protection)
+  app.get("/api/onesignal-config", (req, res) => {
     const appId =
-      fileConfig.appId ||
       process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
       process.env.ONESIGNAL_APP_ID ||
       "10a14311-a42a-4681-9682-ce965d80ae75";
-    const restApiKey =
-      fileConfig.restApiKey ||
-      process.env.ONESIGNAL_REST_API_KEY ||
-      "";
-    return { appId, restApiKey };
-  };
-
-  // Secure OneSignal configuration endpoint (Server-side secrets protection)
-  app.get("/api/onesignal-config", (req, res) => {
-    const { appId, restApiKey } = getDynamicOneSignalConfig();
     res.json({
       appId,
-      hasServerApiKey: Boolean(restApiKey && restApiKey.trim().length > 0),
-      apiKeyMasked: restApiKey ? `${restApiKey.slice(0, 4)}...${restApiKey.slice(-4)}` : ""
+      hasServerApiKey: Boolean(process.env.ONESIGNAL_REST_API_KEY)
     });
-  });
-
-  // Admin endpoint to configure OneSignal App ID and REST API Key dynamically
-  app.post("/api/admin/onesignal-config", (req, res) => {
-    try {
-      const { appId, restApiKey } = req.body;
-      const current = getDynamicOneSignalConfig();
-      const updated = {
-        appId: appId && typeof appId === 'string' && appId.trim() ? appId.trim() : current.appId,
-        restApiKey: restApiKey !== undefined && typeof restApiKey === 'string' ? restApiKey.trim() : current.restApiKey
-      };
-      fs.writeFileSync(ONESIGNAL_CONFIG_PATH, JSON.stringify(updated, null, 2), "utf-8");
-      
-      // Update runtime process.env
-      if (updated.appId) {
-        process.env.ONESIGNAL_APP_ID = updated.appId;
-        process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID = updated.appId;
-      }
-      if (updated.restApiKey) {
-        process.env.ONESIGNAL_REST_API_KEY = updated.restApiKey;
-      }
-
-      return res.json({
-        success: true,
-        appId: updated.appId,
-        hasServerApiKey: Boolean(updated.restApiKey && updated.restApiKey.length > 0),
-        apiKeyMasked: updated.restApiKey ? `${updated.restApiKey.slice(0, 4)}...${updated.restApiKey.slice(-4)}` : ""
-      });
-    } catch (err: any) {
-      console.error("[api] Failed to save OneSignal config:", err);
-      return res.status(500).json({ error: "Failed to save OneSignal configuration: " + err.message });
-    }
   });
 
   // Secure server-side push notification endpoint (OneSignal REST API key remains 100% secret on the server)
   app.post("/api/send-push-notification", async (req, res) => {
     try {
       const { title, message, targetUserIds, url } = req.body;
-      const { appId, restApiKey } = getDynamicOneSignalConfig();
+      const appId =
+        process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ||
+        process.env.ONESIGNAL_APP_ID ||
+        "10a14311-a42a-4681-9682-ce965d80ae75";
+      const restApiKey = process.env.ONESIGNAL_REST_API_KEY;
 
-      if (!restApiKey || !restApiKey.trim()) {
+      if (!restApiKey) {
         return res.status(400).json({ 
-          error: "OneSignal REST API Key is not configured on the server. Please enter your App API Key in Admin Settings > OneSignal." 
+          error: "ONESIGNAL_REST_API_KEY n'est pas encore configurée sur le serveur. Veuillez l'ajouter dans vos variables d'environnement serveur pour envoyer des notifications push en production." 
         });
       }
 
       const titleStr = title || "Unlocked";
-      const messageStr = message || "New notification from Unlocked";
+      const messageStr = message || "Nouvelle notification Unlocked";
 
       const payload: any = {
         app_id: appId,
@@ -1233,6 +1186,14 @@ FOR EACH REAL EVENT FOUND:
         },
         url: url || "/",
         priority: 10,
+        // Target exclusively mobile apps (iOS & Android) and disable web push
+        isIos: true,
+        isAndroid: true,
+        isChromeWeb: false,
+        isSafariWeb: false,
+        isFirefox: false,
+        isEdge: false,
+        isAnyWeb: false,
         android_visibility: 1,
         android_accent_color: "2563EB",
         ios_badgeType: "Increase",
@@ -1246,55 +1207,27 @@ FOR EACH REAL EVENT FOUND:
         payload.included_segments = ["Total Subscriptions", "Subscribed Users"];
       }
 
-      // Determine authorization header scheme (Key vs Basic)
-      const cleanKey = restApiKey.trim();
-      const schemes = cleanKey.startsWith("os_v2_")
-        ? [`Key ${cleanKey}`, `Basic ${cleanKey}`]
-        : [`Basic ${cleanKey}`, `Key ${cleanKey}`];
-
-      let lastResponse: any = null;
-      let lastData: any = null;
-
-      for (const authHeader of schemes) {
-        const oneSignalRes = await fetch("https://onesignal.com/api/v1/notifications", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": authHeader
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await oneSignalRes.json();
-        lastResponse = oneSignalRes;
-        lastData = data;
-
-        if (oneSignalRes.ok) {
-          return res.json({ success: true, result: data });
-        }
-
-        // If not a 401 auth error, don't retry with another scheme
-        if (oneSignalRes.status !== 401) {
-          break;
-        }
-      }
-
-      // Check if it's an authorization failure
-      const isAuthError = lastResponse?.status === 401 || JSON.stringify(lastData || {}).includes("Access denied");
-      if (isAuthError) {
-        return res.status(401).json({
-          error: `OneSignal Access Denied: The REST API Key for App ID "${appId}" is invalid or expired. Please update your App API Key in Admin Settings > OneSignal.`,
-          details: lastData
-        });
-      }
-
-      return res.status(lastResponse?.status || 500).json({ 
-        error: lastData?.errors?.[0] || "Failed to deliver OneSignal push notification.",
-        details: lastData 
+      const oneSignalRes = await fetch("https://onesignal.com/api/v1/notifications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Basic ${restApiKey}`
+        },
+        body: JSON.stringify(payload)
       });
+
+      const data = await oneSignalRes.json();
+      if (!oneSignalRes.ok) {
+        return res.status(oneSignalRes.status).json({ 
+          error: data.errors?.[0] || "Échec de l'envoi de la notification push OneSignal.",
+          details: data 
+        });
+      }
+
+      return res.json({ success: true, result: data });
     } catch (err: any) {
       console.error("[api] OneSignal push send error:", err);
-      return res.status(500).json({ error: err.message || "Server error while sending OneSignal push." });
+      return res.status(500).json({ error: err.message || "Erreur serveur lors de l'envoi OneSignal." });
     }
   });
 
