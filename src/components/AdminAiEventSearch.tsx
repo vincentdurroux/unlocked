@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { APIProvider, Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 import { eventService, isSameDay } from '../services/eventService';
+import { cn } from '../lib/utils';
 
 const GOOGLE_MAPS_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 
@@ -125,7 +126,7 @@ const PRESET_PROMPTS = [
   { label: '🌳 Outdoor, Sports & Turia', query: 'Outdoor festivals, running events, and open-air activities in Turia Gardens Valencia' }
 ];
 
-const EMOJI_REGEX = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+const EMOJI_REGEX = /[\p{Extended_Pictographic}\u2600-\u27BF]/u;
 
 export function enrichSectionTextWithEmojis(text: string, sectionType: 'expect' | 'perfectFor' | 'goodToKnow' | 'moreInfo'): string {
   if (!text) return '';
@@ -134,14 +135,19 @@ export function enrichSectionTextWithEmojis(text: string, sectionType: 'expect' 
     const trimmed = line.trim();
     if (!trimmed) return line;
 
-    if (EMOJI_REGEX.test(trimmed)) {
-      return line;
+    // Check if line already has any emoji anywhere in the first 30 characters
+    if (EMOJI_REGEX.test(trimmed.slice(0, 30))) {
+      return cleanDuplicateEmojis(line);
     }
 
     const bulletMatch = line.match(/^(\s*[-*•]\s*)(.*)$/);
     const prefix = bulletMatch ? bulletMatch[1] : '';
     const body = bulletMatch ? bulletMatch[2] : line;
     const lower = body.toLowerCase();
+
+    if (EMOJI_REGEX.test(body.slice(0, 30))) {
+      return cleanDuplicateEmojis(line);
+    }
 
     let emoji = '✨';
 
@@ -192,6 +198,43 @@ export function enrichSectionTextWithEmojis(text: string, sectionType: 'expect' 
   }).join('\n');
 }
 
+export function cleanDuplicateEmojis(text: string): string {
+  if (!text) return '';
+  let cleaned = text;
+
+  // 1. Remove repeated consecutive emojis (supporting variation selectors \uFE0F, skin tones, ZWJ, and spaces)
+  cleaned = cleaned.replace(/([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]*\1)+/gu, '$1');
+
+  // 2. Remove duplicate emojis at bullet point starts (e.g. "- 🎟️ 🎟️", "• 🎶 🎶", "* 🎨 🎨")
+  cleaned = cleaned.replace(/^([ \t]*[-*•]\s*)([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]+\2)+/gmu, '$1$2');
+
+  // 3. Remove duplicate emojis at line starts (e.g. "🎶 🎶 Jazz night")
+  cleaned = cleaned.replace(/^([ \t]*)([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]+\2)+/gmu, '$1$2');
+
+  // 4. Clean decorative sparkle + emoji at start of bullets (e.g. "• ✨ 🎶" -> "• 🎶", "- ✨ 🎟️" -> "- 🎟️")
+  cleaned = cleaned.replace(/^([ \t]*[-*•]\s*)✨\s+([\p{Extended_Pictographic}\u2600-\u27BF])/gmu, '$1$2');
+
+  // 5. Clean header duplicate sparkles (e.g. "### ✨ ✨ What to expect" -> "### ✨ What to expect")
+  cleaned = cleaned.replace(/^(#{1,6}\s*)✨\s+✨/gmu, '$1✨');
+
+  // 6. Remove unwanted trailing sparkles & double colons
+  cleaned = cleaned.replace(/\s+✨(?=[.:,\n\s]|$)/g, "");
+  cleaned = cleaned.replace(/:\s*:/g, ':');
+
+  // 7. Consolidate excessive blank lines
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+
+  return cleaned.trim();
+}
+
+function cleanExtractedSectionContent(content: string): string {
+  if (!content) return '';
+  let cleaned = content.trim();
+  // Remove any internal duplicate header lines that might have been captured (e.g. "### ✨ What to expect")
+  cleaned = cleaned.replace(/^[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[\p{Extended_Pictographic}\uFE0F\s]*)(?:What (?:can you |to |you can )?expect\??|Perfect for|Good to know(?:\s*\(tips\))?|More info(?:rmation)?|Useful links|Tickets & (?:Info|Links)|Plus d'infos|A quoi s'attendre\??|Infos pratiques|Public cible|Para quién|Qué esperar\??)(?:\*\*?|__|:|\s)*\n?/gimu, '');
+  return cleanDuplicateEmojis(cleaned);
+}
+
 export function parseDescriptionSections(description: string) {
   let expect = '';
   let perfectFor = '';
@@ -200,32 +243,37 @@ export function parseDescriptionSections(description: string) {
 
   if (!description) return { expect, perfectFor, goodToKnow, moreInfo, hasRealSections: false };
 
-  // Define robust regexes to match the section titles (case-insensitive)
-  // They match lines starting with hashes or bold markers, optional numbering (like "1."), optional emojis, then the title phrase
-  const expectRegex = /(?:^|\n)(?:###?\s+|\*\*?)(?:\d+\.\s+)?(?:[✨\s]*)?What can you expect\??(?:\*\*?|\s*)/i;
-  const perfectRegex = /(?:^|\n)(?:###?\s+|\*\*?)(?:\d+\.\s+)?(?:[🎯\s]*)?Perfect for(?:\*\*?|\s*)/i;
-  const goodRegex = /(?:^|\n)(?:###?\s+|\*\*?)(?:\d+\.\s+)?(?:[💡\s]*)?Good to know(?:\s*\(tips\))?(?:\*\*?|\s*)/i;
-  const infoRegex = /(?:^|\n)(?:###?\s+|\*\*?)(?:\d+\.\s+)?(?:[🔗\s]*)?More information(?:\*\*?|\s*)/i;
+  // Flexible regexes matching common variations of the 4 canonical section titles (Markdown headers ###, bold **, or standard headers)
+  const headerMatchers = [
+    {
+      key: 'expect',
+      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[✨\s]*)?(?:What (?:can you |to |you can )?expect\??|A quoi s'attendre\??|Ce à quoi vous attendre\??|Qué esperar\??)(?:\*\*?|__|:|\s)*(?:\n|$)/i
+    },
+    {
+      key: 'perfectFor',
+      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[🎯\s]*)?(?:Perfect for|Ideal for|Who is (?:this|it) for|Public cible|Idéal pour|Para quién)(?:\*\*?|__|:|\s)*(?:\n|$)/i
+    },
+    {
+      key: 'goodToKnow',
+      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[💡\s]*)?(?:Good to know(?:\s*\(tips\))?|Practical (?:info|information)|Infos pratiques|Bon à savoir|Información práctica)(?:\*\*?|__|:|\s)*(?:\n|$)/i
+    },
+    {
+      key: 'moreInfo',
+      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[🔗\s]*)?(?:More info(?:rmation)?|Useful links|Tickets & (?:Info|Links)|Plus d'infos|En savoir plus|Más información)(?:\*\*?|__|:|\s)*(?:\n|$)/i
+    }
+  ];
 
-  // Find the start indices and the match lengths of each section header
   const sections: { key: string; start: number; end: number }[] = [];
 
-  const matchExpect = description.match(expectRegex);
-  const matchPerfect = description.match(perfectRegex);
-  const matchGood = description.match(goodRegex);
-  const matchInfo = description.match(infoRegex);
-
-  if (matchExpect && matchExpect.index !== undefined) {
-    sections.push({ key: 'expect', start: matchExpect.index, end: matchExpect.index + matchExpect[0].length });
-  }
-  if (matchPerfect && matchPerfect.index !== undefined) {
-    sections.push({ key: 'perfectFor', start: matchPerfect.index, end: matchPerfect.index + matchPerfect[0].length });
-  }
-  if (matchGood && matchGood.index !== undefined) {
-    sections.push({ key: 'goodToKnow', start: matchGood.index, end: matchGood.index + matchGood[0].length });
-  }
-  if (matchInfo && matchInfo.index !== undefined) {
-    sections.push({ key: 'moreInfo', start: matchInfo.index, end: matchInfo.index + matchInfo[0].length });
+  for (const item of headerMatchers) {
+    const match = description.match(item.regex);
+    if (match && match.index !== undefined) {
+      sections.push({
+        key: item.key,
+        start: match.index,
+        end: match.index + match[0].length
+      });
+    }
   }
 
   const hasRealSections = sections.length > 0;
@@ -240,7 +288,7 @@ export function parseDescriptionSections(description: string) {
       const next = sections[i + 1];
       const contentStart = current.end;
       const contentEnd = next ? next.start : description.length;
-      const content = description.substring(contentStart, contentEnd).trim();
+      const content = cleanExtractedSectionContent(description.substring(contentStart, contentEnd));
 
       if (current.key === 'expect') expect = content;
       else if (current.key === 'perfectFor') perfectFor = content;
@@ -251,11 +299,7 @@ export function parseDescriptionSections(description: string) {
 
   // Fallback if no sections matched at all:
   if (!expect && !perfectFor && !goodToKnow && !moreInfo) {
-    // If the description seems to already have our markdown headers but they failed regex matching,
-    // we should try to clean them up or at least not treat the whole thing as one section's content
-    // if it contains things like "###". 
-    // For now, if it's a simple text, put it in expect.
-    expect = description.trim();
+    expect = cleanDuplicateEmojis(description.trim());
   }
 
   return { expect, perfectFor, goodToKnow, moreInfo, hasRealSections };
@@ -390,10 +434,70 @@ export function renderFormattedContent(text: string, defaultBoldClass = "font-ex
 
 export function SimpleMarkdown({ children }: { children: string }) {
   if (!children) return null;
+  const cleaned = cleanDuplicateEmojis(children);
+  const parsed = parseDescriptionSections(cleaned);
+
+  if (parsed.hasRealSections) {
+    return (
+      <div className="space-y-3 text-xs sm:text-sm text-slate-700 not-italic">
+        {parsed.expect && (
+          <div className="space-y-1.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-brand-blue text-xs uppercase tracking-wider">
+              <span>✨ What to expect</span>
+            </div>
+            <div className="leading-relaxed text-slate-700 font-normal">
+              {renderFormattedContent(parsed.expect, "font-bold text-slate-950")}
+            </div>
+          </div>
+        )}
+
+        {parsed.perfectFor && (
+          <div className="space-y-1.5 bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs uppercase tracking-wider">
+              <span>🎯 Perfect for</span>
+            </div>
+            <div className="space-y-1 leading-relaxed text-emerald-950 font-normal">
+              {parsed.perfectFor.split('\n').map(line => line.trim()).filter(Boolean).map((line, idx) => {
+                const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
+                return (
+                  <div key={idx} className="flex items-start gap-2">
+                    <span className="text-emerald-600 font-extrabold mt-0.5">•</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-bold text-emerald-950")}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {parsed.goodToKnow && (
+          <div className="space-y-1.5 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs uppercase tracking-wider">
+              <span>💡 Good to know</span>
+            </div>
+            <div className="leading-relaxed text-amber-950 font-normal">
+              {renderFormattedContent(parsed.goodToKnow, "font-bold text-amber-950")}
+            </div>
+          </div>
+        )}
+
+        {parsed.moreInfo && (
+          <div className="space-y-1.5 bg-sky-50/60 p-4 rounded-2xl border border-sky-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-sky-900 text-xs uppercase tracking-wider">
+              <span>🔗 More info</span>
+            </div>
+            <div className="leading-relaxed text-sky-950 font-normal">
+              {renderFormattedContent(parsed.moreInfo, "font-bold text-sky-950")}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3 text-slate-700 leading-relaxed text-xs sm:text-sm">
-      {renderFormattedContent(children, "font-bold text-slate-950")}
+      {renderFormattedContent(cleaned, "font-bold text-slate-900")}
     </div>
   );
 }
@@ -562,6 +666,11 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
   const [editLat, setEditLat] = useState('');
   const [editLng, setEditLng] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editDescMode, setEditDescMode] = useState<'sections' | 'raw'>('sections');
+  const [editExpect, setEditExpect] = useState('');
+  const [editPerfectFor, setEditPerfectFor] = useState('');
+  const [editGoodToKnow, setEditGoodToKnow] = useState('');
+  const [editMoreInfo, setEditMoreInfo] = useState('');
 
   const fetchDbRepository = async () => {
     setIsLoadingRepository(true);
@@ -597,16 +706,44 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
     setEditIsFree(ev.is_free !== undefined ? ev.is_free : true);
     setEditLat(ev.coordinates?.lat ? String(ev.coordinates.lat) : '39.4699');
     setEditLng(ev.coordinates?.lng ? String(ev.coordinates.lng) : '-0.3763');
-    setEditDescription(ev.description || '');
+    
+    const rawDesc = ev.description || '';
+    const parsed = parseDescriptionSections(rawDesc);
+    setEditExpect(parsed.expect || '');
+    setEditPerfectFor(parsed.perfectFor || '');
+    setEditGoodToKnow(parsed.goodToKnow || '');
+    setEditMoreInfo(parsed.moreInfo || '');
+    setEditDescription(rawDesc);
+    setEditDescMode('sections');
   };
 
   const closeEditModal = () => {
     setEditingEvent(null);
   };
 
+  const getCompiledDescription = () => {
+    if (editDescMode === 'sections') {
+      const parts: string[] = [];
+      if (editExpect.trim()) {
+        parts.push(`### ✨ What to expect\n${editExpect.trim()}`);
+      }
+      if (editPerfectFor.trim()) {
+        parts.push(`### 🎯 Perfect for\n${editPerfectFor.trim()}`);
+      }
+      if (editGoodToKnow.trim()) {
+        parts.push(`### 💡 Good to know\n${editGoodToKnow.trim()}`);
+      }
+      if (editMoreInfo.trim()) {
+        parts.push(`### 🔗 More info\n${editMoreInfo.trim()}`);
+      }
+      return cleanDuplicateEmojis(parts.join('\n\n'));
+    }
+    return cleanDuplicateEmojis(editDescription.trim());
+  };
+
   const handleSaveEditInMemory = () => {
     if (!editingEvent) return;
-    const newDescription = editDescription.trim();
+    const newDescription = getCompiledDescription();
     const pLat = parseFloat(editLat);
     const pLng = parseFloat(editLng);
     const coords = (!isNaN(pLat) && !isNaN(pLng)) ? { lat: pLat, lng: pLng } : editingEvent.coordinates;
@@ -644,7 +781,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
   const handleSaveAndPublish = async () => {
     if (!editingEvent) return;
-    const newDescription = editDescription.trim();
+    const newDescription = getCompiledDescription();
     const pLat = parseFloat(editLat);
     const pLng = parseFloat(editLng);
     const coords = (!isNaN(pLat) && !isNaN(pLng)) ? { lat: pLat, lng: pLng } : editingEvent.coordinates;
@@ -2463,47 +2600,149 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                   </div>
                 </div>
 
-                {/* Event Description */}
-                <div className="space-y-3 pt-2 border-t border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-brand-blue" />
-                    <h4 className="font-bold text-slate-900 text-sm">
-                      Event Description
-                    </h4>
-                  </div>
+                {/* Event Description Section / 4 Boxes Editor */}
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
+                      Sections de l'événement (4 Cases)
+                    </label>
 
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 rounded-xl border border-slate-200/80">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Insert:</span>
-                      {['✨', '🎨', '🎶', '🎭', '🍷', '🥘', '🌟', '📍', '👥', '💡', '🎟️', '⏰', '🚇', '🅿️', '💶', '♿', '☀️', '📱', '🔗', '🌐'].map(emoji => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => setEditDescription(prev => prev ? `${prev} ${emoji} ` : `${emoji} `)}
-                          className="px-1.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold border border-slate-100 shadow-2xs transition-all active:scale-95 cursor-pointer"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
+                    {/* Mode Selector Toggle */}
+                    <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 self-start">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editDescMode === 'raw') {
+                            const p = parseDescriptionSections(editDescription);
+                            setEditExpect(p.expect);
+                            setEditPerfectFor(p.perfectFor);
+                            setEditGoodToKnow(p.goodToKnow);
+                            setEditMoreInfo(p.moreInfo);
+                          }
+                          setEditDescMode('sections');
+                        }}
+                        className={cn(
+                          "px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                          editDescMode === 'sections' ? "bg-white text-brand-blue shadow-xs" : "text-slate-500 hover:text-slate-800"
+                        )}
+                      >
+                        4 Cases
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editDescMode === 'sections') {
+                            setEditDescription(getCompiledDescription());
+                          }
+                          setEditDescMode('raw');
+                        }}
+                        className={cn(
+                          "px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                          editDescMode === 'raw' ? "bg-white text-brand-blue shadow-xs" : "text-slate-500 hover:text-slate-800"
+                        )}
+                      >
+                        Markdown brut
+                      </button>
                     </div>
-
-                    <textarea
-                      rows={8}
-                      value={editDescription}
-                      onChange={(e) => setEditDescription(e.target.value)}
-                      placeholder="Type your event description here (markdown formatting, emojis, bullet points - or •)..."
-                      className="w-full p-4 bg-slate-50/60 rounded-2xl border border-slate-200 text-xs font-medium leading-relaxed outline-none focus:border-brand-blue focus:bg-white resize-y transition-all"
-                    />
-
-                    {editDescription.trim() && (
-                      <div className="mt-2 p-3.5 bg-slate-50 rounded-xl border border-slate-200/70">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Formatted Preview:</span>
-                        <div className="text-xs text-slate-700 leading-relaxed">
-                          {renderFormattedContent(editDescription, "font-bold text-slate-950")}
-                        </div>
-                      </div>
-                    )}
                   </div>
+
+                  {editDescMode === 'sections' ? (
+                    <div className="space-y-4">
+                      {/* Box 1: What to expect */}
+                      <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-brand-blue flex items-center gap-1.5">
+                            <span>✨ What to expect</span>
+                          </label>
+                          <span className="text-[10px] text-slate-400 font-medium">Ambiance, programme, artistes</span>
+                        </div>
+                        <textarea
+                          rows={3}
+                          value={editExpect}
+                          onChange={(e) => setEditExpect(e.target.value)}
+                          placeholder="Description de l'ambiance, artistes invités, activités principales..."
+                          className="w-full p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-brand-blue/20 resize-y"
+                        />
+                      </div>
+
+                      {/* Box 2: Perfect for */}
+                      <div className="bg-emerald-50/50 p-3.5 rounded-2xl border border-emerald-200 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                            <span>🎯 Perfect for</span>
+                          </label>
+                          <span className="text-[10px] text-emerald-600/70 font-medium">Public cible (un par ligne avec - ou •)</span>
+                        </div>
+                        <textarea
+                          rows={2}
+                          value={editPerfectFor}
+                          onChange={(e) => setEditPerfectFor(e.target.value)}
+                          placeholder="- 🌍 Expats & nouveaux arrivants à Valence&#10;- 🎶 Amateurs de musique live&#10;- 👥 Sorties entre amis ou en famille"
+                          className="w-full p-3 bg-white rounded-xl border border-emerald-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-emerald-500/20 resize-y"
+                        />
+                      </div>
+
+                      {/* Box 3: Good to know */}
+                      <div className="bg-amber-50/50 p-3.5 rounded-2xl border border-amber-200 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                            <span>💡 Good to know</span>
+                          </label>
+                          <span className="text-[10px] text-amber-600/70 font-medium">Tarifs, horaires, métro, parking</span>
+                        </div>
+                        <textarea
+                          rows={3}
+                          value={editGoodToKnow}
+                          onChange={(e) => setEditGoodToKnow(e.target.value)}
+                          placeholder="- 🎟️ **Tarif** : Gratuit / À partir de 15€&#10;- 📍 **Lieu** : Adresse précise&#10;- ⏰ **Horaires** : Ouverture des portes 19h30&#10;- 🚇 **Accès** : Métro ligne 3 / 5"
+                          className="w-full p-3 bg-white rounded-xl border border-amber-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-amber-500/20 resize-y"
+                        />
+                      </div>
+
+                      {/* Box 4: More info */}
+                      <div className="bg-sky-50/50 p-3.5 rounded-2xl border border-sky-200 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
+                            <span>🔗 More info</span>
+                          </label>
+                          <span className="text-[10px] text-sky-600/70 font-medium">Liens officiels et billetterie</span>
+                        </div>
+                        <textarea
+                          rows={2}
+                          value={editMoreInfo}
+                          onChange={(e) => setEditMoreInfo(e.target.value)}
+                          placeholder="- 🌐 **Site Officiel** : [Nom du site](https://...)&#10;- 🎟️ **Réservation** : [Acheter des billets](https://...)"
+                          className="w-full p-3 bg-white rounded-xl border border-sky-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-sky-500/20 resize-y"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {/* Emoji Quick Picker */}
+                      <div className="flex flex-wrap items-center gap-1 py-1.5 px-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                        <span className="text-[10px] font-semibold text-slate-400 mr-1">Émoticônes :</span>
+                        {['✨', '🎶', '🎭', '🎨', '🎟️', '🍷', '🥘', '🌟', '📍', '👥', '💡', '⏰', '🚇', '🅿️', '🌐', '🏃', '🤝'].map(emoji => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => setEditDescription(prev => prev ? `${prev} ${emoji} ` : `${emoji} `)}
+                            className="px-1.5 py-0.5 hover:bg-white rounded text-sm transition-transform active:scale-125 cursor-pointer"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+
+                      <textarea
+                        rows={8}
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        placeholder="Rédigez ou collez ici la description complète de l'événement..."
+                        className="w-full p-4 bg-white rounded-2xl border border-slate-200 text-xs font-medium leading-relaxed outline-none focus:border-brand-blue resize-y shadow-xs"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -33,6 +33,7 @@ import {
   Loader2,
   Share2,
   Ticket,
+  FileText,
   Bell
 } from 'lucide-react';
 import { APIProvider, Map, AdvancedMarker, Pin, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -42,9 +43,10 @@ import { storageService } from '../lib/storage';
 import { compressImage } from '../services/imageService';
 import { cn } from '../lib/utils';
 import {
+  parseDescriptionSections,
   renderFormattedContent,
   getCategoryWithEmoji,
-  enrichSectionTextWithEmojis
+  cleanDuplicateEmojis
 } from './AdminAiEventSearch';
 import { matchesCategoryFilter } from '../utils/eventFormatter';
 
@@ -192,6 +194,33 @@ export function AdminEventsManager({
   const [pushingEventId, setPushingEventId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 4-box Structured Description Editor State
+  const [descMode, setDescMode] = useState<'sections' | 'raw'>('sections');
+  const [descExpect, setDescExpect] = useState('');
+  const [descPerfectFor, setDescPerfectFor] = useState('');
+  const [descGoodToKnow, setDescGoodToKnow] = useState('');
+  const [descMoreInfo, setDescMoreInfo] = useState('');
+
+  const getCompiledDescription = () => {
+    if (descMode === 'sections') {
+      const parts: string[] = [];
+      if (descExpect.trim()) {
+        parts.push(`### ✨ What to expect\n${descExpect.trim()}`);
+      }
+      if (descPerfectFor.trim()) {
+        parts.push(`### 🎯 Perfect for\n${descPerfectFor.trim()}`);
+      }
+      if (descGoodToKnow.trim()) {
+        parts.push(`### 💡 Good to know\n${descGoodToKnow.trim()}`);
+      }
+      if (descMoreInfo.trim()) {
+        parts.push(`### 🔗 More info\n${descMoreInfo.trim()}`);
+      }
+      return cleanDuplicateEmojis(parts.join('\n\n'));
+    }
+    return cleanDuplicateEmojis(newEvent.description || '');
+  };
+
   // Helper to parse date strings for upcoming / past filtering
   const getEventTimestamp = (event: AdminEventItem): number => {
     const dateStr = event.start_date || event.date;
@@ -304,6 +333,14 @@ export function AdminEventsManager({
     setEditingEventId(event.id);
     const sDate = event.start_date || event.date || '';
     const eDate = event.end_date && !isSameDay(sDate, event.end_date) ? event.end_date : '';
+    const rawDesc = event.description || '';
+    const parsed = parseDescriptionSections(rawDesc);
+    setDescExpect(parsed.expect || '');
+    setDescPerfectFor(parsed.perfectFor || '');
+    setDescGoodToKnow(parsed.goodToKnow || '');
+    setDescMoreInfo(parsed.moreInfo || '');
+    setDescMode('sections');
+
     setNewEvent({
       title: event.title || '',
       start_date: sDate,
@@ -312,7 +349,7 @@ export function AdminEventsManager({
       end_time: event.end_time || '',
       location: event.location || '',
       category: event.category || '',
-      description: event.description || '',
+      description: rawDesc,
       image: event.image_url || event.image || '',
       lat: event.coordinates?.lat || 0,
       lng: event.coordinates?.lng || 0,
@@ -332,6 +369,14 @@ export function AdminEventsManager({
     setEditingEventId(null);
     const sDate = event.start_date || event.date || '';
     const eDate = event.end_date && !isSameDay(sDate, event.end_date) ? event.end_date : '';
+    const rawDesc = event.description || '';
+    const parsed = parseDescriptionSections(rawDesc);
+    setDescExpect(parsed.expect || '');
+    setDescPerfectFor(parsed.perfectFor || '');
+    setDescGoodToKnow(parsed.goodToKnow || '');
+    setDescMoreInfo(parsed.moreInfo || '');
+    setDescMode('sections');
+
     setNewEvent({
       title: `${event.title} (Copy)`,
       start_date: sDate,
@@ -340,7 +385,7 @@ export function AdminEventsManager({
       end_time: event.end_time || '',
       location: event.location || '',
       category: event.category || '',
-      description: event.description || '',
+      description: rawDesc,
       image: event.image_url || event.image || '',
       lat: event.coordinates?.lat || 0,
       lng: event.coordinates?.lng || 0,
@@ -540,7 +585,7 @@ export function AdminEventsManager({
         time: newEvent.start_time || '',
         location: newEvent.location.trim(),
         category: newEvent.category.trim() || 'Community',
-        description: newEvent.description || '',
+        description: getCompiledDescription(),
         image: imageUrl || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=1200',
         image_url: imageUrl || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=1200',
         coordinates: { lat: finalLat, lng: finalLng },
@@ -745,15 +790,15 @@ export function AdminEventsManager({
               {/* Formatted Content Preview */}
               <div className="md:col-span-2 space-y-3 bg-white/5 p-4 rounded-2xl border border-white/10 max-h-96 overflow-y-auto">
                 <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider block">
-                  Event Description Preview:
+                  Article Preview:
                 </span>
-                <div className="space-y-3 text-xs leading-relaxed text-slate-200">
+                <div className="text-xs leading-relaxed text-slate-200">
                   {newEvent.description ? (
-                    <div className="bg-white/10 p-3.5 rounded-xl border border-white/5">
-                      {renderFormattedContent(newEvent.description, "font-bold text-emerald-200")}
+                    <div className="bg-white/10 p-4 rounded-xl border border-white/5 space-y-2">
+                      {renderFormattedContent(cleanDuplicateEmojis(newEvent.description), "font-bold text-slate-100")}
                     </div>
                   ) : (
-                    <p className="text-slate-400 italic text-xs">No description content added yet.</p>
+                    <p className="text-slate-400 italic text-xs">No article content added yet.</p>
                   )}
                 </div>
               </div>
@@ -1136,42 +1181,197 @@ export function AdminEventsManager({
               </div>
             </div>
 
-            {/* Description & Structured 4 Sections */}
+            {/* Description & Article Content - 4 Cases (Structured) or Raw Mode */}
             <div className="bg-white p-5 sm:p-7 rounded-[32px] border border-slate-100 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h4 className="text-sm font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-emerald-500" />
-                  3. Event Description
-                </h4>
-              </div>
-
-              <div className="space-y-3">
-                {/* Emoji quick insertion toolbar */}
-                <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 rounded-xl border border-slate-200/80">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Insert:</span>
-                  {['✨', '🎨', '🎶', '🎭', '🍷', '🥘', '🌟', '📍', '👥', '💡', '🎟️', '⏰', '🚇', '🅿️', '💶', '♿', '☀️', '📱', '🔗', '🌐'].map(emoji => (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-500" />
+                  <h4 className="text-sm font-extrabold uppercase tracking-widest text-slate-700">
+                    3. Description de l'article (4 Cases)
+                  </h4>
+                </div>
+                
+                {/* Mode Selector Toggle & Actions */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
                     <button
-                      key={emoji}
                       type="button"
                       onClick={() => {
-                        const current = newEvent.description || '';
-                        setNewEvent({ ...newEvent, description: current ? `${current} ${emoji} ` : `${emoji} ` });
+                        if (descMode === 'raw') {
+                          const p = parseDescriptionSections(newEvent.description || '');
+                          setDescExpect(p.expect);
+                          setDescPerfectFor(p.perfectFor);
+                          setDescGoodToKnow(p.goodToKnow);
+                          setDescMoreInfo(p.moreInfo);
+                        }
+                        setDescMode('sections');
                       }}
-                      className="px-1.5 py-1 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-lg text-xs font-semibold border border-slate-100 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                      className={cn(
+                        "px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                        descMode === 'sections' ? "bg-white text-emerald-700 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                      )}
                     >
-                      {emoji}
+                      4 Cases
                     </button>
-                  ))}
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (descMode === 'sections') {
+                          setNewEvent(prev => ({ ...prev, description: getCompiledDescription() }));
+                        }
+                        setDescMode('raw');
+                      }}
+                      className={cn(
+                        "px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                        descMode === 'raw' ? "bg-white text-emerald-700 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                      )}
+                    >
+                      Markdown brut
+                    </button>
+                  </div>
 
-                <textarea
-                  rows={10}
-                  value={newEvent.description || ''}
-                  onChange={e => setNewEvent({ ...newEvent, description: e.target.value })}
-                  placeholder="Type your event description here (markdown formatting, emojis, bullet points - or •)..."
-                  className="w-full bg-slate-50/60 border border-slate-200 rounded-2xl p-4 text-xs font-medium text-slate-900 leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white resize-y transition-all"
-                />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (descMode === 'sections') {
+                        setDescExpect(prev => cleanDuplicateEmojis(prev));
+                        setDescPerfectFor(prev => cleanDuplicateEmojis(prev));
+                        setDescGoodToKnow(prev => cleanDuplicateEmojis(prev));
+                        setDescMoreInfo(prev => cleanDuplicateEmojis(prev));
+                      } else {
+                        const cleaned = cleanDuplicateEmojis(newEvent.description || '');
+                        setNewEvent({ ...newEvent, description: cleaned });
+                      }
+                      setMsg({ type: 'success', text: '✨ Doublons d\'émoticônes nettoyés avec succès !' });
+                    }}
+                    className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                    title="Supprimer les doublons d'émoticônes"
+                  >
+                    ✨ Nettoyer Émoticônes
+                  </button>
+                </div>
               </div>
+
+              {descMode === 'sections' ? (
+                <div className="space-y-4">
+                  {/* Box 1: What to expect */}
+                  <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-brand-blue flex items-center gap-1.5">
+                        <span>✨ What to expect</span>
+                      </label>
+                      <span className="text-[10px] text-slate-400 font-medium">Ambiance, programme, artistes, expérience</span>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={descExpect}
+                      onChange={(e) => setDescExpect(e.target.value)}
+                      placeholder="Description de l'ambiance, artistes invités, activités principales et temps forts..."
+                      className="w-full p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-brand-blue/20 resize-y"
+                    />
+                  </div>
+
+                  {/* Box 2: Perfect for */}
+                  <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                        <span>🎯 Perfect for</span>
+                      </label>
+                      <span className="text-[10px] text-emerald-600/70 font-medium">Public cible (un élément par ligne)</span>
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={descPerfectFor}
+                      onChange={(e) => setDescPerfectFor(e.target.value)}
+                      placeholder="- 🌍 Expats & nouveaux arrivants à Valence&#10;- 🎶 Amateurs de musique live et festivals&#10;- 👥 Sorties entre amis ou en famille"
+                      className="w-full p-3 bg-white rounded-xl border border-emerald-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-emerald-500/20 resize-y"
+                    />
+                  </div>
+
+                  {/* Box 3: Good to know */}
+                  <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                        <span>💡 Good to know</span>
+                      </label>
+                      <span className="text-[10px] text-amber-600/70 font-medium">Tarifs, billets, horaires, métro, accès, parking</span>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={descGoodToKnow}
+                      onChange={(e) => setDescGoodToKnow(e.target.value)}
+                      placeholder="- 🎟️ **Tarif** : Gratuit / À partir de 15€&#10;- 📍 **Lieu** : Adresse précise et salle&#10;- ⏰ **Horaires** : Ouverture des portes 19h30, début 20h00&#10;- 🚇 **Accès** : Métro ligne 3 / 5, station Xàtiva"
+                      className="w-full p-3 bg-white rounded-xl border border-amber-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-amber-500/20 resize-y"
+                    />
+                  </div>
+
+                  {/* Box 4: More info */}
+                  <div className="bg-sky-50/50 p-4 rounded-2xl border border-sky-200 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
+                        <span>🔗 More info</span>
+                      </label>
+                      <span className="text-[10px] text-sky-600/70 font-medium">Liens officiels, billetterie et contact</span>
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={descMoreInfo}
+                      onChange={(e) => setDescMoreInfo(e.target.value)}
+                      placeholder="- 🌐 **Site Officiel** : [Nom du site](https://...)&#10;- 🎟️ **Réservation** : [Acheter des billets](https://...)"
+                      className="w-full p-3 bg-white rounded-xl border border-sky-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-sky-500/20 resize-y"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {/* Emoji Quick Picker */}
+                  <div className="flex flex-wrap items-center gap-1 py-1.5 px-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                    <span className="text-[10px] font-semibold text-slate-400 mr-1">Émoticônes :</span>
+                    {['✨', '🎶', '🎭', '🎨', '🎟️', '🍷', '🥘', '🌟', '📍', '👥', '💡', '⏰', '🚇', '🅿️', '🌐', '🏃', '🤝'].map(emoji => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => {
+                          const current = newEvent.description || '';
+                          const toAdd = current.endsWith(' ') || current.endsWith('\n') ? `${emoji} ` : ` ${emoji} `;
+                          const updated = cleanDuplicateEmojis(`${current}${toAdd}`);
+                          setNewEvent({ ...newEvent, description: updated });
+                        }}
+                        className="px-1.5 py-0.5 hover:bg-white rounded text-sm transition-transform active:scale-125 cursor-pointer"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+
+                  <textarea
+                    rows={10}
+                    value={newEvent.description || ''}
+                    onChange={e => {
+                      const cleanVal = cleanDuplicateEmojis(e.target.value);
+                      setNewEvent({ ...newEvent, description: cleanVal });
+                    }}
+                    placeholder="Type the event article content here...
+
+### ✨ What to expect
+Live music performances, artists, and event highlights
+
+### 🎯 Perfect for
+- 🌍 Expats and music lovers in Valencia
+
+### 💡 Good to know
+- 🎟️ Tickets, prices, and venue schedule
+
+### 🔗 More info
+- 🌐 [Official Website](https://...)"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs sm:text-sm text-slate-900 leading-relaxed focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-y font-sans transition-all"
+                  />
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                    <span>Format Markdown supporté (gras, liens, listes à puces).</span>
+                    <span>{(newEvent.description || '').length} caractères</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Instant Mobile Push Option */}
@@ -1856,15 +2056,9 @@ export function AdminEventsManager({
                 <span className="font-semibold text-xs">{previewModalEvent.location || 'Valencia, Spain'}</span>
               </div>
 
-              {/* Description Display */}
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
-                <h5 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                  Description
-                </h5>
-                <div className="text-xs leading-relaxed text-slate-700">
-                  {renderFormattedContent(previewModalEvent.description || 'No description provided.', "font-bold text-slate-900 bg-white/80 px-1 rounded")}
-                </div>
+              {/* Event Description Content */}
+              <div className="p-4 sm:p-5 bg-slate-50/80 rounded-2xl border border-slate-100 text-xs sm:text-sm leading-relaxed text-slate-700 space-y-2">
+                {renderFormattedContent(cleanDuplicateEmojis(previewModalEvent.description || 'No description provided.'))}
               </div>
             </div>
 

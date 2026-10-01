@@ -565,7 +565,68 @@ const getQualityConfig = (name: string) => {
 function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPlain?: boolean }) {
   if (!children) return null;
 
-  // Standard Markdown for articles, events, and guides with full emoji and header support
+  // If this text contains structured event sections, render them with themed cards and friendly emojis
+  const parsed = parseDescriptionSections(children);
+
+  if (!isPlain && parsed.hasRealSections) {
+    return (
+      <div className="space-y-4 text-xs sm:text-sm text-slate-700 not-italic">
+        {parsed.expect && (
+          <div className="space-y-1.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-brand-blue text-xs uppercase tracking-wider">
+              <span>✨ What to expect</span>
+            </div>
+            <div className="leading-relaxed text-slate-700 font-normal">
+              {renderFormattedContent(parsed.expect, "font-bold text-slate-950")}
+            </div>
+          </div>
+        )}
+
+        {parsed.perfectFor && (
+          <div className="space-y-1.5 bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs uppercase tracking-wider">
+              <span>🎯 Perfect for</span>
+            </div>
+            <div className="space-y-1.5 leading-relaxed text-emerald-955 font-normal">
+              {parsed.perfectFor.split('\n').map(line => line.trim()).filter(Boolean).map((line, idx) => {
+                const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
+                return (
+                  <div key={idx} className="flex items-start gap-2">
+                    <span className="text-emerald-600 font-extrabold mt-0.5">•</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-bold text-emerald-950")}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {parsed.goodToKnow && (
+          <div className="space-y-1.5 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs uppercase tracking-wider">
+              <span>💡 Good to know</span>
+            </div>
+            <div className="leading-relaxed text-amber-955 font-normal">
+              {renderFormattedContent(parsed.goodToKnow, "font-bold text-amber-950")}
+            </div>
+          </div>
+        )}
+
+        {parsed.moreInfo && (
+          <div className="space-y-1.5 bg-sky-50/60 p-4 rounded-2xl border border-sky-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-bold text-sky-900 text-xs uppercase tracking-wider">
+              <span>🔗 More info</span>
+            </div>
+            <div className="leading-relaxed text-sky-955 font-normal">
+              {renderFormattedContent(parsed.moreInfo, "font-bold text-sky-950")}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Standard Markdown for articles and guides with full emoji and header support
   const cleanText = children.replace(/\r\n/g, '\n');
   const lines = cleanText.split('\n');
 
@@ -593,12 +654,11 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
         }
 
         // List items
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ')) {
-          const content = trimmed.replace(/^[-*•]\s*/, '');
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
           return (
-            <div key={idx} className="flex gap-2.5 pl-2 items-start">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 shrink-0" />
-              <div className="flex-1 text-slate-700">{parseInlineMarkdown(content)}</div>
+            <div key={idx} className="flex gap-2.5 pl-3 items-start">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5 shrink-0" />
+              <div className="flex-1 text-slate-700">{parseInlineMarkdown(trimmed.substring(2))}</div>
             </div>
           );
         }

@@ -714,9 +714,9 @@ TICKETING & PURCHASE URL DIRECTIVE (CRITICAL):
   * "is_free": false
   * "price": precise ticket price or range, e.g. "From 15€", "25€ - 65€", "55€ per person"
   * "ticket_url": direct official ticketing website URL (e.g. lesarts.com, feverup.com, ivam.es, teatrolympia.com, entradas.com, ticketmaster.es, venue booking page)
-  * INSIDE the "description" under "**💡 Good to know (tips)**", ALWAYS include:
+  * INSIDE the "description" under "### 💡 Good to know", ALWAYS include:
     - 🎟️ **Tickets & Pricing**: **[price]** — [Buy Official Tickets]([ticket_url])
-  * INSIDE the "description" under "**🔗 More information**", ALWAYS include:
+  * INSIDE the "description" under "### 🔗 More info", ALWAYS include:
     - 🎟️ **Official Ticket Purchase**: [Buy Tickets / Book Online]([ticket_url])
 - For free events:
   * "is_free": true
@@ -735,32 +735,29 @@ FOR EACH REAL EVENT FOUND:
 - is_free: Boolean (true if 100% free admission, false if paid)
 - price: Formatted price string (e.g. "Free", "From 20€", "35€")
 - ticket_url: Official ticketing or booking URL if paid, or registration URL
-- description: Comprehensive factual Markdown summary generously populated with vibrant, friendly, relevant emojis INSIDE every section's content (e.g., ✨ 🎭 🎶 🍷 🎨 📍 💡 👥 🎟️ 🌟 🏛️ 🥘 🕒 🚇 💶 🤝) to make reading engaging and visual.
-  BOLD HIGHLIGHTING DIRECTIVE: Put key terms, artist names, show titles, venue highlights, ticket prices, and important keywords in **bold** text (e.g., **Palau de les Arts**, **25€ to 75€**, **Verdi Requiem**).
-  Strictly format into these FOUR structured sections, ensuring the bullet points and content of EVERY section begin with contextual emojis:
+- description: A clear, engaging, and structured Markdown description formatted STRICTLY into these 4 canonical sections (using these exact headers):
 
-  **✨ What can you expect?**
-  [Factual explanation of highlights with **bold** key terms and bullet points featuring themed emojis, e.g.:
-  - 🎨 **Main Exhibition**: showcasing contemporary works...
-  - 🎶 **Live Performance**: acoustic set by...]
+### ✨ What to expect
+[2-3 engaging paragraphs describing the atmosphere, artists, program highlights, activities, and experience. Use natural, varied emojis and **bold** formatting for important names, artists, and highlights.]
 
-  **🎯 Perfect for**
-  [Target audience with friendly emojis and **bold** keywords, e.g.:
-  - 👥 **Art & Culture Lovers**: seeking immersive experiences
-  - 👨‍👩‍👧 **Families with Kids**: interactive daylight activities
-  - 🍷 **Expats & Socializers**: meeting new people in Valencia]
+### 🎯 Perfect for
+- 🌍 [Target audience 1, e.g. Expats, newcomers, international residents in Valencia]
+- 👥 [Target audience 2, e.g. Culture seekers, families, music enthusiasts]
+- ✨ [Target audience 3, e.g. Anyone looking for a memorable evening in Valencia]
 
-  **💡 Good to know (tips)**
-  [Practical tips with helpful emojis and **bold** info, e.g.:
-  - 🎟️ **Tickets & Pricing**: from 15€ — [Buy Official Tickets](ticket_url)
-  - ⏰ **Doors Open**: 30 minutes before showtime
-  - 🚇 **Metro Access**: Line 3 to Colón station
-  - 🅿️ **Parking**: available nearby]
+### 💡 Good to know
+- 🎟️ **Tickets & Admission**: [Exact price or Free] — [Buy Official Tickets]([ticket_url]) (if paid)
+- 📍 **Venue & Location**: [Venue name, address, and directions]
+- ⏰ **Schedule & Timing**: [Doors open, start time, duration]
+- 🚇 **Public Transport & Access**: [Metro stations, bus lines, or parking tips]
 
-  **🔗 More information**
-  [Official venue website notes, ticketing website links, and organizer details with 🔗 Markdown links and 🌐 official websites, e.g.:
-  - 🎟️ **Official Ticket Purchase**: [Buy Tickets / Book Online](ticket_url)
-  - 🌐 **Venue Website**: [lesarts.com](https://www.lesarts.com)]
+### 🔗 More info
+- 🌐 **Official Website**: [Venue / Organizer Official Page]([sources url or official website])
+- 🎟️ **Ticket Purchase / RSVP**: [Book Online]([ticket_url]) (if applicable)
+
+CRITICAL EMOJI & FORMATTING DIRECTIVE:
+- NEVER output duplicate or double emojis (e.g. NEVER write "🎶 🎶", "🎟️ 🎟️", or "✨ ✨"). Use each emoji at most once per line/item.
+- Always cleanly divide the content into the 4 sections above so each piece of information is placed in its dedicated box.
 - coordinates: Estimated GPS coordinates { lat: number, lng: number } in Valencia region
 - sources: List of 1-3 official website URLs and verified search source links for this event (e.g. { "title": "Official Venue Website", "url": "https://www.lesarts.com" })
 - verified_real: true`;
@@ -920,7 +917,7 @@ FOR EACH REAL EVENT FOUND:
             is_free: false,
             price: "From 18€",
             ticket_url: "https://www.palaudelamusica.com",
-            description: "**✨ What can you expect?**\n- 🎶 **Live Jazz Performances**: top international artists and local Spanish jazz ensembles.\n- 🎷 **Open-Air Jam Sessions**: vibrant evening gatherings around the Palau gardens.\n\n**🎯 Perfect for**\n- 👥 **Music Lovers**: seeking world-class acoustic performances.\n- 🌍 **Expats & Locals**: enjoying cultural nights in Valencia.\n\n**💡 Good to know (tips)**\n- 🎟️ **Tickets & Pricing**: from 18€ — [Buy Official Tickets](https://www.palaudelamusica.com)\n- ⏰ **Doors Open**: 45 minutes before concert time.\n\n**🔗 More information**\n- 🎟️ **Official Ticket Purchase**: [Buy Tickets / Book Online](https://www.palaudelamusica.com)",
+            description: "- 🎶 **Live Jazz Performances**: top international artists and local Spanish jazz ensembles.\n- 🎷 **Open-Air Jam Sessions**: vibrant evening gatherings around the Palau gardens.\n- 👥 **Atmosphere**: ideal for music lovers, expats, and locals enjoying cultural nights in Valencia.\n- 🎟️ **Tickets & Pricing**: from 18€ — [Buy Official Tickets](https://www.palaudelamusica.com)\n- ⏰ **Doors Open**: 45 minutes before concert time.",
             coordinates: { lat: 39.4678, lng: -0.3635 },
             verified_real: true,
             sources: [{ title: "Palau de la Música Official", url: "https://www.palaudelamusica.com" }]
@@ -936,7 +933,7 @@ FOR EACH REAL EVENT FOUND:
             is_free: false,
             price: "6€ (Free on Sundays)",
             ticket_url: "https://www.ivam.es",
-            description: "**✨ What can you expect?**\n- 🎨 **Modern Masterpieces**: groundbreaking contemporary installations and sculpture.\n- 🏛️ **Guided Tours**: expert curator-led tours in Spanish and English.\n\n**🎯 Perfect for**\n- 👥 **Art Enthusiasts**: discovering avant-garde creators.\n- 🌍 **International Visitors**: multilingual audio guides available.\n\n**💡 Good to know (tips)**\n- 🎟️ **Tickets & Pricing**: 6€ general admission — [Buy Official Tickets](https://www.ivam.es)\n- 🗓️ **Free Entry**: every Sunday from 15:00.\n\n**🔗 More information**\n- 🎟️ **Official Ticket Purchase**: [Buy Tickets / Book Online](https://www.ivam.es)",
+            description: "- 🎨 **Modern Masterpieces**: groundbreaking contemporary installations and sculpture.\n- 🏛️ **Guided Tours**: expert curator-led tours in Spanish and English.\n- 🌍 **International Visitors**: multilingual audio guides available.\n- 🎟️ **Tickets & Pricing**: 6€ general admission — [Buy Official Tickets](https://www.ivam.es)\n- 🗓️ **Free Entry**: every Sunday from 15:00.",
             coordinates: { lat: 39.4754, lng: -0.3835 },
             verified_real: true,
             sources: [{ title: "IVAM Official Website", url: "https://www.ivam.es" }]
@@ -952,7 +949,7 @@ FOR EACH REAL EVENT FOUND:
             is_free: false,
             price: "35€ per person",
             ticket_url: "https://www.feverup.com",
-            description: "**✨ What can you expect?**\n- 🍷 **Wine Tasting**: selection of Valencian DO wines paired with artisan tapas.\n- 👨‍🍳 **Chef Masterclass**: live paella and local delicacy demonstrations.\n\n**🎯 Perfect for**\n- 🍷 **Foodies & Expats**: exploring Valencian culinary traditions.\n- 🤝 **Socializers**: meeting new friends in the trendy Ruzafa district.\n\n**💡 Good to know (tips)**\n- 🎟️ **Tickets & Pricing**: 35€ inclusive — [Buy Official Tickets](https://www.feverup.com)\n- ⏰ **Duration**: approx. 2.5 hours.\n\n**🔗 More information**\n- 🎟️ **Official Ticket Purchase**: [Buy Tickets / Book Online](https://www.feverup.com)",
+            description: "- 🍷 **Wine Tasting**: selection of Valencian DO wines paired with artisan tapas.\n- 👨‍🍳 **Chef Masterclass**: live paella and local delicacy demonstrations.\n- 🤝 **Socializers**: meet new friends in the trendy Ruzafa district.\n- 🎟️ **Tickets & Pricing**: 35€ inclusive — [Buy Official Tickets](https://www.feverup.com)\n- ⏰ **Duration**: approx. 2.5 hours.",
             coordinates: { lat: 39.4623, lng: -0.3751 },
             verified_real: true,
             sources: [{ title: "Fever Valencia Events", url: "https://www.feverup.com" }]
@@ -968,7 +965,7 @@ FOR EACH REAL EVENT FOUND:
             is_free: true,
             price: "Free",
             ticket_url: null,
-            description: "**✨ What can you expect?**\n- 🏃 **5K & 10K Group Run**: relaxed pace through Turia riverbed gardens.\n- 🤝 **Social Drinks**: post-run refreshments at a nearby terrace.\n\n**🎯 Perfect for**\n- 🌍 **Expats & Newcomers**: integrating into Valencia sports community.\n- 👟 **Fitness Enthusiasts**: staying active in scenic surroundings.\n\n**💡 Good to know (tips)**\n- 🎟️ **Admission**: 100% free, no registration required.\n- 💧 **Bring Water**: hydration stations at midpoint.\n\n**🔗 More information**\n- 🌐 **Community Hub**: [Valencia Runners Club](https://www.valenciarunners.com)",
+            description: "- 🏃 **5K & 10K Group Run**: relaxed pace through Turia riverbed gardens.\n- 🤝 **Social Drinks**: post-run refreshments at a nearby terrace.\n- 🌍 **Expats & Newcomers**: integrate into the Valencia sports and international community.\n- 🎟️ **Admission**: 100% free, no registration required.\n- 💧 **Bring Water**: hydration stations at midpoint.",
             coordinates: { lat: 39.4719, lng: -0.3712 },
             verified_real: true,
             sources: [{ title: "Valencia Runners Club", url: "https://www.valenciarunners.com" }]
@@ -1054,84 +1051,26 @@ FOR EACH REAL EVENT FOUND:
         return false;
       };
 
-      const enrichEventDescriptionWithEmojis = (rawDesc: string): string => {
+      const cleanEventDescription = (rawDesc: string): string => {
         if (!rawDesc) return "";
         let desc = rawDesc;
-        desc = desc.replace(/\*\*(?:[✨\s]*)?What can you expect\?\*\*/gi, "**✨ What can you expect?**");
-        desc = desc.replace(/\*\*(?:[🎯\s]*)?Perfect for\*\*/gi, "**🎯 Perfect for**");
-        desc = desc.replace(/\*\*(?:[💡\s]*)?Good to know \(tips\)\*\*/gi, "**💡 Good to know (tips)**");
-        desc = desc.replace(/\*\*(?:[🔗\s]*)?More information\*\*/gi, "**🔗 More information**");
-
-        const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
-        const sections = desc.split(/(\*\*.*?\*\*)/g);
-        let currentHeader = "";
-
-        const enrichedSections = sections.map((section) => {
-          if (section.startsWith("**") && section.endsWith("**")) {
-            currentHeader = section;
-            return section;
-          }
-          if (!section.trim()) return section;
-
-          const lines = section.split("\n");
-          const enrichedLines = lines.map((line) => {
-            const trimmed = line.trim();
-            if (!trimmed || emojiRegex.test(trimmed)) return line;
-
-            const bulletMatch = line.match(/^(\s*[-*•]\s*)(.*)$/);
-            const prefix = bulletMatch ? bulletMatch[1] : "";
-            const body = bulletMatch ? bulletMatch[2] : line;
-            const lower = body.toLowerCase();
-
-            let emoji = "✨";
-            if (currentHeader.includes("What can you expect")) {
-              if (/music|concert|jazz|song|band|singer|orchestra|dj|acoustic/i.test(lower)) emoji = "🎶";
-              else if (/art|paint|sculpture|exhibit|gallery|visual|museum|photo/i.test(lower)) emoji = "🎨";
-              else if (/theat|drama|stage|actor|play|comedy|performance/i.test(lower)) emoji = "🎭";
-              else if (/food|wine|tapas|gastro|tasting|beer|dinner|lunch|chef|culinary/i.test(lower)) emoji = "🍷";
-              else if (/dance|flamenco|ballet/i.test(lower)) emoji = "💃";
-              else if (/tech|digital|code|innovation|startup|ai|screen/i.test(lower)) emoji = "💻";
-              else if (/sport|run|match|race|fitness|yoga|marathon/i.test(lower)) emoji = "🏃";
-              else if (/workshop|class|learn|craft|talk|conference/i.test(lower)) emoji = "🛠️";
-              else if (/garden|outdoor|park|beach|terrace|sunset/i.test(lower)) emoji = "🌅";
-              else emoji = "✨";
-            } else if (currentHeader.includes("Perfect for")) {
-              if (/family|child|kid|parent|baby/i.test(lower)) emoji = "👨‍👩‍👧";
-              else if (/expat|international|newcomer|english|nomad|tourist/i.test(lower)) emoji = "🌍";
-              else if (/music|concert|live music/i.test(lower)) emoji = "🎶";
-              else if (/art|design|creative/i.test(lower)) emoji = "🎨";
-              else if (/food|wine|tasting|foodie/i.test(lower)) emoji = "🍷";
-              else if (/couple|date|romantic/i.test(lower)) emoji = "💑";
-              else if (/student|youth|teen/i.test(lower)) emoji = "🎓";
-              else if (/sport|runner|active|athletic/i.test(lower)) emoji = "👟";
-              else emoji = "👥";
-            } else if (currentHeader.includes("Good to know")) {
-              if (/ticket|price|fee|cost|admission|free|gratis|entry|€|euro/i.test(lower)) emoji = "🎟️";
-              else if (/metro|bus|transport|train|tram|station|bike|valenbisi/i.test(lower)) emoji = "🚇";
-              else if (/time|hour|door|schedule|start|duration|arrive|early/i.test(lower)) emoji = "⏰";
-              else if (/park|car|garage|vehicle/i.test(lower)) emoji = "🅿️";
-              else if (/wheelchair|access|reduced mobility|disabilit/i.test(lower)) emoji = "♿";
-              else if (/dress|wear|clothes|jacket/i.test(lower)) emoji = "👔";
-              else if (/language|english|spanish|valencian|audio/i.test(lower)) emoji = "🗣️";
-              else if (/weather|rain|sun|outdoor|indoor/i.test(lower)) emoji = "☀️";
-              else emoji = "💡";
-            } else if (currentHeader.includes("More information")) {
-              if (/ticket|book|buy|reserve|entry/i.test(lower)) emoji = "🎟️";
-              else if (/site|web|http|url|official|link|page/i.test(lower)) emoji = "🌐";
-              else if (/phone|call|contact|email|whatsapp/i.test(lower)) emoji = "📱";
-              else if (/location|address|venue|map|google/i.test(lower)) emoji = "📍";
-              else emoji = "🔗";
-            }
-
-            if (bulletMatch) {
-              return `${prefix}${emoji} ${body}`;
-            } else {
-              return `${emoji} ${line}`;
-            }
-          });
-          return enrichedLines.join("\n");
-        });
-        return enrichedSections.join("");
+        // 1. Remove repeated consecutive emojis (supporting compound emojis & variation selectors \uFE0F)
+        desc = desc.replace(/([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]*\1)+/gu, '$1');
+        // 2. Remove duplicate emojis at bullet point starts (e.g. "- 🎟️ 🎟️", "• 🎶 🎶")
+        desc = desc.replace(/^([ \t]*[-*•]\s*)([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]+\2)+/gmu, '$1$2');
+        // 3. Remove duplicate emojis at line starts (e.g. "🎶 🎶 Jazz night")
+        desc = desc.replace(/^([ \t]*)([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]+\2)+/gmu, '$1$2');
+        // 4. Clean decorative sparkle + emoji at start of bullets (e.g. "• ✨ 🎶" -> "• 🎶")
+        desc = desc.replace(/^([ \t]*[-*•]\s*)✨\s+([\p{Extended_Pictographic}\u2600-\u27BF])/gmu, '$1$2');
+        // 5. Clean header duplicate sparkles (e.g. "### ✨ ✨ What to expect" -> "### ✨ What to expect")
+        desc = desc.replace(/^(#{1,6}\s*)✨\s+✨/gmu, '$1✨');
+        // 6. Clean double colons
+        desc = desc.replace(/:\s*:/g, ':');
+        // 7. Clean unwanted isolated trailing sparkles
+        desc = desc.replace(/\s+✨\s*(?=[.:,\n]|$)/g, ' ');
+        // 8. Consolidate extra blank lines
+        desc = desc.replace(/\n{3,}/g, '\n\n');
+        return desc.trim();
       };
 
       const formattedEvents = rawEvents.map((ev: any, idx: number) => {
@@ -1172,7 +1111,7 @@ FOR EACH REAL EVENT FOUND:
           location: ev.location || "Valencia, Spain",
           category: ev.category || "Culture",
           image: (ev.image && ev.image.startsWith('http')) ? ev.image : fallbackImg,
-          description: (ev.description || "").trim(),
+          description: cleanEventDescription(ev.description || ""),
           coordinates: ev.coordinates && ev.coordinates.lat ? ev.coordinates : { lat: 39.4699, lng: -0.3763 },
           verified_real: true,
           ticket_url: ticketUrl || null,
