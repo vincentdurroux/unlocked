@@ -98,6 +98,27 @@ function isQuotaOrRateLimitError(error: any): boolean {
   );
 }
 
+function extractJsonFromModelResponse(rawText: string): any {
+  if (!rawText) return {};
+  try {
+    return JSON.parse(rawText);
+  } catch (_) {}
+  const match = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (match) {
+    try {
+      return JSON.parse(match[1]);
+    } catch (_) {}
+  }
+  const firstBrace = rawText.indexOf('{');
+  const lastBrace = rawText.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(rawText.slice(firstBrace, lastBrace + 1));
+    } catch (_) {}
+  }
+  return {};
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -746,8 +767,8 @@ FOR EACH REAL EVENT FOUND:
 
       const ai = getAiClient();
 
-      // Candidate models for search: primary model with Google Search grounding, followed by resilient fallbacks
-      const defaultChain = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
+      // Candidate models for search: gemini-2.5-flash-lite has unrestricted search grounding on free tier, followed by Gemini 3 series
+      const defaultChain = ["gemini-2.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
       const candidateModels: string[] = [];
       if (preferredModel && preferredModel !== "auto" && typeof preferredModel === "string") {
         candidateModels.push(preferredModel);
@@ -768,71 +789,82 @@ FOR EACH REAL EVENT FOUND:
         const currentModel = candidateModels[i];
         try {
           console.log(`[api/search-events] Attempting search with model: ${currentModel} (attempt ${i + 1}/${candidateModels.length})`);
-          response = await ai.models.generateContent({
-            model: currentModel,
-            contents: `Perform a deep web search for REAL upcoming events in ${searchLocation} for target month/timeframe "${targetMonth}" matching request: "${query}". For every paid event, ensure you find and include the official ticket purchase URL and price details in the description and ticket_url. Return the most famous, popular, or relevant verified events.`,
-            config: {
-              tools: [
-                { googleSearch: {} }
-              ],
-              systemInstruction: sysInstruction,
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  summary: { type: Type.STRING, description: "Detailed factual summary of the search results in English" },
-                  events: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        title: { type: Type.STRING },
-                        start_date: { type: Type.STRING },
-                        end_date: { type: Type.STRING },
-                        start_time: { type: Type.STRING },
-                        end_time: { type: Type.STRING },
-                        location: { type: Type.STRING },
-                        category: { type: Type.STRING },
-                        image: { type: Type.STRING },
-                        is_free: { type: Type.BOOLEAN },
-                        price: { type: Type.STRING },
-                        ticket_url: { type: Type.STRING },
-                        description: { type: Type.STRING },
-                        coordinates: {
+          
+          const is25Model = currentModel.includes("2.5");
+          const configObj: any = {
+            tools: [
+              { googleSearch: {} }
+            ],
+            systemInstruction: sysInstruction,
+            temperature: 0.1
+          };
+
+          if (!is25Model) {
+            configObj.responseMimeType = "application/json";
+            configObj.responseSchema = {
+              type: Type.OBJECT,
+              properties: {
+                summary: { type: Type.STRING, description: "Detailed factual summary of the search results in English" },
+                events: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      title: { type: Type.STRING },
+                      start_date: { type: Type.STRING },
+                      end_date: { type: Type.STRING },
+                      start_time: { type: Type.STRING },
+                      end_time: { type: Type.STRING },
+                      location: { type: Type.STRING },
+                      category: { type: Type.STRING },
+                      image: { type: Type.STRING },
+                      is_free: { type: Type.BOOLEAN },
+                      price: { type: Type.STRING },
+                      ticket_url: { type: Type.STRING },
+                      description: { type: Type.STRING },
+                      coordinates: {
+                        type: Type.OBJECT,
+                        properties: {
+                          lat: { type: Type.NUMBER },
+                          lng: { type: Type.NUMBER }
+                        },
+                        required: ["lat", "lng"]
+                      },
+                      sources: {
+                        type: Type.ARRAY,
+                        items: {
                           type: Type.OBJECT,
                           properties: {
-                            lat: { type: Type.NUMBER },
-                            lng: { type: Type.NUMBER }
+                            title: { type: Type.STRING },
+                            url: { type: Type.STRING }
                           },
-                          required: ["lat", "lng"]
-                        },
-                        sources: {
-                          type: Type.ARRAY,
-                          items: {
-                            type: Type.OBJECT,
-                            properties: {
-                              title: { type: Type.STRING },
-                              url: { type: Type.STRING }
-                            },
-                            required: ["title", "url"]
-                          }
-                        },
-                        verified_real: { type: Type.BOOLEAN }
+                          required: ["title", "url"]
+                        }
                       },
-                      required: ["title", "start_date", "location", "category", "description"]
-                    }
+                      verified_real: { type: Type.BOOLEAN }
+                    },
+                    required: ["title", "start_date", "location", "category", "description"]
                   }
-                },
-                required: ["events"]
+                }
               },
-              temperature: 0.1
-            }
+              required: ["events"]
+            };
+          }
+
+          const promptText = is25Model
+            ? `Perform a deep web search for REAL upcoming events in ${searchLocation} for target month/timeframe "${targetMonth}" matching request: "${query}". For every event, find the real dates, venue, ticket pricing, and official ticket booking URL. Return strictly a valid JSON object formatted as: {"summary": "...", "events": [{"title": "...", "start_date": "YYYY-MM-DD", "end_date": null, "start_time": "HH:MM", "location": "...", "category": "...", "description": "...", "ticket_url": "...", "price": "...", "is_free": false, "coordinates": {"lat": 39.4699, "lng": -0.3763}}]}. Output only the JSON object, with no conversational text.`
+            : `Perform a deep web search for REAL upcoming events in ${searchLocation} for target month/timeframe "${targetMonth}" matching request: "${query}". For every paid event, ensure you find and include the official ticket purchase URL and price details in the description and ticket_url. Return the most famous, popular, or relevant verified events.`;
+
+          response = await ai.models.generateContent({
+            model: currentModel,
+            contents: promptText,
+            config: configObj
           });
 
           usedModel = currentModel;
           if (i > 0) {
             fallbackTriggered = true;
-            fallbackReason = `Basculement automatique effectué car le modèle précédent a rencontré une limite ou un épuisement de quota (${candidateModels[i - 1]} → ${currentModel})`;
+            fallbackReason = `Basculement automatique effectué car le modèle précédent a rencontré une limite de quota ou d'indisponibilité (${candidateModels[i - 1]} → ${currentModel})`;
             console.log(`[api/search-events] Fallback succeeded with model: ${currentModel}`);
           }
           break; // Succeeded!
@@ -848,6 +880,29 @@ FOR EACH REAL EVENT FOUND:
             fallbackTriggered = true;
             continue;
           }
+        }
+      }
+
+      // If all live web-grounded models fail due to search quotas, attempt AI knowledge search without search tool
+      if (!response) {
+        console.warn("[api/search-events] All grounded search attempts hit quotas. Attempting fallback knowledge-based AI generation (without Search tool)...");
+        try {
+          response = await ai.models.generateContent({
+            model: "gemini-3.1-flash-lite",
+            contents: `Generate real upcoming events, festivals, and concerts in ${searchLocation} for "${targetMonth}" matching request: "${query}". Return strictly a JSON object with a summary and an array of events with title, start_date (YYYY-MM-DD), location, category, description, and ticket_url.`,
+            config: {
+              systemInstruction: sysInstruction,
+              responseMimeType: "application/json",
+              temperature: 0.2
+            }
+          });
+          if (response?.text) {
+            usedModel = "gemini-3.1-flash-lite (knowledge-base)";
+            fallbackTriggered = true;
+            fallbackReason = "Recherche effectuée via la base de connaissances IA (les quotas Google Search Grounding étant temporairement atteints sur l'API externe).";
+          }
+        } catch (kbErr: any) {
+          console.warn("[api/search-events] Knowledge-based AI fallback also failed:", kbErr?.message);
         }
       }
 
@@ -951,7 +1006,7 @@ FOR EACH REAL EVENT FOUND:
         });
       }
 
-      const parsed = JSON.parse(response.text || "{}");
+      const parsed = extractJsonFromModelResponse(response.text || "{}");
       const rawEvents = Array.isArray(parsed.events) ? parsed.events : [];
 
       // Extract search grounding metadata sources from Gemini response
@@ -1117,7 +1172,7 @@ FOR EACH REAL EVENT FOUND:
           location: ev.location || "Valencia, Spain",
           category: ev.category || "Culture",
           image: (ev.image && ev.image.startsWith('http')) ? ev.image : fallbackImg,
-          description: enrichEventDescriptionWithEmojis(ev.description || ""),
+          description: (ev.description || "").trim(),
           coordinates: ev.coordinates && ev.coordinates.lat ? ev.coordinates : { lat: 39.4699, lng: -0.3763 },
           verified_real: true,
           ticket_url: ticketUrl || null,

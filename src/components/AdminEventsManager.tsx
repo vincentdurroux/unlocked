@@ -42,7 +42,6 @@ import { storageService } from '../lib/storage';
 import { compressImage } from '../services/imageService';
 import { cn } from '../lib/utils';
 import {
-  parseDescriptionSections,
   renderFormattedContent,
   getCategoryWithEmoji,
   enrichSectionTextWithEmojis
@@ -186,60 +185,12 @@ export function AdminEventsManager({
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Editor State
-  const [editorDescriptionMode, setEditorDescriptionMode] = useState<'structured' | 'raw'>('structured');
-  const [editExpect, setEditExpect] = useState('');
-  const [editPerfectFor, setEditPerfectFor] = useState('');
-  const [editGoodToKnow, setEditGoodToKnow] = useState('');
-  const [editMoreInfo, setEditMoreInfo] = useState('');
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showLivePreview, setShowLivePreview] = useState(false);
   const [sendEventPush, setSendEventPush] = useState(false);
   const [pushingEventId, setPushingEventId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const lastParsedDescription = useRef<string | null>(null);
-
-  // When opening edit mode, parse the 4 description sections
-  useEffect(() => {
-    if (activeTab === 'edit_event' || activeTab === 'add_event') {
-      const rawDesc = newEvent.description || '';
-      // If the description has changed from what we last parsed/synced, re-parse it
-      if (rawDesc !== lastParsedDescription.current) {
-        const parsed = parseDescriptionSections(rawDesc);
-        setEditExpect(parsed.expect || '');
-        setEditPerfectFor(parsed.perfectFor || '');
-        setEditGoodToKnow(parsed.goodToKnow || '');
-        setEditMoreInfo(parsed.moreInfo || '');
-        lastParsedDescription.current = rawDesc;
-      }
-    }
-  }, [activeTab, editingEventId, newEvent.description, newEvent.title]);
-
-  // Sync structured sections back to newEvent.description
-  const syncStructuredToDescription = (
-    expect: string,
-    perfectFor: string,
-    goodToKnow: string,
-    moreInfo: string
-  ) => {
-    const parts: string[] = [];
-    if (expect.trim()) {
-      parts.push(`### 1. What can you expect?\n${expect.trim()}`);
-    }
-    if (perfectFor.trim()) {
-      parts.push(`### 2. Perfect for\n${perfectFor.trim()}`);
-    }
-    if (goodToKnow.trim()) {
-      parts.push(`### 3. Good to know (tips)\n${goodToKnow.trim()}`);
-    }
-    if (moreInfo.trim()) {
-      parts.push(`### 4. More information\n${moreInfo.trim()}`);
-    }
-    const combined = parts.join('\n\n');
-    lastParsedDescription.current = combined; // Mark as synced so useEffect doesn't re-parse
-    setNewEvent((prev: any) => ({ ...prev, description: combined }));
-  };
 
   // Helper to parse date strings for upcoming / past filtering
   const getEventTimestamp = (event: AdminEventItem): number => {
@@ -794,35 +745,15 @@ export function AdminEventsManager({
               {/* Formatted Content Preview */}
               <div className="md:col-span-2 space-y-3 bg-white/5 p-4 rounded-2xl border border-white/10 max-h-96 overflow-y-auto">
                 <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider block">
-                  Article Sections Rendering:
+                  Event Description Preview:
                 </span>
                 <div className="space-y-3 text-xs leading-relaxed text-slate-200">
-                  {editExpect && (
-                    <div className="bg-white/10 p-3 rounded-xl border border-white/5">
-                      <p className="font-bold text-sky-300 mb-1">✨ What can you expect?</p>
-                      {renderFormattedContent(editExpect, "font-bold text-sky-200")}
+                  {newEvent.description ? (
+                    <div className="bg-white/10 p-3.5 rounded-xl border border-white/5">
+                      {renderFormattedContent(newEvent.description, "font-bold text-emerald-200")}
                     </div>
-                  )}
-                  {editPerfectFor && (
-                    <div className="bg-white/10 p-3 rounded-xl border border-white/5">
-                      <p className="font-bold text-emerald-300 mb-1">🎯 Perfect for</p>
-                      {renderFormattedContent(editPerfectFor, "font-bold text-emerald-200")}
-                    </div>
-                  )}
-                  {editGoodToKnow && (
-                    <div className="bg-white/10 p-3 rounded-xl border border-white/5">
-                      <p className="font-bold text-amber-300 mb-1">💡 Good to know (tips)</p>
-                      {renderFormattedContent(editGoodToKnow, "font-bold text-amber-200")}
-                    </div>
-                  )}
-                  {editMoreInfo && (
-                    <div className="bg-white/10 p-3 rounded-xl border border-white/5">
-                      <p className="font-bold text-teal-300 mb-1">🔗 More information</p>
-                      {renderFormattedContent(editMoreInfo, "font-bold text-teal-200")}
-                    </div>
-                  )}
-                  {!editExpect && !editPerfectFor && !editGoodToKnow && !editMoreInfo && (
-                    <p className="text-slate-400 italic text-xs">No section content added yet.</p>
+                  ) : (
+                    <p className="text-slate-400 italic text-xs">No description content added yet.</p>
                   )}
                 </div>
               </div>
@@ -1210,192 +1141,37 @@ export function AdminEventsManager({
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h4 className="text-sm font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-emerald-500" />
-                  3. Event Content & Sections
+                  3. Event Description
                 </h4>
-                <div className="flex bg-slate-100 p-0.5 rounded-xl text-[10px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setEditorDescriptionMode('structured')}
-                    className={cn(
-                      "px-2.5 py-1 rounded-lg transition-colors cursor-pointer",
-                      editorDescriptionMode === 'structured' ? "bg-white text-emerald-700 shadow-2xs font-extrabold" : "text-slate-500"
-                    )}
-                  >
-                    Structured (4 Tabs)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditorDescriptionMode('raw')}
-                    className={cn(
-                      "px-2.5 py-1 rounded-lg transition-colors cursor-pointer",
-                      editorDescriptionMode === 'raw' ? "bg-white text-emerald-700 shadow-2xs font-extrabold" : "text-slate-500"
-                    )}
-                  >
-                    Raw Markdown
-                  </button>
-                </div>
               </div>
 
-              {editorDescriptionMode === 'structured' ? (
-                <div className="space-y-4">
-                  {/* Section 1 */}
-                  <div className="space-y-1.5 bg-sky-50/40 p-3 rounded-2xl border border-sky-100">
-                    <div className="flex items-center justify-between gap-1">
-                      <label className="text-[11px] font-extrabold text-brand-blue uppercase">
-                        1. What can you expect?
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap gap-1 bg-white/70 p-1 rounded-lg border border-sky-100/60">
-                      {['✨', '🎨', '🎶', '🎭', '🍷', '🥘', '🌟', '💃', '💻', '🏃', '🛠️'].map(emoji => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => {
-                            const updated = editExpect ? `${editExpect} ${emoji} ` : `${emoji} `;
-                            setEditExpect(updated);
-                            syncStructuredToDescription(updated, editPerfectFor, editGoodToKnow, editMoreInfo);
-                          }}
-                          className="px-1 hover:bg-slate-100 rounded text-xs cursor-pointer"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                    <textarea
-                      rows={3}
-                      value={editExpect}
-                      onChange={e => {
-                        setEditExpect(e.target.value);
-                        syncStructuredToDescription(e.target.value, editPerfectFor, editGoodToKnow, editMoreInfo);
+              <div className="space-y-3">
+                {/* Emoji quick insertion toolbar */}
+                <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 rounded-xl border border-slate-200/80">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Insert:</span>
+                  {['✨', '🎨', '🎶', '🎭', '🍷', '🥘', '🌟', '📍', '👥', '💡', '🎟️', '⏰', '🚇', '🅿️', '💶', '♿', '☀️', '📱', '🔗', '🌐'].map(emoji => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => {
+                        const current = newEvent.description || '';
+                        setNewEvent({ ...newEvent, description: current ? `${current} ${emoji} ` : `${emoji} ` });
                       }}
-                      placeholder="- 🎶 Main activities and highlights&#10;- 🍷 Key features of the experience&#10;- 🌟 Unique selling points"
-                      className="w-full bg-white border border-sky-200/60 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 resize-none"
-                    />
-                  </div>
-
-                  {/* Section 2 */}
-                  <div className="space-y-1.5 bg-emerald-50/40 p-3 rounded-2xl border border-emerald-100">
-                    <div className="flex items-center justify-between gap-1">
-                      <label className="text-[11px] font-extrabold text-emerald-800 uppercase">
-                        2. Perfect for
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap gap-1 bg-white/70 p-1 rounded-lg border border-emerald-100/60">
-                      {['👥', '🎯', '👨‍👩‍👧', '🌍', '🍷', '🎶', '🎨', '💑', '🎓', '🤝'].map(emoji => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => {
-                            const updated = editPerfectFor ? `${editPerfectFor} ${emoji} ` : `${emoji} `;
-                            setEditPerfectFor(updated);
-                            syncStructuredToDescription(editExpect, updated, editGoodToKnow, editMoreInfo);
-                          }}
-                          className="px-1 hover:bg-emerald-100/50 rounded text-xs cursor-pointer"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                    <textarea
-                      rows={2}
-                      value={editPerfectFor}
-                      onChange={e => {
-                        setEditPerfectFor(e.target.value);
-                        syncStructuredToDescription(editExpect, e.target.value, editGoodToKnow, editMoreInfo);
-                      }}
-                      placeholder="- 👥 Target audience and community groups&#10;- 🎯 People interested in this type of activity"
-                      className="w-full bg-white border border-emerald-200/60 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
-                    />
-                  </div>
-
-                  {/* Section 3 */}
-                  <div className="space-y-1.5 bg-amber-50/40 p-3 rounded-2xl border border-amber-100">
-                    <div className="flex items-center justify-between gap-1">
-                      <label className="text-[11px] font-extrabold text-amber-800 uppercase">
-                        3. Good to know (tips)
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap gap-1 bg-white/70 p-1 rounded-lg border border-amber-100">
-                      {['💡', '🎟️', '⏰', '🚇', '🅿️', '💶', '♿', '☀️', '📱'].map(emoji => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => {
-                            const updated = editGoodToKnow ? `${editGoodToKnow} ${emoji} ` : `${emoji} `;
-                            setEditGoodToKnow(updated);
-                            syncStructuredToDescription(editExpect, editPerfectFor, updated, editMoreInfo);
-                          }}
-                          className="px-1 hover:bg-amber-100/50 rounded text-xs cursor-pointer"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                    <textarea
-                      rows={2}
-                      value={editGoodToKnow}
-                      onChange={e => {
-                        setEditGoodToKnow(e.target.value);
-                        syncStructuredToDescription(editExpect, editPerfectFor, e.target.value, editMoreInfo);
-                      }}
-                      placeholder="- 🎟️ Early bird tickets available until Friday&#10;- 🚇 Metro Line 3 to Alameda"
-                      className="w-full bg-white border border-amber-200/60 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none"
-                    />
-                  </div>
-
-                  {/* Section 4 */}
-                  <div className="space-y-1.5 bg-teal-50/40 p-3 rounded-2xl border border-teal-100">
-                    <div className="flex items-center justify-between gap-1">
-                      <label className="text-[11px] font-extrabold text-teal-800 uppercase">
-                        4. More information (links & tickets)
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap gap-1 bg-white/70 p-1 rounded-lg border border-teal-100">
-                      {['🔗', '🌐', '🎟️', '📍', '📱', '📧', '📋', '⭐'].map(emoji => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => {
-                            const updated = editMoreInfo ? `${editMoreInfo} ${emoji} ` : `${emoji} `;
-                            setEditMoreInfo(updated);
-                            syncStructuredToDescription(editExpect, editPerfectFor, editGoodToKnow, updated);
-                          }}
-                          className="px-1 hover:bg-teal-100/50 rounded text-xs cursor-pointer"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                    <textarea
-                      rows={2}
-                      value={editMoreInfo}
-                      onChange={e => {
-                        setEditMoreInfo(e.target.value);
-                        syncStructuredToDescription(editExpect, editPerfectFor, editGoodToKnow, e.target.value);
-                      }}
-                      placeholder="- 🔗 Official Website: https://...&#10;- 🎟️ Tickets: https://..."
-                      className="w-full bg-white border border-teal-200/60 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 resize-none"
-                    />
-                  </div>
+                      className="px-1.5 py-1 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-lg text-xs font-semibold border border-slate-100 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <textarea
-                    rows={12}
-                    value={newEvent.description || ''}
-                    onChange={e => {
-                      setNewEvent({ ...newEvent, description: e.target.value });
-                      const parsed = parseDescriptionSections(e.target.value);
-                      setEditExpect(parsed.expect);
-                      setEditPerfectFor(parsed.perfectFor);
-                      setEditGoodToKnow(parsed.goodToKnow);
-                      setEditMoreInfo(parsed.moreInfo);
-                    }}
-                    placeholder="Raw Markdown content..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
-                  />
-                </div>
-              )}
+
+                <textarea
+                  rows={10}
+                  value={newEvent.description || ''}
+                  onChange={e => setNewEvent({ ...newEvent, description: e.target.value })}
+                  placeholder="Type your event description here (markdown formatting, emojis, bullet points - or •)..."
+                  className="w-full bg-slate-50/60 border border-slate-200 rounded-2xl p-4 text-xs font-medium text-slate-900 leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white resize-y transition-all"
+                />
+              </div>
             </div>
 
             {/* Instant Mobile Push Option */}
@@ -2080,72 +1856,16 @@ export function AdminEventsManager({
                 <span className="font-semibold text-xs">{previewModalEvent.location || 'Valencia, Spain'}</span>
               </div>
 
-              {/* Description Sections */}
-              {(() => {
-                const raw = previewModalEvent.description || '';
-                const { expect, perfectFor, goodToKnow, moreInfo } = parseDescriptionSections(raw);
-                const hasSections = Boolean(expect || perfectFor || goodToKnow || moreInfo);
-
-                if (!hasSections) {
-                  return (
-                    <div className="p-4 bg-slate-50 rounded-2xl">
-                      <p className="text-xs leading-relaxed text-slate-600 whitespace-pre-line">{raw || 'No description provided.'}</p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="space-y-4">
-                    {expect && (
-                      <div className="bg-sky-50/50 p-4 rounded-2xl border border-sky-100 space-y-1.5">
-                        <h5 className="font-bold text-brand-blue text-xs uppercase tracking-wider flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-sky-500" />
-                          1. What can you expect?
-                        </h5>
-                        <div className="text-xs leading-relaxed text-slate-700">
-                          {renderFormattedContent(expect, "font-bold text-slate-900 bg-white/80 px-1 rounded")}
-                        </div>
-                      </div>
-                    )}
-
-                    {perfectFor && (
-                      <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 space-y-1.5">
-                        <h5 className="font-bold text-emerald-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                          <Compass className="w-3.5 h-3.5 text-emerald-600" />
-                          2. Perfect for
-                        </h5>
-                        <div className="text-xs leading-relaxed text-slate-700">
-                          {renderFormattedContent(perfectFor, "font-bold text-slate-900 bg-white/80 px-1 rounded")}
-                        </div>
-                      </div>
-                    )}
-
-                    {goodToKnow && (
-                      <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-200/60 space-y-1.5">
-                        <h5 className="font-bold text-amber-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                          <Info className="w-3.5 h-3.5 text-amber-600" />
-                          3. Good to know (tips)
-                        </h5>
-                        <div className="text-xs leading-relaxed text-slate-700">
-                          {renderFormattedContent(goodToKnow, "font-bold text-slate-900 bg-white/80 px-1 rounded")}
-                        </div>
-                      </div>
-                    )}
-
-                    {moreInfo && (
-                      <div className="bg-teal-50/50 p-4 rounded-2xl border border-teal-100 space-y-1.5">
-                        <h5 className="font-bold text-teal-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                          <ExternalLink className="w-3.5 h-3.5 text-teal-600" />
-                          4. More information
-                        </h5>
-                        <div className="text-xs leading-relaxed text-slate-700">
-                          {renderFormattedContent(moreInfo, "font-bold text-slate-900 bg-white/80 px-1 rounded")}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {/* Description Display */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+                <h5 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  Description
+                </h5>
+                <div className="text-xs leading-relaxed text-slate-700">
+                  {renderFormattedContent(previewModalEvent.description || 'No description provided.', "font-bold text-slate-900 bg-white/80 px-1 rounded")}
+                </div>
+              </div>
             </div>
 
             {/* Modal Footer */}

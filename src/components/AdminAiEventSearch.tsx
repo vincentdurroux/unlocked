@@ -391,66 +391,6 @@ export function renderFormattedContent(text: string, defaultBoldClass = "font-ex
 export function SimpleMarkdown({ children }: { children: string }) {
   if (!children) return null;
 
-  const parsed = parseDescriptionSections(children);
-
-  if (parsed.hasRealSections) {
-    return (
-      <div className="space-y-3.5 text-xs sm:text-sm text-slate-700">
-        {parsed.expect && (
-          <div className="space-y-1.5 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-brand-blue text-xs uppercase tracking-wider">
-              <span>✨ What can you expect?</span>
-            </div>
-            <div className="leading-relaxed text-slate-700 font-normal">
-              {renderFormattedContent(parsed.expect, "font-bold text-slate-950")}
-            </div>
-          </div>
-        )}
-
-        {parsed.perfectFor && (
-          <div className="space-y-1.5 bg-emerald-50/60 p-3.5 rounded-2xl border border-emerald-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs uppercase tracking-wider">
-              <span>🎯 Perfect for</span>
-            </div>
-            <div className="space-y-1.5 leading-relaxed text-emerald-950 font-normal">
-              {parsed.perfectFor.split('\n').map(line => line.trim()).filter(Boolean).map((line, idx) => {
-                const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
-                return (
-                  <div key={idx} className="flex items-start gap-2">
-                    <span className="text-emerald-600 font-extrabold mt-0.5">•</span>
-                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-bold text-emerald-950")}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {parsed.goodToKnow && (
-          <div className="space-y-1.5 bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs uppercase tracking-wider">
-              <span>💡 Good to know (tips)</span>
-            </div>
-            <div className="leading-relaxed text-amber-950 font-normal">
-              {renderFormattedContent(parsed.goodToKnow, "font-bold text-amber-950")}
-            </div>
-          </div>
-        )}
-
-        {parsed.moreInfo && (
-          <div className="space-y-1.5 bg-sky-50/60 p-3.5 rounded-2xl border border-sky-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-sky-900 text-xs uppercase tracking-wider">
-              <span>🔗 More information</span>
-            </div>
-            <div className="leading-relaxed text-sky-950 font-normal">
-              {renderFormattedContent(parsed.moreInfo, "font-bold text-sky-950")}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-3 text-slate-700 leading-relaxed text-xs sm:text-sm">
       {renderFormattedContent(children, "font-bold text-slate-950")}
@@ -621,10 +561,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
   const [editIsFree, setEditIsFree] = useState(true);
   const [editLat, setEditLat] = useState('');
   const [editLng, setEditLng] = useState('');
-  const [editExpect, setEditExpect] = useState('');
-  const [editPerfectFor, setEditPerfectFor] = useState('');
-  const [editGoodToKnow, setEditGoodToKnow] = useState('');
-  const [editMoreInfo, setEditMoreInfo] = useState('');
+  const [editDescription, setEditDescription] = useState('');
 
   const fetchDbRepository = async () => {
     setIsLoadingRepository(true);
@@ -660,30 +597,16 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
     setEditIsFree(ev.is_free !== undefined ? ev.is_free : true);
     setEditLat(ev.coordinates?.lat ? String(ev.coordinates.lat) : '39.4699');
     setEditLng(ev.coordinates?.lng ? String(ev.coordinates.lng) : '-0.3763');
-
-    const parsed = parseDescriptionSections(ev.description || '');
-    setEditExpect(parsed.expect || '');
-    setEditPerfectFor(parsed.perfectFor || '');
-    setEditGoodToKnow(parsed.goodToKnow || '');
-    setEditMoreInfo(parsed.moreInfo || '');
+    setEditDescription(ev.description || '');
   };
 
   const closeEditModal = () => {
     setEditingEvent(null);
   };
 
-  const buildEditedDescription = () => {
-    const parts = [];
-    if (editExpect.trim()) parts.push(`### 1. What can you expect?\n${editExpect.trim()}`);
-    if (editPerfectFor.trim()) parts.push(`### 2. Perfect for\n${editPerfectFor.trim()}`);
-    if (editGoodToKnow.trim()) parts.push(`### 3. Good to know (tips)\n${editGoodToKnow.trim()}`);
-    if (editMoreInfo.trim()) parts.push(`### 4. More information\n${editMoreInfo.trim()}`);
-    return parts.join('\n\n');
-  };
-
   const handleSaveEditInMemory = () => {
     if (!editingEvent) return;
-    const newDescription = buildEditedDescription();
+    const newDescription = editDescription.trim();
     const pLat = parseFloat(editLat);
     const pLng = parseFloat(editLng);
     const coords = (!isNaN(pLat) && !isNaN(pLng)) ? { lat: pLat, lng: pLng } : editingEvent.coordinates;
@@ -721,7 +644,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
   const handleSaveAndPublish = async () => {
     if (!editingEvent) return;
-    const newDescription = buildEditedDescription();
+    const newDescription = editDescription.trim();
     const pLat = parseFloat(editLat);
     const pLng = parseFloat(editLng);
     const coords = (!isNaN(pLat) && !isNaN(pLng)) ? { lat: pLat, lng: pLng } : editingEvent.coordinates;
@@ -1285,13 +1208,16 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                           className="pl-3 pr-7 py-1.5 bg-white/10 hover:bg-white/15 focus:bg-white/20 text-white rounded-xl border border-white/15 focus:border-brand-blue focus:outline-none transition-all text-xs font-bold appearance-none cursor-pointer"
                         >
                           <option value="auto" className="bg-slate-900 text-white font-medium">
-                            ⚡ Auto-Failover (Gemini 3.8 Flash + Basculement auto si quota épuisé)
+                            ⚡ Auto-Failover (Multi-modèles résilient + Basculement auto si quota épuisé)
+                          </option>
+                          <option value="gemini-2.5-flash-lite" className="bg-slate-900 text-white font-medium">
+                            Gemini 2.5 Flash-Lite (Google Search Grounding illimité Free Tier)
+                          </option>
+                          <option value="gemini-3.1-flash-lite" className="bg-slate-900 text-white font-medium">
+                            Gemini 3.1 Flash-Lite (Rapide)
                           </option>
                           <option value="gemini-3.8-flash" className="bg-slate-900 text-white font-medium">
                             Gemini 3.8 Flash (Recherche approfondie)
-                          </option>
-                          <option value="gemini-3.1-flash-lite" className="bg-slate-900 text-white font-medium">
-                            Gemini 3.1 Flash-Lite (Quota très élevé / Rapide)
                           </option>
                           <option value="gemini-flash-latest" className="bg-slate-900 text-white font-medium">
                             Gemini Flash Latest
@@ -2537,125 +2463,46 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                   </div>
                 </div>
 
-                {/* Four Structured Description Sections */}
-                <div className="space-y-4 pt-2 border-t border-slate-100">
+                {/* Event Description */}
+                <div className="space-y-3 pt-2 border-t border-slate-100">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-brand-blue" />
                     <h4 className="font-bold text-slate-900 text-sm">
-                      Structured Description Sections
+                      Event Description
                     </h4>
                   </div>
 
-                  <div className="space-y-1.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="font-bold text-brand-blue text-xs uppercase tracking-wider">
-                        1. What can you expect?
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1 my-1 py-1 px-2 bg-white/70 rounded-lg border border-slate-100">
-                      <span className="text-[10px] font-semibold text-slate-400 mr-1">Insert:</span>
-                      {['✨', '🎨', '🎶', '🎭', '🍷', '🥘', '🌟', '📍', '💃', '💻', '🏃', '🛠️'].map(emoji => (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-50 rounded-xl border border-slate-200/80">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Insert:</span>
+                      {['✨', '🎨', '🎶', '🎭', '🍷', '🥘', '🌟', '📍', '👥', '💡', '🎟️', '⏰', '🚇', '🅿️', '💶', '♿', '☀️', '📱', '🔗', '🌐'].map(emoji => (
                         <button
                           key={emoji}
                           type="button"
-                          onClick={() => setEditExpect(prev => prev ? `${prev} ${emoji} ` : `${emoji} `)}
-                          className="px-1.5 py-0.5 hover:bg-slate-100 rounded text-xs transition-transform active:scale-125 cursor-pointer"
+                          onClick={() => setEditDescription(prev => prev ? `${prev} ${emoji} ` : `${emoji} `)}
+                          className="px-1.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold border border-slate-100 shadow-2xs transition-all active:scale-95 cursor-pointer"
                         >
                           {emoji}
                         </button>
                       ))}
                     </div>
-                    <textarea
-                      rows={3}
-                      value={editExpect}
-                      onChange={(e) => setEditExpect(e.target.value)}
-                      placeholder="Explain what happens at the show, exhibition, concert or workshop..."
-                      className="w-full p-3 bg-white rounded-xl border border-slate-200 text-xs font-medium leading-relaxed outline-none focus:border-brand-blue resize-y"
-                    />
-                  </div>
 
-                  <div className="space-y-1.5 bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="font-bold text-emerald-900 text-xs uppercase tracking-wider">
-                        2. Perfect for
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1 my-1 py-1 px-2 bg-white/70 rounded-lg border border-emerald-100/60">
-                      <span className="text-[10px] font-semibold text-emerald-700/60 mr-1">Insert:</span>
-                      {['👥', '🎯', '👨‍👩‍👧', '🌍', '🍷', '🎶', '🎨', '💑', '🎓', '🤝', '👟', '🏖️'].map(emoji => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => setEditPerfectFor(prev => prev ? `${prev} ${emoji} ` : `${emoji} `)}
-                          className="px-1.5 py-0.5 hover:bg-emerald-100/50 rounded text-xs transition-transform active:scale-125 cursor-pointer"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
                     <textarea
-                      rows={2}
-                      value={editPerfectFor}
-                      onChange={(e) => setEditPerfectFor(e.target.value)}
-                      placeholder="E.g., Art lovers, Expat families, Classical music enthusiasts..."
-                      className="w-full p-3 bg-white rounded-xl border border-emerald-200 text-xs font-medium leading-relaxed outline-none focus:border-emerald-500 resize-y"
+                      rows={8}
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      placeholder="Type your event description here (markdown formatting, emojis, bullet points - or •)..."
+                      className="w-full p-4 bg-slate-50/60 rounded-2xl border border-slate-200 text-xs font-medium leading-relaxed outline-none focus:border-brand-blue focus:bg-white resize-y transition-all"
                     />
-                  </div>
 
-                  <div className="space-y-1.5 bg-amber-50/60 p-4 rounded-2xl border border-amber-200/60">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="font-bold text-amber-900 text-xs uppercase tracking-wider">
-                        3. Good to know (tips)
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1 my-1 py-1 px-2 bg-white/70 rounded-lg border border-amber-100">
-                      <span className="text-[10px] font-semibold text-amber-800/60 mr-1">Insert:</span>
-                      {['💡', '🎟️', '⏰', '🚇', '🅿️', '💶', '♿', '☀️', '👔', '🗣️', '📱', '⚠️'].map(emoji => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => setEditGoodToKnow(prev => prev ? `${prev} ${emoji} ` : `${emoji} `)}
-                          className="px-1.5 py-0.5 hover:bg-amber-100/50 rounded text-xs transition-transform active:scale-125 cursor-pointer"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                    <textarea
-                      rows={2}
-                      value={editGoodToKnow}
-                      onChange={(e) => setEditGoodToKnow(e.target.value)}
-                      placeholder="Practical tips: ticket prices, doors open time, parking, Metro access, dress code..."
-                      className="w-full p-3 bg-white rounded-xl border border-amber-200 text-xs font-medium leading-relaxed outline-none focus:border-amber-500 resize-y"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5 bg-sky-50/50 p-4 rounded-2xl border border-sky-100">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="font-bold text-sky-900 text-xs uppercase tracking-wider">
-                        4. More information
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1 my-1 py-1 px-2 bg-white/70 rounded-lg border border-sky-100">
-                      <span className="text-[10px] font-semibold text-sky-800/60 mr-1">Insert:</span>
-                      {['🔗', '🌐', '🎟️', '📍', '📱', '📧', '📋', '⭐', '🤝'].map(emoji => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => setEditMoreInfo(prev => prev ? `${prev} ${emoji} ` : `${emoji} `)}
-                          className="px-1.5 py-0.5 hover:bg-sky-100/50 rounded text-xs transition-transform active:scale-125 cursor-pointer"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                    <textarea
-                      rows={2}
-                      value={editMoreInfo}
-                      onChange={(e) => setEditMoreInfo(e.target.value)}
-                      placeholder="Official website links, booking guidelines, or organizer notes..."
-                      className="w-full p-3 bg-white rounded-xl border border-sky-200 text-xs font-medium leading-relaxed outline-none focus:border-sky-500 resize-y"
-                    />
+                    {editDescription.trim() && (
+                      <div className="mt-2 p-3.5 bg-slate-50 rounded-xl border border-slate-200/70">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Formatted Preview:</span>
+                        <div className="text-xs text-slate-700 leading-relaxed">
+                          {renderFormattedContent(editDescription, "font-bold text-slate-950")}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

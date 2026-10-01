@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import Papa from 'papaparse';
 import { parseProfessionalCSV, rowToPro, detectColumnMappings, parseEventCSV, detectEventColumnMappings, rowToEvent } from './utils/csvParser';
 import { Logo } from './components/Logo';
@@ -565,68 +565,7 @@ const getQualityConfig = (name: string) => {
 function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPlain?: boolean }) {
   if (!children) return null;
 
-  // If this text contains structured event sections, render them with themed cards and friendly emojis
-  const parsed = parseDescriptionSections(children);
-
-  if (!isPlain && parsed.hasRealSections) {
-    return (
-      <div className="space-y-4 text-xs sm:text-sm text-slate-700 not-italic">
-        {parsed.expect && (
-          <div className="space-y-1.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-brand-blue text-xs uppercase tracking-wider">
-              <span>✨ What can you expect?</span>
-            </div>
-            <div className="leading-relaxed text-slate-700 font-normal">
-              {renderFormattedContent(parsed.expect, "font-bold text-slate-950")}
-            </div>
-          </div>
-        )}
-
-        {parsed.perfectFor && (
-          <div className="space-y-1.5 bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs uppercase tracking-wider">
-              <span>🎯 Perfect for</span>
-            </div>
-            <div className="space-y-1.5 leading-relaxed text-emerald-955 font-normal">
-              {parsed.perfectFor.split('\n').map(line => line.trim()).filter(Boolean).map((line, idx) => {
-                const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
-                return (
-                  <div key={idx} className="flex items-start gap-2">
-                    <span className="text-emerald-600 font-extrabold mt-0.5">•</span>
-                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-bold text-emerald-950")}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {parsed.goodToKnow && (
-          <div className="space-y-1.5 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs uppercase tracking-wider">
-              <span>💡 Good to know (tips)</span>
-            </div>
-            <div className="leading-relaxed text-amber-955 font-normal">
-              {renderFormattedContent(parsed.goodToKnow, "font-bold text-amber-950")}
-            </div>
-          </div>
-        )}
-
-        {parsed.moreInfo && (
-          <div className="space-y-1.5 bg-sky-50/60 p-4 rounded-2xl border border-sky-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-sky-900 text-xs uppercase tracking-wider">
-              <span>🔗 More information</span>
-            </div>
-            <div className="leading-relaxed text-sky-955 font-normal">
-              {renderFormattedContent(parsed.moreInfo, "font-bold text-sky-950")}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Standard Markdown for articles and guides with full emoji and header support
+  // Standard Markdown for articles, events, and guides with full emoji and header support
   const cleanText = children.replace(/\r\n/g, '\n');
   const lines = cleanText.split('\n');
 
@@ -654,11 +593,12 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
         }
 
         // List items
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ')) {
+          const content = trimmed.replace(/^[-*•]\s*/, '');
           return (
-            <div key={idx} className="flex gap-2.5 pl-3 items-start">
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5 shrink-0" />
-              <div className="flex-1 text-slate-700">{parseInlineMarkdown(trimmed.substring(2))}</div>
+            <div key={idx} className="flex gap-2.5 pl-2 items-start">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 shrink-0" />
+              <div className="flex-1 text-slate-700">{parseInlineMarkdown(content)}</div>
             </div>
           );
         }
@@ -3672,9 +3612,30 @@ export default function App() {
     // No longer navigating to searchResults view, MarketplaceView will handle it internally
   };
 
-  const scrollToTop = () => {
+  const scrollToTop = (instant = true) => {
     if (mainRef.current) {
-      mainRef.current.scrollTo(0, 0);
+      try {
+        // Cancel active momentum scrolling in WebKit
+        mainRef.current.style.overflowY = 'hidden';
+        mainRef.current.scrollTop = 0;
+        void mainRef.current.offsetHeight; // Force reflow to kill inertia
+        mainRef.current.style.overflowY = '';
+        mainRef.current.scrollTop = 0;
+        if (typeof mainRef.current.scrollTo === 'function') {
+          mainRef.current.scrollTo({ top: 0, left: 0, behavior: instant ? 'instant' : 'auto' });
+        }
+      } catch (_) {
+        if (mainRef.current) mainRef.current.scrollTop = 0;
+      }
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: instant ? 'instant' : 'auto' });
+      } catch (_) {
+        window.scrollTo(0, 0);
+      }
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
     }
   };
 
@@ -3944,17 +3905,27 @@ export default function App() {
     }
   };
 
+  useLayoutEffect(() => {
+    scrollToTop(true);
+  }, [activeView]);
+
   useEffect(() => {
-    if (mainRef.current) {
-      // Scroll to top immediately when switching activeView
-      mainRef.current.scrollTop = 0;
-      // Force repaint to prevent WebKit GPU blank tile bug
-      requestAnimationFrame(() => {
-        if (mainRef.current) {
-          mainRef.current.scrollTop = 0;
-        }
-      });
-    }
+    scrollToTop(true);
+    const r1 = requestAnimationFrame(() => {
+      scrollToTop(true);
+    });
+    const r2 = requestAnimationFrame(() => {
+      scrollToTop(true);
+    });
+    const timer = setTimeout(() => {
+      scrollToTop(true);
+    }, 60);
+
+    return () => {
+      cancelAnimationFrame(r1);
+      cancelAnimationFrame(r2);
+      clearTimeout(timer);
+    };
   }, [activeView]);
 
   return (
@@ -21539,6 +21510,24 @@ function ProfileView({
     }
   }, [activeSubPage]);
 
+  useLayoutEffect(() => {
+    scrollToTop?.();
+  }, []);
+
+  useEffect(() => {
+    scrollToTop?.();
+    const r1 = requestAnimationFrame(() => {
+      scrollToTop?.();
+    });
+    const timer = setTimeout(() => {
+      scrollToTop?.();
+    }, 60);
+    return () => {
+      cancelAnimationFrame(r1);
+      clearTimeout(timer);
+    };
+  }, []);
+
   useEffect(() => {
     scrollToTop?.();
   }, [activeSubPage]);
@@ -21738,7 +21727,7 @@ function ProfileView({
   ];
 
   return (
-    <div className="pb-12">
+    <div className="min-h-full w-full pb-16 flex flex-col bg-white">
       {/* Profile Header */}
       <div className="flex flex-col items-center pt-8 pb-10 bg-white border-b border-slate-100">
         <div 
@@ -23928,6 +23917,13 @@ function useSwipeBack(onBack: () => void) {
 
 function ProfileSubPage({ title, onBack, children, className }: { title: string, onBack: () => void, children: React.ReactNode, className?: string, key?: string }) {
   const swipeProps = useSwipeBack(onBack);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, []);
 
   return (
     <motion.div
@@ -23941,7 +23937,7 @@ function ProfileSubPage({ title, onBack, children, className }: { title: string,
       <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
         <h2 className="text-xl font-semibold font-display text-brand-navy">{title}</h2>
       </div>
-      <div className="flex-1 overflow-y-auto p-6 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
         <div className="max-w-2xl mx-auto mb-5">
           <button 
             onClick={onBack} 

@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
+// Prevent browser from restoring scroll positions to phantom offsets during SPA navigation
+if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+  window.history.scrollRestoration = 'manual';
+}
+
 interface ErrorBoundaryProps {
   children: React.ReactNode;
 }
