@@ -5,6 +5,14 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { Resend } from "resend";
 import dotenv from "dotenv";
+import { 
+  matchProsLocally, 
+  preFilterCandidatesForGemini,
+  detectLanguagesInQuery,
+  proSpeaksAnyRequestedLanguage,
+  normalizeText,
+  detectQueryPrimaryLanguage
+} from "./src/services/janeMatchingEngine";
 
 dotenv.config();
 
@@ -284,12 +292,12 @@ async function startServer() {
     const { query, professionals } = req.body;
 
     if (!query || !query.trim() || !professionals || !Array.isArray(professionals)) {
-      return res.json({ results: [] });
+      return res.json({ exactMatchFound: false, summaryMessage: null, results: [] });
     }
 
-    try {
-      const qLower = query.toLowerCase().trim();
+    const qLower = query.toLowerCase().trim();
 
+    try {
       // Check cache first to save 100% of tokens and quota on repeated or frequent searches
       const cacheKey = `${qLower}__${professionals.length}`;
       const cached = getCachedSearch(cacheKey);
@@ -298,15 +306,20 @@ async function startServer() {
         return res.json(cached);
       }
 
-      // Compact pro representation to keep prompt tokens well below free-tier TPM limits
+      // 1. Intelligent Candidate Pre-filtering:
+      // If there are many pros, pre-filter to top 36 candidates to reduce token payload by 85%+
+      // and prevent blowing TPM / free-tier limits.
+      const candidatePros = preFilterCandidatesForGemini(query, professionals, 36);
+
+      // Compact pro representation to keep prompt tokens well below rate limits
       // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
-      const proListBrief = professionals.map((p: any) => ({
+      const proListBrief = candidatePros.map((p: any) => ({
         id: String(p.id),
         name: p.name,
         company_name: p.company_name || "",
         category: p.category || p.profession || "",
         categories: p.categories || (typeof p.profession === 'string' ? p.profession.split(',').map((s: string) => s.trim()) : []),
-        bio: (p.bio || p.description || "").slice(0, 160),
+        bio: (p.bio || p.description || "").slice(0, 150),
         top_qualities: (p.top_qualities || []).slice(0, 3),
         languages: p.languages || [],
         location: p.location || "",
@@ -480,20 +493,22 @@ ${JSON.stringify(proListBrief)}`,
 
       return res.json(responsePayload);
     } catch (error: any) {
-      console.error("[api] Gemini AI Search matching error:", error);
-      const errorMsg = error.message || "";
-      const errorLower = errorMsg.toLowerCase();
-      if (
-        errorLower.includes("quota") ||
-        errorLower.includes("limit") ||
-        errorLower.includes("exhausted") ||
-        errorLower.includes("429") ||
-        errorLower.includes("too many requests") ||
-        errorLower.includes("rate limit")
-      ) {
-        return res.status(429).json({ error: "Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need." });
+      console.warn(`[api] Gemini AI Search rate-limited or failed for query: "${query}". Activating zero-downtime Jane Local Matcher failover...`, error?.message || error);
+      
+      // Zero-quota error failover: execute local high-precision semantic matching engine
+      try {
+        const localResults = matchProsLocally(query, professionals);
+        console.log(`[api] Jane Local Matcher successfully returned ${localResults.results.length} matched professionals (exactMatchFound: ${localResults.exactMatchFound})`);
+        
+        // Cache the local results to serve subsequent searches immediately
+        const cacheKey = `${qLower}__${professionals.length}`;
+        setCachedSearch(cacheKey, localResults);
+        
+        return res.json(localResults);
+      } catch (localErr: any) {
+        console.error("[api] Local Jane matching engine error:", localErr);
+        return res.json({ exactMatchFound: false, summaryMessage: null, results: [] });
       }
-      return res.status(500).json({ error: error.message || "Failed to process matching" });
     }
   });
 
@@ -646,20 +661,72 @@ ${JSON.stringify(eventListBrief, null, 2)}`,
         results: validResults
       });
     } catch (error: any) {
-      console.error("[api] Jane AI Event matching error:", error);
-      const errorMsg = error.message || "";
-      const errorLower = errorMsg.toLowerCase();
-      if (
-        errorLower.includes("quota") ||
-        errorLower.includes("limit") ||
-        errorLower.includes("exhausted") ||
-        errorLower.includes("429") ||
-        errorLower.includes("too many requests") ||
-        errorLower.includes("rate limit")
-      ) {
-        return res.status(429).json({ error: "Jane is currently very busy! Please wait a few seconds and try again." });
+      console.warn(`[api] Jane AI Event matching quota/rate limit error for query: "${query}". Activating local event failover...`, error?.message || error);
+      
+      // Fallback local event matcher
+      try {
+        const cleanQ = normalizeText(query);
+        const qWords = cleanQ.split(' ').filter(w => w.length > 2);
+        const today = new Date();
+        const todayISO = today.toISOString().split('T')[0];
+
+        const localEventResults = (events || []).map((ev: any) => {
+          const title = normalizeText(ev.title || '');
+          const desc = normalizeText(ev.description || '');
+          const cat = normalizeText(ev.category || '');
+          const loc = normalizeText(ev.location || '');
+          const org = normalizeText(ev.organizer || '');
+          const tags = normalizeText(ev.tags || '');
+
+          let score = 0;
+          let matchCount = 0;
+
+          for (const w of qWords) {
+            if (title.includes(w)) { score += 30; matchCount++; }
+            if (cat.includes(w)) { score += 25; matchCount++; }
+            if (tags.includes(w)) { score += 20; matchCount++; }
+            if (desc.includes(w)) { score += 10; matchCount++; }
+            if (loc.includes(w)) { score += 15; matchCount++; }
+            if (org.includes(w)) { score += 15; matchCount++; }
+          }
+
+          // Temporal boosts
+          if (cleanQ.includes("ce soir") || cleanQ.includes("tonight") || cleanQ.includes("nuit")) {
+            const time = (ev.start_time || ev.time || '').toLowerCase();
+            if (time.includes("18:") || time.includes("19:") || time.includes("20:") || time.includes("21:") || time.includes("22:") || time.includes("23:")) {
+              score += 20;
+            }
+          }
+          if (cleanQ.includes("aujourd hui") || cleanQ.includes("today")) {
+            if (ev.start_date === todayISO || ev.date === todayISO) {
+              score += 35;
+            }
+          }
+          if (cleanQ.includes("gratuit") || cleanQ.includes("free")) {
+            if (ev.is_free) score += 25;
+          }
+
+          const finalScore = Math.min(95, Math.max(0, score));
+          const reason = `Événement "${ev.title || 'sélectionné'}" correspondant à votre recherche à Valence.`;
+
+          return {
+            id: String(ev.id),
+            score: finalScore,
+            reason
+          };
+        })
+        .filter((r: any) => r.score >= 25)
+        .sort((a: any, b: any) => b.score - a.score);
+
+        return res.json({
+          exactMatchFound: localEventResults.some((r: any) => r.score >= 60),
+          summaryMessage: null,
+          results: localEventResults
+        });
+      } catch (fallbackErr: any) {
+        console.error("[api] Local event fallback error:", fallbackErr);
+        return res.json({ exactMatchFound: false, summaryMessage: null, results: [] });
       }
-      return res.status(500).json({ error: error.message || "Failed to match events with Jane." });
     }
   });
 

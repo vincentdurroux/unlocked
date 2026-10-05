@@ -138,6 +138,7 @@ import { authService, Profile } from './services/authService';
 import { chatService, Conversation, Message } from './services/chatService';
 import { searchService } from './services/searchService';
 import { pushNotificationService } from './services/pushNotificationService';
+import { matchProsLocally } from './services/janeMatchingEngine';
 import { oneSignalService } from './services/oneSignalService';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
 import { OneSignalVerificationDialog } from './components/OneSignalVerificationDialog';
@@ -15439,30 +15440,26 @@ function ExploreView({
     }));
 
     try {
-      const response = await fetch("/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: trimmed, professionals: compactPros }),
-      });
+      let data: any = null;
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
+      try {
+        const response = await fetch("/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: trimmed, professionals: compactPros }),
+        });
+
+        if (response.ok) {
+          data = await response.json();
         }
-        let errorMsg = "Sorry, an error occurred during AI search.";
-        try {
-          const errJson = await response.json();
-          if (errJson && errJson.error) {
-            errorMsg = errJson.error;
-          }
-        } catch (_) {}
-        throw new Error(errorMsg);
+      } catch (fetchErr) {
+        console.warn("[Search] Network or fetch error, activating local Jane matcher:", fetchErr);
       }
 
-      const data = await response.json();
-
-      if (!data) {
-        throw new Error("Could not retrieve search results.");
+      // If server failed or returned empty/error, execute local matching engine directly
+      if (!data || !data.results) {
+        console.log("[Search] Using Client-side Jane Local Engine failover");
+        data = matchProsLocally(trimmed, compactPros);
       }
       
       let exactMatch = true;
@@ -15534,27 +15531,18 @@ function ExploreView({
         currentUser?.id
       ).catch(err => console.warn("Failed to background-log Jane pro search:", err));
     } catch (err: any) {
-      console.error("[Search] AI matching error:", err);
-      const errMsg = err.message || "";
-      const errorLower = errMsg.toLowerCase();
-      if (
-        errorLower.includes("quota") || 
-        errorLower.includes("limit") || 
-        errorLower.includes("exhausted") || 
-        errorLower.includes("429") || 
-        errorLower.includes("too many requests") ||
-        errorLower.includes("sollicitée") ||
-        errorLower.includes("busy") ||
-        errorLower.includes("rate limit")
-      ) {
-        setAiError("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
-      } else {
-        setAiError(err.message || "Connection error with the AI service.");
-      }
-      // Fallback: clear AI results
-      setAiResults(null);
-      setAiExactMatch(true);
-      setAiSummaryMessage(null);
+      console.warn("[Search] Executing emergency fallback for Jane AI:", err);
+      const fallbackData = matchProsLocally(trimmed, compactPros);
+      const resultsDict: { [key: string]: { score: number; reason: string } } = {};
+      fallbackData.results.forEach((item: any) => {
+        resultsDict[String(item.id)] = {
+          score: item.score,
+          reason: item.reason || ''
+        };
+      });
+      setAiResults(resultsDict);
+      setAiExactMatch(fallbackData.exactMatchFound);
+      setAiSummaryMessage(fallbackData.summaryMessage);
     } finally {
       setAiLoading(false);
       setIsSearching(false);
