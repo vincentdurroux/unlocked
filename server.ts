@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { Resend } from "resend";
 import dotenv from "dotenv";
 
@@ -75,154 +75,6 @@ function proSpeaksAnyLanguage(pro: any, requestedLanguages: string[]): boolean {
       return false;
     });
   });
-}
-
-function performSmartLocalProMatching(query: string, professionals: any[]): { exactMatchFound: boolean; summaryMessage: string | null; results: any[] } {
-  const q = (query || "").toLowerCase().trim();
-  if (!q || !Array.isArray(professionals) || professionals.length === 0) {
-    return { exactMatchFound: false, summaryMessage: null, results: [] };
-  }
-
-  const requestedLangs = detectRequestedLanguages(q);
-  
-  // Keyword mappings for Valencia directory
-  const specialtyKeywords: Record<string, string[]> = {
-    "physio": ["physiothér", "kiné", "kinési", "fisioterap", "physio", "massag", "rééduc"],
-    "osteo": ["ostéo", "osteo", "thérapeute"],
-    "chiro": ["chiro", "quiropr", "vertèbre", "colonne"],
-    "doctor": ["médecin", "docteur", "médico", "general practitioner", "gp", "santé", "medical"],
-    "dentist": ["dentiste", "dentist", "dent", "odontol", "orthodont", "dents"],
-    "psychologist": ["psycho", "psychol", "thérapie", "thérapeute", "coach", "mental", "anxiété", "stress", "burnout"],
-    "plumber": ["plombier", "fontanero", "plumb", "fuite", "tuyau", "robinet", "chauffe-eau", "eau", "canalisation"],
-    "electrician": ["électricien", "electric", "electricista", "tableau électrique", "court-circuit", "courant", "panne"],
-    "handyman": ["manitas", "bricoleur", "handyman", "travaux", "bricolage", "peinture", "rénovation", "réparation"],
-    "lawyer": ["avocat", "abogado", "lawyer", "juridique", "droit", "contrat", "visa", "nie", "empadronamiento"],
-    "gestor": ["gestor", "gestoría", "gestoria", "autónomo", "autonomo", "tax", "comptable", "impôt", "fiscal", "déclaration"],
-    "realtor": ["immobilier", "inmobiliaria", "real estate", "realtor", "logement", "appartement", "maison", "location", "achat", "vendeur", "flat"],
-    "mover": ["déménagement", "mudanza", "moving", "mover", "déménageur", "transport", "camion"],
-    "hairdresser": ["coiff", "peluquer", "barber", "hair", "barbier", "beauté", "estétic"],
-    "trainer": ["coach", "sport", "fitness", "entraineur", "personal trainer", "yoga", "pilates"],
-    "mechanic": ["mécani", "garage", "garagiste", "taller", "auto", "voiture", "moto", "vélo", "réparation auto"],
-    "cleaner": ["nettoyage", "ménage", "limpieza", "cleaning", "propreté", "femme de ménage"]
-  };
-
-  const symptomKeywords: Record<string, string[]> = {
-    "back": ["dos", "back", "espalda", "lombaire", "sciatique", "sciatica", "ciática", "hernie", "cervicale", "torticolis"],
-    "plumbing_issue": ["fuite", "leak", "goteo", "inondation", "tuyau", "bouché", "évacuation", "robinet"],
-    "electrical_issue": ["court-circuit", "coupure", "disjoncteur", "prise", "fusible"],
-    "moving_issue": ["déménager", "déménagement", "mudanza", "moving", "cartons", "transport meuble"],
-    "legal_issue": ["autonomo", "autónomo", "nie", "visa", "impôt", "fiscal", "déclaration", "société", "créer entreprise"]
-  };
-
-  const matchedSymptoms: string[] = [];
-  for (const [symptom, kws] of Object.entries(symptomKeywords)) {
-    if (kws.some(kw => q.includes(kw))) {
-      matchedSymptoms.push(symptom);
-    }
-  }
-
-  const scoredPros: any[] = [];
-
-  for (const pro of professionals) {
-    if (!pro || !pro.id) continue;
-    let score = 0;
-    const reasons: string[] = [];
-
-    const proCat = (pro.category || pro.profession || "").toLowerCase();
-    const proCats = Array.isArray(pro.categories) ? pro.categories.map((c: string) => c.toLowerCase()) : [];
-    const proBio = (pro.bio || pro.description || "").toLowerCase();
-    const proName = (pro.name || "").toLowerCase();
-    const proCompany = (pro.company_name || "").toLowerCase();
-    const proQualities = Array.isArray(pro.top_qualities) ? pro.top_qualities.map((t: string) => t.toLowerCase()) : [];
-    const allProText = `${proCat} ${proCats.join(" ")} ${proBio} ${proName} ${proCompany} ${proQualities.join(" ")}`;
-
-    if (requestedLangs.length > 0) {
-      const speaks = proSpeaksAnyLanguage(pro, requestedLangs);
-      if (speaks) {
-        score += 30;
-        reasons.push(`Parle ${requestedLangs.join(', ')}`);
-      } else {
-        score -= 50;
-      }
-    }
-
-    const words = q.split(/\s+/).filter(w => w.length > 2);
-    for (const w of words) {
-      if (proName.includes(w) || proCompany.includes(w)) {
-        score += 40;
-        reasons.push(`Correspond au nom/entreprise "${w}"`);
-      }
-    }
-
-    for (const [specialty, kws] of Object.entries(specialtyKeywords)) {
-      const queryMatchesSpecialty = kws.some(kw => q.includes(kw));
-      if (queryMatchesSpecialty) {
-        const proMatchesSpecialty = kws.some(kw => allProText.includes(kw));
-        if (proMatchesSpecialty) {
-          score += 55;
-          reasons.push(`Spécialiste qualifié pour votre recherche`);
-        }
-      }
-    }
-
-    if (matchedSymptoms.includes("back")) {
-      if (allProText.includes("ostéo") || allProText.includes("osteo") || allProText.includes("kiné") || allProText.includes("physio") || allProText.includes("chiro") || allProText.includes("médic") || allProText.includes("santé") || allProText.includes("doctor")) {
-        score += 50;
-        reasons.push("Prise en charge du mal de dos et soins musculosquelettiques");
-      }
-    }
-    if (matchedSymptoms.includes("plumbing_issue")) {
-      if (allProText.includes("plomb") || allProText.includes("fontan") || allProText.includes("manitas") || allProText.includes("travaux")) {
-        score += 50;
-        reasons.push("Dépannage plomberie et fuites d'eau");
-      }
-    }
-    if (matchedSymptoms.includes("electrical_issue")) {
-      if (allProText.includes("électric") || allProText.includes("electric") || allProText.includes("manitas")) {
-        score += 50;
-        reasons.push("Intervention électrique et dépannage");
-      }
-    }
-    if (matchedSymptoms.includes("moving_issue")) {
-      if (allProText.includes("déménag") || allProText.includes("mudan") || allProText.includes("transport") || allProText.includes("manitas")) {
-        score += 50;
-        reasons.push("Services de déménagement et transport");
-      }
-    }
-    if (matchedSymptoms.includes("legal_issue")) {
-      if (allProText.includes("avocat") || allProText.includes("abogad") || allProText.includes("gestor") || allProText.includes("fiscal") || allProText.includes("comptab")) {
-        score += 50;
-        reasons.push("Accompagnement juridique, fiscal et démarches NIE/Autónomo");
-      }
-    }
-
-    const matchingWords = words.filter(w => allProText.includes(w));
-    if (matchingWords.length > 0) {
-      score += Math.min(matchingWords.length * 15, 30);
-    }
-
-    if (pro.is_recommended !== false) {
-      score += 5;
-    }
-
-    if (score > 15) {
-      const finalScore = Math.min(Math.max(score, 45), 98);
-      scoredPros.push({
-        id: String(pro.id),
-        score: finalScore,
-        reasonUrlExcerpt: reasons.length > 0 ? reasons.slice(0, 2).join(' • ') : "Professionnel correspondant à votre recherche à Valence."
-      });
-    }
-  }
-
-  scoredPros.sort((a, b) => b.score - a.score);
-
-  const exactMatchFound = scoredPros.length > 0 && scoredPros[0].score >= 60;
-  return {
-    exactMatchFound,
-    summaryMessage: exactMatchFound ? null : "Résultats suggérés selon vos critères.",
-    results: scoredPros
-  };
 }
 
 function isQuotaOrRateLimitError(error: any): boolean {
@@ -325,29 +177,21 @@ async function startServer() {
     },
     customModels?: string[]
   ): Promise<any> => {
-    // Priority: gemini-3.1-flash-lite (highest RPD/RPM limits, fastest latency, lowest token footprint)
-    // Fallbacks: gemini-3.8-flash, gemini-flash-latest (separate quota buckets)
-    const models = customModels || ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
+    // Priority: gemini-3.1-flash-lite (highest RPD limit, lowest token footprint)
+    // Fallbacks: gemini-flash-latest, gemini-3.8-flash (separate quota buckets)
+    const models = customModels || ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
     let lastError: any = null;
 
     for (const modelName of models) {
       let attempt = 0;
-      const maxAttempts = 2;
-      let delay = 600; // start with 600ms delay
+      const maxAttempts = 3;
+      let delay = 1000; // start with 1 second delay
 
       while (attempt < maxAttempts) {
         try {
           console.log(`[ai] Attempting content generation with model: ${modelName} (attempt ${attempt + 1}/${maxAttempts})`);
-          
-          // Configure minimal thinking for flash-lite to save 100% of reasoning token quotas
-          const effectiveConfig = { ...(params.config || {}) };
-          if (modelName.includes("flash-lite") && !effectiveConfig.thinkingConfig) {
-            effectiveConfig.thinkingConfig = { thinkingLevel: ThinkingLevel.MINIMAL };
-          }
-
           const response = await getAiClient().models.generateContent({
             ...params,
-            config: effectiveConfig,
             model: modelName,
           });
           return response;
@@ -359,11 +203,11 @@ async function startServer() {
 
           const isTransient = isQuotaOrRateLimitError(err);
           if (isTransient && attempt < maxAttempts) {
-            console.log(`[ai] Transient quota/rate-limit on ${modelName}. Retrying in ${delay}ms...`);
+            console.log(`[ai] Transient error on ${modelName}. Retrying in ${delay}ms...`);
             await new Promise((resolve) => setTimeout(resolve, delay));
-            delay *= 2;
+            delay *= 2; // exponential backoff
           } else {
-            // Move to the next fallback model in the pool
+            // Not transient or exhausted attempts, move to the next fallback model
             break;
           }
         }
@@ -636,21 +480,20 @@ ${JSON.stringify(proListBrief)}`,
 
       return res.json(responsePayload);
     } catch (error: any) {
-      console.warn("[api] Gemini AI Search encountered quota / rate-limit / delay. Activating instant smart local matcher:", error?.message || error);
-      
-      try {
-        const fallbackResult = performSmartLocalProMatching(query, professionals);
-        if (fallbackResult && Array.isArray(fallbackResult.results) && fallbackResult.results.length > 0) {
-          const qLower = (query || "").toLowerCase().trim();
-          const cacheKey = `${qLower}__${professionals.length}`;
-          setCachedSearch(cacheKey, fallbackResult);
-          return res.json(fallbackResult);
-        }
-      } catch (localErr) {
-        console.error("[api] Local fallback matching error:", localErr);
+      console.error("[api] Gemini AI Search matching error:", error);
+      const errorMsg = error.message || "";
+      const errorLower = errorMsg.toLowerCase();
+      if (
+        errorLower.includes("quota") ||
+        errorLower.includes("limit") ||
+        errorLower.includes("exhausted") ||
+        errorLower.includes("429") ||
+        errorLower.includes("too many requests") ||
+        errorLower.includes("rate limit")
+      ) {
+        return res.status(429).json({ error: "Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need." });
       }
-
-      return res.json({ exactMatchFound: false, summaryMessage: "Aucun résultat direct trouvé pour cette recherche.", results: [] });
+      return res.status(500).json({ error: error.message || "Failed to process matching" });
     }
   });
 

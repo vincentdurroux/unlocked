@@ -1,17 +1,71 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { 
-  matchProsLocally, 
-  preFilterCandidatesForGemini,
-  detectLanguagesInQuery,
-  proSpeaksAnyRequestedLanguage
-} from "../src/services/janeMatchingEngine";
 
 function detectRequestedLanguages(query: string): string[] {
-  return detectLanguagesInQuery(query);
+  if (!query || typeof query !== "string") return [];
+  const q = query.toLowerCase();
+  const detected: string[] = [];
+
+  if (/\b(fran[cç]ais|fran[cç]aise|fran[cç]aises|french|francophone|francophones)\b/i.test(q)) {
+    detected.push("French");
+  }
+  if (/\b(anglais|anglaise|anglaises|english|anglophone|anglophones|ingles|inglés)\b/i.test(q)) {
+    detected.push("English");
+  }
+  if (/\b(espagnol|espagnole|espagnols|espagnoles|spanish|español|espanol|hispanophone|hispanophones|hispano|castellano|castillan)\b/i.test(q)) {
+    detected.push("Spanish");
+  }
+  if (/\b(allemand|allemande|allemands|allemandes|german|deutsch|germanophone)\b/i.test(q)) {
+    detected.push("German");
+  }
+  if (/\b(italien|italienne|italiens|italiennes|italian|italiano|italophone)\b/i.test(q)) {
+    detected.push("Italian");
+  }
+  if (/\b(portugais|portugaise|portugaises|portuguese|portugu[eê]s|lusophone)\b/i.test(q)) {
+    detected.push("Portuguese");
+  }
+  if (/\b(n[ée]erlandais|n[ée]erlandaise|dutch|hollandais|hollandaise|nederlands)\b/i.test(q)) {
+    detected.push("Dutch");
+  }
+  if (/\b(russe|russes|russian|russophone|ruso)\b/i.test(q)) {
+    detected.push("Russian");
+  }
+  if (/\b(arabe|arabes|arabic|arabophone|[aá]rabe)\b/i.test(q)) {
+    detected.push("Arabic");
+  }
+  if (/\b(chinois|chinoise|chinoises|chinese|mandarin|canton[a-z]+|sinophone)\b/i.test(q)) {
+    detected.push("Chinese");
+  }
+  if (/\b(japonais|japonaise|japonaises|japanese|japone?s)\b/i.test(q)) {
+    detected.push("Japanese");
+  }
+
+  return detected;
 }
 
 function proSpeaksAnyLanguage(pro: any, requestedLanguages: string[]): boolean {
-  return proSpeaksAnyRequestedLanguage(pro, requestedLanguages);
+  if (!pro || !Array.isArray(pro.languages) || requestedLanguages.length === 0) return false;
+
+  const proLangs = pro.languages.map((l: any) => (typeof l === "string" ? l.trim().toLowerCase() : ""));
+
+  return requestedLanguages.some(targetLang => {
+    const t = targetLang.toLowerCase();
+    return proLangs.some((lang: string) => {
+      if (!lang) return false;
+      if (lang === t) return true;
+      if (t === "french" && (lang.includes("fran") || lang.includes("french"))) return true;
+      if (t === "english" && (lang.includes("angl") || lang.includes("engl") || lang.includes("ingl"))) return true;
+      if (t === "spanish" && (lang.includes("esp") || lang.includes("span") || lang.includes("cast"))) return true;
+      if (t === "german" && (lang.includes("allem") || lang.includes("germ") || lang.includes("deutsch"))) return true;
+      if (t === "italian" && lang.includes("ital")) return true;
+      if (t === "portuguese" && lang.includes("portug")) return true;
+      if (t === "dutch" && (lang.includes("dutch") || lang.includes("neerl") || lang.includes("néerl") || lang.includes("holl"))) return true;
+      if (t === "russian" && lang.includes("russ")) return true;
+      if (t === "arabic" && lang.includes("arab")) return true;
+      if (t === "chinese" && lang.includes("chin")) return true;
+      if (t === "japanese" && (lang.includes("japon") || lang.includes("japan"))) return true;
+      return false;
+    });
+  });
 }
 
 function isQuotaOrRateLimitError(error: any): boolean {
@@ -35,46 +89,40 @@ function isQuotaOrRateLimitError(error: any): boolean {
 }
 
 export async function processSearch(query: string, professionals: any[]) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured on the server.");
+  }
+
   if (!query || !query.trim() || !professionals || !Array.isArray(professionals)) {
     return { exactMatchFound: false, summaryMessage: null, results: [] };
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.warn("[api/search] No GEMINI_API_KEY present, using Jane Local Matcher");
-    return matchProsLocally(query, professionals);
-  }
-
-  try {
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
+  const ai = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
       },
-    });
+    },
+  });
 
-    // 1. Intelligent Candidate Pre-filtering:
-    // Pre-filter to top 36 candidates to reduce token payload by 85%+
-    const candidatePros = preFilterCandidatesForGemini(query, professionals, 36);
+  // Compact pro representation to keep prompt tokens well below free-tier TPM limits
+  // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
+  const proListBrief = professionals.map((p: any) => ({
+    id: String(p.id),
+    name: p.name,
+    company_name: p.company_name || "",
+    category: p.category || p.profession || "",
+    categories: p.categories || (typeof p.profession === "string" ? p.profession.split(",").map((s: string) => s.trim()) : []),
+    bio: (p.bio || p.description || "").slice(0, 180),
+    top_qualities: (p.top_qualities || []).slice(0, 3),
+    languages: p.languages || [],
+    location: p.location || "",
+    is_recommended: p.is_recommended ?? true
+  }));
 
-    // Compact pro representation to keep prompt tokens well below rate limits
-    // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
-    const proListBrief = candidatePros.map((p: any) => ({
-      id: String(p.id),
-      name: p.name,
-      company_name: p.company_name || "",
-      category: p.category || p.profession || "",
-      categories: p.categories || (typeof p.profession === "string" ? p.profession.split(",").map((s: string) => s.trim()) : []),
-      bio: (p.bio || p.description || "").slice(0, 150),
-      top_qualities: (p.top_qualities || []).slice(0, 3),
-      languages: p.languages || [],
-      location: p.location || "",
-      is_recommended: p.is_recommended ?? true
-    }));
-
-    const sysInstruction = `You are an expert matching AI assistant ("Jane") for "Unlocked" - a community-curated directory of verified local professionals in Valencia, Spain.
+  const sysInstruction = `You are an expert matching AI assistant ("Jane") for "Unlocked" - a community-curated directory of verified local professionals in Valencia, Spain.
 Your purpose is to deeply understand the user's natural language request and match ALL relevant professionals from the directory.
 
 EVALUATION CRITERIA:
@@ -138,141 +186,140 @@ EVALUATION CRITERIA:
      * If matching pros speak that language, ONLY return those who speak it (score 75-100) and omit non-speakers.
      * If none speak it, return other matching pros with lower scores and explain in summaryMessage.`;
 
-    const candidateModels = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
-    let lastError: any = null;
-    let responseText = "";
+  // Resilient multi-model fallback chain with exponential backoff:
+  // 1. gemini-3.1-flash-lite: Highest daily request limit (1,000-1,500 RPD) & lowest latency
+  // 2. gemini-flash-latest: Independent daily quota pool
+  // 3. gemini-3.8-flash: Third independent quota pool
+  const candidateModels = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+  let lastError: any = null;
+  let responseText = "";
 
-    for (const modelName of candidateModels) {
-      let attempts = 0;
-      const maxAttempts = 2;
-      let delayMs = 1000;
+  for (const modelName of candidateModels) {
+    let attempts = 0;
+    const maxAttempts = 2;
+    let delayMs = 1000;
 
-      while (attempts < maxAttempts) {
-        try {
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents: `User Query: "${query}"
+    while (attempts < maxAttempts) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: `User Query: "${query}"
 
 Professionals:
 ${JSON.stringify(proListBrief)}`,
-            config: {
-              systemInstruction: sysInstruction,
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service/symptom, false if not." },
-                  summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
-                  results: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        id: { type: Type.STRING, description: "The professional's ID as a string" },
-                        score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                        reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
-                      },
-                      required: ["id", "score", "reasonUrlExcerpt"]
-                    }
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service/symptom, false if not." },
+                summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
+                results: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING, description: "The professional's ID as a string" },
+                      score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
+                      reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                    },
+                    required: ["id", "score", "reasonUrlExcerpt"]
                   }
-                },
-                required: ["exactMatchFound", "results"]
+                }
               },
-              temperature: 0.1
-            }
-          });
-
-          if (response && response.text) {
-            responseText = response.text;
-            break;
+              required: ["exactMatchFound", "results"]
+            },
+            temperature: 0.1
           }
-        } catch (err: any) {
-          lastError = err;
-          attempts++;
-          const isQuota = isQuotaOrRateLimitError(err);
-          console.warn(`[api/search] Model ${modelName} attempt ${attempts} failed (quota: ${isQuota}):`, err?.message || err);
-
-          if (isQuota && attempts < maxAttempts) {
-            await new Promise((resolve) => setTimeout(resolve, delayMs));
-            delayMs *= 2;
-          } else {
-            break; // Try next fallback model
-          }
-        }
-      }
-
-      if (responseText) {
-        break; // Successfully generated content
-      }
-    }
-
-    if (!responseText) {
-      console.warn("[api/search] All Gemini models were rate-limited or failed. Activating Jane Local Matcher failover...");
-      return matchProsLocally(query, professionals);
-    }
-
-    const parsedData = JSON.parse(responseText || "{}");
-    let results: any[] = [];
-    let exactMatchFound = true;
-    let summaryMessage: string | null = null;
-
-    if (Array.isArray(parsedData)) {
-      results = parsedData;
-    } else if (parsedData && typeof parsedData === "object") {
-      results = Array.isArray(parsedData.results) ? parsedData.results : [];
-      exactMatchFound = typeof parsedData.exactMatchFound === "boolean" ? parsedData.exactMatchFound : true;
-      summaryMessage = parsedData.summaryMessage || null;
-    }
-
-    // Spoken language post-filtering and prioritization
-    const requestedLangs = detectRequestedLanguages(query);
-    if (requestedLangs.length > 0) {
-      const proLookup: Record<string, any> = {};
-      professionals.forEach((p: any) => {
-        if (p && p.id != null) proLookup[String(p.id)] = p;
-      });
-
-      const matchingSpeakers = results.filter((r: any) => {
-        if ((r.score || 0) <= 0) return false;
-        const pro = proLookup[String(r.id)];
-        return pro && proSpeaksAnyLanguage(pro, requestedLangs);
-      });
-
-      if (matchingSpeakers.length > 0) {
-        results = results
-          .filter((r: any) => {
-            const pro = proLookup[String(r.id)];
-            return pro && proSpeaksAnyLanguage(pro, requestedLangs);
-          })
-          .map((r: any) => ({
-            ...r,
-            score: Math.max(r.score || 0, 75)
-          }));
-
-        results.sort((a: any, b: any) => {
-          const proA = proLookup[String(a.id)];
-          const proB = proLookup[String(b.id)];
-          const recA = proA?.is_recommended !== false;
-          const recB = proB?.is_recommended !== false;
-          if (recA !== recB) return recA ? -1 : 1;
-          return (b.score || 0) - (a.score || 0);
         });
 
-        exactMatchFound = true;
-        summaryMessage = null;
+        if (response && response.text) {
+          responseText = response.text;
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        attempts++;
+        const isQuota = isQuotaOrRateLimitError(err);
+        console.warn(`[api/search] Model ${modelName} attempt ${attempts} failed (quota: ${isQuota}):`, err?.message || err);
+
+        if (isQuota && attempts < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          delayMs *= 2;
+        } else {
+          break; // Try next fallback model
+        }
       }
     }
 
-    const hasStrongMatch = results.some((r: any) => (r.score || 0) >= 40);
-    if (!hasStrongMatch) {
-      exactMatchFound = false;
+    if (responseText) {
+      break; // Successfully generated content
     }
-
-    return { exactMatchFound, summaryMessage, results };
-  } catch (err: any) {
-    console.warn("[api/search] Uncaught exception during search, falling back to local matcher:", err);
-    return matchProsLocally(query, professionals);
   }
+
+  if (!responseText) {
+    throw lastError || new Error("All AI matching models failed to generate a response.");
+  }
+
+  const parsedData = JSON.parse(responseText || "{}");
+  let results: any[] = [];
+  let exactMatchFound = true;
+  let summaryMessage: string | null = null;
+
+  if (Array.isArray(parsedData)) {
+    results = parsedData;
+  } else if (parsedData && typeof parsedData === "object") {
+    results = Array.isArray(parsedData.results) ? parsedData.results : [];
+    exactMatchFound = typeof parsedData.exactMatchFound === "boolean" ? parsedData.exactMatchFound : true;
+    summaryMessage = parsedData.summaryMessage || null;
+  }
+
+  // Spoken language post-filtering and prioritization
+  const requestedLangs = detectRequestedLanguages(query);
+  if (requestedLangs.length > 0) {
+    const proLookup: Record<string, any> = {};
+    professionals.forEach((p: any) => {
+      if (p && p.id != null) proLookup[String(p.id)] = p;
+    });
+
+    const matchingSpeakers = results.filter((r: any) => {
+      if ((r.score || 0) <= 0) return false;
+      const pro = proLookup[String(r.id)];
+      return pro && proSpeaksAnyLanguage(pro, requestedLangs);
+    });
+
+    if (matchingSpeakers.length > 0) {
+      results = results
+        .filter((r: any) => {
+          const pro = proLookup[String(r.id)];
+          return pro && proSpeaksAnyLanguage(pro, requestedLangs);
+        })
+        .map((r: any) => ({
+          ...r,
+          score: Math.max(r.score || 0, 75)
+        }));
+
+      results.sort((a: any, b: any) => {
+        const proA = proLookup[String(a.id)];
+        const proB = proLookup[String(b.id)];
+        const recA = proA?.is_recommended !== false;
+        const recB = proB?.is_recommended !== false;
+        if (recA !== recB) return recA ? -1 : 1;
+        return (b.score || 0) - (a.score || 0);
+      });
+
+      exactMatchFound = true;
+      summaryMessage = null;
+    }
+  }
+
+  const hasStrongMatch = results.some((r: any) => (r.score || 0) >= 40);
+  if (!hasStrongMatch) {
+    exactMatchFound = false;
+  }
+
+  return { exactMatchFound, summaryMessage, results };
 }
 
 // Vercel Serverless Function handler
@@ -304,9 +351,14 @@ export default async function handler(req: any, res: any) {
     const result = await processSearch(query, professionals);
     return res.status(200).json(result);
   } catch (error: any) {
-    console.warn("[api/search] Serverless search error, executing local failover:", error);
-    const localResult = matchProsLocally(query || "", professionals || []);
-    return res.status(200).json(localResult);
+    console.error("[api/search] Serverless search error:", error);
+    if (isQuotaOrRateLimitError(error)) {
+      return res.status(429).json({
+        error: "Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need."
+      });
+    }
+    return res.status(500).json({
+      error: error.message || "Failed to process matching"
+    });
   }
 }
-
