@@ -15503,7 +15503,9 @@ function ExploreView({
             score: Math.max(typeof r.score === 'number' ? r.score : 0, 75)
           }));
           exactMatch = true;
-          summaryMsg = null;
+          if (!summaryMsg) {
+            summaryMsg = `Voici les professionnels recommandés qui parlent ${requestedLangs.join(', ')}.`;
+          }
         }
       }
 
@@ -15520,6 +15522,19 @@ function ExploreView({
 
       if (rawResults.length === 0 || highestScore < 30) {
         exactMatch = false;
+      }
+
+      // If exactMatch is true and no summaryMsg was provided by the API, provide a clean natural fallback
+      if (!summaryMsg && rawResults.length > 0 && exactMatch) {
+        const isFrench = /[éèàùçâêîôûëï]|\b(le|la|les|un|une|des|du|de|pour|mon|ma|mes|qui|avec)\b/i.test(trimmed);
+        const isSpanish = /[áéíóúñ¿¡]|\b(el|la|los|las|un|una|unos|unas|del|de|para|mi|mis|que|con)\b/i.test(trimmed);
+        if (isFrench) {
+          summaryMsg = `Pour votre recherche, voici les professionnels recommandés les plus adaptés à vos besoins.`;
+        } else if (isSpanish) {
+          summaryMsg = `Para tu búsqueda, aquí tienes a los profesionales recomendados más adecuados.`;
+        } else {
+          summaryMsg = `Here are the top recommended professionals matched to your request.`;
+        }
       }
 
       setAiResults(resultsDict);
@@ -16310,9 +16325,24 @@ function ExploreView({
                         )}
                       </p>
                     ) : (
-                      <p className="text-xs sm:text-sm font-medium leading-relaxed text-slate-700">
-                        Jane found <strong>{filteredPros.length}</strong> {filteredPros.length === 1 ? 'match' : 'matches'} for "<strong>{aiQuery}</strong>" sorted by relevance:
-                      </p>
+                      <div className="space-y-1.5">
+                        {aiSummaryMessage ? (
+                          <p className="text-xs sm:text-sm font-semibold leading-relaxed text-slate-800">
+                            {aiSummaryMessage}
+                          </p>
+                        ) : (
+                          <p className="text-xs sm:text-sm font-medium leading-relaxed text-slate-700">
+                            Jane found <strong>{filteredPros.length}</strong> {filteredPros.length === 1 ? 'match' : 'matches'} for "<strong>{aiQuery}</strong>" sorted by relevance:
+                          </p>
+                        )}
+                        {aiSummaryMessage && (
+                          <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5">
+                            <span>{filteredPros.length} {filteredPros.length === 1 ? 'match' : 'matches'}</span>
+                            <span>•</span>
+                            <span>Sorted by relevance</span>
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

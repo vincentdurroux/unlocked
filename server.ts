@@ -290,8 +290,8 @@ async function startServer() {
     try {
       const qLower = query.toLowerCase().trim();
 
-      // Check cache first to save 100% of tokens and quota on repeated or frequent searches
-      const cacheKey = `${qLower}__${professionals.length}`;
+      // Use versioned cache key to ensure fresh prompt responses with Jane's commentary
+      const cacheKey = `v3_${qLower}__${professionals.length}`;
       const cached = getCachedSearch(cacheKey);
       if (cached) {
         console.log(`[ai] Returning cached Jane search result for: "${qLower}"`);
@@ -367,10 +367,17 @@ EVALUATION CRITERIA:
    - Professionals with "is_recommended: true" are community-vetted and should receive higher scores (e.g., 85-95) or be ranked above Google-sourced pros (is_recommended: false, scored 70-80).
    - Both recommended and non-recommended matching professionals MUST be returned in the results array so the user has access to all available pros.
 
-5. "exactMatchFound" & "summaryMessage" RULES:
-   - If AT LEAST ONE professional is a DIRECT MATCH (score >= 60), you MUST set "exactMatchFound" to true, and set "summaryMessage" to null!
-   - Set "exactMatchFound" to false ONLY if NO professional in the directory matches the trade.
-   - If "exactMatchFound" is false and alternative pros exist: explain in the user's language that exact matches weren't found but alternatives were provided.
+5. "exactMatchFound" & "summaryMessage" (JANE'S SHORT EXPLANATION - CRITICAL):
+   - "exactMatchFound": Set to true if at least one professional is a direct or strong match (score >= 40), false otherwise.
+   - "summaryMessage" (MANDATORY): Always provide a SHORT, friendly explanation (1 to 2 sentences max, 15 to 25 words, "vraiment pas long") written as Jane speaking naturally in the first person ("Je", "I", "He encontrado", etc.).
+   - In this short text, Jane explains her found results and why these professions/disciplines were chosen for the user's specific request.
+   - Examples based on user query language:
+     * French: "Pour vos douleurs de dos, je vous ai sélectionné des kinésithérapeutes et ostéopathes expérimentés à Valence."
+     * English: "To help with your back pain, I've selected trusted physiotherapists and osteopaths in Valencia."
+     * Spanish: "Para tu dolor de espalda, he seleccionado a nuestros fisioterapeutas y osteópatas en Valencia."
+     * French (language request): "Voici les professionnels recommandés à Valence qui parlent français."
+     * If no exact match: "Je n'ai pas trouvé de correspondance exacte, mais voici quelques alternatives proches qui pourraient vous aider."
+   - The summaryMessage MUST strictly match the query language (French if queried in French, English if English, Spanish if Spanish).
 
 6. Under "reasonUrlExcerpt" for each professional, provide a single clear sentence explaining why they matched (trade, specialty, location, or symptom solution).
 
@@ -391,7 +398,7 @@ ${JSON.stringify(proListBrief)}`,
             type: Type.OBJECT,
             properties: {
               exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
-              summaryMessage: { type: Type.STRING, description: "Explanation message when no direct match is found, written in user's query language." },
+              summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 25 words) from Jane explaining her found results to the user in their query language." },
               results: {
                 type: Type.ARRAY,
                 items: {
@@ -405,7 +412,7 @@ ${JSON.stringify(proListBrief)}`,
                 }
               }
             },
-            required: ["exactMatchFound", "results"]
+            required: ["exactMatchFound", "summaryMessage", "results"]
           },
           temperature: 0.1
         }
@@ -465,7 +472,9 @@ ${JSON.stringify(proListBrief)}`,
           });
 
           exactMatchFound = true;
-          summaryMessage = null;
+          if (!summaryMessage) {
+            summaryMessage = `Voici les professionnels recommandés qui parlent ${requestedLangs.join(', ')}.`;
+          }
         }
       }
 
