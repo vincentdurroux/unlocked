@@ -294,8 +294,8 @@ async function startServer() {
     try {
       const qLower = query.toLowerCase().trim();
 
-      // Use versioned cache key to ensure fresh prompt responses with Jane's commentary
-      const cacheKey = `v3_${qLower}__${professionals.length}`;
+      // Use versioned cache key to ensure fresh prompt responses with Jane's commentary in English
+      const cacheKey = `v5_en_${qLower}__${professionals.length}`;
       const cached = getCachedSearch(cacheKey);
       if (cached) {
         console.log(`[ai] Returning cached Jane search result for: "${qLower}"`);
@@ -371,24 +371,28 @@ EVALUATION CRITERIA:
    - Professionals with "is_recommended: true" are community-vetted and should receive higher scores (e.g., 85-95) or be ranked above Google-sourced pros (is_recommended: false, scored 70-80).
    - Both recommended and non-recommended matching professionals MUST be returned in the results array so the user has access to all available pros.
 
-5. "exactMatchFound" & "summaryMessage" (JANE'S SHORT EXPLANATION - CRITICAL):
+5. LANGUAGE REQUIREMENT (CRITICAL - ALWAYS ENGLISH):
+   - You MUST ALWAYS write all explanations in ENGLISH, even if the user query was written in French, Spanish, or any other language!
+   - Both "summaryMessage" and "reasonUrlExcerpt" MUST ALWAYS be written in English.
+
+6. "exactMatchFound" & "summaryMessage" (JANE'S SHORT EXPLANATION):
    - "exactMatchFound": Set to true if at least one professional is a direct or strong match (score >= 40), false otherwise.
-   - "summaryMessage" (MANDATORY): Always provide a SHORT, friendly explanation (1 to 2 sentences max, 15 to 25 words, "vraiment pas long") written as Jane speaking naturally in the first person ("Je", "I", "He encontrado", etc.).
+   - "summaryMessage" (MANDATORY): Always provide a SHORT, friendly explanation (1 to 2 sentences max, 15 to 25 words) written as Jane speaking naturally in the first person ("I") in ENGLISH.
    - In this short text, Jane explains her found results and why these professions/disciplines were chosen for the user's specific request.
-   - Examples based on user query language:
-     * French: "Pour vos douleurs de dos, je vous ai sélectionné des kinésithérapeutes et ostéopathes expérimentés à Valence."
-     * English: "To help with your back pain, I've selected trusted physiotherapists and osteopaths in Valencia."
-     * Spanish: "Para tu dolor de espalda, he seleccionado a nuestros fisioterapeutas y osteópatas en Valencia."
-     * French (language request): "Voici les professionnels recommandés à Valence qui parlent français."
-     * If no exact match: "Je n'ai pas trouvé de correspondance exacte, mais voici quelques alternatives proches qui pourraient vous aider."
-   - The summaryMessage MUST strictly match the query language (French if queried in French, English if English, Spanish if Spanish).
+   - English Examples:
+     * "To help with your back pain, I've selected trusted physiotherapists and osteopaths in Valencia."
+     * "Here are the top-rated professionals in Valencia matching your request."
+     * "Here are the recommended professionals in Valencia who speak French."
+     * If no exact match: "I couldn't find an exact match in our directory, but here are some close alternatives that may help."
 
-6. Under "reasonUrlExcerpt" for each professional, provide a single clear sentence explaining why they matched (trade, specialty, location, or symptom solution).
+7. Under "reasonUrlExcerpt" for each professional:
+   - Provide a single clear sentence in ENGLISH explaining why they matched (trade, specialty, location, or symptom solution).
+   - E.g.: "Physiotherapist specialized in spine rehabilitation and back pain."
 
-7. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
+8. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
    - If the user's query explicitly requests a specific spoken language (e.g. "qui parle français", "french speaking", "habla español", etc.):
      * If matching professionals speak that language: ONLY return professionals who speak that language (give them score 75-100).
-     * If no professional speaks that language: return other matching pros with lower scores and explain in summaryMessage.`;
+     * If no professional speaks that language: return other matching pros with lower scores and explain in summaryMessage in English.`;
 
       const response = await generateContentWithFallback({
         contents: `User Query: "${query}"
@@ -402,7 +406,7 @@ ${JSON.stringify(proListBrief)}`,
             type: Type.OBJECT,
             properties: {
               exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
-              summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 25 words) from Jane explaining her found results to the user in their query language." },
+              summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 25 words) in English from Jane explaining her found results to the user." },
               results: {
                 type: Type.ARRAY,
                 items: {
@@ -410,7 +414,7 @@ ${JSON.stringify(proListBrief)}`,
                   properties: {
                     id: { type: Type.STRING, description: "The professional's ID as a string" },
                     score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                    reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                    reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation in English" }
                   },
                   required: ["id", "score", "reasonUrlExcerpt"]
                 }
@@ -477,7 +481,7 @@ ${JSON.stringify(proListBrief)}`,
 
           exactMatchFound = true;
           if (!summaryMessage) {
-            summaryMessage = `Voici les professionnels recommandés qui parlent ${requestedLangs.join(', ')}.`;
+            summaryMessage = `Here are the recommended professionals who speak ${requestedLangs.join(', ')}.`;
           }
         }
       }

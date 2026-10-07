@@ -175,24 +175,26 @@ EVALUATION CRITERIA:
    - Community-vetted professionals (is_recommended: true) should receive a slight score boost (e.g. 85-95) over Google-sourced listings (is_recommended: false, scored 70-80).
    - Both recommended and non-recommended pros must be returned if they match.
 
-5. "exactMatchFound" & "summaryMessage" (JANE'S SHORT EXPLANATION - CRITICAL):
+5. LANGUAGE REQUIREMENT (CRITICAL - ALWAYS ENGLISH):
+   - You MUST ALWAYS write all explanations in ENGLISH, even if the user query was written in French, Spanish, or any other language!
+   - Both "summaryMessage" and "reasonUrlExcerpt" MUST ALWAYS be written in English.
+
+6. "exactMatchFound" & "summaryMessage" (JANE'S SHORT EXPLANATION):
    - "exactMatchFound": Set to true if at least one professional is a direct or strong match (score >= 40), false otherwise.
-   - "summaryMessage" (MANDATORY): Always provide a SHORT, friendly explanation (1 to 2 sentences max, 15 to 25 words, "vraiment pas long") written as Jane speaking naturally in the first person ("Je", "I", "He encontrado", etc.).
+   - "summaryMessage" (MANDATORY): Always provide a SHORT, friendly explanation (1 to 2 sentences max, 15 to 25 words) written as Jane speaking naturally in the first person ("I") in ENGLISH.
    - In this short text, Jane explains her found results and why these professions/disciplines were chosen for the user's specific request.
-   - Examples based on user query language:
-     * French: "Pour vos douleurs de dos, je vous ai sélectionné des kinésithérapeutes et ostéopathes expérimentés à Valence."
-     * English: "To help with your back pain, I've selected trusted physiotherapists and osteopaths in Valencia."
-     * Spanish: "Para tu dolor de espalda, he seleccionado a nuestros fisioterapeutas y osteópatas en Valencia."
-     * French (language request): "Voici les professionnels recommandés à Valence qui parlent français."
-     * If no exact match: "Je n'ai pas trouvé de correspondance exacte, mais voici quelques alternatives proches qui pourraient vous aider."
-   - The summaryMessage MUST strictly match the query language (French if queried in French, English if English, Spanish if Spanish).
+   - English Examples:
+     * "To help with your back pain, I've selected trusted physiotherapists and osteopaths in Valencia."
+     * "Here are the top-rated professionals in Valencia matching your request."
+     * "Here are the recommended professionals in Valencia who speak French."
+     * If no exact match: "I couldn't find an exact match in our directory, but here are some close alternatives that may help."
 
-6. Under "reasonUrlExcerpt" for each matched professional, write a concise sentence explaining why they are recommended for this specific problem (e.g. "Physiotherapist specialized in spine rehabilitation and back pain", "Osteopath offering gentle postural realignment").
+7. Under "reasonUrlExcerpt" for each matched professional, write a concise sentence in ENGLISH explaining why they are recommended for this specific problem (e.g. "Physiotherapist specialized in spine rehabilitation and back pain", "Osteopath offering gentle postural realignment").
 
-7. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
+8. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
    - If the query explicitly asks for a language (e.g. "qui parle français", "french speaking", "habla español", etc.):
      * If matching pros speak that language, ONLY return those who speak it (score 75-100) and omit non-speakers.
-     * If none speak it, return other matching pros with lower scores and explain in summaryMessage.`;
+     * If none speak it, return other matching pros with lower scores and explain in summaryMessage in English.`;
 
   // Resilient multi-model fallback chain:
   // 1. gemini-3.1-flash-lite: Highest daily request limit & lowest latency
@@ -219,7 +221,7 @@ ${JSON.stringify(proListBrief)}`,
             type: Type.OBJECT,
             properties: {
               exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service/symptom, false if not." },
-              summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 25 words) from Jane explaining her found results to the user in their query language." },
+              summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 25 words) in English from Jane explaining her found results to the user." },
               results: {
                 type: Type.ARRAY,
                 items: {
@@ -227,7 +229,7 @@ ${JSON.stringify(proListBrief)}`,
                   properties: {
                     id: { type: Type.STRING, description: "The professional's ID as a string" },
                     score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                    reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                    reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation in English" }
                   },
                   required: ["id", "score", "reasonUrlExcerpt"]
                 }
@@ -353,7 +355,7 @@ ${JSON.stringify(proListBrief)}`,
 
       exactMatchFound = true;
       if (!summaryMessage) {
-        summaryMessage = `Voici les professionnels recommandés qui parlent ${requestedLangs.join(', ')}.`;
+        summaryMessage = `Here are the recommended professionals who speak ${requestedLangs.join(', ')}.`;
       }
     }
   }

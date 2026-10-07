@@ -15566,7 +15566,7 @@ function ExploreView({
           }));
           exactMatch = true;
           if (!summaryMsg) {
-            summaryMsg = `Voici les professionnels recommandés qui parlent ${requestedLangs.join(', ')}.`;
+            summaryMsg = `Here are the recommended professionals who speak ${requestedLangs.join(', ')}.`;
           }
         }
       }
@@ -15586,17 +15586,9 @@ function ExploreView({
         exactMatch = false;
       }
 
-      // If exactMatch is true and no summaryMsg was provided by the API, provide a clean natural fallback
+      // If exactMatch is true and no summaryMsg was provided by the API, provide a clean natural English fallback
       if (!summaryMsg && rawResults.length > 0 && exactMatch) {
-        const isFrench = /[éèàùçâêîôûëï]|\b(le|la|les|un|une|des|du|de|pour|mon|ma|mes|qui|avec)\b/i.test(trimmed);
-        const isSpanish = /[áéíóúñ¿¡]|\b(el|la|los|las|un|una|unos|unas|del|de|para|mi|mis|que|con)\b/i.test(trimmed);
-        if (isFrench) {
-          summaryMsg = `Pour votre recherche, voici les professionnels recommandés les plus adaptés à vos besoins.`;
-        } else if (isSpanish) {
-          summaryMsg = `Para tu búsqueda, aquí tienes a los profesionales recomendados más adecuados.`;
-        } else {
-          summaryMsg = `Here are the top recommended professionals matched to your request.`;
-        }
+        summaryMsg = `Here are the top recommended professionals matched to your request.`;
       }
 
       setAiResults(resultsDict);
