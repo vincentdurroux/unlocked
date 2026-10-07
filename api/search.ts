@@ -194,20 +194,68 @@ EVALUATION CRITERIA:
      * If matching pros speak that language, ONLY return those who speak it (score 75-100) and omit non-speakers.
      * If none speak it, return other matching pros with lower scores and explain in summaryMessage.`;
 
-  // Resilient multi-model fallback chain with exponential backoff:
-  // 1. gemini-3.1-flash-lite: Highest daily request limit (1,000-1,500 RPD) & lowest latency
+  // Resilient multi-model fallback chain:
+  // 1. gemini-3.1-flash-lite: Highest daily request limit & lowest latency
   // 2. gemini-flash-latest: Independent daily quota pool
   // 3. gemini-3.8-flash: Third independent quota pool
   const candidateModels = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
   let lastError: any = null;
   let responseText = "";
 
-  for (const modelName of candidateModels) {
-    let attempts = 0;
-    const maxAttempts = 2;
-    let delayMs = 1000;
+  // Pass 1: Try each model immediately without stalling if one is unavailable
+  for (let i = 0; i < candidateModels.length; i++) {
+    const modelName = candidateModels[i];
+    try {
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: `User Query: "${query}"
 
-    while (attempts < maxAttempts) {
+Professionals:
+${JSON.stringify(proListBrief)}`,
+        config: {
+          systemInstruction: sysInstruction,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service/symptom, false if not." },
+              summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 25 words) from Jane explaining her found results to the user in their query language." },
+              results: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING, description: "The professional's ID as a string" },
+                    score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
+                    reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                  },
+                  required: ["id", "score", "reasonUrlExcerpt"]
+                }
+              }
+            },
+            required: ["exactMatchFound", "summaryMessage", "results"]
+          },
+          temperature: 0.1
+        }
+      });
+
+      if (response && response.text) {
+        responseText = response.text;
+        break;
+      }
+    } catch (err: any) {
+      lastError = err;
+      const nextModel = candidateModels[i + 1];
+      if (nextModel) {
+        console.log(`[api/search] Model ${modelName} unavailable, seamlessly trying next fallback: ${nextModel}...`);
+      }
+    }
+  }
+
+  // Pass 2: If all models had a simultaneous spike, wait 1s and try one final pass
+  if (!responseText) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    for (const modelName of candidateModels) {
       try {
         const response = await ai.models.generateContent({
           model: modelName,
@@ -248,21 +296,7 @@ ${JSON.stringify(proListBrief)}`,
         }
       } catch (err: any) {
         lastError = err;
-        attempts++;
-        const isQuota = isQuotaOrRateLimitError(err);
-        console.warn(`[api/search] Model ${modelName} attempt ${attempts} failed (quota: ${isQuota}):`, err?.message || err);
-
-        if (isQuota && attempts < maxAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-          delayMs *= 2;
-        } else {
-          break; // Try next fallback model
-        }
       }
-    }
-
-    if (responseText) {
-      break; // Successfully generated content
     }
   }
 

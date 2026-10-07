@@ -169,7 +169,7 @@ async function startServer() {
     aiSearchCache.set(key, { data, timestamp: Date.now() });
   };
 
-  // Highly robust Gemini content generator with fallback and exponential backoff retry mechanism
+  // Highly robust Gemini content generator with seamless multi-model fallback
   const generateContentWithFallback = async (
     params: {
       contents: any;
@@ -177,40 +177,44 @@ async function startServer() {
     },
     customModels?: string[]
   ): Promise<any> => {
-    // Priority: gemini-3.1-flash-lite (highest RPD limit, lowest token footprint)
-    // Fallbacks: gemini-flash-latest, gemini-3.8-flash (separate quota buckets)
+    // Models in order of priority: gemini-3.1-flash-lite, gemini-flash-latest, gemini-3.8-flash
     const models = customModels || ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
     let lastError: any = null;
 
-    for (const modelName of models) {
-      let attempt = 0;
-      const maxAttempts = 3;
-      let delay = 1000; // start with 1 second delay
-
-      while (attempt < maxAttempts) {
-        try {
-          console.log(`[ai] Attempting content generation with model: ${modelName} (attempt ${attempt + 1}/${maxAttempts})`);
-          const response = await getAiClient().models.generateContent({
-            ...params,
-            model: modelName,
-          });
+    // Pass 1: Try each model immediately. If a model encounters high demand (503) or rate limit (429),
+    // immediately fail over to the next available model without stalling the user request.
+    for (let i = 0; i < models.length; i++) {
+      const modelName = models[i];
+      try {
+        const response = await getAiClient().models.generateContent({
+          ...params,
+          model: modelName,
+        });
+        if (response && response.text) {
           return response;
-        } catch (err: any) {
-          lastError = err;
-          attempt++;
-          const errMsg = err?.message || String(err);
-          console.warn(`[ai] Model ${modelName} attempt ${attempt} failed: ${errMsg}`);
-
-          const isTransient = isQuotaOrRateLimitError(err);
-          if (isTransient && attempt < maxAttempts) {
-            console.log(`[ai] Transient error on ${modelName}. Retrying in ${delay}ms...`);
-            await new Promise((resolve) => setTimeout(resolve, delay));
-            delay *= 2; // exponential backoff
-          } else {
-            // Not transient or exhausted attempts, move to the next fallback model
-            break;
-          }
         }
+      } catch (err: any) {
+        lastError = err;
+        const nextModel = models[i + 1];
+        if (nextModel) {
+          console.log(`[ai] Model ${modelName} unavailable, seamlessly trying next fallback: ${nextModel}...`);
+        }
+      }
+    }
+
+    // Pass 2: If all models had a simultaneous spike, wait 1s and try one final pass across the models
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    for (const modelName of models) {
+      try {
+        const response = await getAiClient().models.generateContent({
+          ...params,
+          model: modelName,
+        });
+        if (response && response.text) {
+          return response;
+        }
+      } catch (err: any) {
+        lastError = err;
       }
     }
 
@@ -773,8 +777,8 @@ CRITICAL EMOJI & FORMATTING DIRECTIVE:
 
       const ai = getAiClient();
 
-      // Candidate models for search: gemini-2.5-flash-lite has unrestricted search grounding on free tier, followed by Gemini 3 series
-      const defaultChain = ["gemini-2.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+      // Candidate models for search: gemini-3.1-flash-lite, followed by gemini-flash-latest and gemini-3.8-flash
+      const defaultChain = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
       const candidateModels: string[] = [];
       if (preferredModel && preferredModel !== "auto" && typeof preferredModel === "string") {
         candidateModels.push(preferredModel);

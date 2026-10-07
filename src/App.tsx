@@ -15376,17 +15376,55 @@ function ExploreView({
   const [aiQuery, setAiQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'standard' | 'ai'>(() => initialProId ? 'standard' : 'ai');
 
-  useEffect(() => {
-    // If the input gets cleared, instantly reset all AI search filters
-    if (search.trim() === '') {
+  // Debounce & In-flight request cancellation refs
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+
+  // Debounced input change handler: never executes AI on keystrokes, aborts in-flight searches, sets debounce timer
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+
+    // Cancel in-flight AI search if user modified the query
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    if (val.trim() === '') {
+      setIsTyping(false);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
       setDeferredSearch('');
       setAiResults(null);
       setAiExactMatch(true);
       setAiSummaryMessage(null);
       setAiError(null);
       setAiQuery('');
+      return;
     }
-  }, [search]);
+
+    setIsTyping(true);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+    }, 350);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   useEffect(() => {
    if (searchMode === 'standard') {
@@ -15400,10 +15438,21 @@ function ExploreView({
    }
   }, [searchMode]);
 
-  // Hook up handleSearchSubmit to perform an intelligent AI matching process
+  // Hook up handleSearchSubmit to perform an intelligent AI matching process (exclusively triggered on Enter or button click)
   const handleSearchSubmit = async (overrideQuery?: string) => {
+    // Clear typing debounce
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    setIsTyping(false);
+
     const trimmed = (typeof overrideQuery === 'string' ? overrideQuery : search).trim();
     if (!trimmed) {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
       setAiResults(null);
       setAiExactMatch(true);
       setAiSummaryMessage(null);
@@ -15412,6 +15461,18 @@ function ExploreView({
       setAiError(null);
       return;
     }
+
+    // Debounce / duplicate prevention: if already loading with identical query, skip
+    if (aiLoading && aiQuery === trimmed) {
+      return;
+    }
+
+    // Cancel any previous in-flight AI fetch
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     setIsInputFocused(false);
     
@@ -15443,6 +15504,7 @@ function ExploreView({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: trimmed, professionals: compactPros }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -15549,6 +15611,10 @@ function ExploreView({
         currentUser?.id
       ).catch(err => console.warn("Failed to background-log Jane pro search:", err));
     } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        // Request was aborted cleanly by user typing or newer query
+        return;
+      }
       console.error("[Search] AI matching error:", err);
       const errMsg = err.message || "";
       const errorLower = errMsg.toLowerCase();
@@ -15571,8 +15637,10 @@ function ExploreView({
       setAiExactMatch(true);
       setAiSummaryMessage(null);
     } finally {
-      setAiLoading(false);
-      setIsSearching(false);
+      if (!controller.signal.aborted) {
+        setAiLoading(false);
+        setIsSearching(false);
+      }
     }
   };
 
@@ -15988,10 +16056,7 @@ function ExploreView({
                         <button
                           type="button"
                           onClick={() => {
-                            setSearch('');
-                            setDeferredSearch('');
-                            setAiResults(null);
-                            setAiQuery('');
+                            handleSearchChange('');
                             inputRef.current?.focus();
                           }}
                           className="p-1 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0 cursor-pointer"
@@ -16006,7 +16071,7 @@ function ExploreView({
                       placeholder="e.g. plumber, French-speaking dentist, or help sorting out my paperwork"
                       className="w-full bg-transparent outline-none text-slate-700 font-medium leading-relaxed placeholder:text-slate-300 text-xs sm:text-sm border-none p-0 focus:ring-0 resize-none"
                       value={search}
-                      onChange={(e) => setSearch(e.target.value)}
+                      onChange={(e) => handleSearchChange(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
@@ -16020,6 +16085,7 @@ function ExploreView({
 
               {/* Large Blue Recommendations Action Button */}
               <button 
+                type="button"
                 onClick={() => handleSearchSubmit()}
                 disabled={aiLoading || !search.trim()}
                 className="w-full py-4.5 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-[24px] font-bold text-sm md:text-base shadow-lg shadow-blue-500/15 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
@@ -16029,7 +16095,7 @@ function ExploreView({
                 ) : (
                   <Sparkles className="w-5 h-5 fill-white/10" />
                 )}
-                Find professionals
+                <span>Find professionals</span>
               </button>
 
               {/* Privacy Safeguard Note */}
@@ -16350,12 +16416,22 @@ function ExploreView({
                 <div className="flex items-center shrink-0 self-start md:self-center pt-1 md:pt-0">
                   <button
                     onClick={() => {
+                      if (abortControllerRef.current) {
+                        abortControllerRef.current.abort();
+                        abortControllerRef.current = null;
+                      }
+                      if (typingTimeoutRef.current) {
+                        clearTimeout(typingTimeoutRef.current);
+                        typingTimeoutRef.current = null;
+                      }
+                      setIsTyping(false);
                       setSearch('');
                       setAiResults(null);
                       setAiQuery('');
                       setDeferredSearch('');
                       setAiSummaryMessage(null);
                       setAiExactMatch(true);
+                      setAiError(null);
                     }}
                     className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 active:scale-95 text-xs font-semibold text-slate-700 border border-slate-200 shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
                   >
