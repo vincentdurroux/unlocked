@@ -88,10 +88,198 @@ function isQuotaOrRateLimitError(error: any): boolean {
   );
 }
 
+export function fallbackSmartSearch(query: string, professionals: any[]) {
+  if (!query || !query.trim() || !professionals || !Array.isArray(professionals) || professionals.length === 0) {
+    return { exactMatchFound: false, summaryMessage: null, results: [] };
+  }
+
+  const cleanQuery = query.toLowerCase().trim();
+  const requestedLangs = detectRequestedLanguages(cleanQuery);
+  const rawTokens = cleanQuery
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[\s,.;:!?/\\+&|()"-]+/)
+    .filter(t => t.length >= 2);
+
+  const topicSynonyms: Record<string, { keywords: string[]; targetTerms: string[]; summary: string }> = {
+    back_pain: {
+      keywords: ["dos", "back", "colonne", "spine", "vertebre", "lombes", "lombaire", "lumbago", "sciatique", "sciatica", "hernie", "cervical", "posture", "kine", "kinesitherapeute", "physio", "physiotherapist", "physiotherapy", "osteo", "osteopathe", "osteopath", "osteopathy", "chiro", "chiropractor", "chiropracteur"],
+      targetTerms: ["physiotherapist", "kinésithérapeute", "fisioterapia", "osteopath", "ostéopathe", "chiropractor", "chiropracteur", "physiotherapy", "rehabilitation", "spine", "back"],
+      summary: "To help with your back and spine care, I've selected trusted physiotherapists and osteopaths in Valencia."
+    },
+    dental: {
+      keywords: ["dent", "dents", "dentiste", "dentist", "dentaire", "dental", "orthodontiste", "orthodontist", "carie", "implant", "teeth", "tooth"],
+      targetTerms: ["dentist", "dentiste", "orthodontist", "dental", "dentaire"],
+      summary: "Here are the top-rated dental and orthodontics specialists in Valencia."
+    },
+    plumbing: {
+      keywords: ["plombier", "plumber", "fontanero", "fuite", "leak", "tuyau", "tuyauterie", "robinet", "eau", "water", "plomberie", "chauffe-eau", "canalisation", "evier", "wc"],
+      targetTerms: ["plumber", "plombier", "fontanero", "plumbing"],
+      summary: "Here are trusted plumbing specialists available in Valencia for repairs and installations."
+    },
+    electricity: {
+      keywords: ["electricien", "electrician", "electricidad", "courant", "panne", "tableau electrique", "prise", "eclairage", "lumiere"],
+      targetTerms: ["electrician", "électricien", "electricidad", "electrical"],
+      summary: "Here are certified electricians in Valencia for your electrical installations and repairs."
+    },
+    legal_tax: {
+      keywords: ["avocat", "lawyer", "abogado", "juriste", "legal", "droit", "visa", "nie", "empadronamiento", "residence", "fiscal", "tax", "taxes", "impot", "gestor", "gestoria", "comptable", "accountant", "contable", "contrat"],
+      targetTerms: ["lawyer", "avocat", "abogado", "legal", "gestor", "gestoria", "gestoría", "tax advisor", "accountant", "comptable"],
+      summary: "Here are experienced legal, immigration, and tax advisors in Valencia to guide you."
+    },
+    doctor_health: {
+      keywords: ["medecin", "doctor", "medico", "general practitioner", "docteur", "sante", "health", "pediatre", "pediatrician", "gynecologue", "dermatologue", "ophtalmo", "clinic", "clinique"],
+      targetTerms: ["doctor", "médecin", "médico", "general practitioner", "clinic", "pediatrician", "health"],
+      summary: "Here are verified medical doctors and healthcare professionals in Valencia."
+    },
+    real_estate: {
+      keywords: ["immobilier", "real estate", "inmobiliaria", "appartement", "apartment", "flat", "maison", "house", "location", "rent", "louer", "achat", "buy", "realtor", "agence"],
+      targetTerms: ["real estate", "immobilier", "inmobiliaria", "property", "realtor"],
+      summary: "Here are trusted real estate and property consultants in Valencia."
+    },
+    renovation_building: {
+      keywords: ["travaux", "renovation", "architect", "architecte", "peintre", "painter", "peinture", "macon", "handyman", "manitas", "interior designer", "cuisine", "salle de bain"],
+      targetTerms: ["architect", "architecte", "renovation", "painter", "peintre", "handyman", "contractor"],
+      summary: "Here are recommended architects, renovation specialists, and handymen in Valencia."
+    },
+    moving: {
+      keywords: ["demenagement", "moving", "movers", "relocation", "installation", "expat"],
+      targetTerms: ["movers", "moving", "déménagement", "relocation", "gestor"],
+      summary: "Here are relocation and moving specialists in Valencia to make your transition smooth."
+    },
+    languages_translation: {
+      keywords: ["traducteur", "traduction", "translator", "translation", "traductor", "assermente", "sworn", "professeur", "cours", "language", "langue"],
+      targetTerms: ["translator", "traducteur", "traductor", "language", "sworn"],
+      summary: "Here are sworn translators and language specialists in Valencia."
+    },
+    hair_beauty: {
+      keywords: ["coiffeur", "coiffure", "hairdresser", "hair", "barber", "barbier", "peluquero", "ongles", "nails", "beaute", "massage", "spa", "esthetique"],
+      targetTerms: ["hairdresser", "coiffeur", "barber", "beauty", "massage", "spa"],
+      summary: "Here are recommended hair stylists, barbers, and beauty professionals in Valencia."
+    },
+    mind_wellness: {
+      keywords: ["psychologue", "psychologist", "therapeute", "therapist", "coach", "coaching", "mental", "stress", "anxiete", "burnout", "hypnose", "sophrologie", "yoga", "pilates"],
+      targetTerms: ["psychologist", "psychologue", "therapist", "counselor", "coach", "yoga", "pilates"],
+      summary: "Here are certified therapists, counselors, and wellness coaches in Valencia."
+    }
+  };
+
+  let matchedTopic: { keywords: string[]; targetTerms: string[]; summary: string } | null = null;
+  for (const topicKey of Object.keys(topicSynonyms)) {
+    const topic = topicSynonyms[topicKey];
+    if (topic.keywords.some(kw => cleanQuery.includes(kw) || rawTokens.includes(kw))) {
+      matchedTopic = topic;
+      break;
+    }
+  }
+
+  const scoredPros: { id: string; score: number; reasonUrlExcerpt: string }[] = [];
+
+  professionals.forEach((p: any) => {
+    if (!p || p.id == null) return;
+    const proId = String(p.id);
+    const pName = (p.name || "").toLowerCase();
+    const pCompany = (p.company_name || "").toLowerCase();
+    const pCategory = (p.category || p.profession || "").toLowerCase();
+    const pCats = [
+      pCategory,
+      ...(Array.isArray(p.categories) ? p.categories.map((c: any) => String(c).toLowerCase()) : [])
+    ].join(" ");
+    const pBio = (p.bio || p.description || "").toLowerCase();
+    const pQualities = (Array.isArray(p.top_qualities) ? p.top_qualities.map((q: any) => String(q).toLowerCase()) : []).join(" ");
+    const pFullText = `${pName} ${pCompany} ${pCats} ${pBio} ${pQualities}`;
+    const pNorm = pFullText.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    let score = 0;
+    let matchedReason = "";
+
+    // Topic / Specialty matching
+    if (matchedTopic) {
+      const hitsTarget = matchedTopic.targetTerms.some(term => pNorm.includes(term));
+      if (hitsTarget) {
+        score += 75;
+        matchedReason = `Specialized in ${p.category || p.profession || 'this discipline'} in Valencia.`;
+      }
+    }
+
+    // Word tokens matching
+    let tokenMatches = 0;
+    rawTokens.forEach(tok => {
+      if (tok.length <= 2) return;
+      if (pName.includes(tok)) {
+        score += 35;
+        tokenMatches++;
+      } else if (pCats.includes(tok)) {
+        score += 30;
+        tokenMatches++;
+      } else if (pNorm.includes(tok)) {
+        score += 15;
+        tokenMatches++;
+      }
+    });
+
+    if (tokenMatches > 0 && !matchedReason) {
+      matchedReason = `Verified ${p.category || p.profession || 'professional'} in Valencia matching '${query}'.`;
+    }
+
+    // Spoken language filter
+    if (requestedLangs.length > 0) {
+      const speaksLang = proSpeaksAnyLanguage(p, requestedLangs);
+      if (speaksLang) {
+        score += 25;
+        matchedReason = matchedReason 
+          ? `${matchedReason} (Speaks ${requestedLangs.join(', ')})`
+          : `Verified professional in Valencia who speaks ${requestedLangs.join(', ')}.`;
+      } else if (score > 0) {
+        score = Math.max(0, score - 50);
+      }
+    }
+
+    if (p.is_recommended && score > 0) {
+      score += 5;
+    }
+
+    score = Math.min(score, 98);
+
+    if (score > 0) {
+      scoredPros.push({
+        id: proId,
+        score,
+        reasonUrlExcerpt: matchedReason || `Recommended ${p.category || p.profession || 'professional'} in Valencia.`
+      });
+    }
+  });
+
+  scoredPros.sort((a, b) => b.score - a.score);
+
+  const exactMatchFound = scoredPros.length > 0 && scoredPros[0].score >= 40;
+
+  let summaryMessage: string | null = null;
+  if (requestedLangs.length > 0) {
+    summaryMessage = `Here are the recommended professionals in Valencia who speak ${requestedLangs.join(', ')}.`;
+  } else if (matchedTopic) {
+    summaryMessage = matchedTopic.summary;
+  } else if (exactMatchFound) {
+    summaryMessage = `Here are the top-rated professionals in Valencia matching "${query}".`;
+  } else {
+    summaryMessage = `I couldn't find an exact match for "${query}", but here are top community-recommended professionals in Valencia.`;
+  }
+
+  return {
+    exactMatchFound,
+    summaryMessage,
+    results: scoredPros
+  };
+}
+
 export async function processSearch(query: string, professionals: any[]) {
+  // Jane AI Paused flag: provides fast, reliable, zero-quota semantic search during API suspension
+  const isAiPaused = process.env.PAUSE_JANE_AI !== "false";
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured on the server.");
+
+  if (isAiPaused || !apiKey) {
+    console.log(`[api/search] Jane AI is paused: executing fast semantic search for "${query}"`);
+    return fallbackSmartSearch(query, professionals);
   }
 
   if (!query || !query.trim() || !professionals || !Array.isArray(professionals)) {
@@ -397,14 +585,50 @@ export default async function handler(req: any, res: any) {
     const result = await processSearch(query, professionals);
     return res.status(200).json(result);
   } catch (error: any) {
-    console.error("[api/search] Serverless search error:", error);
-    if (isQuotaOrRateLimitError(error)) {
-      return res.status(429).json({
-        error: "Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need."
-      });
-    }
-    return res.status(500).json({
-      error: error.message || "Failed to process matching"
+    console.warn("[api/search] Gemini API quota reached. Serving intelligent fallback catalog results:", error?.message || error);
+    
+    const cleanQuery = (query || "").trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const tokens = cleanQuery.split(/[\s,.'"-]+/).filter((t: string) => t.length > 1 && !['in', 'at', 'the', 'le', 'la', 'les', 'de', 'du', 'des', 'en', 'un', 'une', 'to', 'for', 'pour', 'por', 'y', 'et', 'and'].includes(t));
+
+    const fallbackResults = (professionals || []).map((p: any) => {
+      const id = String(p.id);
+      const pName = (p.name || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const pCat = (p.category || p.profession || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const pCats = ((Array.isArray(p.categories) ? p.categories : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const pBio = (p.bio || p.description || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const pCompany = (p.company_name || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const pLangs = ((Array.isArray(p.languages) ? p.languages : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+      let score = 0;
+      let matchReason = "Recommended professional in Valencia";
+
+      for (const t of tokens) {
+        if (pName.includes(t) || pCat.includes(t) || pCats.includes(t)) {
+          score += 60;
+          matchReason = `Specialized in ${p.category || p.profession || 'services'} in Valencia`;
+        } else if (pCompany.includes(t) || pLangs.includes(t)) {
+          score += 40;
+        } else if (pBio.includes(t)) {
+          score += 25;
+        }
+      }
+
+      if (tokens.length === 0) {
+        score = 70;
+      }
+
+      return {
+        id,
+        score: Math.min(100, score),
+        reasonUrlExcerpt: matchReason
+      };
+    }).filter((r: any) => r.score > 0).sort((a: any, b: any) => b.score - a.score);
+
+    return res.status(200).json({
+      exactMatchFound: fallbackResults.length > 0,
+      summaryMessage: `Here are the top-rated professionals matching your search for "${query}".`,
+      results: fallbackResults,
+      fallback_used: true
     });
   }
 }

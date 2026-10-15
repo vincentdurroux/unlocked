@@ -15376,6 +15376,94 @@ function ExploreView({
     window.scrollTo(0, 0);
   }, []);
 
+// JANE AI STATUS FLAG:
+// Put Jane AI on pause due to Gemini API limits/quotas.
+// Directory search remains 100% active, instant, and resilient via smart bilingual catalog matching.
+const IS_JANE_AI_PAUSED = true;
+
+const PRO_SYNONYM_GROUPS: string[][] = [
+  ['plumber', 'plomberie', 'plombier', 'fontanero', 'fontaneria', 'leak', 'fuite', 'fuga', 'pipe', 'tuyau'],
+  ['electrician', 'electricite', 'electricien', 'electricista', 'power', 'courant', 'wiring'],
+  ['doctor', 'medecin', 'medico', 'generaliste', 'gp', 'health', 'sante', 'salud', 'clinic', 'clinique'],
+  ['dentist', 'dentiste', 'dentista', 'teeth', 'dents', 'dientes', 'dental'],
+  ['physio', 'physiotherapist', 'physiotherapie', 'kine', 'kinesitherapeute', 'fisioterapeuta', 'fisioterapia', 'back pain', 'mal de dos', 'dolor de espalda'],
+  ['osteo', 'osteopath', 'osteopathe', 'osteopatia', 'osteopathie'],
+  ['chiro', 'chiropractor', 'chiropracteur', 'quiropractico'],
+  ['lawyer', 'avocat', 'abogado', 'legal', 'juridique', 'notaire', 'notary', 'gestor', 'gestoria', 'paperwork', 'visas', 'nie', 'padron', 'taxes', 'impots'],
+  ['psychologist', 'psychologue', 'psicologo', 'therapist', 'therapeute', 'therapy', 'mental health', 'counseling'],
+  ['locksmith', 'serrurier', 'cerrajero', 'lock', 'serrure', 'cerradura', 'keys', 'cles', 'llaves'],
+  ['mechanic', 'mecanicien', 'mecanico', 'garage', 'car', 'voiture', 'coche', 'auto', 'vehicule'],
+  ['painter', 'peintre', 'pintor', 'painting', 'peinture', 'pintura'],
+  ['cleaner', 'menage', 'cleaning', 'limpieza', 'housekeeper', 'femme de menage'],
+  ['real estate', 'immobilier', 'inmobiliaria', 'agent', 'realtor', 'apartment', 'flat', 'housing', 'logement', 'piso', 'rental'],
+  ['accountant', 'comptable', 'contable', 'fiscal', 'tax', 'accounting', 'taxes'],
+  ['architect', 'architecte', 'arquitecto', 'renovation', 'construction', 'reforme'],
+  ['veterinarian', 'vet', 'veterinaire', 'veterinario', 'pets', 'animals', 'dog', 'cat', 'chien', 'chat', 'perro', 'gato'],
+  ['hairdresser', 'coiffeur', 'coiffeuse', 'peluquero', 'peluqueria', 'hair', 'cheveux', 'pelo'],
+  ['trainer', 'coach', 'fitness', 'sport', 'personal trainer', 'gym'],
+  ['pediatrician', 'pediatre', 'pediatra', 'child', 'children', 'enfant', 'bebe', 'baby'],
+  ['gynecologist', 'gynecologue', 'ginecologo', 'women', 'sage femme', 'matrona'],
+  ['dermatologist', 'dermatologue', 'dermatologo', 'skin', 'peau', 'piel']
+];
+
+function computeProSearchScore(pro: any, searchStr: string): number {
+  if (!searchStr || !searchStr.trim()) return 100;
+
+  const cleanStr = searchStr.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const tokens = cleanStr.split(/[\s,.'"-]+/).filter(t => t.length > 1 && !['in', 'at', 'the', 'le', 'la', 'les', 'de', 'du', 'des', 'en', 'un', 'une', 'to', 'for', 'pour', 'por', 'y', 'et', 'and', 'my', 'mon', 'me', 'help', 'aide'].includes(t));
+
+  if (tokens.length === 0) return 100;
+
+  const proName = (pro.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const proCompany = (pro.company_name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const proCat = (pro.category || pro.profession || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const proCats = ((Array.isArray(pro.categories) ? pro.categories : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const proBio = (pro.bio || pro.description || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const proLangs = ((Array.isArray(pro.languages) ? pro.languages : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const proQualities = ((Array.isArray(pro.top_qualities) ? pro.top_qualities : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const proLoc = (pro.location || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  const combinedFull = `${proName} ${proCompany} ${proCat} ${proCats} ${proBio} ${proLangs} ${proQualities} ${proLoc}`;
+
+  let matchedTokensCount = 0;
+  let totalScore = 0;
+
+  for (const token of tokens) {
+    let tokenMatched = false;
+
+    // Direct match in name, primary category, or subcategories
+    if (proName.includes(token) || proCat.includes(token) || proCats.includes(token)) {
+      totalScore += 50;
+      tokenMatched = true;
+    } else if (proCompany.includes(token) || proLangs.includes(token) || proLoc.includes(token)) {
+      totalScore += 35;
+      tokenMatched = true;
+    } else if (proBio.includes(token) || proQualities.includes(token)) {
+      totalScore += 20;
+      tokenMatched = true;
+    }
+
+    // Synonym group match
+    if (!tokenMatched) {
+      const group = PRO_SYNONYM_GROUPS.find(g => g.some(word => word.includes(token) || token.includes(word)));
+      if (group) {
+        const matchesSyn = group.some(word => combinedFull.includes(word));
+        if (matchesSyn) {
+          totalScore += 30;
+          tokenMatched = true;
+        }
+      }
+    }
+
+    if (tokenMatched) {
+      matchedTokensCount++;
+    }
+  }
+
+  if (matchedTokensCount === 0) return 0;
+  return totalScore + (matchedTokensCount / tokens.length) * 40;
+}
+
   // AI-powered Search states
   const [aiResults, setAiResults] = useState<{ [key: string]: { score: number; reason: string } } | null>(null);
   const [aiExactMatch, setAiExactMatch] = useState<boolean>(true);
@@ -15390,7 +15478,7 @@ function ExploreView({
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isTyping, setIsTyping] = useState(false);
 
-  // Debounced input change handler: never executes AI on keystrokes, aborts in-flight searches, sets debounce timer
+  // Debounced input change handler: provides smooth real-time catalog search when Jane AI is paused
   const handleSearchChange = (val: string) => {
     setSearch(val);
 
@@ -15421,7 +15509,11 @@ function ExploreView({
     }
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
-    }, 350);
+      if (IS_JANE_AI_PAUSED) {
+        setDeferredSearch(val.trim());
+        setAiQuery(val.trim());
+      }
+    }, 250);
   };
 
   useEffect(() => {
@@ -15447,7 +15539,7 @@ function ExploreView({
    }
   }, [searchMode]);
 
-  // Hook up handleSearchSubmit to perform an intelligent AI matching process (exclusively triggered on Enter or button click)
+  // Hook up handleSearchSubmit to perform directory search (instant local search when Jane AI is paused)
   const handleSearchSubmit = async (overrideQuery?: string) => {
     // Clear typing debounce
     if (typingTimeoutRef.current) {
@@ -15468,6 +15560,30 @@ function ExploreView({
       setDeferredSearch('');
       setAiQuery('');
       setAiError(null);
+      return;
+    }
+
+    if (IS_JANE_AI_PAUSED) {
+      // Jane AI is currently paused to avoid API limits.
+      // Immediate, zero-latency catalog search preserving the full user experience:
+      setAiLoading(false);
+      setIsSearching(false);
+      setAiError(null);
+      setAiQuery(trimmed);
+      setDeferredSearch(trimmed);
+      setSelectedCategory('All');
+      setAiResults(null);
+      setAiExactMatch(true);
+      setAiSummaryMessage(null);
+      scrollToResults();
+
+      // Background analytics log
+      searchService.saveSearch(
+        trimmed,
+        'catalog_search',
+        1,
+        currentUser?.id
+      ).catch(() => {});
       return;
     }
 
@@ -15967,17 +16083,8 @@ function ExploreView({
               matchesSearch = proSpeaksAnyLanguage(pro, requestedLangs);
             }
           } else {
-            const searchLower = searchStr.toLowerCase();
-            const proName = typeof pro.name === 'string' ? pro.name : '';
-            const proCat = typeof pro.category === 'string' ? pro.category : '';
-            const proCompany = typeof pro.company_name === 'string' ? pro.company_name : '';
-            const proBio = typeof pro.bio === 'string' ? pro.bio : '';
-
-            matchesSearch = proName.toLowerCase().includes(searchLower) || 
-                            (Array.isArray(pro.categories) && pro.categories.some(c => typeof c === 'string' && c.toLowerCase().includes(searchLower))) ||
-                            proCat.toLowerCase().includes(searchLower) ||
-                            proCompany.toLowerCase().includes(searchLower) ||
-                            proBio.toLowerCase().includes(searchLower);
+            const localScore = computeProSearchScore(pro, searchStr);
+            matchesSearch = localScore > 0;
           }
         }
         
@@ -16006,11 +16113,18 @@ function ExploreView({
         const recB = b.is_recommended !== false;
         if (recA !== recB) return recA ? -1 : 1;
 
-        // 3. AI match score
+        // 3. Match score (AI match score or smart local catalog relevance score)
         if (aiResults) {
           const scoreA = aiResults[String(a.id)]?.score || 0;
           const scoreB = aiResults[String(b.id)]?.score || 0;
           if (scoreA !== scoreB) return scoreB - scoreA;
+        } else {
+          const searchStr = typeof deferredSearch === 'string' ? deferredSearch.trim() : '';
+          if (searchStr) {
+            const scoreA = computeProSearchScore(a, searchStr);
+            const scoreB = computeProSearchScore(b, searchStr);
+            if (scoreA !== scoreB) return scoreB - scoreA;
+          }
         }
 
         if (userLocation && a.coordinates && b.coordinates) {
@@ -16341,15 +16455,15 @@ function ExploreView({
             </motion.div>
           </div>
 
-          {/* Active AI search message banner (Placed AFTER map - Clean & Seamless Light Theme) */}
-          {aiQuery && aiResults && !aiLoading && (
+          {/* Active Search message banner (Placed AFTER map - Clean & Seamless Light Theme) */}
+          {(aiQuery || (typeof deferredSearch === 'string' && deferredSearch.trim() !== '')) && !aiLoading && (
             <motion.div 
               id="ai-search-banner"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
               className={`scroll-mt-28 p-4 md:p-5 rounded-2xl border transition-all shadow-xs ${
-                !hasStrongAiMatches || !aiExactMatch
+                filteredPros.length === 0
                   ? "bg-amber-50/70 border-amber-200/80 text-amber-950"
                   : "bg-blue-50/60 border-blue-100 text-slate-900"
               }`}
@@ -16357,56 +16471,75 @@ function ExploreView({
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-start gap-3.5">
                   <div className={`p-2.5 rounded-xl shrink-0 border ${
-                    !hasStrongAiMatches || !aiExactMatch
+                    filteredPros.length === 0
                       ? "bg-amber-100/80 border-amber-200 text-amber-800"
                       : "bg-blue-100/80 border-blue-200 text-brand-blue"
                   }`}>
-                    <Sparkles className="w-5 h-5 animate-pulse" />
+                    <Sparkles className="w-5 h-5" />
                   </div>
 
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
-                        !hasStrongAiMatches || !aiExactMatch
+                        filteredPros.length === 0
                           ? "bg-amber-100 text-amber-900 border-amber-200"
                           : "bg-blue-100 text-blue-900 border-blue-200"
                       }`}>
-                        {!hasStrongAiMatches || !aiExactMatch ? "Jane's Tips" : "Jane's Search"}
+                        {aiResults ? (!hasStrongAiMatches || !aiExactMatch ? "Jane's Tips" : "Jane's Search") : (filteredPros.length === 0 ? "Search Tips" : "Verified Search")}
                       </span>
                       <span className="text-xs font-medium text-slate-500">
-                        "{aiQuery}"
+                        "{aiQuery || deferredSearch}"
                       </span>
                     </div>
 
-                    {!hasStrongAiMatches || !aiExactMatch ? (
-                      <p className="text-xs sm:text-sm font-medium leading-relaxed text-amber-950">
-                        {aiSummaryMessage ? (
-                          filteredPros.length === 0 
-                            ? aiSummaryMessage.replace(/Jane found some alternative options, but they may not meet all your criteria\./gi, '').trim()
-                            : aiSummaryMessage
-                        ) : (
-                          <>
-                            We couldn't find an exact match for "<strong>{aiQuery}</strong>" in our directory.
-                            {filteredPros.length > 0 && " Jane found some alternative options, but they may not meet all your criteria."}
-                          </>
-                        )}
-                      </p>
+                    {aiResults ? (
+                      !hasStrongAiMatches || !aiExactMatch ? (
+                        <p className="text-xs sm:text-sm font-medium leading-relaxed text-amber-950">
+                          {aiSummaryMessage ? (
+                            filteredPros.length === 0 
+                              ? aiSummaryMessage.replace(/Jane found some alternative options, but they may not meet all your criteria\./gi, '').trim()
+                              : aiSummaryMessage
+                          ) : (
+                            <>
+                              We couldn't find an exact match for "<strong>{aiQuery || deferredSearch}</strong>" in our directory.
+                              {filteredPros.length > 0 && " Jane found some alternative options, but they may not meet all your criteria."}
+                            </>
+                          )}
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {aiSummaryMessage ? (
+                            <p className="text-xs sm:text-sm font-semibold leading-relaxed text-slate-800">
+                              {aiSummaryMessage}
+                            </p>
+                          ) : (
+                            <p className="text-xs sm:text-sm font-medium leading-relaxed text-slate-700">
+                              Jane found <strong>{filteredPros.length}</strong> {filteredPros.length === 1 ? 'match' : 'matches'} for "<strong>{aiQuery || deferredSearch}</strong>" sorted by relevance:
+                            </p>
+                          )}
+                          {aiSummaryMessage && (
+                            <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5">
+                              <span>{filteredPros.length} {filteredPros.length === 1 ? 'match' : 'matches'}</span>
+                              <span>•</span>
+                              <span>Sorted by relevance</span>
+                            </p>
+                          )}
+                        </div>
+                      )
                     ) : (
-                      <div className="space-y-1.5">
-                        {aiSummaryMessage ? (
-                          <p className="text-xs sm:text-sm font-semibold leading-relaxed text-slate-800">
-                            {aiSummaryMessage}
-                          </p>
-                        ) : (
-                          <p className="text-xs sm:text-sm font-medium leading-relaxed text-slate-700">
-                            Jane found <strong>{filteredPros.length}</strong> {filteredPros.length === 1 ? 'match' : 'matches'} for "<strong>{aiQuery}</strong>" sorted by relevance:
-                          </p>
-                        )}
-                        {aiSummaryMessage && (
+                      <div className="space-y-1">
+                        <p className="text-xs sm:text-sm font-semibold leading-relaxed text-slate-800">
+                          {filteredPros.length === 0 ? (
+                            `We couldn't find any professionals matching "${aiQuery || deferredSearch}". Try broader terms or change the category filter.`
+                          ) : (
+                            `Found ${filteredPros.length} ${filteredPros.length === 1 ? 'verified professional' : 'verified professionals'} matching "${aiQuery || deferredSearch}":`
+                          )}
+                        </p>
+                        {filteredPros.length > 0 && (
                           <p className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5">
                             <span>{filteredPros.length} {filteredPros.length === 1 ? 'match' : 'matches'}</span>
                             <span>•</span>
-                            <span>Sorted by relevance</span>
+                            <span>Sorted by community relevance</span>
                           </p>
                         )}
                       </div>

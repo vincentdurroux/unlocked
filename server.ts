@@ -497,20 +497,51 @@ ${JSON.stringify(proListBrief)}`,
 
       return res.json(responsePayload);
     } catch (error: any) {
-      console.error("[api] Gemini AI Search matching error:", error);
-      const errorMsg = error.message || "";
-      const errorLower = errorMsg.toLowerCase();
-      if (
-        errorLower.includes("quota") ||
-        errorLower.includes("limit") ||
-        errorLower.includes("exhausted") ||
-        errorLower.includes("429") ||
-        errorLower.includes("too many requests") ||
-        errorLower.includes("rate limit")
-      ) {
-        return res.status(429).json({ error: "Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need." });
-      }
-      return res.status(500).json({ error: error.message || "Failed to process matching" });
+      console.warn("[api] Gemini AI Search API hit limit/quota. Seamlessly activating local catalog matching fallback:", error?.message || error);
+      
+      const cleanQuery = (query || "").trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const tokens = cleanQuery.split(/[\s,.'"-]+/).filter(t => t.length > 1 && !['in', 'at', 'the', 'le', 'la', 'les', 'de', 'du', 'des', 'en', 'un', 'une', 'to', 'for', 'pour', 'por', 'y', 'et', 'and'].includes(t));
+
+      const fallbackResults = (professionals || []).map((p: any) => {
+        const id = String(p.id);
+        const pName = (p.name || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const pCat = (p.category || p.profession || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const pCats = ((Array.isArray(p.categories) ? p.categories : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const pBio = (p.bio || p.description || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const pCompany = (p.company_name || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const pLangs = ((Array.isArray(p.languages) ? p.languages : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+        let score = 0;
+        let matchReason = "Recommended professional in Valencia";
+
+        for (const t of tokens) {
+          if (pName.includes(t) || pCat.includes(t) || pCats.includes(t)) {
+            score += 60;
+            matchReason = `Specialized in ${p.category || p.profession || 'services'} in Valencia`;
+          } else if (pCompany.includes(t) || pLangs.includes(t)) {
+            score += 40;
+          } else if (pBio.includes(t)) {
+            score += 25;
+          }
+        }
+
+        if (tokens.length === 0) {
+          score = 70;
+        }
+
+        return {
+          id,
+          score: Math.min(100, score),
+          reasonUrlExcerpt: matchReason
+        };
+      }).filter((r: any) => r.score > 0).sort((a: any, b: any) => b.score - a.score);
+
+      return res.json({
+        exactMatchFound: fallbackResults.length > 0,
+        summaryMessage: `Here are the top-rated professionals matching your search for "${query}".`,
+        results: fallbackResults,
+        fallback_used: true
+      });
     }
   });
 
