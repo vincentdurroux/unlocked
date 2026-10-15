@@ -230,8 +230,8 @@ export function cleanDuplicateEmojis(text: string): string {
 function cleanExtractedSectionContent(content: string): string {
   if (!content) return '';
   let cleaned = content.trim();
-  // Remove any internal duplicate header lines that might have been captured (e.g. "### ✨ What to expect")
-  cleaned = cleaned.replace(/^[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[\p{Extended_Pictographic}\uFE0F\s]*)(?:What (?:can you |to |you can )?expect\??|Perfect for|Good to know(?:\s*\(tips\))?|More info(?:rmation)?|Useful links|Tickets & (?:Info|Links)|Plus d'infos|A quoi s'attendre\??|Infos pratiques|Public cible|Para quién|Qué esperar\??)(?:\*\*?|__|:|\s)*\n?/gimu, '');
+  // Remove any internal duplicate header lines that might have been captured
+  cleaned = cleaned.replace(/^[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[\p{Extended_Pictographic}\uFE0F\s]*)(?:What (?:can you |to |you can )?expect\??|About (?:the )?event|Overview|Description|Event details|Perfect for|Target audience|Who should attend|Ideal for|Who is (?:this|it) for|Good to know(?:\s*\(tips\))?|Practical (?:info|information)|Need to know|Important info(?:rmation)?|Tickets & Timing|More info(?:rmation)?|Useful links|Tickets & (?:Info|Links)|Official links|Plus d'infos|A quoi s'attendre\??|Infos pratiques|Public cible|Para quién|Qué esperar\??)(?:\*\*?|__|:|\s)*\n?/gimu, '');
   return cleanDuplicateEmojis(cleaned);
 }
 
@@ -247,19 +247,19 @@ export function parseDescriptionSections(description: string) {
   const headerMatchers = [
     {
       key: 'expect',
-      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[✨\s]*)?(?:What (?:can you |to |you can )?expect\??|A quoi s'attendre\??|Ce à quoi vous attendre\??|Qué esperar\??)(?:\*\*?|__|:|\s)*(?:\n|$)/i
+      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[✨\s]*)?(?:What (?:can you |to |you can )?expect\??|About (?:the )?event|Overview|Description|Event details|A quoi s'attendre\??|Ce à quoi vous attendre\??|Qué esperar\??)(?:\*\*?|__|:|\s)*(?:\n|$)/i
     },
     {
       key: 'perfectFor',
-      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[🎯\s]*)?(?:Perfect for|Ideal for|Who is (?:this|it) for|Public cible|Idéal pour|Para quién)(?:\*\*?|__|:|\s)*(?:\n|$)/i
+      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[🎯\s]*)?(?:Perfect for|Ideal for|Who is (?:this|it) for|Target audience|Who should attend|Public cible|Idéal pour|Para quién)(?:\*\*?|__|:|\s)*(?:\n|$)/i
     },
     {
       key: 'goodToKnow',
-      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[💡\s]*)?(?:Good to know(?:\s*\(tips\))?|Practical (?:info|information)|Infos pratiques|Bon à savoir|Información práctica)(?:\*\*?|__|:|\s)*(?:\n|$)/i
+      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[💡\s]*)?(?:Good to know(?:\s*\(tips\))?|Practical (?:info|information)|Need to know|Important info(?:rmation)?|Tickets & Timing|Infos pratiques|Bon à savoir|Información práctica)(?:\*\*?|__|:|\s)*(?:\n|$)/i
     },
     {
       key: 'moreInfo',
-      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[🔗\s]*)?(?:More info(?:rmation)?|Useful links|Tickets & (?:Info|Links)|Plus d'infos|En savoir plus|Más información)(?:\*\*?|__|:|\s)*(?:\n|$)/i
+      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[🔗\s]*)?(?:More info(?:rmation)?|Useful links|Tickets & (?:Info|Links)|Official links|Plus d'infos|En savoir plus|Más información)(?:\*\*?|__|:|\s)*(?:\n|$)/i
     }
   ];
 
@@ -283,6 +283,11 @@ export function parseDescriptionSections(description: string) {
 
   // If we found at least one real section header, extract the content for each
   if (hasRealSections) {
+    if (sections[0].start > 0) {
+      const preamble = cleanExtractedSectionContent(description.substring(0, sections[0].start));
+      if (preamble) expect = preamble;
+    }
+
     for (let i = 0; i < sections.length; i++) {
       const current = sections[i];
       const next = sections[i + 1];
@@ -290,7 +295,9 @@ export function parseDescriptionSections(description: string) {
       const contentEnd = next ? next.start : description.length;
       const content = cleanExtractedSectionContent(description.substring(contentStart, contentEnd));
 
-      if (current.key === 'expect') expect = content;
+      if (current.key === 'expect') {
+        expect = expect ? `${expect}\n\n${content}` : content;
+      }
       else if (current.key === 'perfectFor') perfectFor = content;
       else if (current.key === 'goodToKnow') goodToKnow = content;
       else if (current.key === 'moreInfo') moreInfo = content;
@@ -437,32 +444,33 @@ export function SimpleMarkdown({ children }: { children: string }) {
   const cleaned = cleanDuplicateEmojis(children);
   const parsed = parseDescriptionSections(cleaned);
 
-  if (parsed.hasRealSections) {
+  // If there is any content in expect, perfectFor, goodToKnow or moreInfo, render with canonical structured cards
+  if (parsed.expect || parsed.perfectFor || parsed.goodToKnow || parsed.moreInfo) {
     return (
-      <div className="space-y-3 text-xs sm:text-sm text-slate-700 not-italic">
+      <div className="space-y-3.5 text-xs sm:text-sm text-slate-700 not-italic">
         {parsed.expect && (
-          <div className="space-y-1.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-brand-blue text-xs uppercase tracking-wider">
-              <span>✨ What to expect</span>
+          <div className="space-y-1.5 bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-black text-brand-blue text-xs uppercase tracking-wider">
+              <span>✨ WHAT TO EXPECT</span>
             </div>
             <div className="leading-relaxed text-slate-700 font-normal">
-              {renderFormattedContent(parsed.expect, "font-bold text-slate-950")}
+              {renderFormattedContent(parsed.expect, "font-extrabold text-slate-950")}
             </div>
           </div>
         )}
 
         {parsed.perfectFor && (
           <div className="space-y-1.5 bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs uppercase tracking-wider">
-              <span>🎯 Perfect for</span>
+            <div className="flex items-center gap-1.5 font-black text-emerald-900 text-xs uppercase tracking-wider">
+              <span>🎯 PERFECT FOR</span>
             </div>
-            <div className="space-y-1 leading-relaxed text-emerald-950 font-normal">
+            <div className="space-y-1.5 leading-relaxed text-emerald-950 font-normal">
               {parsed.perfectFor.split('\n').map(line => line.trim()).filter(Boolean).map((line, idx) => {
                 const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
                 return (
                   <div key={idx} className="flex items-start gap-2">
                     <span className="text-emerald-600 font-extrabold mt-0.5">•</span>
-                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-bold text-emerald-950")}</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-emerald-950")}</span>
                   </div>
                 );
               })}
@@ -472,22 +480,30 @@ export function SimpleMarkdown({ children }: { children: string }) {
 
         {parsed.goodToKnow && (
           <div className="space-y-1.5 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs uppercase tracking-wider">
-              <span>💡 Good to know</span>
+            <div className="flex items-center gap-1.5 font-black text-amber-900 text-xs uppercase tracking-wider">
+              <span>💡 GOOD TO KNOW</span>
             </div>
-            <div className="leading-relaxed text-amber-950 font-normal">
-              {renderFormattedContent(parsed.goodToKnow, "font-bold text-amber-950")}
+            <div className="space-y-1.5 leading-relaxed text-amber-950 font-normal">
+              {parsed.goodToKnow.split('\n').map(line => line.trim()).filter(Boolean).map((line, idx) => {
+                const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
+                return (
+                  <div key={idx} className="flex items-start gap-2">
+                    <span className="text-amber-700 font-bold mt-0.5">-</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-amber-950")}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
         {parsed.moreInfo && (
           <div className="space-y-1.5 bg-sky-50/60 p-4 rounded-2xl border border-sky-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-sky-900 text-xs uppercase tracking-wider">
-              <span>🔗 More info</span>
+            <div className="flex items-center gap-1.5 font-black text-sky-900 text-xs uppercase tracking-wider">
+              <span>🔗 MORE INFO</span>
             </div>
-            <div className="leading-relaxed text-sky-950 font-normal">
-              {renderFormattedContent(parsed.moreInfo, "font-bold text-sky-950")}
+            <div className="space-y-1 leading-relaxed text-sky-950 font-normal">
+              {renderFormattedContent(parsed.moreInfo, "font-extrabold text-sky-950")}
             </div>
           </div>
         )}
@@ -775,8 +791,16 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
     setDiscoveredEvents(prev => prev.map(e => e.id === editingEvent.id ? updatedEv : e));
     setDbDiscoveredEvents(prev => prev.map(e => e.id === editingEvent.id ? updatedEv : e));
+    if (activeSubTab === 'db_repository') {
+      eventService.updateDiscoveredEventByTitle(editingEvent.title, updatedEv).catch(err => console.error("Failed to update repository event in Supabase:", err));
+    }
+    if (activeSubTab === 'published_events') {
+      setPublishedEvents(prev => prev.map(e => e.id === editingEvent.id ? updatedEv : e));
+      eventService.updateEvent(editingEvent.id, updatedEv).catch(err => console.error("Failed to update published event in Supabase:", err));
+      if (onRefetchEvents) onRefetchEvents();
+    }
     setEditingEvent(null);
-    setMsg?.({ type: 'success', text: 'Card preview updated with your customized information.' });
+    setMsg?.({ type: 'success', text: 'Event updated successfully with your customized sections.' });
   };
 
   const handleSaveAndPublish = async () => {
@@ -2652,16 +2676,16 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                       {/* Box 1: What to expect */}
                       <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200 space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-brand-blue flex items-center gap-1.5">
-                            <span>✨ What to expect</span>
+                          <label className="text-xs font-black text-brand-blue flex items-center gap-1.5 uppercase tracking-wider">
+                            <span>✨ WHAT TO EXPECT</span>
                           </label>
-                          <span className="text-[10px] text-slate-400 font-medium">Ambiance, programme, artistes</span>
+                          <span className="text-[10px] text-slate-400 font-medium">Atmosphere, program, artists, experience</span>
                         </div>
                         <textarea
                           rows={3}
                           value={editExpect}
                           onChange={(e) => setEditExpect(e.target.value)}
-                          placeholder="Description de l'ambiance, artistes invités, activités principales..."
+                          placeholder="Description of atmosphere, guest artists, program highlights, activities..."
                           className="w-full p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-brand-blue/20 resize-y"
                         />
                       </div>
@@ -2669,16 +2693,16 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                       {/* Box 2: Perfect for */}
                       <div className="bg-emerald-50/50 p-3.5 rounded-2xl border border-emerald-200 space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                            <span>🎯 Perfect for</span>
+                          <label className="text-xs font-black text-emerald-900 flex items-center gap-1.5 uppercase tracking-wider">
+                            <span>🎯 PERFECT FOR</span>
                           </label>
-                          <span className="text-[10px] text-emerald-600/70 font-medium">Public cible (un par ligne avec - ou •)</span>
+                          <span className="text-[10px] text-emerald-600/70 font-medium">Target audience (one per line with - or •)</span>
                         </div>
                         <textarea
                           rows={2}
                           value={editPerfectFor}
                           onChange={(e) => setEditPerfectFor(e.target.value)}
-                          placeholder="- 🌍 Expats & nouveaux arrivants à Valence&#10;- 🎶 Amateurs de musique live&#10;- 👥 Sorties entre amis ou en famille"
+                          placeholder="- 🌍 Expats & newcomers in Valencia&#10;- 🎨 Art and live music lovers&#10;- 👥 Outings with friends or family"
                           className="w-full p-3 bg-white rounded-xl border border-emerald-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-emerald-500/20 resize-y"
                         />
                       </div>
@@ -2686,16 +2710,16 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                       {/* Box 3: Good to know */}
                       <div className="bg-amber-50/50 p-3.5 rounded-2xl border border-amber-200 space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                            <span>💡 Good to know</span>
+                          <label className="text-xs font-black text-amber-900 flex items-center gap-1.5 uppercase tracking-wider">
+                            <span>💡 GOOD TO KNOW</span>
                           </label>
-                          <span className="text-[10px] text-amber-600/70 font-medium">Tarifs, horaires, métro, parking</span>
+                          <span className="text-[10px] text-amber-600/70 font-medium">Tickets, timing, address, transport, parking</span>
                         </div>
                         <textarea
                           rows={3}
                           value={editGoodToKnow}
                           onChange={(e) => setEditGoodToKnow(e.target.value)}
-                          placeholder="- 🎟️ **Tarif** : Gratuit / À partir de 15€&#10;- 📍 **Lieu** : Adresse précise&#10;- ⏰ **Horaires** : Ouverture des portes 19h30&#10;- 🚇 **Accès** : Métro ligne 3 / 5"
+                          placeholder="- 🎟️ **Tickets & Pricing**: 6€ / Free&#10;- 📍 **Venue & Location**: Address and hall&#10;- ⏰ **Schedule & Timing**: Doors open at 19:30&#10;- 🚇 **Access**: Metro line 3 / 5"
                           className="w-full p-3 bg-white rounded-xl border border-amber-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-amber-500/20 resize-y"
                         />
                       </div>
@@ -2703,16 +2727,16 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                       {/* Box 4: More info */}
                       <div className="bg-sky-50/50 p-3.5 rounded-2xl border border-sky-200 space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
-                            <span>🔗 More info</span>
+                          <label className="text-xs font-black text-sky-900 flex items-center gap-1.5 uppercase tracking-wider">
+                            <span>🔗 MORE INFO</span>
                           </label>
-                          <span className="text-[10px] text-sky-600/70 font-medium">Liens officiels et billetterie</span>
+                          <span className="text-[10px] text-sky-600/70 font-medium">Official links, ticketing and contact</span>
                         </div>
                         <textarea
                           rows={2}
                           value={editMoreInfo}
                           onChange={(e) => setEditMoreInfo(e.target.value)}
-                          placeholder="- 🌐 **Site Officiel** : [Nom du site](https://...)&#10;- 🎟️ **Réservation** : [Acheter des billets](https://...)"
+                          placeholder="- 🌐 **Official Website**: [Venue Website](https://...)&#10;- 🎟️ **Tickets**: [Buy Tickets](https://...)"
                           className="w-full p-3 bg-white rounded-xl border border-sky-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-sky-500/20 resize-y"
                         />
                       </div>
@@ -2738,11 +2762,25 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                         rows={8}
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
-                        placeholder="Rédigez ou collez ici la description complète de l'événement..."
+                        placeholder="Write or paste the full event description here..."
                         className="w-full p-4 bg-white rounded-2xl border border-slate-200 text-xs font-medium leading-relaxed outline-none focus:border-brand-blue resize-y shadow-xs"
                       />
                     </div>
                   )}
+
+                  {/* Live Article Preview in Edit Modal */}
+                  <div className="space-y-2 pt-3 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
+                        Article Preview (Same organization as Repository & Published)
+                      </span>
+                      <span className="text-[10px] text-brand-blue font-bold">Live Preview</span>
+                    </div>
+                    <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/90 shadow-2xs">
+                      <SimpleMarkdown>{getCompiledDescription() || 'No description yet.'}</SimpleMarkdown>
+                    </div>
+                  </div>
                 </div>
               </div>
 

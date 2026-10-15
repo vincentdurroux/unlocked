@@ -612,8 +612,9 @@ CRITICAL REASONING & EVALUATION CRITERIA:
    - UNRELATED (0 - 30): Event does not fit what the user is asking for.
 
 4. OUTPUT REQUIREMENTS:
-   - summaryMessage: A warm, intelligent, 1-2 sentence response from Jane in the language of the user's query explaining what she selected (or if no exact match, offering close alternatives).
-   - results: Array of objects with "id", "score" (0-100), and "reason" (a 1-sentence personalized explanation in the user's language highlighting WHY Jane selected this event, explicitly referencing date, schedule, or key description details).`;
+   - Both "summaryMessage" and "reason" MUST ALWAYS be written in English.
+   - summaryMessage: A warm, intelligent, 1-2 sentence response from Jane in ENGLISH explaining what she selected (or if no exact match, offering close alternatives).
+   - results: Array of objects with "id", "score" (0-100), and "reason" (a 1-sentence personalized explanation in ENGLISH highlighting WHY Jane selected this event, explicitly referencing date, schedule, or key description details).`;
 
       const response = await generateContentWithFallback({
         contents: `User Query: "${query.trim()}"
@@ -1016,7 +1017,7 @@ CRITICAL EMOJI & FORMATTING DIRECTIVE:
           search_groundings: [{ title: "Valencia Cultural Calendar", url: "https://www.visitvalencia.com" }],
           model_used: "fallback-curated-mode",
           fallback_triggered: true,
-          fallback_reason: "Basculement automatique vers le catalogue vérifié de Valence (les quotas de l'API Gemini sont temporairement atteints)."
+          fallback_reason: "Automatic failover to verified Valencia events catalogue (Gemini API quotas temporarily reached)."
         });
       }
 

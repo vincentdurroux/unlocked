@@ -46,7 +46,8 @@ import {
   parseDescriptionSections,
   renderFormattedContent,
   getCategoryWithEmoji,
-  cleanDuplicateEmojis
+  cleanDuplicateEmojis,
+  SimpleMarkdown
 } from './AdminAiEventSearch';
 import { matchesCategoryFilter } from '../utils/eventFormatter';
 
@@ -194,12 +195,29 @@ export function AdminEventsManager({
   const [pushingEventId, setPushingEventId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 4-box Structured Description Editor State
+  // 4-box Structured Description Editor State (Harmonized with repository & published events)
   const [descMode, setDescMode] = useState<'sections' | 'raw'>('sections');
   const [descExpect, setDescExpect] = useState('');
   const [descPerfectFor, setDescPerfectFor] = useState('');
   const [descGoodToKnow, setDescGoodToKnow] = useState('');
   const [descMoreInfo, setDescMoreInfo] = useState('');
+  const prevDescRef = useRef<string | null>(null);
+
+  // Automatically sync and parse the 4 canonical sections whenever editing an event or when newEvent.description changes
+  useEffect(() => {
+    if (activeTab === 'edit_event' || activeTab === 'add_event') {
+      const rawDesc = newEvent.description || '';
+      if (rawDesc !== prevDescRef.current) {
+        prevDescRef.current = rawDesc;
+        const parsed = parseDescriptionSections(rawDesc);
+        setDescExpect(parsed.expect || '');
+        setDescPerfectFor(parsed.perfectFor || '');
+        setDescGoodToKnow(parsed.goodToKnow || '');
+        setDescMoreInfo(parsed.moreInfo || '');
+        setDescMode('sections');
+      }
+    }
+  }, [activeTab, newEvent.description]);
 
   const getCompiledDescription = () => {
     if (descMode === 'sections') {
@@ -219,6 +237,28 @@ export function AdminEventsManager({
       return cleanDuplicateEmojis(parts.join('\n\n'));
     }
     return cleanDuplicateEmojis(newEvent.description || '');
+  };
+
+  const handleSectionChange = (field: 'expect' | 'perfectFor' | 'goodToKnow' | 'moreInfo', value: string) => {
+    let nextExpect = descExpect;
+    let nextPerfectFor = descPerfectFor;
+    let nextGoodToKnow = descGoodToKnow;
+    let nextMoreInfo = descMoreInfo;
+
+    if (field === 'expect') { nextExpect = value; setDescExpect(value); }
+    if (field === 'perfectFor') { nextPerfectFor = value; setDescPerfectFor(value); }
+    if (field === 'goodToKnow') { nextGoodToKnow = value; setDescGoodToKnow(value); }
+    if (field === 'moreInfo') { nextMoreInfo = value; setDescMoreInfo(value); }
+
+    const parts: string[] = [];
+    if (nextExpect.trim()) parts.push(`### ✨ What to expect\n${nextExpect.trim()}`);
+    if (nextPerfectFor.trim()) parts.push(`### 🎯 Perfect for\n${nextPerfectFor.trim()}`);
+    if (nextGoodToKnow.trim()) parts.push(`### 💡 Good to know\n${nextGoodToKnow.trim()}`);
+    if (nextMoreInfo.trim()) parts.push(`### 🔗 More info\n${nextMoreInfo.trim()}`);
+    
+    const compiled = cleanDuplicateEmojis(parts.join('\n\n'));
+    prevDescRef.current = compiled;
+    setNewEvent(prev => ({ ...prev, description: compiled }));
   };
 
   // Helper to parse date strings for upcoming / past filtering
@@ -789,13 +829,16 @@ export function AdminEventsManager({
 
               {/* Formatted Content Preview */}
               <div className="md:col-span-2 space-y-3 bg-white/5 p-4 rounded-2xl border border-white/10 max-h-96 overflow-y-auto">
-                <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider block">
-                  Article Preview:
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider block">
+                    Article Preview (Same organization as Repository & Published Events):
+                  </span>
+                  <span className="text-[10px] text-emerald-300/80 font-mono">Live Preview</span>
+                </div>
                 <div className="text-xs leading-relaxed text-slate-200">
-                  {newEvent.description ? (
-                    <div className="bg-white/10 p-4 rounded-xl border border-white/5 space-y-2">
-                      {renderFormattedContent(cleanDuplicateEmojis(newEvent.description), "font-bold text-slate-100")}
+                  {(descMode === 'sections' ? getCompiledDescription() : newEvent.description) ? (
+                    <div className="bg-white p-4.5 rounded-2xl border border-slate-200 shadow-sm text-slate-800">
+                      <SimpleMarkdown>{descMode === 'sections' ? getCompiledDescription() : (newEvent.description || '')}</SimpleMarkdown>
                     </div>
                   ) : (
                     <p className="text-slate-400 italic text-xs">No article content added yet.</p>
@@ -1187,7 +1230,7 @@ export function AdminEventsManager({
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4 text-emerald-500" />
                   <h4 className="text-sm font-extrabold uppercase tracking-widest text-slate-700">
-                    3. Description de l'article (4 Cases)
+                    3. Article Description (4 Boxes — Same Organization as Repository)
                   </h4>
                 </div>
                 
@@ -1242,12 +1285,12 @@ export function AdminEventsManager({
                         const cleaned = cleanDuplicateEmojis(newEvent.description || '');
                         setNewEvent({ ...newEvent, description: cleaned });
                       }
-                      setMsg({ type: 'success', text: '✨ Doublons d\'émoticônes nettoyés avec succès !' });
+                      setMsg({ type: 'success', text: '✨ Cleaned duplicate emojis successfully!' });
                     }}
                     className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                    title="Supprimer les doublons d'émoticônes"
+                    title="Clean duplicate emojis"
                   >
-                    ✨ Nettoyer Émoticônes
+                    ✨ Clean Emojis
                   </button>
                 </div>
               </div>
@@ -1257,16 +1300,16 @@ export function AdminEventsManager({
                   {/* Box 1: What to expect */}
                   <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-brand-blue flex items-center gap-1.5">
-                        <span>✨ What to expect</span>
+                      <label className="text-xs font-black text-brand-blue flex items-center gap-1.5 uppercase tracking-wider">
+                        <span>✨ WHAT TO EXPECT</span>
                       </label>
-                      <span className="text-[10px] text-slate-400 font-medium">Ambiance, programme, artistes, expérience</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Atmosphere, program, artists, experience</span>
                     </div>
                     <textarea
                       rows={3}
                       value={descExpect}
-                      onChange={(e) => setDescExpect(e.target.value)}
-                      placeholder="Description de l'ambiance, artistes invités, activités principales et temps forts..."
+                      onChange={(e) => handleSectionChange('expect', e.target.value)}
+                      placeholder="Description of atmosphere, guest artists, program highlights, activities..."
                       className="w-full p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-brand-blue/20 resize-y"
                     />
                   </div>
@@ -1274,16 +1317,16 @@ export function AdminEventsManager({
                   {/* Box 2: Perfect for */}
                   <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-200 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                        <span>🎯 Perfect for</span>
+                      <label className="text-xs font-black text-emerald-900 flex items-center gap-1.5 uppercase tracking-wider">
+                        <span>🎯 PERFECT FOR</span>
                       </label>
-                      <span className="text-[10px] text-emerald-600/70 font-medium">Public cible (un élément par ligne)</span>
+                      <span className="text-[10px] text-emerald-600/70 font-medium">Target audience (one per line with - or •)</span>
                     </div>
                     <textarea
                       rows={2}
                       value={descPerfectFor}
-                      onChange={(e) => setDescPerfectFor(e.target.value)}
-                      placeholder="- 🌍 Expats & nouveaux arrivants à Valence&#10;- 🎶 Amateurs de musique live et festivals&#10;- 👥 Sorties entre amis ou en famille"
+                      onChange={(e) => handleSectionChange('perfectFor', e.target.value)}
+                      placeholder="- 🌍 Expats & newcomers in Valencia&#10;- 🎨 Art and live music lovers&#10;- 👥 Outings with friends or family"
                       className="w-full p-3 bg-white rounded-xl border border-emerald-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-emerald-500/20 resize-y"
                     />
                   </div>
@@ -1291,16 +1334,16 @@ export function AdminEventsManager({
                   {/* Box 3: Good to know */}
                   <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-200 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                        <span>💡 Good to know</span>
+                      <label className="text-xs font-black text-amber-900 flex items-center gap-1.5 uppercase tracking-wider">
+                        <span>💡 GOOD TO KNOW</span>
                       </label>
-                      <span className="text-[10px] text-amber-600/70 font-medium">Tarifs, billets, horaires, métro, accès, parking</span>
+                      <span className="text-[10px] text-amber-600/70 font-medium">Tickets, timing, address, transport, parking</span>
                     </div>
                     <textarea
                       rows={3}
                       value={descGoodToKnow}
-                      onChange={(e) => setDescGoodToKnow(e.target.value)}
-                      placeholder="- 🎟️ **Tarif** : Gratuit / À partir de 15€&#10;- 📍 **Lieu** : Adresse précise et salle&#10;- ⏰ **Horaires** : Ouverture des portes 19h30, début 20h00&#10;- 🚇 **Accès** : Métro ligne 3 / 5, station Xàtiva"
+                      onChange={(e) => handleSectionChange('goodToKnow', e.target.value)}
+                      placeholder="- 🎟️ **Tickets & Pricing**: 6€ / Free&#10;- 📍 **Venue & Location**: Address and hall&#10;- ⏰ **Schedule & Timing**: Doors open at 19:30&#10;- 🚇 **Access**: Metro line 3 / 5"
                       className="w-full p-3 bg-white rounded-xl border border-amber-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-amber-500/20 resize-y"
                     />
                   </div>
@@ -1308,16 +1351,16 @@ export function AdminEventsManager({
                   {/* Box 4: More info */}
                   <div className="bg-sky-50/50 p-4 rounded-2xl border border-sky-200 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
-                        <span>🔗 More info</span>
+                      <label className="text-xs font-black text-sky-900 flex items-center gap-1.5 uppercase tracking-wider">
+                        <span>🔗 MORE INFO</span>
                       </label>
-                      <span className="text-[10px] text-sky-600/70 font-medium">Liens officiels, billetterie et contact</span>
+                      <span className="text-[10px] text-sky-600/70 font-medium">Official links, ticketing and contact</span>
                     </div>
                     <textarea
                       rows={2}
                       value={descMoreInfo}
-                      onChange={(e) => setDescMoreInfo(e.target.value)}
-                      placeholder="- 🌐 **Site Officiel** : [Nom du site](https://...)&#10;- 🎟️ **Réservation** : [Acheter des billets](https://...)"
+                      onChange={(e) => handleSectionChange('moreInfo', e.target.value)}
+                      placeholder="- 🌐 **Official Website**: [Venue Website](https://...)&#10;- 🎟️ **Tickets**: [Buy Tickets](https://...)"
                       className="w-full p-3 bg-white rounded-xl border border-sky-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-sky-500/20 resize-y"
                     />
                   </div>
@@ -1747,9 +1790,9 @@ Live music performances, artists, and event highlights
                       </div>
 
                       {event.description && (
-                        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed font-sans">
-                          {event.description.replace(/###.*?\n/g, '').replace(/[#*`_]/g, '')}
-                        </p>
+                        <div className="pt-2 border-t border-slate-100 max-h-72 overflow-y-auto">
+                          <SimpleMarkdown>{event.description}</SimpleMarkdown>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2057,8 +2100,8 @@ Live music performances, artists, and event highlights
               </div>
 
               {/* Event Description Content */}
-              <div className="p-4 sm:p-5 bg-slate-50/80 rounded-2xl border border-slate-100 text-xs sm:text-sm leading-relaxed text-slate-700 space-y-2">
-                {renderFormattedContent(cleanDuplicateEmojis(previewModalEvent.description || 'No description provided.'))}
+              <div className="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200/90 text-xs sm:text-sm leading-relaxed text-slate-700 space-y-2 shadow-2xs">
+                <SimpleMarkdown>{cleanDuplicateEmojis(previewModalEvent.description || 'No description provided.')}</SimpleMarkdown>
               </div>
             </div>
 

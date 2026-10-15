@@ -272,7 +272,7 @@ ${JSON.stringify(proListBrief)}`,
               type: Type.OBJECT,
               properties: {
                 exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service/symptom, false if not." },
-                summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 25 words) from Jane explaining her found results to the user in their query language." },
+                summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 25 words) in English from Jane explaining her found results to the user." },
                 results: {
                   type: Type.ARRAY,
                   items: {
@@ -280,7 +280,7 @@ ${JSON.stringify(proListBrief)}`,
                     properties: {
                       id: { type: Type.STRING, description: "The professional's ID as a string" },
                       score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                      reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation" }
+                      reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation in English" }
                     },
                     required: ["id", "score", "reasonUrlExcerpt"]
                   }

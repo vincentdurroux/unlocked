@@ -3,7 +3,7 @@ import Papa from 'papaparse';
 import { parseProfessionalCSV, rowToPro, detectColumnMappings, parseEventCSV, detectEventColumnMappings, rowToEvent } from './utils/csvParser';
 import { Logo } from './components/Logo';
 import { InAppNotificationCenter, InAppToastBanner, type InAppNotification, isRecommendProNotification, isGuideNotification, extractGuideIdFromNotification } from './components/InAppNotificationCenter';
-import { getCategoryWithEmoji, parseDescriptionSections, renderFormattedContent } from './components/AdminAiEventSearch';
+import { getCategoryWithEmoji, parseDescriptionSections, renderFormattedContent, cleanDuplicateEmojis } from './components/AdminAiEventSearch';
 
 const AdminAiEventSearch = React.lazy(() => import('./components/AdminAiEventSearch').then(m => ({ default: m.AdminAiEventSearch })));
 const AdminEventsManager = React.lazy(() => import('./components/AdminEventsManager').then(m => ({ default: m.AdminEventsManager })));
@@ -566,34 +566,35 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
   if (!children) return null;
 
   // If this text contains structured event sections, render them with themed cards and friendly emojis
-  const parsed = parseDescriptionSections(children);
+  const cleaned = cleanDuplicateEmojis(children);
+  const parsed = parseDescriptionSections(cleaned);
 
-  if (!isPlain && parsed.hasRealSections) {
+  if (!isPlain && (parsed.expect || parsed.perfectFor || parsed.goodToKnow || parsed.moreInfo)) {
     return (
-      <div className="space-y-4 text-xs sm:text-sm text-slate-700 not-italic">
+      <div className="space-y-3.5 text-xs sm:text-sm text-slate-700 not-italic">
         {parsed.expect && (
-          <div className="space-y-1.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-brand-blue text-xs uppercase tracking-wider">
-              <span>✨ What to expect</span>
+          <div className="space-y-1.5 bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-black text-brand-blue text-xs uppercase tracking-wider">
+              <span>✨ WHAT TO EXPECT</span>
             </div>
             <div className="leading-relaxed text-slate-700 font-normal">
-              {renderFormattedContent(parsed.expect, "font-bold text-slate-950")}
+              {renderFormattedContent(parsed.expect, "font-extrabold text-slate-950")}
             </div>
           </div>
         )}
 
         {parsed.perfectFor && (
           <div className="space-y-1.5 bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs uppercase tracking-wider">
-              <span>🎯 Perfect for</span>
+            <div className="flex items-center gap-1.5 font-black text-emerald-900 text-xs uppercase tracking-wider">
+              <span>🎯 PERFECT FOR</span>
             </div>
-            <div className="space-y-1.5 leading-relaxed text-emerald-955 font-normal">
+            <div className="space-y-1.5 leading-relaxed text-emerald-950 font-normal">
               {parsed.perfectFor.split('\n').map(line => line.trim()).filter(Boolean).map((line, idx) => {
                 const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
                 return (
                   <div key={idx} className="flex items-start gap-2">
                     <span className="text-emerald-600 font-extrabold mt-0.5">•</span>
-                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-bold text-emerald-950")}</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-emerald-950")}</span>
                   </div>
                 );
               })}
@@ -603,22 +604,30 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
 
         {parsed.goodToKnow && (
           <div className="space-y-1.5 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-amber-900 text-xs uppercase tracking-wider">
-              <span>💡 Good to know</span>
+            <div className="flex items-center gap-1.5 font-black text-amber-900 text-xs uppercase tracking-wider">
+              <span>💡 GOOD TO KNOW</span>
             </div>
-            <div className="leading-relaxed text-amber-955 font-normal">
-              {renderFormattedContent(parsed.goodToKnow, "font-bold text-amber-950")}
+            <div className="space-y-1.5 leading-relaxed text-amber-950 font-normal">
+              {parsed.goodToKnow.split('\n').map(line => line.trim()).filter(Boolean).map((line, idx) => {
+                const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
+                return (
+                  <div key={idx} className="flex items-start gap-2">
+                    <span className="text-amber-700 font-bold mt-0.5">-</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-amber-950")}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
         {parsed.moreInfo && (
           <div className="space-y-1.5 bg-sky-50/60 p-4 rounded-2xl border border-sky-200/80 shadow-2xs">
-            <div className="flex items-center gap-1.5 font-bold text-sky-900 text-xs uppercase tracking-wider">
-              <span>🔗 More info</span>
+            <div className="flex items-center gap-1.5 font-black text-sky-900 text-xs uppercase tracking-wider">
+              <span>🔗 MORE INFO</span>
             </div>
-            <div className="leading-relaxed text-sky-955 font-normal">
-              {renderFormattedContent(parsed.moreInfo, "font-bold text-sky-950")}
+            <div className="space-y-1 leading-relaxed text-sky-950 font-normal">
+              {renderFormattedContent(parsed.moreInfo, "font-extrabold text-sky-950")}
             </div>
           </div>
         )}
