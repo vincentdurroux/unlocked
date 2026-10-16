@@ -15377,91 +15377,247 @@ function ExploreView({
   }, []);
 
 // JANE AI STATUS FLAG:
-// Put Jane AI on pause due to Gemini API limits/quotas.
-// Directory search remains 100% active, instant, and resilient via smart bilingual catalog matching.
-const IS_JANE_AI_PAUSED = true;
+// Jane AI is active with Gemini semantic search and intelligent matching.
+const IS_JANE_AI_PAUSED = false;
 
-const PRO_SYNONYM_GROUPS: string[][] = [
-  ['plumber', 'plomberie', 'plombier', 'fontanero', 'fontaneria', 'leak', 'fuite', 'fuga', 'pipe', 'tuyau'],
-  ['electrician', 'electricite', 'electricien', 'electricista', 'power', 'courant', 'wiring'],
-  ['doctor', 'medecin', 'medico', 'generaliste', 'gp', 'health', 'sante', 'salud', 'clinic', 'clinique'],
-  ['dentist', 'dentiste', 'dentista', 'teeth', 'dents', 'dientes', 'dental'],
-  ['physio', 'physiotherapist', 'physiotherapie', 'kine', 'kinesitherapeute', 'fisioterapeuta', 'fisioterapia', 'back pain', 'mal de dos', 'dolor de espalda'],
-  ['osteo', 'osteopath', 'osteopathe', 'osteopatia', 'osteopathie'],
-  ['chiro', 'chiropractor', 'chiropracteur', 'quiropractico'],
-  ['lawyer', 'avocat', 'abogado', 'legal', 'juridique', 'notaire', 'notary', 'gestor', 'gestoria', 'paperwork', 'visas', 'nie', 'padron', 'taxes', 'impots'],
-  ['psychologist', 'psychologue', 'psicologo', 'therapist', 'therapeute', 'therapy', 'mental health', 'counseling'],
-  ['locksmith', 'serrurier', 'cerrajero', 'lock', 'serrure', 'cerradura', 'keys', 'cles', 'llaves'],
-  ['mechanic', 'mecanicien', 'mecanico', 'garage', 'car', 'voiture', 'coche', 'auto', 'vehicule'],
-  ['painter', 'peintre', 'pintor', 'painting', 'peinture', 'pintura'],
-  ['cleaner', 'menage', 'cleaning', 'limpieza', 'housekeeper', 'femme de menage'],
-  ['real estate', 'immobilier', 'inmobiliaria', 'agent', 'realtor', 'apartment', 'flat', 'housing', 'logement', 'piso', 'rental'],
-  ['accountant', 'comptable', 'contable', 'fiscal', 'tax', 'accounting', 'taxes'],
-  ['architect', 'architecte', 'arquitecto', 'renovation', 'construction', 'reforme'],
-  ['veterinarian', 'vet', 'veterinaire', 'veterinario', 'pets', 'animals', 'dog', 'cat', 'chien', 'chat', 'perro', 'gato'],
-  ['hairdresser', 'coiffeur', 'coiffeuse', 'peluquero', 'peluqueria', 'hair', 'cheveux', 'pelo'],
-  ['trainer', 'coach', 'fitness', 'sport', 'personal trainer', 'gym'],
-  ['pediatrician', 'pediatre', 'pediatra', 'child', 'children', 'enfant', 'bebe', 'baby'],
-  ['gynecologist', 'gynecologue', 'ginecologo', 'women', 'sage femme', 'matrona'],
-  ['dermatologist', 'dermatologue', 'dermatologo', 'skin', 'peau', 'piel']
+const PRO_SYNONYM_GROUPS: { trade: string; keywords: string[] }[] = [
+  {
+    trade: 'Plumber',
+    keywords: ['plumber', 'plomberie', 'plombier', 'fontanero', 'fontaneria', 'leak', 'fuite', 'fuga', 'pipe', 'tuyau', 'canalisation', 'chauffe-eau', 'robinet']
+  },
+  {
+    trade: 'Electrician',
+    keywords: ['electrician', 'electricite', 'electricien', 'electricista', 'power', 'courant', 'wiring', 'tableau', 'panne', 'electric']
+  },
+  {
+    trade: 'Doctor',
+    keywords: ['doctor', 'medecin', 'medico', 'generaliste', 'gp', 'physician', 'sante', 'salud', 'clinic', 'clinique']
+  },
+  {
+    trade: 'Dentist',
+    keywords: ['dentist', 'dentiste', 'dentista', 'dental', 'teeth', 'dents', 'dientes', 'orthodontist', 'orthodontiste', 'ortodoncista', 'carie', 'implant']
+  },
+  {
+    trade: 'Physiotherapist',
+    keywords: ['physio', 'physiotherapist', 'physiotherapie', 'kine', 'kinesitherapeute', 'fisioterapeuta', 'fisioterapia', 'back pain', 'mal de dos', 'dolor de espalda', 'lumbago', 'sciatica', 'sciatique', 'hernie', 'reeducation', 'rehabilitation']
+  },
+  {
+    trade: 'Osteopath',
+    keywords: ['osteo', 'osteopath', 'osteopathe', 'osteopatia', 'osteopathie']
+  },
+  {
+    trade: 'Chiropractor',
+    keywords: ['chiro', 'chiropractor', 'chiropracteur', 'quiropractico', 'chiropraxie']
+  },
+  {
+    trade: 'Lawyer',
+    keywords: ['lawyer', 'avocat', 'abogado', 'legal', 'juridique', 'notaire', 'notary', 'notario', 'gestor', 'gestoria', 'visas', 'visa', 'nie', 'padron', 'residencia', 'immigration', 'juriste', 'contrat']
+  },
+  {
+    trade: 'Accountant',
+    keywords: ['accountant', 'comptable', 'contable', 'fiscal', 'tax', 'accounting', 'taxes', 'impots', 'declaration', 'tva', 'iva', 'autonomo', 'bilan']
+  },
+  {
+    trade: 'Psychologist',
+    keywords: ['psychologist', 'psychologue', 'psicologo', 'therapist', 'therapeute', 'terapeuta', 'therapy', 'therapie', 'mental health', 'counseling', 'anxiete', 'burnout', 'depression', 'stress']
+  },
+  {
+    trade: 'Locksmith',
+    keywords: ['locksmith', 'serrurier', 'cerrajero', 'lock', 'serrure', 'cerradura', 'keys', 'cles', 'llaves', 'porte']
+  },
+  {
+    trade: 'Mechanic',
+    keywords: ['mechanic', 'mecanicien', 'mecanico', 'garage', 'car', 'voiture', 'coche', 'auto', 'vehicule', 'pneu', 'vidange', 'frein']
+  },
+  {
+    trade: 'Painter',
+    keywords: ['painter', 'peintre', 'pintor', 'painting', 'peinture', 'pintura', 'peindre', 'facade']
+  },
+  {
+    trade: 'Cleaner',
+    keywords: ['cleaner', 'menage', 'cleaning', 'limpieza', 'housekeeper', 'femme de menage']
+  },
+  {
+    trade: 'Real Estate',
+    keywords: ['real estate', 'immobilier', 'inmobiliaria', 'agent immobilier', 'realtor', 'apartment', 'flat', 'housing', 'logement', 'piso', 'location', 'achat', 'agence immobiliere']
+  },
+  {
+    trade: 'Architect',
+    keywords: ['architect', 'architecte', 'arquitecto', 'renovation', 'construction', 'reforme', 'reforma', 'travaux', 'chantier']
+  },
+  {
+    trade: 'Veterinarian',
+    keywords: ['veterinarian', 'vet', 'veterinaire', 'veterinario', 'pets', 'animals', 'dog', 'cat', 'chien', 'chat', 'perro', 'gato', 'animaux']
+  },
+  {
+    trade: 'Hairdresser',
+    keywords: ['hairdresser', 'coiffeur', 'coiffeuse', 'peluquero', 'peluqueria', 'hair', 'cheveux', 'pelo', 'barber', 'barbier', 'barbero', 'beauty', 'esthetique', 'estetica', 'ongles', 'nails']
+  },
+  {
+    trade: 'Trainer',
+    keywords: ['trainer', 'coach', 'fitness', 'sport', 'personal trainer', 'gym', 'musculation', 'yoga', 'pilates']
+  },
+  {
+    trade: 'Pediatrician',
+    keywords: ['pediatrician', 'pediatre', 'pediatra', 'child', 'children', 'enfant', 'bebe', 'baby']
+  },
+  {
+    trade: 'Gynecologist',
+    keywords: ['gynecologist', 'gynecologue', 'ginecologo', 'sage-femme', 'matrona', 'grossesse', 'maternite', 'accouchement']
+  },
+  {
+    trade: 'Dermatologist',
+    keywords: ['dermatologist', 'dermatologue', 'dermatologo', 'skin', 'peau', 'piel', 'eczema', 'acne']
+  },
+  {
+    trade: 'Ophthalmologist',
+    keywords: ['ophthalmologist', 'ophtalmologue', 'oftalmologo', 'yeux', 'ojos', 'eyes', 'vue', 'vision', 'lunettes', 'optometrist', 'opticien']
+  }
 ];
 
+const SEARCH_LOCATION_TOKENS = new Set([
+  'valencia', 'valence', 'spain', 'espagne', 'espana', 'city', 'ville', 'ciudad',
+  'ruzafa', 'russafa', 'carmen', 'canovas', 'alboraya', 'benimaclet', 
+  'patraix', 'campanar', 'cabanyal', 'poblats', 'maritims', 'extramurs', 'eixample', 
+  'torrent', 'paterna', 'betera', 'eliana'
+]);
+
+const SEARCH_FILLER_TOKENS = new Set([
+  'cherche', 'recherche', 'chercher', 'besoin', 'trouver', 'trouve', 'aide', 'aider', 
+  'bon', 'bonne', 'bons', 'bonnes', 'meilleur', 'meilleurs', 'meilleure', 'top', 
+  'pro', 'pros', 'professionnel', 'professionnels', 'professionnelle',
+  'recommande', 'recommandee', 'recommandes', 'recommandees', 'recommandation', 'recommandations',
+  'service', 'services', 'expert', 'experts', 'specialiste', 'specialistes', 
+  'qui', 'parle', 'parlant', 'avec', 'pour', 'sur', 'dans', 'mon', 'ma', 'mes', 
+  'un', 'une', 'des', 'le', 'la', 'les', 'du', 'de', 'd', 'l', 'a', 'au', 'aux', 
+  'en', 'et', 'ou', 'y', 'looking', 'look', 'find', 'searching', 'search', 
+  'need', 'needs', 'help', 'good', 'best', 'recommended', 'recommendation', 
+  'professional', 'professionals', 'specialist', 'specialists', 'who', 'speaks', 
+  'speaking', 'with', 'for', 'at', 'on', 'my', 'the', 'busco', 'buscar', 
+  'necesito', 'necesita', 'ayuda', 'ayudar', 'buen', 'bueno', 'buena', 'mejores', 
+  'mejor', 'recomendado', 'recomendados', 'profesional', 'profesionales', 
+  'especialista', 'especialistas', 'que', 'hable', 'habla', 'con', 'para', 'mi', 'mis',
+  'francais', 'francaise', 'french', 'anglais', 'anglaise', 'english', 'espagnol', 'espagnole', 'spanish'
+]);
+
 function computeProSearchScore(pro: any, searchStr: string): number {
-  if (!searchStr || !searchStr.trim()) return 100;
+  if (!searchStr || !searchStr.trim()) return 0;
 
   const cleanStr = searchStr.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const tokens = cleanStr.split(/[\s,.'"-]+/).filter(t => t.length > 1 && !['in', 'at', 'the', 'le', 'la', 'les', 'de', 'du', 'des', 'en', 'un', 'une', 'to', 'for', 'pour', 'por', 'y', 'et', 'and', 'my', 'mon', 'me', 'help', 'aide'].includes(t));
+  const allRawTokens = cleanStr.split(/[\s,.'"-]+/).filter(t => t.length > 1);
 
-  if (tokens.length === 0) return 100;
+  if (allRawTokens.length === 0) return 0;
+
+  // Separate query tokens into location tokens and meaningful subject/trade tokens
+  const tradeTokens = allRawTokens.filter(t => !SEARCH_FILLER_TOKENS.has(t) && !SEARCH_LOCATION_TOKENS.has(t));
+  const locationTokens = allRawTokens.filter(t => SEARCH_LOCATION_TOKENS.has(t));
 
   const proName = (pro.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const proCompany = (pro.company_name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const proCat = (pro.category || pro.profession || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const proCats = ((Array.isArray(pro.categories) ? pro.categories : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const proCatsList = (Array.isArray(pro.categories) ? pro.categories : []).map((c: any) => String(c).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+  const proCatsStr = proCatsList.join(' ');
   const proBio = (pro.bio || pro.description || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const proLangs = ((Array.isArray(pro.languages) ? pro.languages : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const proQualities = ((Array.isArray(pro.top_qualities) ? pro.top_qualities : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const proLoc = (pro.location || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  const combinedFull = `${proName} ${proCompany} ${proCat} ${proCats} ${proBio} ${proLangs} ${proQualities} ${proLoc}`;
+  // Combined text representing the professional's core domain
+  const proDomainText = `${proName} ${proCompany} ${proCat} ${proCatsStr}`;
 
-  let matchedTokensCount = 0;
-  let totalScore = 0;
+  // Find which synonym groups the professional belongs to
+  const proTradeGroups = PRO_SYNONYM_GROUPS.filter(g => {
+    return g.keywords.some(k => proDomainText.includes(k));
+  });
 
-  for (const token of tokens) {
-    let tokenMatched = false;
+  // CASE 1: Query contains specific trade, service, symptom or person name tokens
+  if (tradeTokens.length > 0) {
+    let matchedTradeCount = 0;
+    let score = 0;
 
-    // Direct match in name, primary category, or subcategories
-    if (proName.includes(token) || proCat.includes(token) || proCats.includes(token)) {
-      totalScore += 50;
-      tokenMatched = true;
-    } else if (proCompany.includes(token) || proLangs.includes(token) || proLoc.includes(token)) {
-      totalScore += 35;
-      tokenMatched = true;
-    } else if (proBio.includes(token) || proQualities.includes(token)) {
-      totalScore += 20;
-      tokenMatched = true;
-    }
+    for (const token of tradeTokens) {
+      let isTokenMatched = false;
 
-    // Synonym group match
-    if (!tokenMatched) {
-      const group = PRO_SYNONYM_GROUPS.find(g => g.some(word => word.includes(token) || token.includes(word)));
-      if (group) {
-        const matchesSyn = group.some(word => combinedFull.includes(word));
-        if (matchesSyn) {
-          totalScore += 30;
-          tokenMatched = true;
+      // 1. Direct name match (highest precision)
+      if (proName.includes(token)) {
+        score += 60;
+        isTokenMatched = true;
+      }
+
+      // 2. Direct category or profession match
+      if (proCat.includes(token) || proCatsList.some(c => c.includes(token))) {
+        score += 55;
+        isTokenMatched = true;
+      }
+
+      // 3. Company name match
+      if (proCompany.includes(token)) {
+        score += 45;
+        isTokenMatched = true;
+      }
+
+      // 4. Synonym group match (Exact or stemmed matching, never loose substrings)
+      const queryGroups = PRO_SYNONYM_GROUPS.filter(g => 
+        g.keywords.some(k => k === token || (token.length >= 4 && (k.startsWith(token) || token.startsWith(k))))
+      );
+
+      if (queryGroups.length > 0) {
+        // Check if pro belongs to any of these matched synonym groups
+        const hasMatchingTrade = queryGroups.some(qg => 
+          proTradeGroups.some(ptg => ptg.trade === qg.trade) ||
+          qg.keywords.some(k => proDomainText.includes(k))
+        );
+        if (hasMatchingTrade) {
+          score += 50;
+          isTokenMatched = true;
         }
+      }
+
+      // 5. Bio match: Only count if the token explicitly appears in proBio as a distinct term
+      if (!isTokenMatched && proBio.length > 0) {
+        const wordRegex = new RegExp(`(^|[^a-z0-9])${token}([^a-z0-9]|$)`, 'i');
+        if (wordRegex.test(proBio)) {
+          score += 35;
+          isTokenMatched = true;
+        }
+      }
+
+      if (isTokenMatched) {
+        matchedTradeCount++;
       }
     }
 
-    if (tokenMatched) {
-      matchedTokensCount++;
+    // STRICT REJECTION: If the pro does NOT match ANY trade/subject token, return 0!
+    // A plumber will NEVER match a dentist search, even if both are in Valencia!
+    if (matchedTradeCount === 0) {
+      return 0;
     }
+
+    // Ratio of matched trade tokens
+    const tradeCoverage = matchedTradeCount / tradeTokens.length;
+    score = score * (0.6 + 0.4 * tradeCoverage);
+
+    // Location bonus only if trade already matched
+    if (locationTokens.length > 0) {
+      const locMatched = locationTokens.some(loc => proLoc.includes(loc));
+      if (locMatched) {
+        score += 10;
+      }
+    }
+
+    return Math.min(100, Math.round(score));
   }
 
-  if (matchedTokensCount === 0) return 0;
-  return totalScore + (matchedTokensCount / tokens.length) * 40;
+  // CASE 2: User only searched for a specific location (e.g. "Ruzafa", "Carmen")
+  if (locationTokens.length > 0) {
+    const specificLocs = locationTokens.filter(t => !['valencia', 'valence', 'spain', 'espagne', 'espana', 'city', 'ville', 'ciudad'].includes(t));
+    if (specificLocs.length > 0) {
+      const hasSpecificLoc = specificLocs.some(loc => proLoc.includes(loc));
+      return hasSpecificLoc ? 80 : 0;
+    }
+    // If user literally searched "Valencia", return a neutral score
+    return 60;
+  }
+
+  return 0;
 }
 
   // AI-powered Search states
@@ -16073,9 +16229,8 @@ function computeProSearchScore(pro: any, searchStr: string): number {
           if (aiResults !== null) {
             const proIdStr = String(pro.id);
             const matchInfo = aiResults[proIdStr];
-            // Only keep professionals that have a positive score (> 0).
-            // Any professional with score <= 0 or missing from aiResults has nothing to do with the search and is hidden.
-            matchesSearch = !!matchInfo && typeof matchInfo.score === 'number' && matchInfo.score > 0;
+            // High-precision cutoff: strictly require a solid match score (>= 40)
+            matchesSearch = !!matchInfo && typeof matchInfo.score === 'number' && matchInfo.score >= 40;
 
             // If a language was requested in Jane search and at least 1 speaker exists,
             // strictly exclude any professional who does NOT speak that language!
@@ -16084,7 +16239,12 @@ function computeProSearchScore(pro: any, searchStr: string): number {
             }
           } else {
             const localScore = computeProSearchScore(pro, searchStr);
-            matchesSearch = localScore > 0;
+            // High-precision cutoff: require a verified match (>= 45) to completely eliminate false-positive recommended pros
+            matchesSearch = localScore >= 45;
+
+            if (matchesSearch && hasMatchingLanguageSpeakers) {
+              matchesSearch = proSpeaksAnyLanguage(pro, requestedLangs);
+            }
           }
         }
         
@@ -16101,41 +16261,41 @@ function computeProSearchScore(pro: any, searchStr: string): number {
         return matchesCategory && matchesLanguage && matchesSearch && matchesDistance && matchesRating;
       })
       .sort((a, b) => {
-        // 1. Spoken language priority: if a language was requested in AI search, prioritize pros who speak it
+        const searchStr = typeof deferredSearch === 'string' ? deferredSearch.trim() : '';
+        const scoreA = aiResults ? (aiResults[String(a.id)]?.score || 0) : (searchStr ? computeProSearchScore(a, searchStr) : 0);
+        const scoreB = aiResults ? (aiResults[String(b.id)]?.score || 0) : (searchStr ? computeProSearchScore(b, searchStr) : 0);
+
+        // Priority 1: High match relevance difference (>= 15 points difference always determines rank)
+        // This guarantees that a real match (e.g. dentist score 90) ALWAYS ranks above a weak/tangential match (score 45), regardless of recommendation status!
+        if (searchStr && Math.abs(scoreA - scoreB) >= 15) {
+          return scoreB - scoreA;
+        }
+
+        // Priority 2: Spoken language if a specific language was requested in search
         if (requestedLangs.length > 0) {
           const speaksA = proSpeaksAnyLanguage(a, requestedLangs);
           const speaksB = proSpeaksAnyLanguage(b, requestedLangs);
           if (speaksA !== speaksB) return speaksA ? -1 : 1;
         }
 
-        // 2. Recommended pros priority
+        // Priority 3: Within similar match scores (within 15 points), community-recommended pros come first
         const recA = a.is_recommended !== false;
         const recB = b.is_recommended !== false;
         if (recA !== recB) return recA ? -1 : 1;
 
-        // 3. Match score (AI match score or smart local catalog relevance score)
-        if (aiResults) {
-          const scoreA = aiResults[String(a.id)]?.score || 0;
-          const scoreB = aiResults[String(b.id)]?.score || 0;
-          if (scoreA !== scoreB) return scoreB - scoreA;
-        } else {
-          const searchStr = typeof deferredSearch === 'string' ? deferredSearch.trim() : '';
-          if (searchStr) {
-            const scoreA = computeProSearchScore(a, searchStr);
-            const scoreB = computeProSearchScore(b, searchStr);
-            if (scoreA !== scoreB) return scoreB - scoreA;
-          }
+        // Priority 4: Exact score difference
+        if (searchStr && scoreA !== scoreB) {
+          return scoreB - scoreA;
         }
 
-        if (userLocation && a.coordinates && b.coordinates) {
+        // Priority 5: Distance if user location is available
+        if (userLocation && a.coordinates && b.coordinates && maxDistance !== 'All') {
           const distA = getDistance(userLocation.lat, userLocation.lng, a.coordinates.lat, a.coordinates.lng);
           const distB = getDistance(userLocation.lat, userLocation.lng, b.coordinates.lat, b.coordinates.lng);
-          
-          if (maxDistance !== 'All') {
-             return distA - distB;
-          }
+          return distA - distB;
         }
 
+        // Priority 6: Rating
         return (b.rating || 0) - (a.rating || 0);
       })
     : [];

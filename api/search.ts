@@ -273,12 +273,12 @@ export function fallbackSmartSearch(query: string, professionals: any[]) {
 }
 
 export async function processSearch(query: string, professionals: any[]) {
-  // Jane AI Paused flag: provides fast, reliable, zero-quota semantic search during API suspension
-  const isAiPaused = process.env.PAUSE_JANE_AI !== "false";
+  // Jane AI Paused flag: only pauses if explicitly requested via environment variable
+  const isAiPaused = process.env.PAUSE_JANE_AI === "true";
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (isAiPaused || !apiKey) {
-    console.log(`[api/search] Jane AI is paused: executing fast semantic search for "${query}"`);
+    console.log(`[api/search] Jane AI running in local high-precision mode: "${query}"`);
     return fallbackSmartSearch(query, professionals);
   }
 
@@ -585,36 +585,42 @@ export default async function handler(req: any, res: any) {
     const result = await processSearch(query, professionals);
     return res.status(200).json(result);
   } catch (error: any) {
-    console.warn("[api/search] Gemini API quota reached. Serving intelligent fallback catalog results:", error?.message || error);
+    console.warn("[api/search] Gemini API quota reached. Serving high-precision catalog matching fallback:", error?.message || error);
     
     const cleanQuery = (query || "").trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const tokens = cleanQuery.split(/[\s,.'"-]+/).filter((t: string) => t.length > 1 && !['in', 'at', 'the', 'le', 'la', 'les', 'de', 'du', 'des', 'en', 'un', 'une', 'to', 'for', 'pour', 'por', 'y', 'et', 'and'].includes(t));
+    const allTokens = cleanQuery.split(/[\s,.'"-]+/).filter((t: string) => t.length > 1);
+
+    const locationTokens = allTokens.filter((t: string) => ['valencia', 'valence', 'spain', 'espagne', 'espana', 'ruzafa', 'russafa', 'carmen', 'canovas', 'alboraya', 'benimaclet'].includes(t));
+    const tradeTokens = allTokens.filter((t: string) => !locationTokens.includes(t) && !['cherche', 'recherche', 'besoin', 'trouver', 'bon', 'bonne', 'meilleur', 'top', 'pro', 'recommande', 'expert', 'specialiste', 'pour', 'dans', 'avec', 'qui', 'parle', 'un', 'une', 'des', 'le', 'la', 'les'].includes(t));
 
     const fallbackResults = (professionals || []).map((p: any) => {
       const id = String(p.id);
       const pName = (p.name || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const pCat = (p.category || p.profession || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const pCats = ((Array.isArray(p.categories) ? p.categories : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const pBio = (p.bio || p.description || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const pCompany = (p.company_name || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const pLangs = ((Array.isArray(p.languages) ? p.languages : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const pBio = (p.bio || p.description || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const pLoc = (p.location || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
       let score = 0;
-      let matchReason = "Recommended professional in Valencia";
+      let matchReason = `Specialized professional in Valencia`;
 
-      for (const t of tokens) {
-        if (pName.includes(t) || pCat.includes(t) || pCats.includes(t)) {
-          score += 60;
-          matchReason = `Specialized in ${p.category || p.profession || 'services'} in Valencia`;
-        } else if (pCompany.includes(t) || pLangs.includes(t)) {
-          score += 40;
-        } else if (pBio.includes(t)) {
-          score += 25;
+      if (tradeTokens.length > 0) {
+        let matchedCount = 0;
+        for (const t of tradeTokens) {
+          let m = false;
+          if (pName.includes(t)) { score += 60; m = true; }
+          else if (pCat.includes(t) || pCats.includes(t)) { score += 55; m = true; matchReason = `Specialized in ${p.category || p.profession || 'services'}`; }
+          else if (pCompany.includes(t)) { score += 45; m = true; }
+          else if (pBio.length > 0 && new RegExp(`(^|[^a-z0-9])${t}([^a-z0-9]|$)`, 'i').test(pBio)) { score += 35; m = true; }
+          if (m) matchedCount++;
         }
-      }
-
-      if (tokens.length === 0) {
-        score = 70;
+        if (matchedCount === 0) return { id, score: 0, reasonUrlExcerpt: "" };
+        if (locationTokens.length > 0 && locationTokens.some((loc: string) => pLoc.includes(loc))) score += 10;
+      } else if (locationTokens.length > 0) {
+        const specificLoc = locationTokens.filter((t: string) => !['valencia', 'valence', 'spain', 'espagne', 'espana'].includes(t));
+        if (specificLoc.length > 0 && specificLoc.some((loc: string) => pLoc.includes(loc))) score = 75;
+        else if (specificLoc.length === 0) score = 60;
       }
 
       return {
@@ -622,11 +628,11 @@ export default async function handler(req: any, res: any) {
         score: Math.min(100, score),
         reasonUrlExcerpt: matchReason
       };
-    }).filter((r: any) => r.score > 0).sort((a: any, b: any) => b.score - a.score);
+    }).filter((r: any) => r.score >= 45).sort((a: any, b: any) => b.score - a.score);
 
     return res.status(200).json({
       exactMatchFound: fallbackResults.length > 0,
-      summaryMessage: `Here are the top-rated professionals matching your search for "${query}".`,
+      summaryMessage: fallbackResults.length > 0 ? `Here are the top professionals matching your search for "${query}".` : `No matching professionals found for "${query}".`,
       results: fallbackResults,
       fallback_used: true
     });
