@@ -15625,9 +15625,45 @@ function computeProSearchScore(pro: any, searchStr: string): number {
   const [aiExactMatch, setAiExactMatch] = useState<boolean>(true);
   const [aiSummaryMessage, setAiSummaryMessage] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiProgress, setAiProgress] = useState(0);
+  const [showAiProgress, setShowAiProgress] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiQuery, setAiQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'standard' | 'ai'>(() => initialProId ? 'standard' : 'ai');
+
+  // Smart organic progress simulation for Jane AI search
+  useEffect(() => {
+    let interval: any = null;
+    let fadeTimeout: any = null;
+
+    if (aiLoading) {
+      setShowAiProgress(true);
+      setAiProgress(10);
+
+      interval = setInterval(() => {
+        setAiProgress((prev) => {
+          if (prev < 32) return prev + Math.floor(Math.random() * 8 + 5);
+          if (prev < 68) return prev + Math.floor(Math.random() * 5 + 3);
+          if (prev < 86) return prev + Math.floor(Math.random() * 3 + 1);
+          if (prev < 94) return Math.min(94, prev + 0.4);
+          return prev;
+        });
+      }, 150);
+    } else {
+      if (showAiProgress) {
+        setAiProgress(100);
+        fadeTimeout = setTimeout(() => {
+          setShowAiProgress(false);
+          setAiProgress(0);
+        }, 450);
+      }
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+      if (fadeTimeout) clearTimeout(fadeTimeout);
+    };
+  }, [aiLoading, showAiProgress]);
 
   // Debounce & In-flight request cancellation refs
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -16319,7 +16355,25 @@ function computeProSearchScore(pro: any, searchStr: string): number {
 
             <div className="space-y-4">
               {/* Blue Bordered Ask Jane Container */}
-              <div className="relative bg-white rounded-[24px] border-2 border-blue-200/90 p-5 shadow-[0_4px_24px_rgba(37,99,235,0.02)] space-y-2 focus-within:border-brand-blue/50 focus-within:ring-4 focus-within:ring-brand-blue/5 transition-all">
+              <div className="relative bg-white rounded-[24px] border-2 border-blue-200/90 p-5 shadow-[0_4px_24px_rgba(37,99,235,0.02)] space-y-2 focus-within:border-brand-blue/50 focus-within:ring-4 focus-within:ring-brand-blue/5 transition-all overflow-hidden">
+                {/* Smart Ambient Hairline Progress Bar */}
+                <AnimatePresence>
+                  {showAiProgress && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute top-0 left-0 right-0 h-1 bg-blue-100/70 overflow-hidden z-10"
+                    >
+                      <div 
+                        className="h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400 transition-all duration-200 ease-out"
+                        style={{ width: `${Math.min(100, Math.max(4, aiProgress))}%` }}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="flex items-start gap-3">
                   <Sparkles className="w-5 h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                   <div className="flex-1 space-y-1">
@@ -16358,19 +16412,24 @@ function computeProSearchScore(pro: any, searchStr: string): number {
                 </div>
               </div>
 
-              {/* Large Blue Recommendations Action Button */}
+              {/* Large Blue Recommendations Action Button with live progress % */}
               <button 
                 type="button"
                 onClick={() => handleSearchSubmit()}
                 disabled={aiLoading || !search.trim()}
-                className="w-full py-4.5 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-[24px] font-bold text-sm md:text-base shadow-lg shadow-blue-500/15 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
+                className="w-full py-4.5 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-[24px] font-bold text-sm md:text-base shadow-lg shadow-blue-500/15 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer overflow-hidden relative"
               >
                 {aiLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Searching... {Math.round(aiProgress)}%</span>
+                  </>
                 ) : (
-                  <Sparkles className="w-5 h-5 fill-white/10" />
+                  <>
+                    <Sparkles className="w-5 h-5 fill-white/10" />
+                    <span>Find professionals</span>
+                  </>
                 )}
-                <span>Find professionals</span>
               </button>
 
               {/* Privacy Safeguard Note */}
@@ -16388,18 +16447,52 @@ function computeProSearchScore(pro: any, searchStr: string): number {
               </div>
             )}
 
-            {/* Skeleton / Loading pulse for AI mapping */}
-            {aiLoading && (
-              <div className="p-8 bg-blue-50/40 rounded-3xl border border-blue-100/40 flex flex-col items-center justify-center text-center space-y-4">
-                <div className="w-12 h-12 bg-brand-blue/10 rounded-full flex items-center justify-center">
-                  <Sparkles className="w-6 h-6 text-brand-blue animate-spin" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-brand-navy">Jane is analyzing your request...</p>
-                  <p className="text-xs text-slate-400 max-w-sm">Jane is searching our database of recommended professionals to find the perfect matches.</p>
-                </div>
-              </div>
-            )}
+            {/* Smart Progress Bar Banner for Jane AI */}
+            <AnimatePresence>
+              {showAiProgress && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  transition={{ duration: 0.25 }}
+                  className="p-5 sm:p-6 bg-gradient-to-b from-blue-50/80 to-indigo-50/40 rounded-3xl border border-blue-200/70 shadow-xs space-y-3.5 overflow-hidden"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-2xl bg-brand-blue/10 border border-blue-200/60 flex items-center justify-center shrink-0">
+                        <Sparkles className="w-4.5 h-4.5 text-brand-blue animate-spin" />
+                      </div>
+                      <div>
+                        <p className="text-xs sm:text-sm font-bold text-brand-navy">
+                          Jane is analyzing your request...
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          Searching verified community-recommended professionals
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs sm:text-sm font-black font-mono text-brand-blue bg-white/90 px-2.5 py-1 rounded-xl border border-blue-200/60 shadow-2xs shrink-0">
+                      {Math.round(aiProgress)}%
+                    </span>
+                  </div>
+
+                  {/* Progress Track & Animated Glow Bar */}
+                  <div className="h-2.5 w-full bg-blue-100/80 rounded-full overflow-hidden p-0.5 border border-blue-200/50 shadow-inner">
+                    <div 
+                      className="h-full rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400 relative overflow-hidden transition-all duration-200 ease-out"
+                      style={{ width: `${Math.min(100, Math.max(5, aiProgress))}%` }}
+                    >
+                      {/* Animated Shimmer beam */}
+                      <motion.div 
+                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent w-full"
+                        animate={{ x: ['-100%', '200%'] }}
+                        transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Filters Section */}
             <div className="space-y-4 pt-4 border-t border-slate-100">

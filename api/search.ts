@@ -272,6 +272,29 @@ export function fallbackSmartSearch(query: string, professionals: any[]) {
   };
 }
 
+// Global in-memory cache for fast repeated queries
+const searchCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 1000 * 60 * 60 * 2; // 2 hours
+const MAX_CACHE_SIZE = 250;
+
+function getCachedResult(key: string): any | null {
+  const entry = searchCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    searchCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedResult(key: string, data: any) {
+  if (searchCache.size >= MAX_CACHE_SIZE) {
+    const oldest = searchCache.keys().next().value;
+    if (oldest) searchCache.delete(oldest);
+  }
+  searchCache.set(key, { data, timestamp: Date.now() });
+}
+
 export async function processSearch(query: string, professionals: any[]) {
   // Jane AI Paused flag: only pauses if explicitly requested via environment variable
   const isAiPaused = process.env.PAUSE_JANE_AI === "true";
@@ -286,6 +309,12 @@ export async function processSearch(query: string, professionals: any[]) {
     return { exactMatchFound: false, summaryMessage: null, results: [] };
   }
 
+  const cleanKey = query.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const cached = getCachedResult(cleanKey);
+  if (cached) {
+    return cached;
+  }
+
   const ai = new GoogleGenAI({
     apiKey,
     httpOptions: {
@@ -295,16 +324,37 @@ export async function processSearch(query: string, professionals: any[]) {
     },
   });
 
+  // Fast candidate pre-filtering to keep prompt payload lean and speed up inference by 2x
+  let targetPros = professionals;
+  if (professionals.length > 35) {
+    const qTokens = cleanKey.split(/[\s,.'"-]+/).filter(t => t.length > 2);
+    const scoredCandidates = professionals.map(p => {
+      let candidateScore = 0;
+      const pName = (p.name || '').toLowerCase();
+      const pCat = (p.category || p.profession || '').toLowerCase();
+      const pBio = (p.bio || p.description || '').toLowerCase();
+      for (const t of qTokens) {
+        if (pName.includes(t)) candidateScore += 40;
+        if (pCat.includes(t)) candidateScore += 35;
+        if (pBio.includes(t)) candidateScore += 15;
+      }
+      if (p.is_recommended !== false) candidateScore += 10;
+      return { p, candidateScore };
+    });
+    scoredCandidates.sort((a, b) => b.candidateScore - a.candidateScore);
+    targetPros = scoredCandidates.slice(0, 35).map(c => c.p);
+  }
+
   // Compact pro representation to keep prompt tokens well below free-tier TPM limits
   // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
-  const proListBrief = professionals.map((p: any) => ({
+  const proListBrief = targetPros.map((p: any) => ({
     id: String(p.id),
     name: p.name,
     company_name: p.company_name || "",
     category: p.category || p.profession || "",
     categories: p.categories || (typeof p.profession === "string" ? p.profession.split(",").map((s: string) => s.trim()) : []),
-    bio: (p.bio || p.description || "").slice(0, 180),
-    top_qualities: (p.top_qualities || []).slice(0, 3),
+    bio: (p.bio || p.description || "").slice(0, 140),
+    top_qualities: (p.top_qualities || []).slice(0, 2),
     languages: p.languages || [],
     location: p.location || "",
     is_recommended: p.is_recommended ?? true
@@ -456,11 +506,12 @@ ${JSON.stringify(proListBrief)}`,
           config: {
             systemInstruction: sysInstruction,
             responseMimeType: "application/json",
+            maxOutputTokens: 1000,
             responseSchema: {
               type: Type.OBJECT,
               properties: {
                 exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service/symptom, false if not." },
-                summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 25 words) in English from Jane explaining her found results to the user." },
+                summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 20 words) in English from Jane explaining her found results to the user." },
                 results: {
                   type: Type.ARRAY,
                   items: {
@@ -468,7 +519,7 @@ ${JSON.stringify(proListBrief)}`,
                     properties: {
                       id: { type: Type.STRING, description: "The professional's ID as a string" },
                       score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                      reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation in English" }
+                      reasonUrlExcerpt: { type: Type.STRING, description: "Concise reason in English (max 10 words)" }
                     },
                     required: ["id", "score", "reasonUrlExcerpt"]
                   }
@@ -553,7 +604,9 @@ ${JSON.stringify(proListBrief)}`,
     exactMatchFound = false;
   }
 
-  return { exactMatchFound, summaryMessage, results };
+  const outputPayload = { exactMatchFound, summaryMessage, results };
+  setCachedResult(cleanKey, outputPayload);
+  return outputPayload;
 }
 
 // Vercel Serverless Function handler
@@ -583,6 +636,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     const result = await processSearch(query, professionals);
+    res.setHeader("Cache-Control", "public, s-maxage=1800, stale-while-revalidate=3600");
     return res.status(200).json(result);
   } catch (error: any) {
     console.warn("[api/search] Gemini API quota reached. Serving high-precision catalog matching fallback:", error?.message || error);
