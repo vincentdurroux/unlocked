@@ -4298,7 +4298,6 @@ export default function App() {
                 transition={{ duration: 0.2, ease: 'easeOut' }}
                 className={activeView === 'explore' ? 'block w-full' : 'hidden w-full'}
               >
-                {activeView === 'explore' && (
                   <ExploreView 
                     allPros={allPros}
                     loading={prosLoading}
@@ -4317,7 +4316,6 @@ export default function App() {
                     favoriteProIds={favoriteProIds}
                     onToggleFavoritePro={toggleFavoritePro}
                   />
-                )}
               </motion.div>
               {activeView === 'events' && (
                 <EventsView 
