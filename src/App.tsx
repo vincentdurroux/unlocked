@@ -686,14 +686,13 @@ function stripMarkdown(text?: string): string {
 }
 
 function parseInlineMarkdown(text: string): React.ReactNode {
-  if (!text || typeof text !== 'string') return '';
   const linkRegex = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s]+)/g;
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match;
 
   function parseBold(rawText: string): React.ReactNode[] {
-    const boldRegex = /(\*\*|__)([\s\S]*?)\1/g;
+    const boldRegex = /(\*\*|__)(.*?)\1/g;
     const boldParts = [];
     let lastBoldIndex = 0;
     let boldMatch;
@@ -3687,10 +3686,14 @@ export default function App() {
   const scrollToTop = (instant = true) => {
     if (mainRef.current) {
       try {
+        // Cancel active momentum scrolling in WebKit
+        mainRef.current.style.overflowY = 'hidden';
+        mainRef.current.scrollTop = 0;
+        void mainRef.current.offsetHeight; // Force reflow to kill inertia
+        mainRef.current.style.overflowY = '';
+        mainRef.current.scrollTop = 0;
         if (typeof mainRef.current.scrollTo === 'function') {
-          mainRef.current.scrollTo({ top: 0, left: 0, behavior: instant ? 'auto' : 'smooth' });
-        } else {
-          mainRef.current.scrollTop = 0;
+          mainRef.current.scrollTo({ top: 0, left: 0, behavior: instant ? 'instant' : 'auto' });
         }
       } catch (_) {
         if (mainRef.current) mainRef.current.scrollTop = 0;
@@ -3698,7 +3701,7 @@ export default function App() {
     }
     if (typeof window !== 'undefined') {
       try {
-        window.scrollTo({ top: 0, left: 0, behavior: instant ? 'auto' : 'smooth' });
+        window.scrollTo({ top: 0, left: 0, behavior: instant ? 'instant' : 'auto' });
       } catch (_) {
         window.scrollTo(0, 0);
       }
@@ -4249,60 +4252,53 @@ export default function App() {
           activeView === 'login' ? "pb-0" : "pb-24 xl:pb-0"
         )}
       >
-            <AnimatePresence initial={false}>
-              {activeView === 'home' && (
-                <motion.div 
-                  key="view-home"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15, ease: 'easeOut' }}
-                  className="block w-full"
-                >
-                  <HomeView 
-                    allPros={allPros}
-                    prosLoading={prosLoading}
-                    events={events}
-                    eventsLoading={eventsLoading}
-                    guidesLoading={guidesLoading}
-                    onNavigate={handleNavigate}
-                    userProfile={userProfile}
-                    currentUser={currentUser}
-                    onAddPro={() => {
-                      if (!currentUser) {
-                        handleNavigate('login');
-                      } else {
-                        setShowAddPro(true);
-                      }
-                    }} 
-                    ads={ads} 
-                    onSelectAd={setSelectedAd} 
-                    onSelectPost={(post) => { setSelectedPost(post); navigateTo('community-thread'); }}
-                    scrollToTop={scrollToTop}
-                    onProUpdate={refetchPros}
-                    unreadConversations={unreadConversations}
-                    blockedUsers={blockedUsers}
-                    usersWhoBlockedMe={usersWhoBlockedMe}
-                    highlightedProIds={highlightedProIds}
-                    highlightedEventIds={highlightedEventIds}
-                    highlightedArticleIds={highlightedArticleIds}
-                    highlightedTestimoniesIds={highlightedTestimoniesIds}
-                    allArticles={allArticles}
-                    onContactAdmin={handleContactAdmin}
-                    favoriteProIds={favoriteProIds}
-                    onToggleFavoritePro={toggleFavoritePro}
-                  />
-                </motion.div>
-              )}
-              {activeView === 'explore' && (
-                <motion.div 
-                  key="view-explore"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18, ease: 'easeOut' }}
-                  className="block w-full"
-                >
+              <motion.div 
+                animate={activeView === 'home' ? { opacity: 1 } : { opacity: 0 }}
+                initial={{ opacity: 0 }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+                className={activeView === 'home' ? 'block w-full' : 'hidden w-full'}
+              >
+                <HomeView 
+                  allPros={allPros}
+                  prosLoading={prosLoading}
+                  events={events}
+                  eventsLoading={eventsLoading}
+                  guidesLoading={guidesLoading}
+                  onNavigate={handleNavigate}
+                  userProfile={userProfile}
+                  currentUser={currentUser}
+                  onAddPro={() => {
+                    if (!currentUser) {
+                      handleNavigate('login');
+                    } else {
+                      setShowAddPro(true);
+                    }
+                  }} 
+                  ads={ads} 
+                  onSelectAd={setSelectedAd} 
+                  onSelectPost={(post) => { setSelectedPost(post); navigateTo('community-thread'); }}
+                  scrollToTop={scrollToTop}
+                  onProUpdate={refetchPros}
+                  unreadConversations={unreadConversations}
+                  blockedUsers={blockedUsers}
+                  usersWhoBlockedMe={usersWhoBlockedMe}
+                  highlightedProIds={highlightedProIds}
+                  highlightedEventIds={highlightedEventIds}
+                  highlightedArticleIds={highlightedArticleIds}
+                  highlightedTestimoniesIds={highlightedTestimoniesIds}
+                  allArticles={allArticles}
+                  onContactAdmin={handleContactAdmin}
+                  favoriteProIds={favoriteProIds}
+                  onToggleFavoritePro={toggleFavoritePro}
+                />
+              </motion.div>
+              <motion.div 
+                animate={activeView === 'explore' ? { opacity: 1 } : { opacity: 0 }}
+                initial={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className={activeView === 'explore' ? 'block w-full' : 'hidden w-full'}
+              >
+                {activeView === 'explore' && (
                   <ExploreView 
                     allPros={allPros}
                     loading={prosLoading}
@@ -4321,9 +4317,8 @@ export default function App() {
                     favoriteProIds={favoriteProIds}
                     onToggleFavoritePro={toggleFavoritePro}
                   />
-                </motion.div>
-              )}
-            </AnimatePresence>
+                )}
+              </motion.div>
               {activeView === 'events' && (
                 <EventsView 
                   initialEventId={initialEventId}
@@ -13195,11 +13190,6 @@ function HomeView({
   const [janeSearch, setJaneSearch] = useState('');
   const janeInputRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleJaneSubmit = () => {
-    if (!janeSearch.trim()) return;
-    onNavigate('explore', { searchQuery: janeSearch.trim() });
-  };
-
   const [sec1Idx, setSec1Idx] = useState(0);
   const [sec2Idx, setSec2Idx] = useState(0);
   const [sec3Idx, setSec3Idx] = useState(0);
@@ -13327,7 +13317,9 @@ function HomeView({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        handleJaneSubmit();
+                        if (janeSearch.trim()) {
+                          onNavigate('explore', { searchQuery: janeSearch.trim() });
+                        }
                       }
                     }}
                   />
@@ -13354,13 +13346,16 @@ function HomeView({
 
             {/* Large Blue Recommendations Action Button */}
             <button 
-              type="button"
-              onClick={handleJaneSubmit}
+              onClick={() => {
+                if (janeSearch.trim()) {
+                  onNavigate('explore', { searchQuery: janeSearch.trim() });
+                }
+              }}
               disabled={!janeSearch.trim()}
               className="w-full py-3.5 md:py-4 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-[20px] font-bold text-xs md:text-sm shadow-md shadow-blue-500/15 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               <Sparkles className="w-4 h-4 fill-white/10" />
-              <span>Find professionals</span>
+              Find professionals
             </button>
 
             {/* Privacy Safeguard Note */}
@@ -14937,7 +14932,7 @@ function DirectoryProCardItem({
                 <SimpleMarkdown isPlain={true}>{pro.bio}</SimpleMarkdown>
               </div>
             ) : (
-              pro.bio ? parseInlineMarkdown(pro.bio) : null
+              pro.bio
             )}
           </div>
 
@@ -14945,7 +14940,7 @@ function DirectoryProCardItem({
             <div className="mt-3 p-3 bg-blue-50/40 rounded-2xl border border-blue-100/45 flex items-start gap-2 max-w-full">
               <Sparkles className="w-3.5 h-3.5 text-brand-blue mt-0.5 flex-shrink-0 animate-pulse" />
               <p className="text-xs text-blue-900 font-medium italic leading-relaxed">
-                "{parseInlineMarkdown(aiResult.reason)}"
+                "{aiResult.reason}"
               </p>
             </div>
           )}
@@ -15361,15 +15356,33 @@ function ExploreView({
 
   useEffect(() => {
     scrollToTop?.();
+    const mainContainer = document.querySelector('main');
+    if (mainContainer) {
+      mainContainer.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
     if (isActive) {
-      const timer = setTimeout(() => {
+      setTimeout(() => {
+        const mc = document.querySelector('main');
+        if (mc) {
+          mc.scrollTop = 0;
+        }
+        window.scrollTo(0, 0);
         if (inputRef.current) {
           inputRef.current.focus({ preventScroll: true });
         }
-      }, 100);
-      return () => clearTimeout(timer);
+      }, 50);
     }
   }, [isActive]);
+
+  useEffect(() => {
+    scrollToTop?.();
+    const mainContainer = document.querySelector('main');
+    if (mainContainer) {
+      mainContainer.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+  }, []);
 
 // JANE AI STATUS FLAG:
 // Jane AI is active with Gemini semantic search and intelligent matching.
@@ -15923,6 +15936,13 @@ function computeProSearchScore(pro: any, searchStr: string): number {
     return () => clearTimeout(timer);
   }, []);
 
+  // Secure auto-scrolling to results once the progress bar reaches 100%
+  useEffect(() => {
+    if (aiResults && searchProgress >= 100) {
+      scrollToResults();
+    }
+  }, [aiResults, searchProgress]);
+
   useEffect(() => {
     if (initialSearch !== null && initialSearch !== undefined) {
       setSearch(initialSearch);
@@ -16392,9 +16412,6 @@ function computeProSearchScore(pro: any, searchStr: string): number {
               isLoading={aiLoading}
               query={search || aiQuery}
               onProgressUpdate={(p) => setSearchProgress(p)}
-              onComplete={() => {
-                scrollToResults();
-              }}
               onCancel={() => {
                 if (abortControllerRef.current) {
                   abortControllerRef.current.abort();

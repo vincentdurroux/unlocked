@@ -1,115 +1,67 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Check } from 'lucide-react';
+import { Sparkles, X, CheckCircle2 } from 'lucide-react';
 
 interface SmartSearchProgressBarProps {
   isLoading: boolean;
   query?: string;
   onCancel?: () => void;
   onProgressUpdate?: (progress: number) => void;
-  onComplete?: () => void;
   className?: string;
 }
 
 export function SmartSearchProgressBar({
   isLoading,
   query,
+  onCancel,
   onProgressUpdate,
-  onComplete,
   className = ''
 }: SmartSearchProgressBarProps) {
   const [progress, setProgress] = useState(0);
-  const [isFinishing, setIsFinishing] = useState(false);
   const [visible, setVisible] = useState(false);
-  const finishTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const completionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const safeUpdateProgress = (val: number) => {
-    if (onProgressUpdate) {
-      setTimeout(() => {
-        onProgressUpdate(val);
-      }, 0);
-    }
-  };
+  const [isFinishing, setIsFinishing] = useState(false);
 
   useEffect(() => {
     if (isLoading) {
       setVisible(true);
       setIsFinishing(false);
-      setProgress(10);
-      safeUpdateProgress(10);
+      setProgress(5);
+      onProgressUpdate?.(5);
 
-      if (finishTimeoutRef.current) {
-        clearTimeout(finishTimeoutRef.current);
-        finishTimeoutRef.current = null;
-      }
-      if (completionTimeoutRef.current) {
-        clearTimeout(completionTimeoutRef.current);
-        completionTimeoutRef.current = null;
-      }
-
-      // Smooth progression up to 92%
       const interval = setInterval(() => {
         setProgress(prev => {
-          if (prev >= 92) {
-            const creep = Math.min(prev + 0.1, 95);
-            safeUpdateProgress(creep);
-            return creep;
+          if (prev >= 95) {
+            const next = Math.min(prev + 0.5, 98);
+            onProgressUpdate?.(next);
+            return next;
           }
-
-          let increment = 2.0;
-          if (prev < 30) increment = 3.0;
-          else if (prev < 65) increment = 2.0;
-          else if (prev < 85) increment = 1.0;
-          else increment = 0.3;
-
-          const next = Math.min(prev + increment, 92);
-          safeUpdateProgress(next);
+          const increment = prev < 30 ? 3 : prev < 70 ? 2 : 1;
+          const next = Math.min(prev + increment, 95);
+          onProgressUpdate?.(next);
           return next;
         });
-      }, 60);
+      }, 45);
 
       return () => clearInterval(interval);
     } else {
       if (visible) {
         setIsFinishing(true);
         setProgress(100);
-        safeUpdateProgress(100);
+        onProgressUpdate?.(100);
 
-        // Wait until the user visibly sees the bar reach 100% and "Matches ready!" before triggering scroll
-        completionTimeoutRef.current = setTimeout(() => {
-          onComplete?.();
-        }, 360);
-
-        finishTimeoutRef.current = setTimeout(() => {
+        const timeout = setTimeout(() => {
           setVisible(false);
           setIsFinishing(false);
           setProgress(0);
-          safeUpdateProgress(0);
-        }, 650);
+        }, 400);
+
+        return () => clearTimeout(timeout);
       }
     }
   }, [isLoading]);
 
-  useEffect(() => {
-    return () => {
-      if (finishTimeoutRef.current) clearTimeout(finishTimeoutRef.current);
-      if (completionTimeoutRef.current) clearTimeout(completionTimeoutRef.current);
-    };
-  }, []);
-
   if (!visible && !isLoading) {
     return null;
-  }
-
-  // Simple, calm dynamic message
-  let statusText = "Jane is searching the directory...";
-  if (isFinishing) {
-    statusText = "Matches ready!";
-  } else if (progress > 68) {
-    statusText = "Ranking the best recommendations...";
-  } else if (progress > 32) {
-    statusText = "Matching languages & specialties...";
   }
 
   const displayPercent = Math.min(Math.round(progress), 100);
@@ -117,36 +69,57 @@ export function SmartSearchProgressBar({
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, y: -4, scale: 0.99 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -4, scale: 0.99 }}
-        transition={{ duration: 0.22, ease: 'easeOut' }}
-        className={`w-full py-2.5 px-3.5 bg-blue-50/70 rounded-xl border border-blue-100/90 shadow-xs ${className}`}
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.2 }}
+        className={`w-full bg-white rounded-2xl border border-blue-100 p-4 shadow-sm ${className}`}
       >
-        <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-          <div className="flex items-center gap-2 min-w-0">
-            {isFinishing ? (
-              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            ) : (
-              <Sparkles className="w-3.5 h-3.5 text-brand-blue animate-pulse shrink-0" />
-            )}
-            <span className={`truncate text-xs ${isFinishing ? 'text-emerald-700 font-semibold' : 'text-slate-700'}`}>
-              {statusText}
-            </span>
+        <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+              isFinishing ? 'bg-emerald-500 text-white' : 'bg-brand-blue text-white'
+            }`}>
+              {isFinishing ? (
+                <CheckCircle2 className="w-4 h-4" />
+              ) : (
+                <Sparkles className="w-4 h-4 animate-spin" />
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-800">
+                {isFinishing ? 'Recommendations ready!' : 'Jane is searching professionals...'}
+              </p>
+              {query && (
+                <p className="text-[11px] text-slate-400 truncate max-w-[200px] sm:max-w-[300px]">
+                  "{query}"
+                </p>
+              )}
+            </div>
           </div>
 
-          <span className="font-mono text-[11px] font-bold text-brand-blue shrink-0 ml-2">
-            {displayPercent}%
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-brand-blue font-mono">
+              {displayPercent}%
+            </span>
+            {onCancel && !isFinishing && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-md transition-colors cursor-pointer"
+                title="Cancel"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Sleek, simple animated progress bar */}
-        <div className="w-full h-1.5 bg-blue-100/80 rounded-full overflow-hidden">
-          <motion.div
-            className={`h-full rounded-full transition-all duration-300 ease-out ${
-              isFinishing
-                ? 'bg-emerald-500'
-                : 'bg-gradient-to-r from-brand-blue via-indigo-500 to-cyan-400'
+        {/* Simple Progress Bar */}
+        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div
+            className={`h-full transition-all duration-300 ease-out ${
+              isFinishing ? 'bg-emerald-500' : 'bg-brand-blue'
             }`}
             style={{ width: `${displayPercent}%` }}
           />
