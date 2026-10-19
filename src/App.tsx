@@ -3686,14 +3686,10 @@ export default function App() {
   const scrollToTop = (instant = true) => {
     if (mainRef.current) {
       try {
-        // Cancel active momentum scrolling in WebKit
-        mainRef.current.style.overflowY = 'hidden';
-        mainRef.current.scrollTop = 0;
-        void mainRef.current.offsetHeight; // Force reflow to kill inertia
-        mainRef.current.style.overflowY = '';
-        mainRef.current.scrollTop = 0;
         if (typeof mainRef.current.scrollTo === 'function') {
-          mainRef.current.scrollTo({ top: 0, left: 0, behavior: instant ? 'instant' : 'auto' });
+          mainRef.current.scrollTo({ top: 0, left: 0, behavior: instant ? 'auto' : 'smooth' });
+        } else {
+          mainRef.current.scrollTop = 0;
         }
       } catch (_) {
         if (mainRef.current) mainRef.current.scrollTop = 0;
@@ -3701,7 +3697,7 @@ export default function App() {
     }
     if (typeof window !== 'undefined') {
       try {
-        window.scrollTo({ top: 0, left: 0, behavior: instant ? 'instant' : 'auto' });
+        window.scrollTo({ top: 0, left: 0, behavior: instant ? 'auto' : 'smooth' });
       } catch (_) {
         window.scrollTo(0, 0);
       }
@@ -4252,53 +4248,60 @@ export default function App() {
           activeView === 'login' ? "pb-0" : "pb-24 xl:pb-0"
         )}
       >
-              <motion.div 
-                animate={activeView === 'home' ? { opacity: 1 } : { opacity: 0 }}
-                initial={{ opacity: 0 }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-                className={activeView === 'home' ? 'block w-full' : 'hidden w-full'}
-              >
-                <HomeView 
-                  allPros={allPros}
-                  prosLoading={prosLoading}
-                  events={events}
-                  eventsLoading={eventsLoading}
-                  guidesLoading={guidesLoading}
-                  onNavigate={handleNavigate}
-                  userProfile={userProfile}
-                  currentUser={currentUser}
-                  onAddPro={() => {
-                    if (!currentUser) {
-                      handleNavigate('login');
-                    } else {
-                      setShowAddPro(true);
-                    }
-                  }} 
-                  ads={ads} 
-                  onSelectAd={setSelectedAd} 
-                  onSelectPost={(post) => { setSelectedPost(post); navigateTo('community-thread'); }}
-                  scrollToTop={scrollToTop}
-                  onProUpdate={refetchPros}
-                  unreadConversations={unreadConversations}
-                  blockedUsers={blockedUsers}
-                  usersWhoBlockedMe={usersWhoBlockedMe}
-                  highlightedProIds={highlightedProIds}
-                  highlightedEventIds={highlightedEventIds}
-                  highlightedArticleIds={highlightedArticleIds}
-                  highlightedTestimoniesIds={highlightedTestimoniesIds}
-                  allArticles={allArticles}
-                  onContactAdmin={handleContactAdmin}
-                  favoriteProIds={favoriteProIds}
-                  onToggleFavoritePro={toggleFavoritePro}
-                />
-              </motion.div>
-              <motion.div 
-                animate={activeView === 'explore' ? { opacity: 1 } : { opacity: 0 }}
-                initial={{ opacity: 0 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
-                className={activeView === 'explore' ? 'block w-full' : 'hidden w-full'}
-              >
-                {activeView === 'explore' && (
+            <AnimatePresence initial={false}>
+              {activeView === 'home' && (
+                <motion.div 
+                  key="view-home"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className="block w-full"
+                >
+                  <HomeView 
+                    allPros={allPros}
+                    prosLoading={prosLoading}
+                    events={events}
+                    eventsLoading={eventsLoading}
+                    guidesLoading={guidesLoading}
+                    onNavigate={handleNavigate}
+                    userProfile={userProfile}
+                    currentUser={currentUser}
+                    onAddPro={() => {
+                      if (!currentUser) {
+                        handleNavigate('login');
+                      } else {
+                        setShowAddPro(true);
+                      }
+                    }} 
+                    ads={ads} 
+                    onSelectAd={setSelectedAd} 
+                    onSelectPost={(post) => { setSelectedPost(post); navigateTo('community-thread'); }}
+                    scrollToTop={scrollToTop}
+                    onProUpdate={refetchPros}
+                    unreadConversations={unreadConversations}
+                    blockedUsers={blockedUsers}
+                    usersWhoBlockedMe={usersWhoBlockedMe}
+                    highlightedProIds={highlightedProIds}
+                    highlightedEventIds={highlightedEventIds}
+                    highlightedArticleIds={highlightedArticleIds}
+                    highlightedTestimoniesIds={highlightedTestimoniesIds}
+                    allArticles={allArticles}
+                    onContactAdmin={handleContactAdmin}
+                    favoriteProIds={favoriteProIds}
+                    onToggleFavoritePro={toggleFavoritePro}
+                  />
+                </motion.div>
+              )}
+              {activeView === 'explore' && (
+                <motion.div 
+                  key="view-explore"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  className="block w-full"
+                >
                   <ExploreView 
                     allPros={allPros}
                     loading={prosLoading}
@@ -4317,8 +4320,9 @@ export default function App() {
                     favoriteProIds={favoriteProIds}
                     onToggleFavoritePro={toggleFavoritePro}
                   />
-                )}
-              </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
               {activeView === 'events' && (
                 <EventsView 
                   initialEventId={initialEventId}
@@ -13190,6 +13194,11 @@ function HomeView({
   const [janeSearch, setJaneSearch] = useState('');
   const janeInputRef = useRef<HTMLTextAreaElement>(null);
 
+  const handleJaneSubmit = () => {
+    if (!janeSearch.trim()) return;
+    onNavigate('explore', { searchQuery: janeSearch.trim() });
+  };
+
   const [sec1Idx, setSec1Idx] = useState(0);
   const [sec2Idx, setSec2Idx] = useState(0);
   const [sec3Idx, setSec3Idx] = useState(0);
@@ -13317,9 +13326,7 @@ function HomeView({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        if (janeSearch.trim()) {
-                          onNavigate('explore', { searchQuery: janeSearch.trim() });
-                        }
+                        handleJaneSubmit();
                       }
                     }}
                   />
@@ -13346,16 +13353,13 @@ function HomeView({
 
             {/* Large Blue Recommendations Action Button */}
             <button 
-              onClick={() => {
-                if (janeSearch.trim()) {
-                  onNavigate('explore', { searchQuery: janeSearch.trim() });
-                }
-              }}
+              type="button"
+              onClick={handleJaneSubmit}
               disabled={!janeSearch.trim()}
               className="w-full py-3.5 md:py-4 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-[20px] font-bold text-xs md:text-sm shadow-md shadow-blue-500/15 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               <Sparkles className="w-4 h-4 fill-white/10" />
-              Find professionals
+              <span>Find professionals</span>
             </button>
 
             {/* Privacy Safeguard Note */}
@@ -15356,33 +15360,15 @@ function ExploreView({
 
   useEffect(() => {
     scrollToTop?.();
-    const mainContainer = document.querySelector('main');
-    if (mainContainer) {
-      mainContainer.scrollTop = 0;
-    }
-    window.scrollTo(0, 0);
     if (isActive) {
-      setTimeout(() => {
-        const mc = document.querySelector('main');
-        if (mc) {
-          mc.scrollTop = 0;
-        }
-        window.scrollTo(0, 0);
+      const timer = setTimeout(() => {
         if (inputRef.current) {
           inputRef.current.focus({ preventScroll: true });
         }
-      }, 50);
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [isActive]);
-
-  useEffect(() => {
-    scrollToTop?.();
-    const mainContainer = document.querySelector('main');
-    if (mainContainer) {
-      mainContainer.scrollTop = 0;
-    }
-    window.scrollTo(0, 0);
-  }, []);
 
 // JANE AI STATUS FLAG:
 // Jane AI is active with Gemini semantic search and intelligent matching.
