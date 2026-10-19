@@ -11369,7 +11369,33 @@ function AdminView({
                     <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
                       Article Content (Markdown supported)
                     </label>
-                    <span className="text-[11px] text-slate-400 font-medium">Click any emoji to insert into your article</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const template = `# Introduction to the Topic
+
+## Key Highlights
+- First major point or tip for newcomers
+- Second important detail to keep in mind
+- Essential local advice
+
+## Deep Dive & Practical Advice
+Write your main article content here using clear paragraphs and formatting. You can structure different sections using headings (## Heading).
+
+- Detailed tip 1
+- Detailed tip 2
+
+## Conclusion
+Wrap up your guide with a warm closing thought for newcomers settling into Valencia.`;
+                          setArticleFormContent(template);
+                        }}
+                        className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold rounded-lg transition-all border border-emerald-200/70 flex items-center gap-1 cursor-pointer shadow-2xs"
+                      >
+                        <span>✨ Insert Editorial Template</span>
+                      </button>
+                      <span className="text-[11px] text-slate-400 font-medium">Click any emoji to insert</span>
+                    </div>
                   </div>
 
                   {/* Emoji Quick Picker Toolbar */}
@@ -11389,13 +11415,16 @@ function AdminView({
                   </div>
 
                   <textarea
-                    rows={8}
+                    rows={10}
                     required
-                    placeholder="Enter full article text. You can use markdown headers (#, ##), bullet points (-), and rich emojis..."
+                    placeholder="Enter full article text. Use markdown headers (#, ##), bullet points (-), and rich emojis..."
                     value={articleFormContent}
                     onChange={(e) => setArticleFormContent(e.target.value)}
                     className="w-full text-xs px-4 py-3 rounded-xl bg-slate-50 border border-slate-150 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-slate-800 font-medium font-sans resize-y"
                   />
+                  <p className="text-[11px] text-slate-400 italic">
+                    💡 Tip: Your future articles will automatically take advantage of the new professional magazine layout, author card, and rich typography.
+                  </p>
                 </div>
               </div>
 
@@ -19789,57 +19818,64 @@ function GuideCardItem({
   const imageSrc = article.imageUrl || "/valencia.jpg";
   const categoryName = article.categoryTitle || "Valencia Guide";
 
+
+
   return (
     <div
       id={`guide-card-${article.id}`}
       onClick={onToggleExpand}
       className={`bg-white rounded-3xl border transition-all duration-300 scroll-mt-28 cursor-pointer overflow-hidden ${
         isExpanded
-          ? "border-[#00C2A8]/40 shadow-xl p-5 sm:p-8 md:p-10 ring-2 ring-[#00C2A8]/10"
-          : "border-slate-100 hover:border-[#00C2A8]/30 shadow-sm hover:shadow-md p-3 sm:p-4"
+          ? "border-emerald-300/50 shadow-2xl p-6 sm:p-10 md:p-12 ring-4 ring-emerald-500/10"
+          : "border-slate-100 hover:border-emerald-500/30 shadow-sm hover:shadow-md p-4 sm:p-5"
       }`}
     >
       {!isExpanded ? (
         /* Collapsed State: Row item */
         <div className="flex items-center gap-4 group">
           {article.imageUrl && (
-            <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden shrink-0 relative">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden shrink-0 relative shadow-inner">
               <img 
                 src={article.imageUrl} 
                 alt={article.title} 
-                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300" 
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
                 referrerPolicy="no-referrer"
               />
             </div>
           )}
-          <div className="flex-1 min-w-0 pr-2 space-y-1">
-            {article.categoryTitle && (
-              <span className="text-[9px] font-black uppercase tracking-widest text-[#00C2A8]">{article.categoryTitle}</span>
-            )}
-            <h4 className="font-bold text-slate-950 text-sm sm:text-base line-clamp-2 leading-tight group-hover:text-brand-blue transition-colors">
+          <div className="flex-1 min-w-0 pr-2 space-y-1.5">
+            <div className="flex items-center gap-2">
+              {article.categoryTitle && (
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                  {article.categoryTitle}
+                </span>
+              )}
+
+            </div>
+            <h4 className="font-bold text-slate-950 text-base sm:text-lg line-clamp-2 leading-snug group-hover:text-brand-blue transition-colors">
               {article.title}
             </h4>
-            <p className="text-[10px] sm:text-xs text-slate-500 line-clamp-2 mt-0.5 leading-relaxed font-medium">
+            <p className="text-xs sm:text-sm text-slate-500 line-clamp-2 mt-0.5 leading-relaxed font-normal">
               {article.excerpt}
             </p>
           </div>
-          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-brand-blue transition-colors group-hover:translate-x-0.5" />
+          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-brand-blue transition-colors group-hover:translate-x-1 shrink-0" />
         </div>
       ) : (
-        /* Expanded State: Full Blog Post Detail inline */
-        <div className="space-y-6" onClick={(e) => e.stopPropagation()}>
+        /* Expanded State: Full Magazine Editorial Detail inline */
+        <div className="space-y-8" onClick={(e) => e.stopPropagation()}>
           {/* Header Image and Top Actions */}
-          <div className="relative h-[240px] sm:h-[320px] rounded-2xl overflow-hidden bg-brand-navy">
+          <div className="relative h-[280px] sm:h-[380px] md:h-[420px] rounded-3xl overflow-hidden bg-brand-navy shadow-lg">
             <img 
               src={imageSrc} 
               alt={article.title} 
-              className="w-full h-full object-cover absolute inset-0" 
+              className="w-full h-full object-cover absolute inset-0 transform hover:scale-102 transition-transform duration-700" 
               referrerPolicy="no-referrer"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/15" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/20" />
             
             {/* Share and Close actions */}
-            <div className="absolute top-4 right-4 flex items-center gap-2">
+            <div className="absolute top-5 right-5 flex items-center gap-2.5">
               <button 
                 onClick={async (e) => {
                   e.stopPropagation();
@@ -19866,67 +19902,96 @@ function GuideCardItem({
                     }
                   }
                 }}
-                className={`p-2 backdrop-blur-md rounded-full text-white transition-all shadow-lg active:scale-95 z-20 ${
+                className={`p-2.5 backdrop-blur-md rounded-full text-white transition-all shadow-xl active:scale-95 z-20 cursor-pointer ${
                   shared 
                     ? "bg-emerald-500 hover:bg-emerald-600 scale-105" 
-                    : "bg-white/15 hover:bg-white/25"
+                    : "bg-white/20 hover:bg-white/30"
                 }`}
+                title="Share guide"
               >
                 {shared ? (
-                  <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <Check className="w-5 h-5" />
                 ) : (
-                  <ShareIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <ShareIcon className="w-5 h-5" />
                 )}
               </button>
 
               <button 
                 onClick={onToggleExpand}
-                className="p-2 bg-white/15 hover:bg-white/25 backdrop-blur-md rounded-full text-white transition-all shadow-lg active:scale-95 z-20"
+                className="p-2.5 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-full text-white transition-all shadow-xl active:scale-95 z-20 cursor-pointer"
+                title="Close guide"
               >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="absolute bottom-6 left-6 right-6 md:bottom-8 md:left-8 md:right-8 text-left">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="absolute bottom-8 left-6 right-6 md:bottom-10 md:left-10 md:right-10 text-left">
+              <div className="flex flex-wrap items-center gap-3 mb-3">
                 {categoryName && (
-                  <span className="px-2.5 py-0.5 bg-brand-yellow text-slate-900 text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-brand-yellow/20">
+                  <span className="px-3 py-1 bg-brand-yellow text-slate-950 text-[10px] font-black uppercase tracking-wider rounded-full shadow-lg shadow-brand-yellow/25">
                     {categoryName}
                   </span>
                 )}
+
               </div>
-              <h2 className="text-lg sm:text-2xl md:text-3xl font-black text-white font-display leading-tight drop-shadow-2xl">
+              <h2 className="text-xl sm:text-3xl md:text-4xl font-black text-white font-display leading-tight drop-shadow-lg">
                 {article.title}
               </h2>
             </div>
           </div>
 
-          {/* Guide Article Content */}
-          <div className="max-w-3xl mx-auto space-y-6 text-left pt-2">
-            {/* Excerpt with custom Unlocked attribution */}
-            <div className="pb-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+          {/* Guide Article Body Container */}
+          <div className="max-w-3xl mx-auto space-y-8 text-left">
+            {/* Author & Excerpt Callout Box */}
+            <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-3xl p-6 sm:p-7 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-emerald-200/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                    {String(article.author?.name || 'M')[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-xs font-extrabold text-slate-900">
+                      {article.author?.name || (typeof article.author === 'string' ? article.author : null) || 'MyCityUnlocked Editorial'}
+                    </p>
+                    <p className="text-[11px] text-emerald-800 font-medium">Verified Valencia Expert</p>
+                  </div>
+                </div>
+                <span className="text-[11px] text-emerald-800 font-semibold bg-white px-3 py-1 rounded-full border border-emerald-200 shadow-2xs">
+                  Updated for 2026
+                </span>
+              </div>
+
               {article.excerpt && (
-                <p className="text-slate-600 italic text-sm sm:text-base leading-relaxed max-w-xl">
-                  {article.excerpt}
+                <p className="text-slate-800 font-semibold italic text-base sm:text-lg leading-relaxed">
+                  "{article.excerpt}"
                 </p>
               )}
-              <span className="text-[10px] sm:text-xs text-brand-blue font-bold uppercase tracking-wider shrink-0 bg-blue-50/50 px-2.5 py-1 rounded-lg border border-blue-100/55">
-                By {article.author?.name || (typeof article.author === 'string' ? article.author : null) || 'MyCityUnlocked'}
-              </span>
             </div>
 
-            {/* Render full guide text using SimpleMarkdown */}
-            <div className="markdown-body text-slate-700 leading-relaxed text-sm sm:text-base">
+            {/* Full Guide Text */}
+            <div className="markdown-body text-slate-800 leading-loose text-base sm:text-lg space-y-6 font-sans">
               <SimpleMarkdown isPlain={true}>{article.content}</SimpleMarkdown>
             </div>
 
-            {/* Bottom Collapse Button */}
-            <div className="pt-6 flex justify-center border-t border-slate-150/40">
+
+
+            {/* Bottom Collapse & Action Bar */}
+            <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200">
               <button
                 onClick={onToggleExpand}
-                className="px-6 py-2.5 bg-slate-100 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-200 hover:text-slate-700 active:scale-95 transition-all flex items-center gap-2"
+                className="w-full sm:w-auto px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black uppercase tracking-widest rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span>Collapse Article</span>
+                <span>Collapse Guide</span>
+                <span>↑</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="w-full sm:w-auto px-6 py-3 bg-brand-blue hover:bg-brand-blue/90 text-white text-xs font-black uppercase tracking-widest rounded-2xl active:scale-95 transition-all shadow-md shadow-brand-blue/25 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Back to Top</span>
                 <span>↑</span>
               </button>
             </div>
