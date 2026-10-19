@@ -686,13 +686,14 @@ function stripMarkdown(text?: string): string {
 }
 
 function parseInlineMarkdown(text: string): React.ReactNode {
+  if (!text || typeof text !== 'string') return '';
   const linkRegex = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s]+)/g;
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match;
 
   function parseBold(rawText: string): React.ReactNode[] {
-    const boldRegex = /(\*\*|__)(.*?)\1/g;
+    const boldRegex = /(\*\*|__)([\s\S]*?)\1/g;
     const boldParts = [];
     let lastBoldIndex = 0;
     let boldMatch;
@@ -14936,7 +14937,7 @@ function DirectoryProCardItem({
                 <SimpleMarkdown isPlain={true}>{pro.bio}</SimpleMarkdown>
               </div>
             ) : (
-              pro.bio
+              pro.bio ? parseInlineMarkdown(pro.bio) : null
             )}
           </div>
 
@@ -14944,7 +14945,7 @@ function DirectoryProCardItem({
             <div className="mt-3 p-3 bg-blue-50/40 rounded-2xl border border-blue-100/45 flex items-start gap-2 max-w-full">
               <Sparkles className="w-3.5 h-3.5 text-brand-blue mt-0.5 flex-shrink-0 animate-pulse" />
               <p className="text-xs text-blue-900 font-medium italic leading-relaxed">
-                "{aiResult.reason}"
+                "{parseInlineMarkdown(aiResult.reason)}"
               </p>
             </div>
           )}
