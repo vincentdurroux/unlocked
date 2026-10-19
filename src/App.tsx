@@ -19953,7 +19953,6 @@ function GuideCardItem({
                     <p className="text-xs font-extrabold text-slate-900">
                       {article.author?.name || (typeof article.author === 'string' ? article.author : null) || 'MyCityUnlocked Editorial'}
                     </p>
-                    <p className="text-[11px] text-emerald-800 font-medium">Verified Valencia Expert</p>
                   </div>
                 </div>
                 <span className="text-[11px] text-emerald-800 font-semibold bg-white px-3 py-1 rounded-full border border-emerald-200 shadow-2xs">
@@ -19987,7 +19986,12 @@ function GuideCardItem({
 
               <button
                 onClick={() => {
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  const el = document.getElementById(`guide-card-${article.id}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  } else {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }
                 }}
                 className="w-full sm:w-auto px-6 py-3 bg-brand-blue hover:bg-brand-blue/90 text-white text-xs font-black uppercase tracking-widest rounded-2xl active:scale-95 transition-all shadow-md shadow-brand-blue/25 cursor-pointer flex items-center justify-center gap-2"
               >
