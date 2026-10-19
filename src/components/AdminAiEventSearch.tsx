@@ -1388,25 +1388,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                       </div>
                     </div>
 
-                    {/* Expat Focus Toggle Switch */}
-                    <button
-                      type="button"
-                      onClick={() => setIsExpatFocus(!isExpatFocus)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border cursor-pointer ${
-                        isExpatFocus
-                          ? "bg-gradient-to-r from-teal-500 to-emerald-500 text-white border-teal-300 shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/40"
-                          : "bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white border-white/15"
-                      }`}
-                      title="Activer la recherche ciblée pour la communauté des expats, nomades et résidents internationaux"
-                    >
-                      <Globe className={`w-3.5 h-3.5 ${isExpatFocus ? 'text-white animate-pulse' : 'text-teal-400'}`} />
-                      <span>Focus Expats & Inter</span>
-                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] uppercase tracking-wider font-mono font-extrabold ${
-                        isExpatFocus ? "bg-white text-emerald-700" : "bg-white/15 text-slate-300"
-                      }`}>
-                        {isExpatFocus ? "ACTIF" : "OFF"}
-                      </span>
-                    </button>
+
                   </div>
 
                   <div className="flex items-center gap-1.5 text-[11px] text-emerald-300 font-medium">
@@ -1454,7 +1436,6 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                         onClick={() => {
                           setSelectedCategory(c.id);
                           setAiQuery(c.query);
-                          handleSearch(c.query, selectedMonth, c.id);
                         }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 border cursor-pointer ${
                           isSelected
