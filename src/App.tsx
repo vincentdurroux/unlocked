@@ -15923,13 +15923,6 @@ function computeProSearchScore(pro: any, searchStr: string): number {
     return () => clearTimeout(timer);
   }, []);
 
-  // Secure auto-scrolling to results once Jane has finished sorting and rendering the list
-  useEffect(() => {
-    if (aiResults && !aiLoading) {
-      scrollToResults();
-    }
-  }, [aiResults, aiLoading]);
-
   useEffect(() => {
     if (initialSearch !== null && initialSearch !== undefined) {
       setSearch(initialSearch);
@@ -16399,6 +16392,9 @@ function computeProSearchScore(pro: any, searchStr: string): number {
               isLoading={aiLoading}
               query={search || aiQuery}
               onProgressUpdate={(p) => setSearchProgress(p)}
+              onComplete={() => {
+                scrollToResults();
+              }}
               onCancel={() => {
                 if (abortControllerRef.current) {
                   abortControllerRef.current.abort();

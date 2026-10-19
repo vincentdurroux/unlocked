@@ -7,6 +7,7 @@ interface SmartSearchProgressBarProps {
   query?: string;
   onCancel?: () => void;
   onProgressUpdate?: (progress: number) => void;
+  onComplete?: () => void;
   className?: string;
 }
 
@@ -14,12 +15,14 @@ export function SmartSearchProgressBar({
   isLoading,
   query,
   onProgressUpdate,
+  onComplete,
   className = ''
 }: SmartSearchProgressBarProps) {
   const [progress, setProgress] = useState(0);
   const [isFinishing, setIsFinishing] = useState(false);
   const [visible, setVisible] = useState(false);
   const finishTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const completionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (isLoading) {
@@ -31,6 +34,10 @@ export function SmartSearchProgressBar({
       if (finishTimeoutRef.current) {
         clearTimeout(finishTimeoutRef.current);
         finishTimeoutRef.current = null;
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
+        completionTimeoutRef.current = null;
       }
 
       // Smooth progression up to 92%
@@ -61,12 +68,17 @@ export function SmartSearchProgressBar({
         setProgress(100);
         onProgressUpdate?.(100);
 
+        // Wait until the user visibly sees the bar reach 100% and "Matches ready!" before triggering scroll
+        completionTimeoutRef.current = setTimeout(() => {
+          onComplete?.();
+        }, 360);
+
         finishTimeoutRef.current = setTimeout(() => {
           setVisible(false);
           setIsFinishing(false);
           setProgress(0);
           onProgressUpdate?.(0);
-        }, 400);
+        }, 650);
       }
     }
   }, [isLoading]);
@@ -74,6 +86,7 @@ export function SmartSearchProgressBar({
   useEffect(() => {
     return () => {
       if (finishTimeoutRef.current) clearTimeout(finishTimeoutRef.current);
+      if (completionTimeoutRef.current) clearTimeout(completionTimeoutRef.current);
     };
   }, []);
 
