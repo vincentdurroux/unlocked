@@ -147,6 +147,8 @@ import { HeaderWeatherWidget } from './components/HeaderWeatherWidget';
 import { RotatingCylinderWord } from './components/RotatingCylinderWord';
 import { HalloweenMarketplaceSection } from './components/HalloweenMarketplaceSection';
 import { MarketplaceLocationPicker, VALENCIA_AREAS, VALENCIA_CENTER, VALENCIA_CITY_NEIGHBORHOODS, VALENCIA_SUBURBS } from './components/MarketplaceLocationPicker';
+import { SmartSearchProgressBar } from './components/SmartSearchProgressBar';
+import { RotatingPlaceholder } from './components/RotatingPlaceholder';
 import { 
   DiscoverCardProSkeleton, 
   DiscoverCardGuideSkeleton, 
@@ -13297,32 +13299,21 @@ function HomeView({
 
           <div className="space-y-4">
             {/* Blue Bordered Ask Jane Container */}
-            <div className="relative bg-white rounded-[20px] border-2 border-blue-200/90 p-4 md:p-5 shadow-sm space-y-2 focus-within:border-brand-blue/60 focus-within:ring-4 focus-within:ring-brand-blue/5 transition-all text-left">
-              <div className="flex items-start gap-3">
-                <Sparkles className="w-4 h-4 text-brand-blue mt-0.5 flex-shrink-0" />
-                <div className="flex-1 space-y-1">
-                  {janeSearch && (
-                    <div className="flex items-center justify-end">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setJaneSearch('');
-                          janeInputRef.current?.focus();
-                        }}
-                        className="p-1 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0 cursor-pointer"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
+            <div className="relative bg-white rounded-[20px] border-2 border-blue-200/90 shadow-sm focus-within:border-brand-blue/60 focus-within:ring-4 focus-within:ring-brand-blue/5 transition-all text-left">
+              <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-3.5">
+                <Sparkles className="w-5 h-5 text-brand-blue shrink-0" />
+                <div className="flex-1 min-w-0 relative">
+                  <RotatingPlaceholder value={janeSearch} />
                   <textarea 
                     ref={janeInputRef}
-                    rows={2}
-                    placeholder="e.g. plumber, French-speaking dentist, or help sorting out my paperwork"
-                    className="w-full bg-transparent outline-none text-slate-700 font-medium leading-relaxed placeholder:text-slate-300 text-xs sm:text-sm border-none p-0 focus:ring-0 resize-none"
+                    rows={1}
+                    className="w-full bg-transparent outline-none text-slate-700 font-medium leading-normal text-xs sm:text-sm border-none p-0 focus:ring-0 resize-none block align-middle relative z-10"
                     value={janeSearch}
-                    onChange={(e) => setJaneSearch(e.target.value)}
+                    onChange={(e) => {
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 96)}px`;
+                      setJaneSearch(e.target.value);
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -13333,6 +13324,23 @@ function HomeView({
                     }}
                   />
                 </div>
+                {janeSearch && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setJaneSearch('');
+                      if (janeInputRef.current) {
+                        janeInputRef.current.style.height = 'auto';
+                        janeInputRef.current.focus();
+                      }
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors shrink-0 cursor-pointer"
+                    title="Clear search"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -15625,45 +15633,10 @@ function computeProSearchScore(pro: any, searchStr: string): number {
   const [aiExactMatch, setAiExactMatch] = useState<boolean>(true);
   const [aiSummaryMessage, setAiSummaryMessage] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiProgress, setAiProgress] = useState(0);
-  const [showAiProgress, setShowAiProgress] = useState(false);
+  const [searchProgress, setSearchProgress] = useState(0);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiQuery, setAiQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'standard' | 'ai'>(() => initialProId ? 'standard' : 'ai');
-
-  // Smart organic progress simulation for Jane AI search
-  useEffect(() => {
-    let interval: any = null;
-    let fadeTimeout: any = null;
-
-    if (aiLoading) {
-      setShowAiProgress(true);
-      setAiProgress(10);
-
-      interval = setInterval(() => {
-        setAiProgress((prev) => {
-          if (prev < 32) return prev + Math.floor(Math.random() * 8 + 5);
-          if (prev < 68) return prev + Math.floor(Math.random() * 5 + 3);
-          if (prev < 86) return prev + Math.floor(Math.random() * 3 + 1);
-          if (prev < 94) return Math.min(94, prev + 0.4);
-          return prev;
-        });
-      }, 150);
-    } else {
-      if (showAiProgress) {
-        setAiProgress(100);
-        fadeTimeout = setTimeout(() => {
-          setShowAiProgress(false);
-          setAiProgress(0);
-        }, 450);
-      }
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-      if (fadeTimeout) clearTimeout(fadeTimeout);
-    };
-  }, [aiLoading, showAiProgress]);
 
   // Debounce & In-flight request cancellation refs
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -15687,6 +15660,7 @@ function computeProSearchScore(pro: any, searchStr: string): number {
         typingTimeoutRef.current = null;
       }
       setDeferredSearch('');
+      setSearchProgress(0);
       setAiResults(null);
       setAiExactMatch(true);
       setAiSummaryMessage(null);
@@ -15795,6 +15769,7 @@ function computeProSearchScore(pro: any, searchStr: string): number {
     
     setIsSearching(true);
     setAiLoading(true);
+    setSearchProgress(5);
     setAiError(null);
     setAiQuery(trimmed);
     setDeferredSearch(trimmed);
@@ -16355,52 +16330,21 @@ function computeProSearchScore(pro: any, searchStr: string): number {
 
             <div className="space-y-4">
               {/* Blue Bordered Ask Jane Container */}
-              <div className="relative bg-white rounded-[24px] border-2 border-blue-200/90 p-5 shadow-[0_4px_24px_rgba(37,99,235,0.02)] space-y-2 focus-within:border-brand-blue/50 focus-within:ring-4 focus-within:ring-brand-blue/5 transition-all overflow-hidden">
-                {/* Smart Ambient Hairline Progress Bar */}
-                <AnimatePresence>
-                  {showAiProgress && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute top-0 left-0 right-0 h-1 bg-blue-100/70 overflow-hidden z-10"
-                    >
-                      <div 
-                        className="h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400 transition-all duration-200 ease-out"
-                        style={{ width: `${Math.min(100, Math.max(4, aiProgress))}%` }}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <div className="flex items-start gap-3">
-                  <Sparkles className="w-5 h-5 text-brand-blue mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-[10px] sm:text-[11px] font-extrabold text-brand-blue uppercase tracking-wider">
-                        Tell Jane what you need...
-                      </label>
-                      {search && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleSearchChange('');
-                            inputRef.current?.focus();
-                          }}
-                          className="p-1 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0 cursor-pointer"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
+              <div className="relative bg-white rounded-[22px] border-2 border-blue-200/90 shadow-sm focus-within:border-brand-blue/60 focus-within:ring-4 focus-within:ring-brand-blue/5 transition-all text-left">
+                <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-3.5">
+                  <Sparkles className="w-5 h-5 text-brand-blue shrink-0" />
+                  <div className="flex-1 min-w-0 relative">
+                    <RotatingPlaceholder value={search} />
                     <textarea 
                       ref={inputRef as any}
-                      rows={3}
-                      placeholder="e.g. plumber, French-speaking dentist, or help sorting out my paperwork"
-                      className="w-full bg-transparent outline-none text-slate-700 font-medium leading-relaxed placeholder:text-slate-300 text-xs sm:text-sm border-none p-0 focus:ring-0 resize-none"
+                      rows={1}
+                      className="w-full bg-transparent outline-none text-slate-700 font-medium leading-normal text-xs sm:text-sm border-none p-0 focus:ring-0 resize-none block align-middle relative z-10"
                       value={search}
-                      onChange={(e) => handleSearchChange(e.target.value)}
+                      onChange={(e) => {
+                        e.target.style.height = 'auto';
+                        e.target.style.height = `${Math.min(e.target.scrollHeight, 96)}px`;
+                        handleSearchChange(e.target.value);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
@@ -16409,20 +16353,36 @@ function computeProSearchScore(pro: any, searchStr: string): number {
                       }}
                     />
                   </div>
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSearchChange('');
+                        if (inputRef.current) {
+                          inputRef.current.style.height = 'auto';
+                          inputRef.current.focus();
+                        }
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors shrink-0 cursor-pointer"
+                      title="Clear search"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Large Blue Recommendations Action Button with live progress % */}
+              {/* Large Blue Recommendations Action Button */}
               <button 
                 type="button"
                 onClick={() => handleSearchSubmit()}
                 disabled={aiLoading || !search.trim()}
-                className="w-full py-4.5 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-[24px] font-bold text-sm md:text-base shadow-lg shadow-blue-500/15 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer overflow-hidden relative"
+                className="w-full py-4.5 bg-brand-blue hover:bg-[#0958d9] active:scale-[0.98] text-white rounded-[24px] font-bold text-sm md:text-base shadow-lg shadow-blue-500/15 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer"
               >
                 {aiLoading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Searching... {Math.round(aiProgress)}%</span>
+                    <span>Searching... {Math.round(searchProgress)}%</span>
                   </>
                 ) : (
                   <>
@@ -16447,52 +16407,21 @@ function computeProSearchScore(pro: any, searchStr: string): number {
               </div>
             )}
 
-            {/* Smart Progress Bar Banner for Jane AI */}
-            <AnimatePresence>
-              {showAiProgress && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                  transition={{ duration: 0.25 }}
-                  className="p-5 sm:p-6 bg-gradient-to-b from-blue-50/80 to-indigo-50/40 rounded-3xl border border-blue-200/70 shadow-xs space-y-3.5 overflow-hidden"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-2xl bg-brand-blue/10 border border-blue-200/60 flex items-center justify-center shrink-0">
-                        <Sparkles className="w-4.5 h-4.5 text-brand-blue animate-spin" />
-                      </div>
-                      <div>
-                        <p className="text-xs sm:text-sm font-bold text-brand-navy">
-                          Jane is analyzing your request...
-                        </p>
-                        <p className="text-[11px] text-slate-500 font-medium">
-                          Searching verified community-recommended professionals
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-xs sm:text-sm font-black font-mono text-brand-blue bg-white/90 px-2.5 py-1 rounded-xl border border-blue-200/60 shadow-2xs shrink-0">
-                      {Math.round(aiProgress)}%
-                    </span>
-                  </div>
-
-                  {/* Progress Track & Animated Glow Bar */}
-                  <div className="h-2.5 w-full bg-blue-100/80 rounded-full overflow-hidden p-0.5 border border-blue-200/50 shadow-inner">
-                    <div 
-                      className="h-full rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400 relative overflow-hidden transition-all duration-200 ease-out"
-                      style={{ width: `${Math.min(100, Math.max(5, aiProgress))}%` }}
-                    >
-                      {/* Animated Shimmer beam */}
-                      <motion.div 
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent w-full"
-                        animate={{ x: ['-100%', '200%'] }}
-                        transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* Smart Search Progress Bar */}
+            <SmartSearchProgressBar
+              isLoading={aiLoading}
+              query={search || aiQuery}
+              onProgressUpdate={(p) => setSearchProgress(p)}
+              onCancel={() => {
+                if (abortControllerRef.current) {
+                  abortControllerRef.current.abort();
+                  abortControllerRef.current = null;
+                }
+                setAiLoading(false);
+                setIsSearching(false);
+                setSearchProgress(0);
+              }}
+            />
 
             {/* Filters Section */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
@@ -16817,6 +16746,7 @@ function computeProSearchScore(pro: any, searchStr: string): number {
                       setAiQuery('');
                       setDeferredSearch('');
                       setAiSummaryMessage(null);
+                      setSearchProgress(0);
                       setAiExactMatch(true);
                       setAiError(null);
                     }}
