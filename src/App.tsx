@@ -6011,25 +6011,16 @@ function AdDetailModal({
               onMouseEnter={() => setIsHovering(true)}
               onMouseLeave={() => setIsHovering(false)}
             >
-              <motion.div
-                key={currentImageIndex}
-                initial={{ opacity: 0, x: direction * 100 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -direction * 100 }}
-                transition={{ x: { type: "spring", stiffness: 300, damping: 30 }, opacity: { duration: 0.2 } }}
-                drag={images.length > 1 ? "x" : false}
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.2}
-                onDragEnd={onDragEnd}
-                className="w-full h-full cursor-grab active:cursor-grabbing select-none"
+              <div
+                className="w-full h-full cursor-pointer select-none"
                 onClick={() => setIsFullScreen(true)}
               >
                 <img 
                   src={images[currentImageIndex]} 
                   alt={ad.title} 
-                  className="w-full h-full object-cover pointer-events-none select-none"
+                  className="w-full h-full object-cover select-none"
                 />
-              </motion.div>
+              </div>
               
               {images.length > 1 && (
                 <>
@@ -20691,6 +20682,7 @@ function MarketplaceView({
   const [showSavedOnly, setShowSavedOnly] = useState<boolean>(false);
   const [confirmDeleteAdId, setConfirmDeleteAdId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [cardImageIndexes, setCardImageIndexes] = useState<Record<string, number>>({});
   const [savedAdIds, setSavedAdIds] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('unlocked_marketplace_saved');
@@ -21338,7 +21330,29 @@ function MarketplaceView({
             {filteredAds.map((ad) => {
               const isSaved = effectiveSavedIds.includes(String(ad.id));
               const displayPrice = ad.price?.includes('€') ? ad.price : `${ad.price}€`;
-              const displayImage = ad.image_url || (ad.images && ad.images[0]) || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400';
+              const cardImages = (ad.images && Array.isArray(ad.images) && ad.images.length > 0)
+                ? ad.images
+                : [ad.image_url || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400'];
+              const cardImgIdx = cardImageIndexes[ad.id] || 0;
+              const currentCardImage = cardImages[cardImgIdx] || cardImages[0];
+
+              const handlePrevCardImage = (e: React.MouseEvent) => {
+                e.stopPropagation();
+                setCardImageIndexes(prev => {
+                  const current = prev[ad.id] || 0;
+                  const next = (current - 1 + cardImages.length) % cardImages.length;
+                  return { ...prev, [ad.id]: next };
+                });
+              };
+
+              const handleNextCardImage = (e: React.MouseEvent) => {
+                e.stopPropagation();
+                setCardImageIndexes(prev => {
+                  const current = prev[ad.id] || 0;
+                  const next = (current + 1) % cardImages.length;
+                  return { ...prev, [ad.id]: next };
+                });
+              };
 
               return (
                 <div
@@ -21347,9 +21361,9 @@ function MarketplaceView({
                   className="group bg-white rounded-3xl border border-slate-200/80 hover:border-purple-300 shadow-2xs hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300 overflow-hidden flex flex-col cursor-pointer hover:-translate-y-1"
                 >
                   {/* Image container */}
-                  <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden">
+                  <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden group/img">
                     <img
-                      src={displayImage}
+                      src={currentCardImage}
                       alt={ad.title}
                       className={cn(
                         "w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out",
@@ -21357,6 +21371,39 @@ function MarketplaceView({
                       )}
                       loading="lazy"
                     />
+
+                    {cardImages.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handlePrevCardImage}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white backdrop-blur rounded-full shadow-md text-slate-900 opacity-0 group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
+                          title="Previous photo"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleNextCardImage}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white backdrop-blur rounded-full shadow-md text-slate-900 opacity-0 group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
+                          title="Next photo"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+
+                        <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1 z-20 pointer-events-none bg-slate-950/40 backdrop-blur-xs px-2 py-1 rounded-full">
+                          {cardImages.map((_, i) => (
+                            <div
+                              key={i}
+                              className={cn(
+                                "w-1.5 h-1.5 rounded-full transition-all",
+                                i === cardImgIdx ? "bg-white w-3" : "bg-white/50"
+                              )}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
 
                     {/* Status Overlays */}
                     {ad.status === 'sold' ? (
@@ -21470,7 +21517,29 @@ function MarketplaceView({
             {filteredAds.map((ad) => {
               const isSaved = effectiveSavedIds.includes(String(ad.id));
               const displayPrice = ad.price?.includes('€') ? ad.price : `${ad.price}€`;
-              const displayImage = ad.image_url || (ad.images && ad.images[0]) || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400';
+              const cardImages = (ad.images && Array.isArray(ad.images) && ad.images.length > 0)
+                ? ad.images
+                : [ad.image_url || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400'];
+              const cardImgIdx = cardImageIndexes[ad.id] || 0;
+              const currentCardImage = cardImages[cardImgIdx] || cardImages[0];
+
+              const handlePrevCardImage = (e: React.MouseEvent) => {
+                e.stopPropagation();
+                setCardImageIndexes(prev => {
+                  const current = prev[ad.id] || 0;
+                  const next = (current - 1 + cardImages.length) % cardImages.length;
+                  return { ...prev, [ad.id]: next };
+                });
+              };
+
+              const handleNextCardImage = (e: React.MouseEvent) => {
+                e.stopPropagation();
+                setCardImageIndexes(prev => {
+                  const current = prev[ad.id] || 0;
+                  const next = (current + 1) % cardImages.length;
+                  return { ...prev, [ad.id]: next };
+                });
+              };
 
               return (
                 <div
@@ -21479,9 +21548,9 @@ function MarketplaceView({
                   className="group bg-white rounded-2xl border border-slate-200/80 hover:border-purple-300 p-3 sm:p-4 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between cursor-pointer"
                 >
                   <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
-                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0">
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0 group/img">
                       <img
-                        src={displayImage}
+                        src={currentCardImage}
                         alt={ad.title}
                         className={cn(
                           "w-full h-full rounded-xl object-cover bg-slate-100",
@@ -21489,6 +21558,39 @@ function MarketplaceView({
                         )}
                         loading="lazy"
                       />
+
+                      {cardImages.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handlePrevCardImage}
+                            className="absolute left-1 top-1/2 -translate-y-1/2 p-1 bg-white/80 hover:bg-white backdrop-blur rounded-full shadow-sm text-slate-900 opacity-0 group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
+                            title="Previous photo"
+                          >
+                            <ChevronLeft className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleNextCardImage}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-white/80 hover:bg-white backdrop-blur rounded-full shadow-sm text-slate-900 opacity-0 group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
+                            title="Next photo"
+                          >
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+
+                          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5 z-20 pointer-events-none bg-slate-950/40 px-1.5 py-0.5 rounded-full">
+                            {cardImages.map((_, i) => (
+                              <div
+                                key={i}
+                                className={cn(
+                                  "w-1 h-1 rounded-full transition-all",
+                                  i === cardImgIdx ? "bg-white w-2" : "bg-white/50"
+                                )}
+                              />
+                            ))}
+                          </div>
+                        </>
+                      )}
                       {ad.status === 'sold' && (
                         <div className="absolute inset-0 bg-slate-950/45 rounded-xl flex items-center justify-center p-1 pointer-events-none">
                           <span className="px-2 py-0.5 bg-rose-600 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-md shadow-sm">

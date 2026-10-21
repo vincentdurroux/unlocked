@@ -82,6 +82,7 @@ export const HalloweenMarketplaceSection: React.FC<HalloweenMarketplaceSectionPr
   onToggleFavoriteAd
 }) => {
   const [filterMode, setFilterMode] = useState<'all' | 'swap' | 'sale' | 'free' | 'costumes' | 'decor'>('all');
+  const [cardImageIndexes, setCardImageIndexes] = useState<Record<string, number>>({});
   const scrollTrackRef = useRef<HTMLDivElement>(null);
 
   // Real user Halloween ads from database / state
@@ -271,7 +272,29 @@ export const HalloweenMarketplaceSection: React.FC<HalloweenMarketplaceSectionPr
             const displayPrice = ad.price?.includes('€') || ad.price?.toLowerCase().includes('swap') || ad.price?.toLowerCase().includes('free') 
               ? ad.price 
               : `${ad.price}€`;
-            const displayImage = ad.image_url || (ad.images && ad.images[0]) || 'https://images.unsplash.com/photo-1508759073847-9ca702cec7d2?auto=format&fit=crop&q=80&w=400';
+            const cardImages = (ad.images && Array.isArray(ad.images) && ad.images.length > 0)
+              ? ad.images
+              : [ad.image_url || 'https://images.unsplash.com/photo-1508759073847-9ca702cec7d2?auto=format&fit=crop&q=80&w=400'];
+            const cardImgIdx = cardImageIndexes[ad.id] || 0;
+            const currentCardImage = cardImages[cardImgIdx] || cardImages[0];
+
+            const handlePrevCardImage = (e: React.MouseEvent) => {
+              e.stopPropagation();
+              setCardImageIndexes(prev => {
+                const current = prev[ad.id] || 0;
+                const next = (current - 1 + cardImages.length) % cardImages.length;
+                return { ...prev, [ad.id]: next };
+              });
+            };
+
+            const handleNextCardImage = (e: React.MouseEvent) => {
+              e.stopPropagation();
+              setCardImageIndexes(prev => {
+                const current = prev[ad.id] || 0;
+                const next = (current + 1) % cardImages.length;
+                return { ...prev, [ad.id]: next };
+              });
+            };
 
             const isSwap = ad.halloween_mode === 'swap' || Boolean(ad.halloween_trade_for) || ad.price?.toLowerCase().includes('swap') || ad.price?.toLowerCase().includes('échange');
             const isFree = ad.halloween_mode === 'giveaway' || ad.price?.toLowerCase().includes('free') || ad.price?.toLowerCase().includes('gratuit');
@@ -284,9 +307,9 @@ export const HalloweenMarketplaceSection: React.FC<HalloweenMarketplaceSectionPr
                 className="group w-[230px] min-[400px]:w-[260px] sm:w-[290px] md:w-[310px] shrink-0 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 hover:border-orange-400 shadow-2xs hover:shadow-xl hover:shadow-orange-500/10 transition-all duration-300 overflow-hidden flex flex-col cursor-pointer hover:-translate-y-1 text-slate-900"
               >
                 {/* Image container */}
-                <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden">
+                <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden group/img">
                   <img
-                    src={displayImage}
+                    src={currentCardImage}
                     alt={ad.title}
                     className={cn(
                       "w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out",
@@ -294,6 +317,39 @@ export const HalloweenMarketplaceSection: React.FC<HalloweenMarketplaceSectionPr
                     )}
                     loading="lazy"
                   />
+
+                  {cardImages.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handlePrevCardImage}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white backdrop-blur rounded-full shadow-md text-slate-900 opacity-0 group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
+                        title="Previous photo"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleNextCardImage}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white backdrop-blur rounded-full shadow-md text-slate-900 opacity-0 group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
+                        title="Next photo"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+
+                      <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1 z-20 pointer-events-none bg-slate-950/40 backdrop-blur-xs px-2 py-1 rounded-full">
+                        {cardImages.map((_, i) => (
+                          <div
+                            key={i}
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full transition-all",
+                              i === cardImgIdx ? "bg-white w-3" : "bg-white/50"
+                            )}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
 
                   {/* Status Overlays */}
                   {ad.status === 'sold' ? (
