@@ -23884,7 +23884,7 @@ function ProfileView({
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-bold text-slate-900">
-                          {isAdmin ? "Notifications Push (OneSignal)" : "Notifications push"}
+                          {isAdmin ? "Push Notifications (OneSignal)" : "Push notifications"}
                         </p>
                         {isAdmin && (
                           <>
@@ -23894,11 +23894,11 @@ function ProfileView({
                               oneSignalAppId ? "bg-amber-50 text-amber-700 border border-amber-200" :
                               "bg-slate-100 text-slate-600 border border-slate-200"
                             )}>
-                              {isPushSubscribed ? 'Abonné' : oneSignalAppId ? 'Prêt à s\'abonner' : 'App ID manquant'}
+                              {isPushSubscribed ? 'Subscribed' : oneSignalAppId ? 'Ready to subscribe' : 'Missing App ID'}
                             </span>
                             {pushStatus === 'denied' && (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                                Bloqué navigateur
+                                Browser blocked
                               </span>
                             )}
                           </>
@@ -23921,7 +23921,7 @@ function ProfileView({
                       !oneSignalAppId && "opacity-50 cursor-not-allowed",
                       isPushSubscribed ? "bg-emerald-600" : "bg-slate-200"
                     )}
-                    title={!oneSignalAppId ? "Renseignez d'abord votre OneSignal App ID ci-dessous" : isPushSubscribed ? "Désactiver les notifications" : "Activer les notifications"}
+                    title={!oneSignalAppId ? "Please configure your OneSignal App ID first" : isPushSubscribed ? "Disable notifications" : "Enable notifications"}
                   >
                     <div className={cn(
                       "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all flex items-center justify-center",
