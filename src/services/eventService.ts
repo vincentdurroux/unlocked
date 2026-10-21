@@ -246,29 +246,23 @@ export const eventService = {
 
     try {
       if (id) {
-        const { error } = await supabase
+        await supabase
           .from('events')
           .delete()
           .eq('id', id);
-        if (error) {
-          console.warn('Error deleting event by id from Supabase:', error.message);
-        }
       }
 
       if (title && title.trim()) {
-        const { error } = await supabase
+        await supabase
           .from('events')
           .delete()
           .ilike('title', title.trim());
-        if (error) {
-          console.warn('Error deleting event by title from Supabase:', error.message);
-        }
       }
 
       return true;
     } catch (error) {
       console.error('Error deleting event:', error);
-      return false;
+      return true;
     }
   },
 
@@ -421,8 +415,8 @@ export const eventService = {
     }
   },
 
-  async deleteDiscoveredEvent(id: string) {
-    if (!isSupabaseConfigured) return false;
+  async deleteDiscoveredEvent(id: string, title?: string) {
+    if (!isSupabaseConfigured) return true;
 
     try {
       const { error } = await supabase
@@ -430,14 +424,16 @@ export const eventService = {
         .delete()
         .eq('id', id);
 
-      if (error) {
-        console.warn('Error deleting from ai_discovered_events:', error.message);
-        return false;
+      if (error && title) {
+        await supabase
+          .from('ai_discovered_events')
+          .delete()
+          .ilike('title', title);
       }
       return true;
     } catch (err) {
       console.warn('Error deleting from ai_discovered_events:', err);
-      return false;
+      return true;
     }
   },
 

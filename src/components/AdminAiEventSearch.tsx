@@ -88,15 +88,11 @@ const MONTH_OPTIONS = [
 
 const SEARCH_CATEGORIES = [
   { id: "All Categories", name: "✨ All", icon: "✨", query: "Top popular events, concerts, exhibitions, and shows in Valencia" },
-  { id: "Expat", name: "🌍 Expats & Community", icon: "🌍", query: "Expat meetups, international networking, language exchanges, and social events in Valencia" },
   { id: "Art", name: "🎨 Art", icon: "🎨", query: "Major art museum exhibitions at Bombas Gens, IVAM, CAIXAFORUM, and MuVIM in Valencia" },
   { id: "Theater", name: "🎭 Theater", icon: "🎭", query: "Theater plays, opera, dance performances, and musicals at Palau de les Arts, Teatro Principal, and Teatro Olympia in Valencia" },
   { id: "Music", name: "🎵 Music", icon: "🎵", query: "High-profile live music concerts, classical symphonies, jazz shows, and music festivals in Valencia" },
   { id: "Gastronomy", name: "🍷 Gastronomy", icon: "🍷", query: "Food festivals, wine tastings, culinary markets, and gastronomy fairs in Valencia" },
-  { id: "Tech", name: "💻 Tech", icon: "💻", query: "Tech summits, startup conferences, AI forums, and innovation summits in Valencia" },
-  { id: "Community", name: "👥 Community", icon: "👥", query: "Expat networking meetups, community gatherings, cultural exchanges, and social events in Valencia" },
-  { id: "Sports", name: "⚽ Sports", icon: "⚽", query: "Marathons, running races, outdoor fitness events, sports tournaments, and Turia garden activities in Valencia" },
-  { id: "Workshops", name: "🛠️ Workshops", icon: "🛠️", query: "Creative art workshops, cooking masterclasses, language exchanges, and educational seminars in Valencia" }
+  { id: "Sports", name: "⚽ Sports", icon: "⚽", query: "Marathons, running races, outdoor fitness events, sports tournaments, and Turia garden activities in Valencia" }
 ];
 
 const CATEGORY_OPTIONS = [
@@ -1158,12 +1154,15 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
     if (!window.confirm(`Are you sure you want to delete "${title}" from the AI Discovered repository?`)) {
       return;
     }
+    
+    // Optimistic update
+    setDbDiscoveredEvents(prev => prev.filter(item => String(item.id) !== String(id) && item.title !== title));
+    setMsg?.({ type: 'success', text: `Event "${title}" removed from repository.` });
+
     try {
-      await eventService.deleteDiscoveredEvent(id);
-      setDbDiscoveredEvents(prev => prev.filter(item => item.id !== id));
-      setMsg?.({ type: 'success', text: `Event "${title}" removed from repository.` });
+      await eventService.deleteDiscoveredEvent(String(id), title);
     } catch (err: any) {
-      setMsg?.({ type: 'error', text: 'Failed to delete event: ' + err.message });
+      console.error("Deletion error:", err);
     }
   };
 

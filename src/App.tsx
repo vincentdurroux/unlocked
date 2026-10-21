@@ -4,6 +4,7 @@ import { parseProfessionalCSV, rowToPro, detectColumnMappings, parseEventCSV, de
 import { Logo } from './components/Logo';
 import { InAppNotificationCenter, InAppToastBanner, type InAppNotification, isRecommendProNotification, isGuideNotification, extractGuideIdFromNotification } from './components/InAppNotificationCenter';
 import { getCategoryWithEmoji, parseDescriptionSections, renderFormattedContent, cleanDuplicateEmojis } from './components/AdminAiEventSearch';
+import { ReferralSurveyModal, REFERRAL_OPTIONS } from './components/ReferralSurveyModal';
 
 const AdminAiEventSearch = React.lazy(() => import('./components/AdminAiEventSearch').then(m => ({ default: m.AdminAiEventSearch })));
 const AdminEventsManager = React.lazy(() => import('./components/AdminEventsManager').then(m => ({ default: m.AdminEventsManager })));
@@ -1531,6 +1532,167 @@ function OrientationLock() {
   );
 }
 
+function FeedbackReferralSection({ currentUser, userProfile, onProfileUpdate }: { currentUser: any, userProfile?: any, onProfileUpdate?: () => void }) {
+  const [selectedOption, setSelectedOption] = useState<string>('');
+  const [detailText, setDetailText] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const hasAnswered = !!userProfile?.referral_source;
+  const currentOptionObj = REFERRAL_OPTIONS.find(o => o.id === selectedOption);
+  const isDetailRequired = !!currentOptionObj?.requiresDetail;
+  const isSubmitDisabled = !selectedOption || (isDetailRequired && !detailText.trim()) || isSubmitting;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOption || isSubmitting || !currentUser?.id) return;
+
+    setIsSubmitting(true);
+    const sourceLabel = currentOptionObj?.label || selectedOption;
+    const trimmedDetail = detailText.trim() || undefined;
+
+    try {
+      await authService.saveReferralSource(currentUser.id, sourceLabel, trimmedDetail);
+      setSubmitted(true);
+      onProfileUpdate?.();
+    } catch (err) {
+      console.error('Failed to save referral source from feedback:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (hasAnswered && !submitted) {
+    return (
+      <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-4 text-left">
+        <div className="flex items-center gap-2 border-b border-slate-50 pb-3">
+          <Sparkles className="w-5 h-5 text-emerald-600" />
+          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">How did you hear about us?</h3>
+        </div>
+        <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500">Recorded response:</p>
+            <p className="text-sm font-bold text-slate-900 mt-0.5">{userProfile.referral_source}</p>
+            {userProfile.referral_source_detail && (
+              <p className="text-xs text-slate-600 italic mt-0.5">&ldquo;{userProfile.referral_source_detail}&rdquo;</p>
+            )}
+          </div>
+          <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
+            Thank you! ✨
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (submitted) {
+    return (
+      <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-4 text-center">
+        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+          <Check className="w-6 h-6 stroke-[3]" />
+        </div>
+        <h3 className="text-base font-bold text-slate-900">Thank you for letting us know!</h3>
+        <p className="text-xs text-slate-500">Your response has been saved successfully.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5 text-left">
+      <div className="flex items-center gap-2 border-b border-slate-50 pb-3">
+        <Sparkles className="w-5 h-5 text-emerald-600" />
+        <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">How did you hear about us?</h3>
+      </div>
+      <p className="text-xs text-slate-500 leading-relaxed">
+        You can let us know how you discovered MyCityUnlocked so we can welcome more members from your community!
+      </p>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+          {REFERRAL_OPTIONS.map((opt) => {
+            const Icon = opt.icon;
+            const isSelected = selectedOption === opt.id;
+
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => {
+                  setSelectedOption(opt.id);
+                  if (!opt.requiresDetail) {
+                    setDetailText('');
+                  }
+                }}
+                className={`w-full text-left p-3 rounded-2xl border transition-all flex items-start gap-3 cursor-pointer ${
+                  isSelected 
+                    ? 'bg-emerald-50/80 border-emerald-400/80 shadow-xs ring-1 ring-emerald-400/40' 
+                    : 'bg-white hover:bg-slate-50 border-slate-200/80'
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full mt-0.5 flex items-center justify-center shrink-0 border transition-colors ${
+                  isSelected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white'
+                }`}>
+                  {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+
+                <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                  isSelected ? 'bg-emerald-600/10 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  <Icon className="w-3.5 h-3.5" />
+                </div>
+
+                <div className="flex-1 min-w-0 pr-1">
+                  <p className={`text-xs sm:text-sm font-bold leading-snug ${isSelected ? 'text-slate-950' : 'text-slate-800'}`}>
+                    {opt.label}
+                  </p>
+                  {opt.description && (
+                    <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                      {opt.description}
+                    </p>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {isDetailRequired && (
+          <div className="pt-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              {currentOptionObj?.detailLabel || 'Please specify:'} <span className="text-emerald-600">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={detailText}
+              onChange={(e) => setDetailText(e.target.value)}
+              placeholder={currentOptionObj?.detailPlaceholder || 'Type your answer here...'}
+              className="w-full px-4 py-2.5 rounded-xl border border-emerald-300 bg-emerald-50/30 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
+            />
+          </div>
+        )}
+
+        <div className="pt-2 flex justify-end">
+          <button
+            type="submit"
+            disabled={isSubmitDisabled}
+            className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-sm"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <span>Save Response</span>
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
@@ -2178,6 +2340,32 @@ export default function App() {
 
   const [showAddPro, setShowAddPro] = useState(false);
   const [showAddAd, setShowAddAd] = useState(false);
+  const [showReferralModal, setShowReferralModal] = useState(false);
+
+  // Trigger referral source survey modal on the home page for new signups
+  useEffect(() => {
+    if (activeView === 'home' && currentUser) {
+      const userId = currentUser.id;
+      const isNewSignup = 
+        sessionStorage.getItem('mycity_just_signed_up') === 'true' ||
+        localStorage.getItem('mycity_new_signup_' + userId) === 'true';
+
+      const alreadyCompleted = 
+        !!userProfile?.referral_source ||
+        localStorage.getItem('referral_survey_done_' + userId) === 'true';
+
+      const wasDismissed = 
+        localStorage.getItem('referral_survey_dismissed_' + userId) === 'true';
+
+      if (isNewSignup && !alreadyCompleted && !wasDismissed) {
+        // Small delay to let the home page load smoothly first
+        const timer = setTimeout(() => {
+          setShowReferralModal(true);
+        }, 700);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [activeView, currentUser, userProfile]);
 
   useEffect(() => {
     if (activeView) {
@@ -3937,8 +4125,18 @@ export default function App() {
         
         if (!profile.full_name || event === 'SIGNED_UP' || (isVeryNew && isUntouched)) {
           console.log('[Onboarding] Fresh untouched profile detected, showing setup.');
+          try {
+            sessionStorage.setItem('mycity_just_signed_up', 'true');
+            localStorage.setItem('mycity_new_signup_' + userId, 'true');
+          } catch (_) {}
           setActiveView('complete-profile');
         } else {
+          if (event === 'SIGNED_UP' || (isVeryNew && !profile.referral_source)) {
+            try {
+              sessionStorage.setItem('mycity_just_signed_up', 'true');
+              localStorage.setItem('mycity_new_signup_' + userId, 'true');
+            } catch (_) {}
+          }
           if (initialViewRef.current && initialViewRef.current !== 'login' && initialViewRef.current !== 'complete-profile') {
             console.log(`[Auth] Restoring preferred view from saved state: ${initialViewRef.current}`);
             setActiveView(initialViewRef.current);
@@ -4415,6 +4613,12 @@ export default function App() {
                 <ProfileSetupView
                   currentUser={currentUser}
                   onComplete={(profile) => {
+                    try {
+                      sessionStorage.setItem('mycity_just_signed_up', 'true');
+                      if (currentUser?.id) {
+                        localStorage.setItem('mycity_new_signup_' + currentUser.id, 'true');
+                      }
+                    } catch (_) {}
                     setUserProfile(profile);
                     navigateTo('home');
                   }}
@@ -4425,6 +4629,8 @@ export default function App() {
                   <div className="max-w-4xl mx-auto">
                     <FeedbackSubPage 
                       currentUser={currentUser} 
+                      userProfile={userProfile}
+                      onProfileUpdate={() => currentUser && loadProfile(currentUser.id)}
                       onBack={() => navigateTo('home')} 
                     />
                   </div>
@@ -5496,7 +5702,23 @@ export default function App() {
             />
           )}
         </AnimatePresence>
-      {activeView !== 'login' && <SEOFooter onNavigate={handleNavigate} />}
+
+        {/* Referral Survey Modal for new signups on Home page */}
+        <ReferralSurveyModal 
+          isOpen={showReferralModal}
+          userId={currentUser?.id || ''}
+          onClose={() => setShowReferralModal(false)}
+          onSubmitted={(source, detail) => {
+            setUserProfile(prev => prev ? {
+              ...prev,
+              referral_source: source,
+              referral_source_detail: detail,
+              referral_survey_completed_at: new Date().toISOString()
+            } : prev);
+          }}
+        />
+
+        {activeView !== 'login' && <SEOFooter onNavigate={handleNavigate} />}
       </main>
 
       {/* Bottom Navigation */}
@@ -12723,6 +12945,10 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
         const { user } = await authService.signUp(email, password);
         
         if (user) {
+          try {
+            sessionStorage.setItem('mycity_just_signed_up', 'true');
+            localStorage.setItem('mycity_new_signup_' + user.id, 'true');
+          } catch (_) {}
           if (!user.email_confirmed_at) {
             await authService.signOut().catch(() => {});
             setMessage({ 
@@ -21439,7 +21665,7 @@ function MarketplaceView({
   );
 }
 
-function FeedbackSubPage({ currentUser, onBack }: { currentUser: any, onBack: () => void }) {
+function FeedbackSubPage({ currentUser, userProfile, onProfileUpdate, onBack }: { currentUser: any, userProfile?: any, onProfileUpdate?: () => void, onBack: () => void }) {
   const [category, setCategory] = useState<string>('suggestion');
   const [comment, setComment] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -21612,6 +21838,11 @@ function FeedbackSubPage({ currentUser, onBack }: { currentUser: any, onBack: ()
           </div>
         </div>
       </form>
+
+      {/* HOW DID YOU HEAR ABOUT US SECTION IN FEEDBACK */}
+      <div className="max-w-2xl mx-auto pb-16">
+        <FeedbackReferralSection currentUser={currentUser} userProfile={userProfile} onProfileUpdate={onProfileUpdate} />
+      </div>
       <div className="text-center mt-12 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Need help?</p>
         <a 
@@ -21795,7 +22026,7 @@ function ProfileView({
         if (isPushSubscribed) {
           await oneSignalService.unsubscribe();
           setIsPushSubscribed(false);
-          setPushFeedback({ type: 'success', text: 'Notifications désactivées sur cet appareil.' });
+          setPushFeedback({ type: 'success', text: 'Push notifications disabled on this device.' });
         } else {
           const success = await oneSignalService.subscribe(currentUser?.id);
           const currentPerm = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default';
@@ -21805,7 +22036,7 @@ function ProfileView({
             setIsPushSubscribed(true);
             const subId = await oneSignalService.getSubscriptionId();
             setOneSignalSubId(subId);
-            setPushFeedback({ type: 'success', text: 'Notifications activées avec succès !' });
+            setPushFeedback({ type: 'success', text: 'Push notifications enabled successfully!' });
           } else if (pushNotificationService.isIOSInBrowser()) {
             setIsPushSubscribed(false);
             setPushFeedback({
@@ -21816,7 +22047,7 @@ function ProfileView({
             setIsPushSubscribed(false);
             setPushFeedback({
               type: 'error',
-              text: "Les notifications sont bloquées dans les Réglages. Sur votre téléphone : Réglages ➔ Unlocked (ou Safari/Chrome) ➔ Notifications ➔ Autoriser."
+              text: "Notifications are blocked in Settings. On your phone: Settings ➔ Unlocked (or Safari/Chrome) ➔ Notifications ➔ Allow."
             });
           } else {
             setIsPushSubscribed(false);
@@ -21830,12 +22061,12 @@ function ProfileView({
         if (isPushSubscribed) {
           await pushNotificationService.unsubscribeUser(currentUser?.id || 'guest');
           setIsPushSubscribed(false);
-          setPushFeedback({ type: 'success', text: 'Notifications push désactivées sur cet appareil.' });
+          setPushFeedback({ type: 'success', text: 'Push notifications disabled on this device.' });
         } else {
           await pushNotificationService.subscribeUser(currentUser?.id || 'guest');
           setIsPushSubscribed(true);
           setPushStatus('granted');
-          setPushFeedback({ type: 'success', text: 'Notifications push activées avec succès !' });
+          setPushFeedback({ type: 'success', text: 'Push notifications enabled successfully!' });
         }
       }
     } catch (err: any) {
@@ -23652,23 +23883,29 @@ function ProfileView({
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-bold text-slate-900">Notifications Push (OneSignal)</p>
-                        <span className={cn(
-                          "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
-                          isPushSubscribed ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
-                          oneSignalAppId ? "bg-amber-50 text-amber-700 border border-amber-200" :
-                          "bg-slate-100 text-slate-600 border border-slate-200"
-                        )}>
-                          {isPushSubscribed ? 'Abonné' : oneSignalAppId ? 'Prêt à s\'abonner' : 'App ID manquant'}
-                        </span>
-                        {pushStatus === 'denied' && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                            Bloqué navigateur
-                          </span>
+                        <p className="font-bold text-slate-900">
+                          {isAdmin ? "Notifications Push (OneSignal)" : "Notifications push"}
+                        </p>
+                        {isAdmin && (
+                          <>
+                            <span className={cn(
+                              "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
+                              isPushSubscribed ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                              oneSignalAppId ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                              "bg-slate-100 text-slate-600 border border-slate-200"
+                            )}>
+                              {isPushSubscribed ? 'Abonné' : oneSignalAppId ? 'Prêt à s\'abonner' : 'App ID manquant'}
+                            </span>
+                            {pushStatus === 'denied' && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                Bloqué navigateur
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Recevez les alertes en direct pour les nouveaux messages, événements et annonces.
+                        Receive live alerts for new messages, events, and announcements.
                       </p>
                     </div>
                   </div>
@@ -23695,123 +23932,6 @@ function ProfileView({
                   </button>
                 </div>
 
-                {/* Diagnostics and Player ID Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">État navigateur</span>
-                    <div className="flex items-center gap-1.5 font-medium text-slate-800">
-                      {pushStatus === 'granted' ? (
-                        <span className="text-emerald-600 flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Autorisé
-                        </span>
-                      ) : pushStatus === 'denied' ? (
-                        <span className="text-rose-600 flex items-center gap-1">
-                          <AlertCircle className="w-3.5 h-3.5" /> Bloqué (vérifiez cadenas URL)
-                        </span>
-                      ) : (
-                        <span className="text-amber-600 flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" /> En attente d'autorisation
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Player ID OneSignal</span>
-                      {oneSignalSubId && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(oneSignalSubId);
-                            setCopiedSubId(true);
-                            setTimeout(() => setCopiedSubId(false), 2000);
-                          }}
-                          className="text-[10px] text-brand-blue font-bold hover:underline cursor-pointer flex items-center gap-1"
-                        >
-                          <Copy className="w-3 h-3" />
-                          {copiedSubId ? 'Copié !' : 'Copier'}
-                        </button>
-                      )}
-                    </div>
-                    <div className="font-mono text-[11px] text-slate-700 truncate">
-                      {oneSignalSubId ? oneSignalSubId : isPushSubscribed ? 'En cours de synchronisation...' : 'Non abonné'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* App ID configuration row - for Admin or configuration */}
-                {isAdmin && (
-                  <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-slate-700">OneSignal App ID</span>
-                        <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-mono">Admin</span>
-                      </div>
-                      {!isEditingAppId ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTempAppId(oneSignalAppId);
-                            setIsEditingAppId(true);
-                          }}
-                          className="text-xs text-brand-blue font-bold hover:underline cursor-pointer"
-                        >
-                          {oneSignalAppId ? 'Modifier' : 'Configurer'}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setIsEditingAppId(false)}
-                          className="text-xs text-slate-400 font-medium hover:underline cursor-pointer"
-                        >
-                          Annuler
-                        </button>
-                      )}
-                    </div>
-
-                    {isEditingAppId ? (
-                      <div className="flex items-center gap-2 pt-1">
-                        <input
-                          type="text"
-                          value={tempAppId}
-                          onChange={(e) => setTempAppId(e.target.value)}
-                          placeholder="Ex: 10a14311-a42a-4681-9682-ce965d80ae75"
-                          className="flex-1 px-3 py-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-blue font-mono"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleSaveAppId}
-                          disabled={pushLoading}
-                          className="px-3 py-2 bg-brand-blue text-white text-xs font-bold rounded-lg hover:bg-brand-blue/90 cursor-pointer disabled:opacity-50"
-                        >
-                          Enregistrer
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
-                        <span>{oneSignalAppId ? `${oneSignalAppId.slice(0, 8)}...${oneSignalAppId.slice(-6)}` : 'Non configuré'}</span>
-                        <span className="text-[10px] text-emerald-600 font-sans font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                          Worker: OneSignalSDKWorker.js
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* iOS instructions if running in browser */}
-                {pushNotificationService.isIOSInBrowser() && (
-                  <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed">
-                    <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold">Configuration requise sur iPhone / iPad (iOS 16.4+) :</p>
-                      <p className="text-[11px] text-amber-800 mt-0.5">
-                        Apple autorise les notifications push uniquement si l'application est ajoutée à votre écran d'accueil. Appuyez sur le bouton <strong>Partager ⎋</strong> de Safari puis sur <strong>« Sur l'écran d'accueil »</strong>.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 {/* Push feedback alert */}
                 {pushFeedback && (
                   <div className={cn(
@@ -23823,105 +23943,223 @@ function ProfileView({
                   </div>
                 )}
 
-                {/* Actions Row */}
-                <div className="pt-2 flex flex-wrap items-center gap-2.5 border-t border-slate-50">
-                  <button
-                    type="button"
-                    onClick={handleSendTestNotification}
-                    disabled={pushLoading}
-                    className="px-3.5 py-1.5 bg-brand-blue hover:bg-blue-600 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
-                  >
-                    <Zap className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Tester une notification</span>
-                  </button>
+                {/* Admin-only Diagnostics, Tools & Configuration */}
+                {isAdmin && (
+                  <div className="space-y-4 pt-3 border-t border-slate-100">
+                    {/* Diagnostics and Player ID Row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1">
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">État navigateur</span>
+                        <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                          {pushStatus === 'granted' ? (
+                            <span className="text-emerald-600 flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Autorisé
+                            </span>
+                          ) : pushStatus === 'denied' ? (
+                            <span className="text-rose-600 flex items-center gap-1">
+                              <AlertCircle className="w-3.5 h-3.5" /> Bloqué (vérifiez cadenas URL)
+                            </span>
+                          ) : (
+                            <span className="text-amber-600 flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" /> En attente d'autorisation
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={handleSendServerPushNotification}
-                      disabled={pushLoading}
-                      className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      title={hasServerApiKey ? "Envoyer un vrai push OneSignal à tous les abonnés via l'API REST" : "Configurez ONESIGNAL_REST_API_KEY sur le serveur pour activer le broadcast"}
-                    >
-                      <Send className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Push OneSignal réel (Serveur)</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      localStorage.removeItem('onesignal_verification_dialog_shown');
-                      window.location.reload();
-                    }}
-                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                    title="Réinitialiser et afficher le dialogue de vérification OneSignal"
-                  >
-                    <Bell className="w-3.5 h-3.5 text-red-500" />
-                    <span>Dialogue vérification SDK</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowOneSignalGuide(!showOneSignalGuide)}
-                    className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    <span>{showOneSignalGuide ? 'Fermer le guide' : 'Guide OneSignal pas-à-pas'}</span>
-                  </button>
-
-                  <a
-                    href="https://dashboard.onesignal.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ml-auto"
-                  >
-                    <span>Dashboard OneSignal</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-
-                {/* Expandable OneSignal Guide */}
-                {showOneSignalGuide && (
-                  <div className="mt-3 p-4 bg-slate-50 rounded-xl text-xs space-y-3 border border-slate-200 text-slate-700 leading-relaxed animate-in fade-in">
-                    <p className="font-bold text-slate-900 flex items-center gap-1.5">
-                      <Rocket className="w-4 h-4 text-red-500" />
-                      Guide de vérification et configuration OneSignal :
-                    </p>
-                    
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5 text-amber-900">
-                      <p className="font-bold flex items-center gap-1.5">
-                        <AlertTriangle className="w-4 h-4 text-amber-600" />
-                        Point clé pour que les notifications fonctionnent :
-                      </p>
-                      <p className="text-[11px] text-amber-800">
-                        Dans votre tableau de bord OneSignal (<strong>Settings &gt; Platforms &gt; Web Push</strong>), vérifiez que le <strong>Site URL</strong> correspond à l'adresse de votre application (ex: <code>https://votre-projet.vercel.app</code>) ou que l'option <strong>« Localhost Testing »</strong> est activée si vous testez en environnement local ou prévisualisation.
-                      </p>
+                      <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Player ID OneSignal</span>
+                          {oneSignalSubId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(oneSignalSubId);
+                                setCopiedSubId(true);
+                                setTimeout(() => setCopiedSubId(false), 2000);
+                              }}
+                              className="text-[10px] text-brand-blue font-bold hover:underline cursor-pointer flex items-center gap-1"
+                            >
+                              <Copy className="w-3 h-3" />
+                              {copiedSubId ? 'Copié !' : 'Copier'}
+                            </button>
+                          )}
+                        </div>
+                        <div className="font-mono text-[11px] text-slate-700 truncate">
+                          {oneSignalSubId ? oneSignalSubId : isPushSubscribed ? 'En cours de synchronisation...' : 'Non abonné'}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1.5 text-blue-900">
-                      <p className="font-bold flex items-center gap-1.5">
-                        <Smartphone className="w-4 h-4 text-brand-blue" />
-                        Sur les smartphones de vos utilisateurs (iOS & Android) :
-                      </p>
-                      <p className="text-[11px] text-blue-800">
-                        • <strong>Invite automatique :</strong> Une bannière d'activation s'affiche automatiquement en bas de l'écran après quelques secondes.<br />
-                        • <strong>Android :</strong> Fonctionne instantanément dès que l'utilisateur clique sur « Activer ».<br />
-                        • <strong>iPhone / iPad :</strong> Requiert que l'utilisateur ait ajouté l'application sur son écran d'accueil (Partager &gt; Sur l'écran d'accueil) en raison des règles d'Apple pour Web Push (iOS 16.4+).
-                      </p>
+                    {/* App ID configuration row */}
+                    <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-700">OneSignal App ID</span>
+                          <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-mono">Admin</span>
+                        </div>
+                        {!isEditingAppId ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTempAppId(oneSignalAppId);
+                              setIsEditingAppId(true);
+                            }}
+                            className="text-xs text-brand-blue font-bold hover:underline cursor-pointer"
+                          >
+                            {oneSignalAppId ? 'Modifier' : 'Configurer'}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingAppId(false)}
+                            className="text-xs text-slate-400 font-medium hover:underline cursor-pointer"
+                          >
+                            Annuler
+                          </button>
+                        )}
+                      </div>
+
+                      {isEditingAppId ? (
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="text"
+                            value={tempAppId}
+                            onChange={(e) => setTempAppId(e.target.value)}
+                            placeholder="Ex: 10a14311-a42a-4681-9682-ce965d80ae75"
+                            className="flex-1 px-3 py-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-blue font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveAppId}
+                            disabled={pushLoading}
+                            className="px-3 py-2 bg-brand-blue text-white text-xs font-bold rounded-lg hover:bg-brand-blue/90 cursor-pointer disabled:opacity-50"
+                          >
+                            Enregistrer
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
+                          <span>{oneSignalAppId ? `${oneSignalAppId.slice(0, 8)}...${oneSignalAppId.slice(-6)}` : 'Non configuré'}</span>
+                          <span className="text-[10px] text-emerald-600 font-sans font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                            Worker: OneSignalSDKWorker.js
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    <ol className="list-decimal pl-4 space-y-2">
-                      <li>
-                        <strong>Tester immédiatement :</strong> Cliquez sur le bouton bleu <em>« Tester une notification »</em> ci-dessus pour vérifier que votre navigateur affiche bien la bannière de notification.
-                      </li>
-                      <li>
-                        <strong>Vérifier votre inscription dans OneSignal :</strong> Une fois abonné, copiez votre <strong>Player ID</strong> ci-dessus et vérifiez qu'il apparaît bien dans votre console OneSignal sous <em>Audience &gt; All Users</em>.
-                      </li>
-                      <li>
-                        <strong>Envoyer un push réel depuis OneSignal :</strong> Dans votre console OneSignal, rendez-vous dans <em>Messages &gt; New Message &gt; Push Notification</em> pour envoyer un message à tous vos utilisateurs.
-                      </li>
-                    </ol>
+                    {/* iOS instructions if running in browser */}
+                    {pushNotificationService.isIOSInBrowser() && (
+                      <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed">
+                        <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Configuration requise sur iPhone / iPad (iOS 16.4+) :</p>
+                          <p className="text-[11px] text-amber-800 mt-0.5">
+                            Apple autorise les notifications push uniquement si l'application est ajoutée à votre écran d'accueil. Appuyez sur le bouton <strong>Partager ⎋</strong> de Safari puis sur <strong>« Sur l'écran d'accueil »</strong>.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions Row */}
+                    <div className="pt-2 flex flex-wrap items-center gap-2.5 border-t border-slate-150/60">
+                      <button
+                        type="button"
+                        onClick={handleSendTestNotification}
+                        disabled={pushLoading}
+                        className="px-3.5 py-1.5 bg-brand-blue hover:bg-blue-600 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Tester une notification</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSendServerPushNotification}
+                        disabled={pushLoading}
+                        className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        title={hasServerApiKey ? "Envoyer un vrai push OneSignal à tous les abonnés via l'API REST" : "Configurez ONESIGNAL_REST_API_KEY sur le serveur pour activer le broadcast"}
+                      >
+                        <Send className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Push OneSignal réel (Serveur)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.removeItem('onesignal_verification_dialog_shown');
+                          window.location.reload();
+                        }}
+                        className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                        title="Réinitialiser et afficher le dialogue de vérification OneSignal"
+                      >
+                        <Bell className="w-3.5 h-3.5 text-red-500" />
+                        <span>Dialogue vérification SDK</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowOneSignalGuide(!showOneSignalGuide)}
+                        className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>{showOneSignalGuide ? 'Fermer le guide' : 'Guide OneSignal pas-à-pas'}</span>
+                      </button>
+
+                      <a
+                        href="https://dashboard.onesignal.com"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ml-auto"
+                      >
+                        <span>Dashboard OneSignal</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+
+                    {/* Expandable OneSignal Guide */}
+                    {showOneSignalGuide && (
+                      <div className="mt-3 p-4 bg-slate-50 rounded-xl text-xs space-y-3 border border-slate-200 text-slate-700 leading-relaxed animate-in fade-in">
+                        <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                          <Rocket className="w-4 h-4 text-red-500" />
+                          Guide de vérification et configuration OneSignal :
+                        </p>
+                        
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5 text-amber-900">
+                          <p className="font-bold flex items-center gap-1.5">
+                            <AlertTriangle className="w-4 h-4 text-amber-600" />
+                            Point clé pour que les notifications fonctionnent :
+                          </p>
+                          <p className="text-[11px] text-amber-800">
+                            Dans votre tableau de bord OneSignal (<strong>Settings &gt; Platforms &gt; Web Push</strong>), vérifiez que le <strong>Site URL</strong> correspond à l'adresse de votre application (ex: <code>https://votre-projet.vercel.app</code>) ou que l'option <strong>« Localhost Testing »</strong> est activée si vous testez en environnement local ou prévisualisation.
+                          </p>
+                        </div>
+
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1.5 text-blue-900">
+                          <p className="font-bold flex items-center gap-1.5">
+                            <Smartphone className="w-4 h-4 text-brand-blue" />
+                            Sur les smartphones de vos utilisateurs (iOS & Android) :
+                          </p>
+                          <p className="text-[11px] text-blue-800">
+                            • <strong>Invite automatique :</strong> Une bannière d'activation s'affiche automatiquement en bas de l'écran après quelques secondes.<br />
+                            • <strong>Android :</strong> Fonctionne instantanément dès que l'utilisateur clique sur « Activer ».<br />
+                            • <strong>iPhone / iPad :</strong> Requiert que l'utilisateur ait ajouté l'application sur son écran d'accueil (Partager &gt; Sur l'écran d'accueil) en raison des règles d'Apple pour Web Push (iOS 16.4+).
+                          </p>
+                        </div>
+
+                        <ol className="list-decimal pl-4 space-y-2">
+                          <li>
+                            <strong>Tester immédiatement :</strong> Cliquez sur le bouton bleu <em>« Tester une notification »</em> ci-dessus pour vérifier que votre navigateur affiche bien la bannière de notification.
+                          </li>
+                          <li>
+                            <strong>Vérifier votre inscription dans OneSignal :</strong> Une fois abonné, copiez votre <strong>Player ID</strong> ci-dessus et vérifiez qu'il apparaît bien dans votre console OneSignal sous <em>Audience &gt; All Users</em>.
+                          </li>
+                          <li>
+                            <strong>Envoyer un push réel depuis OneSignal :</strong> Dans votre console OneSignal, rendez-vous dans <em>Messages &gt; New Message &gt; Push Notification</em> pour envoyer un message à tous vos utilisateurs.
+                          </li>
+                        </ol>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -24218,7 +24456,12 @@ function ProfileView({
 
         {activeSubPage === 'Feedback' && (
           <ProfileSubPage key="subpage-feedback" title="Feedback" onBack={() => setActiveSubPage(null)}>
-            <FeedbackSubPage currentUser={currentUser} onBack={() => setActiveSubPage(null)} />
+            <FeedbackSubPage 
+              currentUser={currentUser} 
+              userProfile={userProfile} 
+              onProfileUpdate={onProfileUpdate} 
+              onBack={() => setActiveSubPage(null)} 
+            />
           </ProfileSubPage>
         )}
 

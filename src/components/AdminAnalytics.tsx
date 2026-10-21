@@ -24,7 +24,12 @@ import {
   Layers,
   ChevronLeft,
   ChevronRight,
-  ShieldAlert
+  ShieldAlert,
+  Store,
+  Share2,
+  HelpCircle,
+  FileText,
+  Megaphone
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -54,6 +59,9 @@ export interface UserProfileItem {
   joined_at?: string;
   favorite_event_ids?: string[];
   favorite_pro_ids?: string[];
+  referral_source?: string;
+  referral_source_detail?: string;
+  referral_survey_completed_at?: string;
 }
 
 /**
@@ -90,6 +98,8 @@ export const AdminAnalytics: React.FC = () => {
   const [copiedSql, setCopiedSql] = useState<boolean>(false);
   const [searches, setSearches] = useState<any[]>([]);
   const [copiedSearchSql, setCopiedSearchSql] = useState<boolean>(false);
+  const [referrals, setReferrals] = useState<any[]>([]);
+  const [copiedReferralSql, setCopiedReferralSql] = useState<boolean>(false);
 
   // Raw data from Supabase
   const [profiles, setProfiles] = useState<UserProfileItem[]>([]);
@@ -214,6 +224,19 @@ export const AdminAnalytics: React.FC = () => {
         setSearches(recentSearches);
       } catch (searchErr) {
         console.warn('[AdminAnalytics] Failed to query searches:', searchErr);
+      }
+
+      // 5. Fetch referral survey data (from dedicated user_referrals table if available)
+      try {
+        const { data: refData } = await supabase
+          .from('user_referrals')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (refData) {
+          setReferrals(refData);
+        }
+      } catch (refErr) {
+        console.warn('[AdminAnalytics] user_referrals note:', refErr);
       }
 
       setLastRefreshedAt(new Date());
@@ -369,16 +392,100 @@ export const AdminAnalytics: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Referral source survey analytics computations
+  const referralEntries = useMemo(() => {
+    const entries: Array<{
+      id: string;
+      userId: string;
+      userName?: string;
+      userEmail?: string;
+      source: string;
+      detail?: string;
+      createdAt?: string;
+    }> = [];
+
+    const seenUsers = new Set<string>();
+
+    // 1. From dedicated user_referrals table
+    if (referrals && referrals.length > 0) {
+      referrals.forEach((r: any) => {
+        const matchedProfile = profiles.find((p) => p.id === r.user_id);
+        entries.push({
+          id: r.id || `ref_${r.user_id}_${Math.random()}`,
+          userId: r.user_id,
+          userName: matchedProfile?.full_name,
+          userEmail: matchedProfile?.email,
+          source: r.source || 'Other',
+          detail: r.detail || undefined,
+          createdAt: r.created_at
+        });
+        if (r.user_id) seenUsers.add(r.user_id);
+      });
+    }
+
+    // 2. From profiles table
+    profiles.forEach((p) => {
+      if (p.referral_source && !seenUsers.has(p.id)) {
+        entries.push({
+          id: `profile_${p.id}`,
+          userId: p.id,
+          userName: p.full_name,
+          userEmail: p.email,
+          source: p.referral_source,
+          detail: p.referral_source_detail || undefined,
+          createdAt: p.referral_survey_completed_at || getProfileTimestamp(p)
+        });
+        seenUsers.add(p.id);
+      }
+    });
+
+    return entries;
+  }, [referrals, profiles]);
+
+  const referralChannelBreakdown = useMemo(() => {
+    const counts: { [key: string]: number } = {};
+    referralEntries.forEach((entry) => {
+      const src = entry.source || 'Other';
+      counts[src] = (counts[src] || 0) + 1;
+    });
+
+    const total = referralEntries.length;
+    return Object.entries(counts)
+      .map(([name, count]) => ({
+        name,
+        count,
+        percent: total > 0 ? Math.round((count / total) * 100) : 0
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [referralEntries]);
+
+  const detailedMentions = useMemo(() => {
+    return referralEntries.filter((e) => !!e.detail && e.detail.trim().length > 0);
+  }, [referralEntries]);
+
   // Export to CSV
   const handleExportCSV = () => {
     if (profiles.length === 0) return;
 
-    const headers = ['ID', 'Full Name', 'Email', 'Registration Date', 'Admin', 'Chat Active', 'Favorite Pros', 'Favorite Events'];
+    const headers = [
+      'ID',
+      'Full Name',
+      'Email',
+      'Registration Date',
+      'Referral Source',
+      'Referral Detail',
+      'Admin',
+      'Chat Active',
+      'Favorite Pros',
+      'Favorite Events'
+    ];
     const rows = profiles.map((p) => [
       p.id,
       p.full_name || '',
       p.email,
       getProfileTimestamp(p) || '',
+      p.referral_source || '',
+      p.referral_source_detail || '',
       p.is_admin ? 'Yes' : 'No',
       p.chat_enabled ? 'Yes' : 'No',
       p.favorite_pro_ids?.length || 0,
@@ -785,6 +892,189 @@ export const AdminAnalytics: React.FC = () => {
         </div>
       </div>
 
+      {/* HOW DID YOU HEAR ABOUT US? (MEMBER ACQUISITION & REFERRALS) */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+        {/* Header */}
+        <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                <Megaphone className="w-5 h-5 text-emerald-600" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 font-display">
+                How Did You Hear About Us?
+              </h3>
+              <span className="text-xs font-semibold px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full">
+                {referralEntries.length} responses
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 pl-11">
+              Member acquisition channels reported by new users on signup
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl">
+              {profiles.length > 0 ? Math.round((referralEntries.length / profiles.length) * 100) : 0}% of all members
+            </span>
+
+            <button
+              onClick={() => {
+                const sqlText = `-- 1. Add referral columns to profiles
+ALTER TABLE public.profiles 
+ADD COLUMN IF NOT EXISTS referral_source text,
+ADD COLUMN IF NOT EXISTS referral_source_detail text,
+ADD COLUMN IF NOT EXISTS referral_survey_completed_at timestamp with time zone;
+
+-- 2. Dedicated user_referrals table
+CREATE TABLE IF NOT EXISTS public.user_referrals (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  source text NOT NULL,
+  detail text,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.user_referrals ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can insert referral" ON public.user_referrals FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can read referral" ON public.user_referrals FOR SELECT TO authenticated USING (auth.uid() = user_id OR (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true);`;
+                navigator.clipboard.writeText(sqlText);
+                setCopiedReferralSql(true);
+                setTimeout(() => setCopiedReferralSql(false), 2000);
+              }}
+              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              {copiedReferralSql ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-emerald-700">SQL Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Copy Supabase SQL</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Content Grid: Channel Breakdown + Specific Mentions */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+          {/* Left Column: Acquisition Channels Breakdown */}
+          <div className="lg:col-span-7 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Top Acquisition Channels
+              </span>
+              <span className="text-xs font-semibold text-slate-500">
+                {referralChannelBreakdown.length} active sources
+              </span>
+            </div>
+
+            {referralChannelBreakdown.length === 0 ? (
+              <div className="py-12 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                  <Megaphone className="w-5 h-5 text-slate-400" />
+                </div>
+                <p className="text-sm font-bold text-slate-700">No survey responses yet</p>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  When new members sign up and arrive on the home page, the survey window prompts them to select how they discovered MyCityUnlocked.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {referralChannelBreakdown.map((item, idx) => (
+                  <div key={item.name} className="space-y-1.5 p-2.5 rounded-2xl hover:bg-slate-50/80 transition-colors">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-800 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        {item.name}
+                      </span>
+                      <div className="flex items-center gap-2 font-bold">
+                        <span className="text-slate-900">{item.count}</span>
+                        <span className="text-[11px] text-slate-400 font-normal">({item.percent}%)</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all duration-500',
+                          idx === 0
+                            ? 'bg-emerald-500'
+                            : idx === 1
+                            ? 'bg-teal-500'
+                            : idx === 2
+                            ? 'bg-brand-blue'
+                            : idx === 3
+                            ? 'bg-indigo-500'
+                            : idx === 4
+                            ? 'bg-purple-500'
+                            : 'bg-slate-400'
+                        )}
+                        style={{ width: `${Math.max(item.percent, 3)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Right Column: Local Businesses & Specific Mentions */}
+          <div className="lg:col-span-5 p-6 space-y-4 bg-slate-50/40">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <Store className="w-3.5 h-3.5 text-brand-blue" />
+                Specific Mentions & Local Businesses
+              </span>
+              <span className="text-[11px] font-bold text-brand-blue bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                {detailedMentions.length} mentions
+              </span>
+            </div>
+
+            {detailedMentions.length === 0 ? (
+              <div className="py-12 text-center space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/80 text-slate-400 flex items-center justify-center mx-auto shadow-2xs">
+                  <Store className="w-4 h-4 text-slate-400" />
+                </div>
+                <p className="text-xs font-bold text-slate-600">No specific business mentions yet</p>
+                <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                  When users pick &ldquo;Recommended by a local business&rdquo; or &ldquo;Other&rdquo;, their written comments and shop names appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
+                {detailedMentions.map((mention) => (
+                  <div
+                    key={mention.id}
+                    className="p-3 bg-white rounded-2xl border border-slate-200/70 shadow-2xs space-y-1.5 hover:border-emerald-500/30 transition-all"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/60">
+                        {mention.source}
+                      </span>
+                      {mention.createdAt && (
+                        <span className="text-[10px] text-slate-400">
+                          {formatRelativeTime(mention.createdAt)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs font-bold text-slate-900 leading-snug">
+                      &ldquo;{mention.detail}&rdquo;
+                    </p>
+                    <p className="text-[10px] text-slate-500 truncate flex items-center gap-1">
+                      <span>By {mention.userName || mention.userEmail || 'Anonymous member'}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Recent Users Table Section */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
         {/* Table Header Controls */}
@@ -861,6 +1151,7 @@ export const AdminAnalytics: React.FC = () => {
               <tr className="bg-slate-50/75 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 <th className="py-3 px-6">User</th>
                 <th className="py-3 px-4">Registration Date</th>
+                <th className="py-3 px-4">Referral Source</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4">Activity</th>
                 <th className="py-3 px-6 text-right">Supabase ID</th>
@@ -869,14 +1160,14 @@ export const AdminAnalytics: React.FC = () => {
             <tbody className="divide-y divide-slate-100 text-sm">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400 text-sm">
+                  <td colSpan={6} className="py-12 text-center text-slate-400 text-sm">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-brand-blue" />
                     Loading Supabase profiles...
                   </td>
                 </tr>
               ) : paginatedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400">
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
                     <p className="font-semibold text-slate-500">No users found</p>
                     <p className="text-xs mt-1">
                       {searchQuery
@@ -936,6 +1227,25 @@ export const AdminAnalytics: React.FC = () => {
                           <Clock className="w-3 h-3" />
                           {formatRelativeTime(userDate)}
                         </p>
+                      </td>
+
+                      {/* Referral Source Column */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        {u.referral_source ? (
+                          <div className="space-y-0.5 max-w-[200px]">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              <Sparkles className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                              <span className="truncate">{u.referral_source}</span>
+                            </span>
+                            {u.referral_source_detail && (
+                              <p className="text-[10px] text-slate-500 font-medium pl-1 truncate" title={u.referral_source_detail}>
+                                &ldquo;{u.referral_source_detail}&rdquo;
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs italic">Not answered</span>
+                        )}
                       </td>
 
                       {/* Status Badges Column */}

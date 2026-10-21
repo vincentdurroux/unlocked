@@ -40,6 +40,9 @@ export interface Profile {
   favorite_ad_ids?: string[];
   read_announcement_ids?: string[];
   dismissed_announcement_ids?: string[];
+  referral_source?: string;
+  referral_source_detail?: string;
+  referral_survey_completed_at?: string;
 }
 
 export const authService = {
@@ -386,6 +389,36 @@ export const authService = {
     });
     if (error) throw error;
     return data;
+  },
+
+  async saveReferralSource(userId: string, source: string, detail?: string) {
+    if (!isSupabaseConfigured || !userId) return;
+
+    // 1. Try to record in a dedicated table `user_referrals` if it exists in Supabase
+    try {
+      await supabase
+        .from('user_referrals')
+        .insert({
+          user_id: userId,
+          source: source,
+          detail: detail || null,
+          created_at: new Date().toISOString()
+        });
+    } catch (err) {
+      console.warn('[Referral Survey] Note on user_referrals table:', err);
+    }
+
+    // 2. Update user profile
+    try {
+      await this.updateProfile({
+        id: userId,
+        referral_source: source,
+        referral_source_detail: detail || null,
+        referral_survey_completed_at: new Date().toISOString()
+      } as any);
+    } catch (err) {
+      console.warn('[Referral Survey] Note on updating profile referral columns:', err);
+    }
   }
 };
 
