@@ -6006,51 +6006,66 @@ function AdDetailModal({
           </div>
 
           <div>
-            <div 
-              className="h-56 sm:h-80 overflow-hidden relative group cursor-zoom-in touch-pan-y no-swipe"
-              onMouseEnter={() => setIsHovering(true)}
-              onMouseLeave={() => setIsHovering(false)}
-            >
-              <div
-                className="w-full h-full cursor-pointer select-none"
-                onClick={() => setIsFullScreen(true)}
-              >
-                <img 
-                  src={images[currentImageIndex]} 
-                  alt={ad.title} 
-                  className="w-full h-full object-cover select-none"
-                />
-              </div>
-              
-              {images.length > 1 && (
-                <>
-                  <button 
-                    onClick={prevImage}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 backdrop-blur rounded-full shadow-lg text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity"
+            {(() => {
+              let modalTouchStartX = 0;
+              return (
+                <div 
+                  className="h-56 sm:h-80 overflow-hidden relative group cursor-zoom-in touch-pan-y"
+                  onMouseEnter={() => setIsHovering(true)}
+                  onMouseLeave={() => setIsHovering(false)}
+                  onTouchStart={(e) => { modalTouchStartX = e.touches[0].clientX; }}
+                  onTouchEnd={(e) => {
+                    const diff = modalTouchStartX - e.changedTouches[0].clientX;
+                    if (diff > 40) nextImage(e);
+                    else if (diff < -40) prevImage(e);
+                  }}
+                >
+                  <div
+                    className="w-full h-full cursor-pointer select-none"
+                    onClick={() => setIsFullScreen(true)}
                   >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button 
-                    onClick={nextImage}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/80 backdrop-blur rounded-full shadow-lg text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                  
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
-                    {images.map((_: any, i: number) => (
-                      <div 
-                        key={i} 
-                        className={cn(
-                          "w-1.5 h-1.5 rounded-full transition-all",
-                          i === currentImageIndex ? "bg-white w-4" : "bg-white/50"
-                        )}
-                      />
-                    ))}
+                    <img 
+                      src={images[currentImageIndex]} 
+                      alt={ad.title} 
+                      className="w-full h-full object-cover select-none"
+                    />
                   </div>
-                </>
-              )}
-            </div>
+                  
+                  {images.length > 1 && (
+                    <>
+                      <button 
+                        type="button"
+                        onClick={prevImage}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/90 hover:bg-white backdrop-blur rounded-full shadow-lg text-slate-900 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-20 cursor-pointer"
+                        title="Previous photo"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={nextImage}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/90 hover:bg-white backdrop-blur rounded-full shadow-lg text-slate-900 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-20 cursor-pointer"
+                        title="Next photo"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                      
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-20 pointer-events-none bg-slate-950/40 backdrop-blur-xs px-2.5 py-1 rounded-full">
+                        {images.map((_: any, i: number) => (
+                          <div 
+                            key={i} 
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full transition-all",
+                              i === currentImageIndex ? "bg-white w-4" : "bg-white/50"
+                            )}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="p-6 space-y-6">
             <div className="space-y-3">
@@ -21361,7 +21376,16 @@ function MarketplaceView({
                   className="group bg-white rounded-3xl border border-slate-200/80 hover:border-purple-300 shadow-2xs hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300 overflow-hidden flex flex-col cursor-pointer hover:-translate-y-1"
                 >
                   {/* Image container */}
-                  <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden group/img">
+                  <div 
+                    className="relative aspect-[4/3] bg-slate-100 overflow-hidden group/img"
+                    onTouchStart={(e) => { (e.currentTarget as any)._touchStartX = e.touches[0].clientX; }}
+                    onTouchEnd={(e) => {
+                      const startX = (e.currentTarget as any)._touchStartX || 0;
+                      const diff = startX - e.changedTouches[0].clientX;
+                      if (diff > 40) handleNextCardImage(e as any);
+                      else if (diff < -40) handlePrevCardImage(e as any);
+                    }}
+                  >
                     <img
                       src={currentCardImage}
                       alt={ad.title}
@@ -21377,7 +21401,7 @@ function MarketplaceView({
                         <button
                           type="button"
                           onClick={handlePrevCardImage}
-                          className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white backdrop-blur rounded-full shadow-md text-slate-900 opacity-0 group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
+                          className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/90 hover:bg-white backdrop-blur rounded-full shadow-md text-slate-900 opacity-90 sm:opacity-0 sm:group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
                           title="Previous photo"
                         >
                           <ChevronLeft className="w-4 h-4" />
@@ -21385,7 +21409,7 @@ function MarketplaceView({
                         <button
                           type="button"
                           onClick={handleNextCardImage}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/80 hover:bg-white backdrop-blur rounded-full shadow-md text-slate-900 opacity-0 group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-white/90 hover:bg-white backdrop-blur rounded-full shadow-md text-slate-900 opacity-90 sm:opacity-0 sm:group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
                           title="Next photo"
                         >
                           <ChevronRight className="w-4 h-4" />
@@ -21548,7 +21572,16 @@ function MarketplaceView({
                   className="group bg-white rounded-2xl border border-slate-200/80 hover:border-purple-300 p-3 sm:p-4 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between cursor-pointer"
                 >
                   <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
-                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0 group/img">
+                    <div 
+                      className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0 group/img"
+                      onTouchStart={(e) => { (e.currentTarget as any)._touchStartX = e.touches[0].clientX; }}
+                      onTouchEnd={(e) => {
+                        const startX = (e.currentTarget as any)._touchStartX || 0;
+                        const diff = startX - e.changedTouches[0].clientX;
+                        if (diff > 40) handleNextCardImage(e as any);
+                        else if (diff < -40) handlePrevCardImage(e as any);
+                      }}
+                    >
                       <img
                         src={currentCardImage}
                         alt={ad.title}
@@ -21564,7 +21597,7 @@ function MarketplaceView({
                           <button
                             type="button"
                             onClick={handlePrevCardImage}
-                            className="absolute left-1 top-1/2 -translate-y-1/2 p-1 bg-white/80 hover:bg-white backdrop-blur rounded-full shadow-sm text-slate-900 opacity-0 group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
+                            className="absolute left-1 top-1/2 -translate-y-1/2 p-1 bg-white/90 hover:bg-white backdrop-blur rounded-full shadow-sm text-slate-900 opacity-90 sm:opacity-0 sm:group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
                             title="Previous photo"
                           >
                             <ChevronLeft className="w-3 h-3" />
@@ -21572,7 +21605,7 @@ function MarketplaceView({
                           <button
                             type="button"
                             onClick={handleNextCardImage}
-                            className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-white/80 hover:bg-white backdrop-blur rounded-full shadow-sm text-slate-900 opacity-0 group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-white/90 hover:bg-white backdrop-blur rounded-full shadow-sm text-slate-900 opacity-90 sm:opacity-0 sm:group-hover/img:opacity-100 transition-opacity z-20 cursor-pointer"
                             title="Next photo"
                           >
                             <ChevronRight className="w-3 h-3" />
