@@ -13,7 +13,10 @@ import {
   Check, 
   Sparkles,
   ArrowRight,
-  Loader2
+  Loader2,
+  Building2,
+  HeartHandshake,
+  Globe
 } from 'lucide-react';
 import { authService } from '../services/authService';
 
@@ -36,49 +39,34 @@ export interface ReferralOption {
 
 export const REFERRAL_OPTIONS: ReferralOption[] = [
   {
+    id: 'relocation_agency',
+    label: 'Relocation agency',
+    icon: Building2,
+    description: 'Relocation service or advisor',
+    requiresDetail: true,
+    detailLabel: 'Who? (Which relocation agency?)',
+    detailPlaceholder: 'Specify who (agency or consultant name)...'
+  },
+  {
+    id: 'expat_organization',
+    label: 'Expat organization',
+    icon: Globe,
+    description: 'Community, club, group, or forum',
+    requiresDetail: true,
+    detailLabel: 'Who? (Which expat organization?)',
+    detailPlaceholder: 'Specify who (organization or group name)...'
+  },
+  {
     id: 'word_of_mouth',
     label: 'Word of mouth',
     icon: Users,
-    description: 'A friend, colleague, or family member told me'
+    description: 'Friend, colleague, or family member'
   },
   {
     id: 'social_media',
-    label: 'Social media (Instagram, Facebook, LinkedIn...)',
+    label: 'Social media',
     icon: Share2,
-    description: 'Instagram, Facebook, LinkedIn, TikTok, etc.'
-  },
-  {
-    id: 'local_business',
-    label: 'Recommended by a local business',
-    icon: Store,
-    description: 'A shop, café, real estate agency, clinic, etc.',
-    requiresDetail: true,
-    detailLabel: 'Which business recommended us?',
-    detailPlaceholder: 'e.g., English Bookshop, Café Ruzafa, Gym...'
-  },
-  {
-    id: 'search_engine',
-    label: 'Search engine (Google, Bing)',
-    icon: Search,
-    description: 'Searched for Valencia guides, services, or events'
-  },
-  {
-    id: 'local_event',
-    label: 'Local event or meetup',
-    icon: Calendar,
-    description: 'Met someone or saw MyCityUnlocked at an event'
-  },
-  {
-    id: 'expat_group',
-    label: 'Online expat group or forum',
-    icon: MessageSquare,
-    description: 'Reddit, Facebook Expat Group, WhatsApp, Telegram'
-  },
-  {
-    id: 'print_material',
-    label: 'Flyer / Poster / Print material',
-    icon: FileText,
-    description: 'Saw a poster, sticker, or flyer around Valencia'
+    description: 'Instagram, Facebook, LinkedIn...'
   },
   {
     id: 'other',
@@ -166,34 +154,34 @@ export function ReferralSurveyModal({
 
         {/* Modal Window */}
         <motion.div 
-          initial={{ opacity: 0, scale: 0.94, y: 16 }}
+          initial={{ opacity: 0, scale: 0.95, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.94, y: 16 }}
-          transition={{ type: "spring", duration: 0.35, bounce: 0.15 }}
-          className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-10 my-auto"
+          exit={{ opacity: 0, scale: 0.95, y: 12 }}
+          transition={{ type: "spring", duration: 0.3, bounce: 0.1 }}
+          className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-10 my-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header Banner */}
-          <div className="relative bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 p-6 sm:p-7 text-white">
+          <div className="relative bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 px-5 py-3.5 sm:px-6 sm:py-4 text-white">
             <button
               type="button"
               onClick={handleDismiss}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer"
+              className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer"
               title="Close"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-xs text-[11px] font-bold text-emerald-200 uppercase tracking-wider mb-2.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Welcome to MyCityUnlocked!</span>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 backdrop-blur-xs text-[10px] font-bold text-emerald-200 uppercase tracking-wider mb-1">
+              <Sparkles className="w-3 h-3 text-amber-300" />
+              <span>Quick Question</span>
             </div>
 
-            <h3 className="text-xl sm:text-2xl font-black font-display tracking-tight leading-snug">
+            <h3 className="text-lg sm:text-xl font-black font-display tracking-tight leading-snug">
               How did you hear about us?
             </h3>
-            <p className="text-xs sm:text-sm text-emerald-100/90 mt-1 max-w-sm leading-relaxed">
-              Help us understand how you found our community so we can welcome more people like you.
+            <p className="text-[11px] sm:text-xs text-emerald-100/85 mt-0.5 leading-tight">
+              Help us know how you found our community.
             </p>
           </div>
 
@@ -202,128 +190,131 @@ export function ReferralSurveyModal({
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="p-8 sm:p-10 text-center space-y-3"
+              className="p-8 text-center space-y-2.5"
             >
-              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-inner">
-                <Check className="w-8 h-8 stroke-[3]" />
+              <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-inner">
+                <Check className="w-7 h-7 stroke-[3]" />
               </div>
-              <h4 className="text-lg font-bold text-slate-900">Thank you for sharing!</h4>
+              <h4 className="text-base font-bold text-slate-900">Thank you for sharing!</h4>
               <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                Your feedback helps us grow. Welcome to Valencia's international community!
+                Welcome to Valencia's international community!
               </p>
             </motion.div>
           ) : (
-            <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-3.5 sm:p-4 space-y-2">
               {/* Options List */}
-              <div className="max-h-[300px] sm:max-h-[340px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              <div className="space-y-1.5 overflow-y-auto max-h-[62vh] sm:max-h-none pr-0.5 custom-scrollbar">
                 {REFERRAL_OPTIONS.map((opt) => {
                   const Icon = opt.icon;
                   const isSelected = selectedOption === opt.id;
 
                   return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedOption(opt.id);
-                        if (!opt.requiresDetail) {
-                          setDetailText('');
-                        }
-                      }}
-                      className={`w-full text-left p-3 rounded-2xl border transition-all flex items-start gap-3 cursor-pointer ${
-                        isSelected 
-                          ? 'bg-emerald-50/80 border-emerald-400/80 shadow-xs ring-1 ring-emerald-400/40' 
-                          : 'bg-white hover:bg-slate-50 border-slate-200/80'
-                      }`}
-                    >
-                      {/* Radio Circle */}
-                      <div className={`w-5 h-5 rounded-full mt-0.5 flex items-center justify-center shrink-0 border transition-colors ${
-                        isSelected 
-                          ? 'border-emerald-600 bg-emerald-600 text-white' 
-                          : 'border-slate-300 bg-white'
-                      }`}>
-                        {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
-                      </div>
-
-                      {/* Icon */}
-                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
-                        isSelected ? 'bg-emerald-600/10 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        <Icon className="w-3.5 h-3.5" />
-                      </div>
-
-                      {/* Labels */}
-                      <div className="flex-1 min-w-0 pr-1">
-                        <p className={`text-xs sm:text-sm font-bold leading-snug ${
-                          isSelected ? 'text-slate-950' : 'text-slate-800'
+                    <div key={opt.id} className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedOption(opt.id);
+                          if (!opt.requiresDetail) {
+                            setDetailText('');
+                          }
+                        }}
+                        className={`w-full text-left py-2 px-2.5 sm:px-3 rounded-xl border transition-all flex items-center gap-2.5 cursor-pointer ${
+                          isSelected 
+                            ? 'bg-emerald-50/90 border-emerald-400 shadow-xs ring-1 ring-emerald-400/30' 
+                            : 'bg-white hover:bg-slate-50 border-slate-200/70'
+                        }`}
+                      >
+                        {/* Radio Circle */}
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border transition-colors ${
+                          isSelected 
+                            ? 'border-emerald-600 bg-emerald-600 text-white' 
+                            : 'border-slate-300 bg-white'
                         }`}>
-                          {opt.label}
-                        </p>
-                        {opt.description && (
-                          <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
-                            {opt.description}
+                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+
+                        {/* Icon */}
+                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                          isSelected ? 'bg-emerald-600/10 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          <Icon className="w-3.5 h-3.5" />
+                        </div>
+
+                        {/* Labels */}
+                        <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                          <p className={`text-xs sm:text-[13px] font-bold truncate leading-tight ${
+                            isSelected ? 'text-slate-950' : 'text-slate-800'
+                          }`}>
+                            {opt.label}
                           </p>
+                          {opt.description && (
+                            <span className="hidden sm:inline text-[10px] text-slate-400 truncate font-normal">
+                              {opt.description}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+
+                      {/* Dynamic Detail Input appearing directly underneath this selected card */}
+                      <AnimatePresence>
+                        {isSelected && opt.requiresDetail && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0, y: -4 }}
+                            animate={{ opacity: 1, height: 'auto', y: 0 }}
+                            exit={{ opacity: 0, height: 0, y: -4 }}
+                            transition={{ duration: 0.18, ease: "easeOut" }}
+                            className="overflow-hidden px-0.5 pt-0.5"
+                          >
+                            <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
+                              <label className="block text-[11px] font-bold text-emerald-950">
+                                {opt.detailLabel || 'Please specify:'} <span className="text-emerald-600">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                autoFocus
+                                required
+                                value={detailText}
+                                onChange={(e) => setDetailText(e.target.value)}
+                                placeholder={opt.detailPlaceholder || 'Type your answer here...'}
+                                className="w-full px-3 py-1.5 rounded-lg border border-emerald-300 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium shadow-2xs"
+                              />
+                            </div>
+                          </motion.div>
                         )}
-                      </div>
-                    </button>
+                      </AnimatePresence>
+                    </div>
                   );
                 })}
               </div>
 
-              {/* Dynamic Detail Input for Business Name or Other */}
-              <AnimatePresence>
-                {isDetailRequired && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0, y: -4 }}
-                    animate={{ opacity: 1, height: 'auto', y: 0 }}
-                    exit={{ opacity: 0, height: 0, y: -4 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden pt-1"
-                  >
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      {currentOptionObj?.detailLabel || 'Please specify:'} <span className="text-emerald-600">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      autoFocus
-                      required
-                      value={detailText}
-                      onChange={(e) => setDetailText(e.target.value)}
-                      placeholder={currentOptionObj?.detailPlaceholder || 'Type your answer here...'}
-                      className="w-full px-4 py-2.5 rounded-xl border border-emerald-300 bg-emerald-50/30 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium"
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
               {/* Action Buttons */}
-              <div className="pt-2 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5 border-t border-slate-150/60">
+              <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={handleDismiss}
-                  className="w-full sm:w-auto px-4 py-2.5 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors text-center cursor-pointer"
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                 >
-                  Skip for now
+                  Skip
                 </button>
 
                 <button
                   type="submit"
                   disabled={isSubmitDisabled}
-                  className={`w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm ${
+                  className={`px-5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs ${
                     isSubmitDisabled
-                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
                       : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20 active:scale-98'
                   }`}
                 >
                   {isSubmitting ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       <span>Saving...</span>
                     </>
                   ) : (
                     <>
                       <span>Submit</span>
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-3.5 h-3.5" />
                     </>
                   )}
                 </button>

@@ -1600,89 +1600,94 @@ function FeedbackReferralSection({ currentUser, userProfile, onProfileUpdate }: 
   }
 
   return (
-    <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5 text-left">
-      <div className="flex items-center gap-2 border-b border-slate-50 pb-3">
-        <Sparkles className="w-5 h-5 text-emerald-600" />
-        <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">How did you hear about us?</h3>
+    <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-100/85 shadow-sm space-y-3.5 text-left">
+      <div className="flex items-center gap-2 border-b border-slate-50 pb-2.5">
+        <Sparkles className="w-4 h-4 text-emerald-600" />
+        <h3 className="font-bold text-slate-800 text-xs sm:text-sm tracking-wider uppercase">How did you hear about us?</h3>
       </div>
-      <p className="text-xs text-slate-500 leading-relaxed">
+      <p className="text-xs text-slate-500 leading-snug">
         You can let us know how you discovered MyCityUnlocked so we can welcome more members from your community!
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="space-y-1.5 pr-0.5">
           {REFERRAL_OPTIONS.map((opt) => {
             const Icon = opt.icon;
             const isSelected = selectedOption === opt.id;
 
             return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => {
-                  setSelectedOption(opt.id);
-                  if (!opt.requiresDetail) {
-                    setDetailText('');
-                  }
-                }}
-                className={`w-full text-left p-3 rounded-2xl border transition-all flex items-start gap-3 cursor-pointer ${
-                  isSelected 
-                    ? 'bg-emerald-50/80 border-emerald-400/80 shadow-xs ring-1 ring-emerald-400/40' 
-                    : 'bg-white hover:bg-slate-50 border-slate-200/80'
-                }`}
-              >
-                <div className={`w-5 h-5 rounded-full mt-0.5 flex items-center justify-center shrink-0 border transition-colors ${
-                  isSelected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white'
-                }`}>
-                  {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
-                </div>
+              <div key={opt.id} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedOption(opt.id);
+                    if (!opt.requiresDetail) {
+                      setDetailText('');
+                    }
+                  }}
+                  className={`w-full text-left py-2 px-2.5 sm:px-3 rounded-xl border transition-all flex items-center gap-2.5 cursor-pointer ${
+                    isSelected 
+                      ? 'bg-emerald-50/90 border-emerald-400 shadow-xs ring-1 ring-emerald-400/30' 
+                      : 'bg-white hover:bg-slate-50 border-slate-200/70'
+                  }`}
+                >
+                  <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border transition-colors ${
+                    isSelected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white'
+                  }`}>
+                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
 
-                <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
-                  isSelected ? 'bg-emerald-600/10 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                }`}>
-                  <Icon className="w-3.5 h-3.5" />
-                </div>
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                    isSelected ? 'bg-emerald-600/10 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    <Icon className="w-3.5 h-3.5" />
+                  </div>
 
-                <div className="flex-1 min-w-0 pr-1">
-                  <p className={`text-xs sm:text-sm font-bold leading-snug ${isSelected ? 'text-slate-950' : 'text-slate-800'}`}>
-                    {opt.label}
-                  </p>
-                  {opt.description && (
-                    <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
-                      {opt.description}
+                  <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                    <p className={`text-xs sm:text-[13px] font-bold truncate leading-tight ${isSelected ? 'text-slate-950' : 'text-slate-800'}`}>
+                      {opt.label}
                     </p>
-                  )}
-                </div>
-              </button>
+                    {opt.description && (
+                      <span className="hidden sm:inline text-[10px] text-slate-400 truncate font-normal">
+                        {opt.description}
+                      </span>
+                    )}
+                  </div>
+                </button>
+
+                {/* Dynamic Detail Input appearing directly underneath this selected card */}
+                {isSelected && opt.requiresDetail && (
+                  <div className="px-1 pt-0.5 pb-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
+                      <label className="block text-[11px] font-bold text-emerald-950">
+                        {opt.detailLabel || 'Please specify:'} <span className="text-emerald-600">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        autoFocus
+                        required
+                        value={detailText}
+                        onChange={(e) => setDetailText(e.target.value)}
+                        placeholder={opt.detailPlaceholder || 'Type your answer here...'}
+                        className="w-full px-3 py-1.5 rounded-lg border border-emerald-300 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium shadow-2xs"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
 
-        {isDetailRequired && (
-          <div className="pt-1">
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              {currentOptionObj?.detailLabel || 'Please specify:'} <span className="text-emerald-600">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={detailText}
-              onChange={(e) => setDetailText(e.target.value)}
-              placeholder={currentOptionObj?.detailPlaceholder || 'Type your answer here...'}
-              className="w-full px-4 py-2.5 rounded-xl border border-emerald-300 bg-emerald-50/30 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
-            />
-          </div>
-        )}
-
-        <div className="pt-2 flex justify-end">
+        <div className="pt-1.5 flex justify-end">
           <button
             type="submit"
             disabled={isSubmitDisabled}
-            className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-sm"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-xs"
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span>Saving...</span>
               </>
             ) : (
@@ -13477,7 +13482,17 @@ function HomeView({
     };
     loadTestimonies();
   }, [allPros]);
-  
+
+  // Auto-rotate "Meet a local Pro" carousel every 15 seconds
+  useEffect(() => {
+    if (expandedLandingProId) return; // Pause auto-rotation when user expands a pro
+    const timer = setInterval(() => {
+      setSec1Idx(prev => prev + 1);
+      setSec3Idx(prev => prev + 1);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [expandedLandingProId]);
+
   return (
     <div className="px-6 pt-12 md:pt-20 pb-12 md:pb-24 xl:pb-6 space-y-12 md:space-y-20 lg:space-y-28 max-w-7xl mx-auto w-full overflow-hidden">
 
@@ -13547,7 +13562,7 @@ function HomeView({
         </div>
 
         {/* Hero Jane Search Assistant Widget */}
-        <div className="relative z-10 -mt-3 md:mt-0 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#f8fafc] p-5 md:p-8 border-2 border-blue-200/80 shadow-[0_4px_24px_rgba(37,99,235,0.04)] space-y-6">
+        <div className="relative z-10 -mt-3 md:mt-0 max-w-3xl mx-auto w-full overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#f8fafc] p-5 md:p-7 border-2 border-blue-200/80 shadow-[0_4px_24px_rgba(37,99,235,0.04)] space-y-6">
           <div className="text-left space-y-1">
             <h3 className="text-base md:text-xl font-bold text-brand-navy tracking-tight flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-brand-blue" />
@@ -13638,7 +13653,7 @@ function HomeView({
               onAddPro();
             }
           }}
-          className="relative z-10 mt-4 overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#fffdf5] p-5 md:p-8 border border-amber-200/70 hover:border-amber-300/90 transition-all duration-300 hover:scale-[1.015] active:scale-[0.99] group/rec-card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-yellow"
+          className="relative z-10 mt-4 max-w-3xl mx-auto w-full overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#fffdf5] p-5 md:p-7 border border-amber-200/70 hover:border-amber-300/90 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] group/rec-card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-yellow"
         >
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="flex items-center gap-4">
@@ -13654,7 +13669,7 @@ function HomeView({
             </div>
 
             <div 
-              className="w-fit self-center sm:self-auto shrink-0 inline-flex items-center justify-center gap-2 px-6 py-2.5 md:px-8 md:py-3 bg-brand-yellow group-hover/rec-card:bg-amber-400 text-brand-navy rounded-xl font-bold text-xs md:text-sm shadow-sm transition-all"
+              className="w-fit self-center sm:self-auto shrink-0 inline-flex items-center justify-center gap-2 px-6 py-2.5 md:px-7 md:py-3 bg-brand-yellow group-hover/rec-card:bg-amber-400 text-brand-navy rounded-xl font-bold text-xs md:text-sm shadow-sm transition-all"
             >
               <UserPlus className="w-3.5 h-3.5 md:w-4 h-4 text-brand-navy shrink-0" />
               <span>Recommend a pro</span>
@@ -13664,47 +13679,7 @@ function HomeView({
       </div>
 
 
-      {/* Why people love Unlocked Section */}
-      <div className="hidden md:block space-y-8 md:space-y-12 py-4">
-        <h3 className="font-semibold text-2xl font-display text-brand-navy flex items-center gap-2">
-          <Heart className="w-6 h-6 text-brand-blue" />
-          Why people love Unlocked
-        </h3>
-        
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 max-w-5xl mx-auto">
-          {[
-            {
-              title: "Community powered",
-              desc: "Real recommendations from real people like you.",
-              icon: <Users className="w-6 h-6 md:w-8 md:h-8 text-emerald-500" />,
-              bg: "bg-emerald-50/50",
-              className: ""
-            },
-            {
-              title: "Trust-based recommendations",
-              desc: "Reviewed by members.",
-              icon: <ShieldCheck className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />,
-              bg: "bg-blue-50/50",
-              className: ""
-            },
-            {
-              title: "Local first",
-              desc: "Focused on what matters in your city and neighborhood.",
-              icon: <MapPin className="w-6 h-6 md:w-8 md:h-8 text-amber-500" />,
-              bg: "bg-amber-50/50",
-              className: "col-span-2 justify-self-center w-[calc(50%-0.375rem)] md:col-span-1 md:w-full md:justify-self-stretch"
-            }
-          ].map((item, idx) => (
-            <div key={idx} className={`bg-white p-4 md:p-8 lg:p-10 rounded-3xl border border-slate-100 flex flex-col items-center text-center space-y-3 md:space-y-5 shadow-sm hover:shadow-md transition-shadow ${item.className}`}>
-              <div className={`w-12 h-12 md:w-16 md:h-16 rounded-full ${item.bg} flex items-center justify-center`}>
-                {item.icon}
-              </div>
-              <h4 className="font-bold text-slate-900 text-xs md:text-base leading-tight">{item.title}</h4>
-              <p className="text-[10px] md:text-sm text-slate-500 leading-relaxed">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Discover on Unlocked Section */}
 
 
       <div className="space-y-6 md:space-y-10">
@@ -13714,7 +13689,7 @@ function HomeView({
             Discover on Unlocked
           </h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 grid-flow-row-dense">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 grid-flow-row-dense">
           {/* Card 1: Top Rated Pro / Testimonial */}
           {(() => {
             const dbHighlightedPros = allPros.filter(p => p.is_highlighted === true || (p.is_highlighted as any) === 'true' || (p.is_highlighted as any) === 1);
@@ -13932,7 +13907,7 @@ function HomeView({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              className="col-span-1 md:col-span-2 lg:col-span-4 w-full scroll-mt-28"
+              className="col-span-1 md:col-span-2 lg:col-span-3 w-full scroll-mt-28"
             >
               <DirectoryProCardItem
                 key={expandedLandingPro.id}
@@ -13967,7 +13942,11 @@ function HomeView({
           {/* Card 3: Guide Highlight */}
           {(() => {
             if (guidesLoading || (allArticles.length === 0 && isSupabaseConfigured)) {
-              return <DiscoverCardGuideSkeleton />;
+              return (
+                <div className="md:col-span-2 lg:col-span-1 md:max-w-md lg:max-w-none md:mx-auto lg:mx-0 w-full">
+                  <DiscoverCardGuideSkeleton />
+                </div>
+              );
             }
 
             const dbHighlightedArticles = allArticles.filter(art => (art.is_highlighted === true || (art.is_highlighted as any) === 'true' || (art.is_highlighted as any) === 1) && art.isOnline !== false);
@@ -13989,14 +13968,20 @@ function HomeView({
               section3Items = allArticles.filter(art => highlightedArticleIds.includes(String(art.id)) && art.isOnline !== false);
             }
 
-            if (section3Items.length === 0) return guidesLoading ? <DiscoverCardGuideSkeleton /> : null;
+            if (section3Items.length === 0) {
+              return guidesLoading ? (
+                <div className="md:col-span-2 lg:col-span-1 md:max-w-md lg:max-w-none md:mx-auto lg:mx-0 w-full">
+                  <DiscoverCardGuideSkeleton />
+                </div>
+              ) : null;
+            }
 
             const activeIndex = sec3Idx % section3Items.length;
             const featuredArticle = section3Items[activeIndex];
 
             return (
               <div 
-                className="flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-white border border-slate-100 hover:border-[#00C2A8]/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full"
+                className="flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-white border border-slate-100 hover:border-[#00C2A8]/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full md:col-span-2 lg:col-span-1 md:max-w-md lg:max-w-none md:mx-auto lg:mx-0 w-full"
                 id="discover-card-guide"
                 onClick={() => onNavigate('guides', { guideId: featuredArticle.id })}
               >
@@ -14076,46 +14061,48 @@ function HomeView({
               </div>
             );
           })()}
+        </div>
+      </div>
 
-          {/* Card 4: How to Add a Pro */}
-          <div 
-            onClick={onAddPro}
-            className="flex flex-col justify-between p-6 rounded-3xl bg-white border border-slate-100 hover:border-brand-yellow/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group"
-            id="discover-card-addpro"
-          >
-            <div className="space-y-4">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black bg-brand-yellow text-slate-900 uppercase tracking-widest shadow-sm shadow-brand-yellow/10 select-none">
-                <Plus className="w-3.5 h-3.5 text-slate-900" style={{ strokeWidth: 3 }} /> How to add a pro
-              </span>
-              
-              <div className="space-y-3.5 text-xs text-slate-500">
-                <div className="flex items-start gap-2.5">
-                  <div className="w-4 h-4 rounded-full bg-brand-yellow/20 text-amber-700 flex items-center justify-center font-black text-[10px] mt-0.5 select-none shrink-0 border border-brand-yellow/30">1</div>
-                  <div className="leading-tight flex-1" style={{ textAlign: 'left' }}>
-                    <p className="text-slate-600 font-medium">Click the button <strong className="text-slate-800 font-semibold">Recommend a pro</strong> on the home page.</p>
-                    <div className="mt-3 flex items-center justify-start">
-                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-brand-yellow text-brand-navy rounded-xl font-bold text-[10px] shadow-sm select-none">
-                        <UserPlus className="w-3.5 h-3.5 text-brand-navy shrink-0" />
-                        <span>Recommend a pro</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-2.5">
-                  <div className="w-4 h-4 rounded-full bg-brand-yellow/20 text-amber-700 flex items-center justify-center font-black text-[10px] mt-0.5 select-none shrink-0 border border-brand-yellow/30">2</div>
-                  <p className="leading-tight" style={{ textAlign: 'left' }}>
-                    <strong className="text-slate-700">Validation</strong>: Our team validates directly with the pro to approve their profile on MyCityUnlocked.
-                  </p>
-                </div>
-                
-                <div className="flex items-start gap-2.5">
-                  <div className="w-4 h-4 rounded-full bg-brand-yellow/20 text-amber-700 flex items-center justify-center font-black text-[10px] mt-0.5 select-none shrink-0 border border-brand-yellow/30">3</div>
-                  <p className="leading-tight" style={{ textAlign: 'left' }}><strong className="text-slate-700">Go Live</strong>: Profile instantly joins the live platform!</p>
-                </div>
+      {/* Why people love Unlocked Section (placed after Discover on Unlocked for tablet and desktop) */}
+      <div className="hidden md:block space-y-8 md:space-y-12 py-4">
+        <h3 className="font-semibold text-2xl font-display text-brand-navy flex items-center gap-2">
+          <Heart className="w-6 h-6 text-brand-blue" />
+          Why people love Unlocked
+        </h3>
+        
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 max-w-5xl mx-auto">
+          {[
+            {
+              title: "Community powered",
+              desc: "Real recommendations from real people like you.",
+              icon: <Users className="w-6 h-6 md:w-8 md:h-8 text-emerald-500" />,
+              bg: "bg-emerald-50/50",
+              className: ""
+            },
+            {
+              title: "Trust-based recommendations",
+              desc: "Reviewed by members.",
+              icon: <ShieldCheck className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />,
+              bg: "bg-blue-50/50",
+              className: ""
+            },
+            {
+              title: "Local first",
+              desc: "Focused on what matters in your city and neighborhood.",
+              icon: <MapPin className="w-6 h-6 md:w-8 md:h-8 text-amber-500" />,
+              bg: "bg-amber-50/50",
+              className: "col-span-2 justify-self-center w-[calc(50%-0.375rem)] md:col-span-1 md:w-full md:justify-self-stretch"
+            }
+          ].map((item, idx) => (
+            <div key={idx} className={`bg-white p-4 md:p-8 lg:p-10 rounded-3xl border border-slate-100 flex flex-col items-center text-center space-y-3 md:space-y-5 shadow-sm hover:shadow-md transition-shadow ${item.className}`}>
+              <div className={`w-12 h-12 md:w-16 md:h-16 rounded-full ${item.bg} flex items-center justify-center`}>
+                {item.icon}
               </div>
+              <h4 className="font-bold text-slate-900 text-xs md:text-base leading-tight">{item.title}</h4>
+              <p className="text-[10px] md:text-sm text-slate-500 leading-relaxed">{item.desc}</p>
             </div>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -15905,7 +15892,40 @@ function computeProSearchScore(pro: any, searchStr: string): number {
   // Debounce & In-flight request cancellation refs
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const categorySelectRef = useRef<HTMLSelectElement>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [isSearchTakingLonger, setIsSearchTakingLonger] = useState(false);
+
+  // Switch to category search escape hatch
+  const switchToCategorySearch = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+    setAiLoading(false);
+    setIsSearching(false);
+    setSearchProgress(0);
+    setIsSearchTakingLonger(false);
+    setAiError(null);
+    setAiResults(null);
+    setAiExactMatch(true);
+    setAiSummaryMessage(null);
+
+    // Smoothly scroll to and highlight category filter
+    if (categorySelectRef.current) {
+      categorySelectRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      categorySelectRef.current.focus();
+      categorySelectRef.current.classList.add('ring-4', 'ring-brand-blue/30', 'border-brand-blue');
+      setTimeout(() => {
+        categorySelectRef.current?.classList.remove('ring-4', 'ring-brand-blue/30', 'border-brand-blue');
+      }, 2500);
+    }
+  };
 
   // Debounced input change handler: provides smooth real-time catalog search when Jane AI is paused
   const handleSearchChange = (val: string) => {
@@ -15916,6 +15936,11 @@ function computeProSearchScore(pro: any, searchStr: string): number {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+    setIsSearchTakingLonger(false);
 
     if (val.trim() === '') {
       setIsTyping(false);
@@ -15954,6 +15979,9 @@ function computeProSearchScore(pro: any, searchStr: string): number {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -15984,6 +16012,11 @@ function computeProSearchScore(pro: any, searchStr: string): number {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+      setIsSearchTakingLonger(false);
       setAiResults(null);
       setAiExactMatch(true);
       setAiSummaryMessage(null);
@@ -15999,6 +16032,7 @@ function computeProSearchScore(pro: any, searchStr: string): number {
       setAiLoading(false);
       setIsSearching(false);
       setAiError(null);
+      setIsSearchTakingLonger(false);
       setAiQuery(trimmed);
       setDeferredSearch(trimmed);
       setSelectedCategory('All');
@@ -16026,6 +16060,10 @@ function computeProSearchScore(pro: any, searchStr: string): number {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -16035,10 +16073,27 @@ function computeProSearchScore(pro: any, searchStr: string): number {
     setAiLoading(true);
     setSearchProgress(5);
     setAiError(null);
+    setIsSearchTakingLonger(false);
     setAiQuery(trimmed);
     setDeferredSearch(trimmed);
     // Ensure all disciplines matched by Jane (physio, osteo, doctor, etc.) can be displayed
     setSelectedCategory('All');
+
+    // Warning timer if search takes more than 4.5s
+    searchTimeoutRef.current = setTimeout(() => {
+      setIsSearchTakingLonger(true);
+    }, 4500);
+
+    // Hard timeout if search appears blocked after 10.5 seconds
+    const hardTimeoutId = setTimeout(() => {
+      if (controller && !controller.signal.aborted) {
+        controller.abort();
+        setAiLoading(false);
+        setIsSearching(false);
+        setIsSearchTakingLonger(false);
+        setAiError("Jane search appears to be blocked or is taking too long. You can switch to search by category or try again later.");
+      }
+    }, 10500);
 
     // Create a compact payload to avoid sending large images/reviews over the wire and blowing Gemini token limits
     // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
@@ -16062,6 +16117,13 @@ function computeProSearchScore(pro: any, searchStr: string): number {
         body: JSON.stringify({ query: trimmed, professionals: compactPros }),
         signal: controller.signal,
       });
+
+      clearTimeout(hardTimeoutId);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+      setIsSearchTakingLonger(false);
 
       if (!response.ok) {
         if (response.status === 429) {
@@ -16159,8 +16221,15 @@ function computeProSearchScore(pro: any, searchStr: string): number {
         currentUser?.id
       ).catch(err => console.warn("Failed to background-log Jane pro search:", err));
     } catch (err: any) {
+      clearTimeout(hardTimeoutId);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+      setIsSearchTakingLonger(false);
+
       if (err?.name === 'AbortError' || controller.signal.aborted) {
-        // Request was aborted cleanly by user typing or newer query
+        // If aborted by hard timeout, aiError was already set above
         return;
       }
       console.error("[Search] AI matching error:", err);
@@ -16178,7 +16247,7 @@ function computeProSearchScore(pro: any, searchStr: string): number {
       ) {
         setAiError("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
       } else {
-        setAiError(err.message || "Connection error with the AI service.");
+        setAiError("Jane search appears to be blocked or is temporarily unavailable. You can switch to search by category or try again later.");
       }
       // Fallback: clear AI results
       setAiResults(null);
@@ -16188,6 +16257,7 @@ function computeProSearchScore(pro: any, searchStr: string): number {
       if (!controller.signal.aborted) {
         setAiLoading(false);
         setIsSearching(false);
+        setIsSearchTakingLonger(false);
       }
     }
   };
@@ -16663,11 +16733,61 @@ function computeProSearchScore(pro: any, searchStr: string): number {
               </div>
             </div>
 
-            {/* AI Error banner */}
+            {/* AI Error / Blocked search banner */}
             {aiError && (
-              <div className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 flex items-center gap-3 text-sm">
-                <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                <span>{aiError}</span>
+              <div className="p-4 sm:p-5 bg-amber-50/95 border-2 border-amber-200/90 rounded-2xl sm:rounded-3xl shadow-sm text-left space-y-3.5 animate-in fade-in duration-200">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                    <AlertCircle className="w-5 h-5 text-amber-700" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-bold text-slate-900 leading-snug">
+                      Jane search appears to be blocked or delayed
+                    </h4>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                      {aiError}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAiError(null)}
+                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-amber-100/60 rounded-lg transition-colors cursor-pointer"
+                    title="Dismiss"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-amber-200/60">
+                  <button
+                    type="button"
+                    onClick={switchToCategorySearch}
+                    className="px-4 py-2.5 bg-brand-blue hover:bg-[#0958d9] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm cursor-pointer active:scale-95"
+                  >
+                    <Filter className="w-3.5 h-3.5" />
+                    <span>Switch to category search</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSearchSubmit()}
+                    className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Try again</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiError(null);
+                      setAiLoading(false);
+                      setIsSearching(false);
+                      setSearchProgress(0);
+                    }}
+                    className="px-3 py-2 text-slate-500 hover:text-slate-700 text-xs font-medium cursor-pointer"
+                  >
+                    Try again later
+                  </button>
+                </div>
               </div>
             )}
 
@@ -16675,15 +16795,37 @@ function computeProSearchScore(pro: any, searchStr: string): number {
             <SmartSearchProgressBar
               isLoading={aiLoading}
               query={search || aiQuery}
+              isTakingLonger={isSearchTakingLonger}
+              onSwitchToCategory={switchToCategorySearch}
+              onRetryLater={() => {
+                if (abortControllerRef.current) {
+                  abortControllerRef.current.abort();
+                  abortControllerRef.current = null;
+                }
+                if (searchTimeoutRef.current) {
+                  clearTimeout(searchTimeoutRef.current);
+                  searchTimeoutRef.current = null;
+                }
+                setAiLoading(false);
+                setIsSearching(false);
+                setSearchProgress(0);
+                setIsSearchTakingLonger(false);
+                setAiError(null);
+              }}
               onProgressUpdate={(p) => setSearchProgress(p)}
               onCancel={() => {
                 if (abortControllerRef.current) {
                   abortControllerRef.current.abort();
                   abortControllerRef.current = null;
                 }
+                if (searchTimeoutRef.current) {
+                  clearTimeout(searchTimeoutRef.current);
+                  searchTimeoutRef.current = null;
+                }
                 setAiLoading(false);
                 setIsSearching(false);
                 setSearchProgress(0);
+                setIsSearchTakingLonger(false);
               }}
             />
 
@@ -16699,6 +16841,8 @@ function computeProSearchScore(pro: any, searchStr: string): number {
                   </label>
                   <div className="relative">
                     <select
+                      ref={categorySelectRef}
+                      id="category-filter-select"
                       value={selectedCategory}
                       onChange={(e) => {
                         const val = e.target.value;
