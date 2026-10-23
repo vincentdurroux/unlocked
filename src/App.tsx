@@ -4743,24 +4743,18 @@ export default function App() {
               </motion.div>
             </motion.div>
           )}
+        </AnimatePresence>
 
 
 
           {showAddPro && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-950/60 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
+            <div 
+              className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/15 backdrop-blur-2xs z-[100] overflow-y-auto overscroll-contain" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
               onClick={() => setShowAddPro(false)}
             >
               <div className="min-h-full flex items-center justify-center p-4 sm:p-6 my-auto">
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.96, y: 12 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.96, y: 12 }}
-                  transition={{ duration: 0.22, ease: "easeOut" }}
-                  className="bg-white w-full max-w-lg rounded-3xl overflow-hidden relative shadow-2xl shadow-slate-950/20 flex flex-col my-auto border border-slate-100"
+                <div 
+                  className="bg-white w-full max-w-lg rounded-3xl overflow-hidden relative shadow-2xl shadow-slate-950/15 flex flex-col my-auto border border-slate-100"
                   onClick={e => e.stopPropagation()}
                 >
                 {/* Modal Header */}
@@ -4991,12 +4985,12 @@ export default function App() {
                       </div>
                     </>
                   )}
+                  </div>
                 </div>
-              </motion.div>
+              </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+
 
         <AnimatePresence>
           {showAddAd && (
