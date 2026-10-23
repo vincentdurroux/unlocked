@@ -8,6 +8,7 @@ export interface Conversation {
   participant_2: string;
   last_message_at: string;
   is_blocked?: boolean;
+  is_archived?: boolean;
   otherUser?: {
     id: string;
     full_name?: string;
@@ -211,12 +212,14 @@ export const chatService = {
       
       const profileMap = new Map((profiles || []).map(p => [p.id, p]));
       
-      // 6. Match conversations with profiles
+      // 6. Match conversations with profiles and archive state
+      const archivedIds = new Set(this.getArchivedConversationIds(userId));
       return activeConversations.map(c => {
         const otherId = c.participant_1 === userId ? c.participant_2 : c.participant_1;
         const otherProfile = profileMap.get(otherId);
         return {
           ...c,
+          is_archived: archivedIds.has(c.id),
           otherUser: otherProfile || { id: otherId, full_name: 'Unknown Member', email: '' }
         };
       }) as Conversation[];
@@ -826,6 +829,60 @@ export const chatService = {
     }
 
     return null;
+  },
+
+  // --- DISCUSSION ARCHIVING HELPERS ---
+  getArchivedConversationIds(userId: string): string[] {
+    if (!userId) return [];
+    try {
+      const stored = localStorage.getItem(`chat_archived_conversations_${userId}`);
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.warn('Error reading archived conversation IDs:', e);
+      return [];
+    }
+  },
+
+  archiveConversation(userId: string, conversationId: string): boolean {
+    if (!userId || !conversationId) return false;
+    try {
+      const current = this.getArchivedConversationIds(userId);
+      if (!current.includes(conversationId)) {
+        const updated = [...current, conversationId];
+        localStorage.setItem(`chat_archived_conversations_${userId}`, JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('chat_archive_changed', { 
+          detail: { userId, conversationId, action: 'archive' } 
+        }));
+      }
+      return true;
+    } catch (e) {
+      console.error('Error archiving conversation:', e);
+      return false;
+    }
+  },
+
+  unarchiveConversation(userId: string, conversationId: string): boolean {
+    if (!userId || !conversationId) return false;
+    try {
+      const current = this.getArchivedConversationIds(userId);
+      const updated = current.filter(id => id !== conversationId);
+      localStorage.setItem(`chat_archived_conversations_${userId}`, JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('chat_archive_changed', { 
+        detail: { userId, conversationId, action: 'unarchive' } 
+      }));
+      return true;
+    } catch (e) {
+      console.error('Error unarchiving conversation:', e);
+      return false;
+    }
+  },
+
+  isConversationArchived(userId: string, conversationId: string): boolean {
+    if (!userId || !conversationId) return false;
+    const list = this.getArchivedConversationIds(userId);
+    return list.includes(conversationId);
   }
 };
 
