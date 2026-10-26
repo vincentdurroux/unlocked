@@ -1,3 +1,5 @@
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+
 export interface AppPartner {
   id: string;
   business_name: string;
@@ -25,6 +27,7 @@ export interface AppPartner {
   is_active: boolean;
   featured_order?: number;
   updated_at?: string;
+  highlight_mode?: PartnerHighlightMode;
 }
 
 export type PartnerHighlightMode = 'partner' | 'pro' | 'both';
@@ -134,17 +137,79 @@ export const partnerService = {
         return savedMode as PartnerHighlightMode;
       }
     } catch (_) {}
-    return 'partner';
+    return 'pro'; // Default to 'pro' so standard "Meet a local pro" is shown by default
   },
 
   setHighlightMode(mode: PartnerHighlightMode): PartnerHighlightMode {
     try {
       localStorage.setItem(STORAGE_KEY_MODE, mode);
       this.notifyUpdate();
+      this.persistModeToSupabase(mode);
     } catch (e) {
       console.error('Failed to set highlight mode:', e);
     }
     return mode;
+  },
+
+  async persistModeToSupabase(mode: PartnerHighlightMode) {
+    if (!isSupabaseConfigured) return;
+    try {
+      await supabase.from('app_settings').upsert({
+        key: 'partner_highlight_mode',
+        value: mode,
+        updated_at: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Non-fatal: Unable to sync partner highlight mode to Supabase app_settings:', err);
+    }
+  },
+
+  async persistPartnersToSupabase(partners: AppPartner[]) {
+    if (!isSupabaseConfigured) return;
+    try {
+      await supabase.from('app_settings').upsert({
+        key: 'partner_list',
+        value: JSON.stringify(partners),
+        updated_at: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Non-fatal: Unable to sync partners list to Supabase app_settings:', err);
+    }
+  },
+
+  async syncFromSupabase(): Promise<{ mode: PartnerHighlightMode; partners: AppPartner[] }> {
+    if (!isSupabaseConfigured) {
+      return { mode: this.getHighlightMode(), partners: this.getPartners() };
+    }
+    try {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('*')
+        .in('key', ['partner_highlight_mode', 'partner_list']);
+
+      if (!error && data && data.length > 0) {
+        const modeSetting = data.find(row => row.key === 'partner_highlight_mode');
+        if (modeSetting && modeSetting.value && ['partner', 'pro', 'both'].includes(modeSetting.value)) {
+          localStorage.setItem(STORAGE_KEY_MODE, modeSetting.value);
+        }
+
+        const partnersSetting = data.find(row => row.key === 'partner_list');
+        if (partnersSetting && partnersSetting.value) {
+          try {
+            const parsedPartners = JSON.parse(partnersSetting.value);
+            if (Array.isArray(parsedPartners) && parsedPartners.length > 0) {
+              localStorage.setItem(STORAGE_KEY_PARTNERS, JSON.stringify(parsedPartners));
+            }
+          } catch (_) {}
+        }
+
+        this.notifyUpdate();
+      }
+    } catch (err) {
+      console.warn('Non-fatal error syncing partner settings from Supabase:', err);
+    }
+
+    return { mode: this.getHighlightMode(), partners: this.getPartners() };
   },
 
   savePartner(partnerData: Partial<AppPartner>): AppPartner[] {
@@ -185,6 +250,7 @@ export const partnerService = {
     try {
       localStorage.setItem(STORAGE_KEY_PARTNERS, JSON.stringify(updatedList));
       this.notifyUpdate();
+      this.persistPartnersToSupabase(updatedList);
     } catch (e) {
       console.error('Failed to save partner:', e);
     }
@@ -196,6 +262,7 @@ export const partnerService = {
     try {
       localStorage.setItem(STORAGE_KEY_PARTNERS, JSON.stringify(list));
       this.notifyUpdate();
+      this.persistPartnersToSupabase(list);
     } catch (e) {
       console.error('Failed to delete partner:', e);
     }
@@ -212,6 +279,7 @@ export const partnerService = {
     try {
       localStorage.setItem(STORAGE_KEY_PARTNERS, JSON.stringify(list));
       this.notifyUpdate();
+      this.persistPartnersToSupabase(list);
     } catch (e) {
       console.error('Failed to toggle partner:', e);
     }
@@ -221,8 +289,10 @@ export const partnerService = {
   resetToDefaultMocks(): AppPartner[] {
     try {
       localStorage.setItem(STORAGE_KEY_PARTNERS, JSON.stringify(DEFAULT_MOCK_PARTNERS));
-      localStorage.setItem(STORAGE_KEY_MODE, 'partner');
+      localStorage.setItem(STORAGE_KEY_MODE, 'pro');
       this.notifyUpdate();
+      this.persistPartnersToSupabase(DEFAULT_MOCK_PARTNERS);
+      this.persistModeToSupabase('pro');
     } catch (e) {
       console.error('Failed to reset partners:', e);
     }
@@ -253,3 +323,4 @@ export const partnerService = {
     return this.getPartnerHighlight();
   }
 };
+

@@ -1913,6 +1913,10 @@ export default function App() {
       }
     };
     window.addEventListener('mycity_partner_highlight_updated', handlePartnerUpdate);
+    partnerService.syncFromSupabase().then(({ mode, partners }) => {
+      if (mode) setPartnerMode(mode);
+      if (partners) setAllPartners(partners);
+    }).catch(() => {});
     return () => window.removeEventListener('mycity_partner_highlight_updated', handlePartnerUpdate);
   }, []);
 
