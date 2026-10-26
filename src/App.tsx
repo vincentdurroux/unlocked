@@ -644,8 +644,10 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
     );
   }
 
-  // Standard Markdown for articles and guides with full emoji and header support
-  const cleanText = children.replace(/\r\n/g, '\n');
+  // Standard Markdown for articles and guides with full emoji, iframe/map embed and header support
+  const cleanText = children.replace(/\r\n/g, '\n').replace(/<iframe[\s\S]*?<\/iframe>/gi, (match) => {
+    return match.replace(/\n\s*/g, ' ');
+  });
   const lines = cleanText.split('\n');
 
   return (
@@ -654,6 +656,30 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
         const trimmed = line.trim();
         if (!trimmed) {
           return <div key={idx} className="h-2" />;
+        }
+
+        // Handle <iframe> embeds (e.g. Google Maps, video embeds, etc.)
+        if (trimmed.toLowerCase().includes('<iframe')) {
+          const srcMatch = trimmed.match(/src=["']([^"']+)["']/i);
+          const heightMatch = trimmed.match(/height=["']([^"']+)["']/i);
+          if (srcMatch && srcMatch[1]) {
+            const iframeSrc = srcMatch[1];
+            const iframeHeight = heightMatch ? heightMatch[1] : "350";
+            return (
+              <div key={idx} className="my-5 w-full overflow-hidden rounded-2xl shadow-md border border-slate-200/90 bg-slate-50 relative">
+                <iframe
+                  src={iframeSrc}
+                  width="100%"
+                  height={iframeHeight}
+                  style={{ border: 0, borderRadius: '16px' }}
+                  allowFullScreen
+                  loading="lazy"
+                  className="w-full rounded-2xl border-0 min-h-[320px] sm:min-h-[350px]"
+                  title="Interactive Map & Embedded Content"
+                />
+              </div>
+            );
+          }
         }
 
         // Headers
@@ -689,7 +715,60 @@ function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPl
 
 function stripMarkdown(text?: string): string {
   if (!text) return '';
-  return text.replace(/(\*\*|__)/g, '');
+  return text.replace(/(\*{1,3}|_{1,3}|[`~])/g, '');
+}
+
+function parseFormattingParts(rawText: string, defaultBoldClass = "font-extrabold text-slate-950"): React.ReactNode[] {
+  if (!rawText) return [];
+
+  const formattingRegex = /(\*{3}|_{3})(.*?)\1|(\*{2}|_{2})(.*?)\3|(\*|_)(?!\s)(.*?)(?<!\s)\5|(`)(.*?)\7/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = formattingRegex.exec(rawText)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(rawText.substring(lastIndex, match.index));
+    }
+
+    if (match[1] && match[2]) {
+      // ***bold italic*** or ___bold italic___
+      parts.push(
+        <strong key={`bi-${match.index}`} className={defaultBoldClass}>
+          <em className="italic">{match[2]}</em>
+        </strong>
+      );
+    } else if (match[3] && match[4]) {
+      // **bold** or __bold__
+      parts.push(
+        <strong key={`b-${match.index}`} className={defaultBoldClass}>
+          {match[4]}
+        </strong>
+      );
+    } else if (match[5] && match[6]) {
+      // *italic* or _italic_
+      parts.push(
+        <em key={`i-${match.index}`} className="italic font-medium text-slate-900">
+          {match[6]}
+        </em>
+      );
+    } else if (match[7] && match[8]) {
+      // `code`
+      parts.push(
+        <code key={`c-${match.index}`} className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded text-xs font-mono border border-slate-200/80">
+          {match[8]}
+        </code>
+      );
+    }
+
+    lastIndex = formattingRegex.lastIndex;
+  }
+
+  if (lastIndex < rawText.length) {
+    parts.push(rawText.substring(lastIndex));
+  }
+
+  return parts;
 }
 
 function parseInlineMarkdown(text: string): React.ReactNode {
@@ -698,29 +777,9 @@ function parseInlineMarkdown(text: string): React.ReactNode {
   let lastIndex = 0;
   let match;
 
-  function parseBold(rawText: string): React.ReactNode[] {
-    const boldRegex = /(\*\*|__)(.*?)\1/g;
-    const boldParts = [];
-    let lastBoldIndex = 0;
-    let boldMatch;
-
-    while ((boldMatch = boldRegex.exec(rawText)) !== null) {
-      if (boldMatch.index > lastBoldIndex) {
-        boldParts.push(rawText.substring(lastBoldIndex, boldMatch.index));
-      }
-      boldParts.push(<strong key={`bold-${boldMatch.index}`} className="font-extrabold text-slate-950">{boldMatch[2]}</strong>);
-      lastBoldIndex = boldRegex.lastIndex;
-    }
-
-    if (lastBoldIndex < rawText.length) {
-      boldParts.push(rawText.substring(lastBoldIndex));
-    }
-    return boldParts;
-  }
-
   while ((match = linkRegex.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(...parseBold(text.substring(lastIndex, match.index)));
+      parts.push(...parseFormattingParts(text.substring(lastIndex, match.index)));
     }
 
     if (match[1] && match[2]) {
@@ -734,7 +793,7 @@ function parseInlineMarkdown(text: string): React.ReactNode {
           rel="noopener noreferrer" 
           className="text-orange-600 hover:text-orange-700 underline font-semibold transition-colors inline-flex items-center gap-0.5 mx-0.5"
         >
-          {linkText}
+          {parseFormattingParts(linkText)}
         </a>
       );
     } else if (match[3]) {
@@ -755,7 +814,7 @@ function parseInlineMarkdown(text: string): React.ReactNode {
   }
 
   if (lastIndex < text.length) {
-    parts.push(...parseBold(text.substring(lastIndex)));
+    parts.push(...parseFormattingParts(text.substring(lastIndex)));
   }
 
   return parts.length > 0 ? <>{parts}</> : text;
@@ -7404,13 +7463,16 @@ function AdminView({
 
     setUploadingArticleImg(true);
     try {
-      const path = `articles/${Date.now()}_${file.name}`;
-      const publicUrl = await storageService.uploadFile('images', path, file);
+      const compressed = await compressImage(file, 0.8);
+      const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+      const path = `articles/${Date.now()}_${cleanFileName}`;
+      const publicUrl = await storageService.uploadFile('images', path, compressed);
       setArticleFormImageUrl(publicUrl);
       setMsg({ type: 'success', text: 'Image uploaded successfully!' });
     } catch (err: any) {
       console.error('Error uploading article image:', err);
-      setMsg({ type: 'error', text: 'Failed to upload image. Please try again.' });
+      const errorText = err?.message || 'Failed to upload image. Please try again with a smaller file.';
+      setMsg({ type: 'error', text: errorText });
     } finally {
       setUploadingArticleImg(false);
     }
@@ -7964,8 +8026,6 @@ function AdminView({
   };
 
   const handleDeleteArticle = async (artId: string) => {
-    if (!window.confirm('Are you sure you want to delete this article?')) return;
-    
     setDeletingArticleId(artId);
     try {
       await guideService.deleteArticle(artId);
@@ -12060,7 +12120,7 @@ Wrap up your guide with a warm closing thought for newcomers settling into Valen
                                 <button
                                   type="button"
                                   disabled={deletingArticleId === art.id}
-                                  onClick={() => handleDeleteArticle(art.id)}
+                                  onClick={() => setShowConfirmAction(prev => ({ ...prev, [art.id]: 'delete' }))}
                                   className="flex-1 md:flex-none px-4 py-2.5 md:px-3.5 md:py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-rose-100/50 transition-all flex items-center justify-center gap-2 shrink-0 shadow-sm sm:shadow-none"
                                 >
                                   {deletingArticleId === art.id ? (

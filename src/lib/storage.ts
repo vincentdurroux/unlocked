@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { compressImage } from '../services/imageService';
 
 export const storageService = {
   /**
@@ -15,15 +16,51 @@ export const storageService = {
       .replace(/[^a-zA-Z0-9./_-]/g, '_')
       .replace(/_{2,}/g, '_');
 
-    const { data, error } = await supabase.storage
+    let fileToUpload = file;
+
+    // Automatically compress image if larger than 300KB
+    if (file.type && file.type.startsWith('image/') && !file.type.includes('svg') && file.size > 300 * 1024) {
+      try {
+        fileToUpload = await compressImage(file, 0.6);
+      } catch (e) {
+        console.warn('[storageService] Initial image compression skipped or failed:', e);
+      }
+    }
+
+    let { data, error } = await supabase.storage
       .from(bucket)
-      .upload(sanitizedPath, file, {
+      .upload(sanitizedPath, fileToUpload, {
         cacheControl: '3600',
         upsert: true
       });
 
+    // If upload fails with size limit error, attempt emergency high compression retry
+    if (error && (error.message?.includes('exceeded the maximum allowed size') || (error as any).statusCode === '413')) {
+      console.warn('[storageService] Exceeded max allowed size on Supabase. Attempting emergency heavy compression...');
+      try {
+        const ultraCompressed = await compressImage(file, 0.25);
+        const retryResult = await supabase.storage
+          .from(bucket)
+          .upload(sanitizedPath, ultraCompressed, {
+            cacheControl: '3600',
+            upsert: true
+          });
+        data = retryResult.data;
+        error = retryResult.error;
+      } catch (retryErr) {
+        console.error('[storageService] Retry after emergency compression failed:', retryErr);
+      }
+    }
+
     if (error) {
+      if (error.message?.includes('exceeded the maximum allowed size')) {
+        throw new Error('The image file size exceeds the storage bucket limit. Please select a smaller photo or lower resolution image.');
+      }
       throw error;
+    }
+
+    if (!data) {
+      throw new Error('Upload failed: no response data received from storage.');
     }
 
     // Get the public URL

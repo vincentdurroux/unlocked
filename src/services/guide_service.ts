@@ -484,22 +484,38 @@ export function sortCategories(categories: any[]): any[] {
 export const guideService = {
   getLocalGuides(): GuideCategory[] {
     const cached = localStorage.getItem('local_guide_categories');
+    let guides = MOCK_GUIDE_CATEGORIES_DATA;
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        // If cached guides still contain legacy placeholder dots '...', refresh with rich articles
         const hasDummyDots = Array.isArray(parsed) && parsed.some((c: any) => c.articles?.some((a: any) => !a.content || a.content === '...'));
         if (hasDummyDots) {
           localStorage.setItem('local_guide_categories', JSON.stringify(MOCK_GUIDE_CATEGORIES_DATA));
-          return sortCategories(MOCK_GUIDE_CATEGORIES_DATA);
+          guides = MOCK_GUIDE_CATEGORIES_DATA;
+        } else {
+          guides = parsed;
         }
-        return sortCategories(parsed);
       } catch (e) {
         console.error("Failed to parse cached guides", e);
       }
+    } else {
+      localStorage.setItem('local_guide_categories', JSON.stringify(MOCK_GUIDE_CATEGORIES_DATA));
     }
-    localStorage.setItem('local_guide_categories', JSON.stringify(MOCK_GUIDE_CATEGORIES_DATA));
-    return sortCategories(MOCK_GUIDE_CATEGORIES_DATA);
+
+    let deletedIds: string[] = [];
+    try {
+      const savedDeleted = localStorage.getItem('unlocked_deleted_article_ids');
+      if (savedDeleted) deletedIds = JSON.parse(savedDeleted);
+    } catch (_) {}
+
+    if (deletedIds.length > 0) {
+      guides = guides.map(cat => ({
+        ...cat,
+        articles: (cat.articles || []).filter(a => !deletedIds.includes(a.id))
+      }));
+    }
+
+    return sortCategories(guides);
   },
 
   saveLocalGuides(guides: GuideCategory[]) {
@@ -613,7 +629,18 @@ export const guideService = {
         };
       });
 
-      return sortCategories(enrichedCategories);
+      let deletedIds: string[] = [];
+      try {
+        const savedDeleted = localStorage.getItem('unlocked_deleted_article_ids');
+        if (savedDeleted) deletedIds = JSON.parse(savedDeleted);
+      } catch (_) {}
+
+      const finalCategories = enrichedCategories.map(cat => ({
+        ...cat,
+        articles: (cat.articles || []).filter(a => !deletedIds.includes(a.id))
+      }));
+
+      return sortCategories(finalCategories);
     } catch (err) {
       console.error('Failed to get guides and categories from Supabase:', err);
       return this.getLocalGuides();
@@ -723,6 +750,17 @@ export const guideService = {
   },
 
   async deleteArticle(artId: string): Promise<void> {
+    // 0. Track deleted ID in localStorage to prevent re-fetching
+    let deletedIds: string[] = [];
+    try {
+      const savedDeleted = localStorage.getItem('unlocked_deleted_article_ids');
+      if (savedDeleted) deletedIds = JSON.parse(savedDeleted);
+    } catch (_) {}
+    if (!deletedIds.includes(artId)) {
+      deletedIds.push(artId);
+      localStorage.setItem('unlocked_deleted_article_ids', JSON.stringify(deletedIds));
+    }
+
     // 1. Delete from local storage
     const guides = this.getLocalGuides();
     for (const cat of guides) {
@@ -736,13 +774,16 @@ export const guideService = {
 
     // 2. Delete from Supabase if configured
     if (isSupabaseConfigured) {
-      const { error } = await supabase
-        .from('guide_articles')
-        .delete()
-        .eq('id', artId);
-      if (error) {
-        console.error('Failed to delete article in Supabase:', error);
-        throw error;
+      try {
+        const { error } = await supabase
+          .from('guide_articles')
+          .delete()
+          .eq('id', artId);
+        if (error) {
+          console.warn('Failed to delete article in Supabase (continuing with local delete):', error);
+        }
+      } catch (err) {
+        console.warn('Exception deleting article in Supabase:', err);
       }
     }
   },

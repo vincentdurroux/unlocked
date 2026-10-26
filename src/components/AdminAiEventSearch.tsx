@@ -334,11 +334,36 @@ export function getCategoryWithEmoji(cat: string) {
 export function renderFormattedContent(text: string, defaultBoldClass = "font-extrabold text-slate-950") {
   if (!text) return null;
 
-  const lines = text.split('\n');
+  const normalizedText = text.replace(/\r\n/g, '\n').replace(/<iframe[\s\S]*?<\/iframe>/gi, (match) => {
+    return match.replace(/\n\s*/g, ' ');
+  });
+  const lines = normalizedText.split('\n');
   return lines.map((line, lineIdx) => {
     let cleanLine = line.trim();
     if (!cleanLine) {
       return <div key={lineIdx} className="h-1.5" />;
+    }
+
+    // Handle <iframe> embeds (Google Maps, videos, etc.)
+    if (cleanLine.toLowerCase().includes('<iframe')) {
+      const srcMatch = cleanLine.match(/src=["']([^"']+)["']/i);
+      const heightMatch = cleanLine.match(/height=["']([^"']+)["']/i);
+      if (srcMatch && srcMatch[1]) {
+        return (
+          <div key={lineIdx} className="my-4 w-full overflow-hidden rounded-2xl shadow-sm border border-slate-200 bg-slate-50">
+            <iframe
+              src={srcMatch[1]}
+              width="100%"
+              height={heightMatch ? heightMatch[1] : "350"}
+              style={{ border: 0, borderRadius: '16px' }}
+              allowFullScreen
+              loading="lazy"
+              className="w-full rounded-2xl border-0 min-h-[300px]"
+              title="Embedded Map & Content"
+            />
+          </div>
+        );
+      }
     }
 
     // Handle header lines (### Title, ## Title, # Title)
@@ -355,20 +380,42 @@ export function renderFormattedContent(text: string, defaultBoldClass = "font-ex
 
     function parseBoldParts(raw: string): React.ReactNode[] {
       const boldParts: React.ReactNode[] = [];
-      const boldRegex = /(\*\*|__)(.*?)\1/g;
+      const formattingRegex = /(\*{3}|_{3})(.*?)\1|(\*{2}|_{2})(.*?)\3|(\*|_)(?!\s)(.*?)(?<!\s)\5|(`)(.*?)\7/g;
       let bMatch;
       let lastBIndex = 0;
 
-      while ((bMatch = boldRegex.exec(raw)) !== null) {
+      while ((bMatch = formattingRegex.exec(raw)) !== null) {
         if (bMatch.index > lastBIndex) {
           boldParts.push(raw.substring(lastBIndex, bMatch.index));
         }
-        boldParts.push(
-          <strong key={`b-${lineIdx}-${bMatch.index}`} className={defaultBoldClass}>
-            {bMatch[2]}
-          </strong>
-        );
-        lastBIndex = boldRegex.lastIndex;
+
+        if (bMatch[1] && bMatch[2]) {
+          boldParts.push(
+            <strong key={`bi-${lineIdx}-${bMatch.index}`} className={defaultBoldClass}>
+              <em className="italic">{bMatch[2]}</em>
+            </strong>
+          );
+        } else if (bMatch[3] && bMatch[4]) {
+          boldParts.push(
+            <strong key={`b-${lineIdx}-${bMatch.index}`} className={defaultBoldClass}>
+              {bMatch[4]}
+            </strong>
+          );
+        } else if (bMatch[5] && bMatch[6]) {
+          boldParts.push(
+            <em key={`i-${lineIdx}-${bMatch.index}`} className="italic font-medium text-slate-900">
+              {bMatch[6]}
+            </em>
+          );
+        } else if (bMatch[7] && bMatch[8]) {
+          boldParts.push(
+            <code key={`c-${lineIdx}-${bMatch.index}`} className="bg-slate-100 text-slate-800 px-1 py-0.5 rounded text-xs font-mono">
+              {bMatch[8]}
+            </code>
+          );
+        }
+
+        lastBIndex = formattingRegex.lastIndex;
       }
       if (lastBIndex < raw.length) {
         boldParts.push(raw.substring(lastBIndex));

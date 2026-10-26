@@ -443,9 +443,6 @@ export function AdminEventsManager({
 
   // Handle Delete
   const handleDeleteEvent = async (event: AdminEventItem) => {
-    if (!window.confirm(`Are you sure you want to delete "${event.title}"?`)) {
-      return;
-    }
     setDeletingId(event.id);
     try {
       await eventService.deleteEvent(event.id, event.title);
@@ -463,9 +460,6 @@ export function AdminEventsManager({
   // Handle Bulk Delete
   const handleBulkDelete = async () => {
     if (selectedEventIds.length === 0) return;
-    if (!window.confirm(`Are you sure you want to permanently delete ${selectedEventIds.length} selected events?`)) {
-      return;
-    }
     setIsBulkDeleting(true);
     try {
       for (const id of selectedEventIds) {
