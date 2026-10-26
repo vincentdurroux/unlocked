@@ -37,7 +37,9 @@ import {
   CheckSquare,
   Square,
   Cpu,
-  AlertTriangle
+  AlertTriangle,
+  Key,
+  Zap
 } from 'lucide-react';
 import { APIProvider, Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 import { eventService, isSameDay } from '../services/eventService';
@@ -532,10 +534,13 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
   const [expandedMapId, setExpandedMapId] = useState<string | null>(null);
   const [hideSavedInDb, setHideSavedInDb] = useState(false);
 
-  // Gemini model selection & quota resilience
+  // Gemini & Tavily model selection & quota resilience
   const [selectedGeminiModel, setSelectedGeminiModel] = useState<string>('auto');
   const [modelUsedInResults, setModelUsedInResults] = useState<string | null>(null);
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
+  const [tavilyConfigured, setTavilyConfigured] = useState<boolean | null>(null);
+  const [showTavilyInfoModal, setShowTavilyInfoModal] = useState(false);
+  const [searchEngineUsed, setSearchEngineUsed] = useState<string | null>(null);
 
   // Selective repository placement states
   const [repoStoredIds, setRepoStoredIds] = useState<Record<string, boolean>>({});
@@ -578,6 +583,14 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
   useEffect(() => {
     fetchPublishedEvents();
+    fetch('/api/search-config')
+      .then(res => res.json())
+      .then(data => {
+        if (typeof data?.tavily_configured === 'boolean') {
+          setTavilyConfigured(data.tavily_configured);
+        }
+      })
+      .catch(err => console.warn('Could not check search config:', err));
   }, []);
 
   const handleDeletePublished = async (eventOrId: any, titleParam?: string) => {
@@ -861,20 +874,33 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
     if (modelOverride) setSelectedGeminiModel(modelOverride);
     if (expatOverride !== undefined) setIsExpatFocus(expatOverride);
 
+    const isTavilySearch = targetModel === 'tavily';
     setIsSearching(true);
     setErrorMsg(null);
     setSummary(null);
     setFallbackNotice(null);
+    setSearchEngineUsed(null);
     const catLabel = cat !== 'All Categories' ? ` [Category: ${cat}]` : '';
     const expatLabel = targetExpatFocus ? ' [🌍 Expat Focus]' : '';
-    setSearchStep(`🔍 Deep searching live web sources for ${m}${catLabel}${expatLabel} in Valencia...`);
+
+    if (isTavilySearch) {
+      setSearchStep(`🚀 Exploration web avancée en direct via Tavily Search API (${m}${catLabel})...`);
+    } else {
+      setSearchStep(`🔍 Deep searching live web sources for ${m}${catLabel}${expatLabel} in Valencia...`);
+    }
 
     const timer1 = setTimeout(() => {
-      setSearchStep("⚡ Querying Palau de les Arts, IVAM, Teatro Principal & official cultural portals...");
+      setSearchStep(isTavilySearch
+        ? "⚡ Analyse des billetteries, sources officielles et programmation de Valence..."
+        : "⚡ Querying Palau de les Arts, IVAM, Teatro Principal & official cultural portals..."
+      );
     }, 1600);
 
     const timer2 = setTimeout(() => {
-      setSearchStep("✨ Verifying zero-hallucination web grounding & cross-checking database...");
+      setSearchStep(isTavilySearch
+        ? "✨ Extraction et structuration zéro-hallucination avec Gemini..."
+        : "✨ Verifying zero-hallucination web grounding & cross-checking database..."
+      );
     }, 3500);
 
     try {
@@ -912,7 +938,8 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
           expatFocus: targetExpatFocus,
           location: "Valencia, Spain and surrounding Valencian Community",
           existingTitles,
-          preferredModel: targetModel
+          preferredModel: targetModel,
+          searchEngine: targetModel === 'tavily' ? 'tavily' : 'auto'
         })
       });
 
@@ -930,6 +957,9 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
       // Record model used and fallback status
       if (data.model_used) {
         setModelUsedInResults(data.model_used);
+      }
+      if (data.search_engine) {
+        setSearchEngineUsed(data.search_engine);
       }
       if (data.fallback_triggered && data.fallback_reason) {
         setFallbackNotice(data.fallback_reason);
@@ -1352,14 +1382,14 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                   </button>
                 </div>
 
-                {/* Gemini Model Selection, Expat Community Focus & Quota Protection */}
+                {/* Gemini & Tavily Model Selection, Expat Community Focus & Quota Protection */}
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs">
                   <div className="flex flex-wrap items-center gap-3">
                     {/* Model selector */}
                     <div className="flex items-center gap-2">
                       <span className="text-slate-300 font-semibold flex items-center gap-1.5">
                         <Cpu className="w-3.5 h-3.5 text-sky-400" />
-                        Modèle IA :
+                        Moteur / IA :
                       </span>
                       <div className="relative">
                         <select
@@ -1368,7 +1398,10 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                           className="pl-3 pr-7 py-1.5 bg-white/10 hover:bg-white/15 focus:bg-white/20 text-white rounded-xl border border-white/15 focus:border-brand-blue focus:outline-none transition-all text-xs font-bold appearance-none cursor-pointer"
                         >
                           <option value="auto" className="bg-slate-900 text-white font-medium">
-                            ⚡ Auto-Failover (Multi-modèles résilient + Basculement auto si quota épuisé)
+                            ⚡ Auto-Failover ({tavilyConfigured ? 'Tavily Search en direct +' : ''} Multi-modèles résilient)
+                          </option>
+                          <option value="tavily" className="bg-slate-900 text-white font-medium">
+                            🚀 Tavily AI Deep Search (Recherche web avancée en direct)
                           </option>
                           <option value="gemini-2.5-flash-lite" className="bg-slate-900 text-white font-medium">
                             Gemini 2.5 Flash-Lite (Google Search Grounding illimité Free Tier)
@@ -1387,7 +1420,21 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                       </div>
                     </div>
 
-
+                    {/* Tavily API Key status button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowTavilyInfoModal(true)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-xs cursor-pointer ${
+                        tavilyConfigured
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30"
+                          : "bg-indigo-500/20 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/30"
+                      }`}
+                      title="Configuration et statut de la clé Tavily API"
+                    >
+                      <span className={`w-2 h-2 rounded-full ${tavilyConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-indigo-400'}`} />
+                      <span>{tavilyConfigured ? "🟢 Tavily API Connecté" : "⚡ Activer Tavily API"}</span>
+                      <Info className="w-3.5 h-3.5 text-slate-300 ml-0.5 opacity-80" />
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-1.5 text-[11px] text-emerald-300 font-medium">
@@ -1494,6 +1541,12 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                         <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1 shadow-sm">
                           <Cpu className="w-3 h-3 text-brand-blue" />
                           <span>{modelUsedInResults}</span>
+                        </span>
+                      )}
+                      {(searchEngineUsed === 'tavily' || modelUsedInResults?.toLowerCase().includes('tavily')) && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1 shadow-sm">
+                          <Globe className="w-3 h-3 text-indigo-600" />
+                          <span>🚀 Tavily Live Web</span>
                         </span>
                       )}
                     </h3>
@@ -1722,17 +1775,24 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                               ))}
                             </div>
 
-                            <div className="absolute bottom-4 left-4 bg-slate-900/85 backdrop-blur border border-white/20 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-lg">
-                              {isInRepo ? (
-                                <>
-                                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                                  <span className="text-emerald-300">In Repository</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Clock className="w-3.5 h-3.5 text-amber-400" />
-                                  <span className="text-amber-200">Pending Choice</span>
-                                </>
+                            <div className="absolute bottom-4 left-4 flex items-center gap-1.5 flex-wrap">
+                              <div className="bg-slate-900/85 backdrop-blur border border-white/20 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-lg">
+                                {isInRepo ? (
+                                  <>
+                                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span className="text-emerald-300">In Repository</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                                    <span className="text-amber-200">Pending Choice</span>
+                                  </>
+                                )}
+                              </div>
+                              {(searchEngineUsed === 'tavily' || modelUsedInResults?.toLowerCase().includes('tavily')) && (
+                                <div className="bg-indigo-950/85 backdrop-blur border border-indigo-400/40 text-indigo-200 px-2.5 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1 shadow-lg">
+                                  <span>🚀 Tavily Live Web</span>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -2789,6 +2849,96 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                 >
                   <Check className="w-4 h-4" />
                   <span>Save & Publish to Catalog</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* TAVILY API CONFIGURATION & INFO MODAL */}
+      <AnimatePresence>
+        {showTavilyInfoModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-[28px] max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 relative overflow-hidden"
+            >
+              <button
+                type="button"
+                onClick={() => setShowTavilyInfoModal(false)}
+                className="absolute top-5 right-5 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-sky-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+                  <Globe className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-bold font-display text-slate-900">
+                      Tavily Search API pour les Événements
+                    </h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                      tavilyConfigured
+                        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                        : "bg-amber-100 text-amber-800 border-amber-300"
+                    }`}>
+                      {tavilyConfigured ? "🟢 Connecté" : "⚠️ Non configuré"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Moteur de recherche temps réel spécialement conçu pour les agents IA
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4 text-xs sm:text-sm text-slate-700">
+                <div className="bg-indigo-50/70 p-4 rounded-2xl border border-indigo-100 space-y-2">
+                  <h4 className="font-bold text-indigo-950 flex items-center gap-1.5 text-xs uppercase tracking-wider">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                    Pourquoi connecter Tavily ?
+                  </h4>
+                  <p className="text-xs leading-relaxed text-indigo-900/90">
+                    Tavily explore le web en direct pour extraire les programmations culturelles, billets, tarifs et adresses officielles sans dépendre des limites de quotas Google Search Grounding.
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5">
+                  <h4 className="font-bold text-slate-900 flex items-center gap-1.5 text-xs uppercase tracking-wider">
+                    <Key className="w-3.5 h-3.5 text-slate-700" />
+                    Comment configurer la clé d'API Tavily :
+                  </h4>
+                  <ol className="list-decimal pl-4 space-y-1.5 text-xs text-slate-600">
+                    <li>Obtenez gratuitement une clé d'API sur <a href="https://tavily.com" target="_blank" rel="noopener noreferrer" className="font-bold text-brand-blue hover:underline inline-flex items-center gap-0.5">tavily.com <ExternalLink className="w-2.5 h-2.5" /></a> (1 000 recherches offertes chaque mois).</li>
+                    <li>Ajoutez votre clé dans les variables d'environnement de votre serveur :
+                      <pre className="mt-1.5 p-2.5 rounded-xl bg-slate-900 text-emerald-300 font-mono text-[11px] overflow-x-auto select-all">
+                        TAVILY_API_KEY=tvly-xxxxxxxxxxxxxxxxx
+                      </pre>
+                    </li>
+                    <li>La clé est chargée de manière sécurisée côté serveur (<code className="bg-slate-200 text-slate-800 px-1 py-0.5 rounded font-mono text-[11px]">process.env.TAVILY_API_KEY</code>) sans jamais être exposée dans le navigateur client.</li>
+                  </ol>
+                </div>
+
+                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs">
+                  <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p>
+                    <strong>Basculement automatique :</strong> Même sans clé Tavily, la recherche d'événements continue de fonctionner grâce à Gemini et Google Search Grounding.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowTavilyInfoModal(false)}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Fermer
                 </button>
               </div>
             </motion.div>

@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { Resend } from "resend";
 import dotenv from "dotenv";
+import { tavily } from "@tavily/core";
 
 dotenv.config();
 
@@ -237,6 +238,29 @@ async function startServer() {
   // Health check endpoint
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Lazily initialize Tavily client for live real-time web event search
+  let tavilyClient: any = null;
+  const getTavilyClient = () => {
+    const apiKey = process.env.TAVILY_API_KEY;
+    if (!apiKey || !apiKey.trim()) {
+      return null;
+    }
+    if (!tavilyClient) {
+      tavilyClient = tavily({ apiKey: apiKey.trim() });
+    }
+    return tavilyClient;
+  };
+
+  // Status check for search providers (Tavily & Gemini)
+  app.get("/api/search-config", (req, res) => {
+    const hasTavily = Boolean(process.env.TAVILY_API_KEY && process.env.TAVILY_API_KEY.trim());
+    const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim());
+    res.json({
+      tavily_configured: hasTavily,
+      gemini_configured: hasGemini
+    });
   });
 
   // Resend Email Sending Endpoint
@@ -784,7 +808,7 @@ CRITICAL ZERO-HALLUCINATION & FACTUALITY DIRECTIVES:
    - Museums & Exhibitions: IVAM, Bombas Gens, CAIXAFORUM Valencia, MuVIM, Centro del Carmen (CCCC), Museo de Bellas Artes
    - Fairs & Innovation: Feria Valencia, Veles e Vents, Roig Arena / Fonteta
    - Gastronomy, Outdoor & Expat Meetups: Jardines del Real / Viveros, Jardín del Turia, Mercado de Colón, Ruzafa & El Carmen galleries, international pubs, language cafés
-4. Aim to discover 8 to 12 top verified real events matching the user request for ${targetMonth}.
+4. EXHAUSTIVE DIVERSIFIED SEARCH REQUIREMENT (CRITICAL): Aim to discover 18 to 25 verified real events across ALL domains and categories (festivals, cultural exhibitions, museum shows at IVAM/Bombas Gens/Museo de Bellas Artes, local neighborhood events, sports tournaments/runs, concerts, theater, gastronomy fairs, expat meetups, and workshops) for ${targetMonth}. Do not restrict results to a single domain; ensure maximum diversity and volume across all categories.
 5. If no verified real event is found for a specific query, return an empty array [] in "events" and explain in "summary" in clear English.${exclusionList}
 
 TICKETING & PURCHASE URL DIRECTIVE (CRITICAL):
@@ -859,76 +883,157 @@ CRITICAL EMOJI & FORMATTING DIRECTIVE:
       let fallbackTriggered = false;
       let fallbackReason: string | null = null;
       let lastError: any = null;
+      let tavilyDirectSources: any[] = [];
+      let searchEngineUsed = "google-search-grounding";
 
-      for (let i = 0; i < candidateModels.length; i++) {
-        const currentModel = candidateModels[i];
+      // Check if Tavily Search is configured or requested
+      const hasTavilyKey = Boolean(process.env.TAVILY_API_KEY && process.env.TAVILY_API_KEY.trim());
+      const isTavilyRequested = preferredModel === "tavily" || req.body.searchEngine === "tavily";
+
+      // Helper function to run Tavily real-time event discovery across multi-site domain groups in Valencia & Valencian region
+      const executeTavilySearch = async () => {
+        const tvly = getTavilyClient();
+        if (!tvly) {
+          throw new Error("TAVILY_API_KEY is not configured.");
+        }
+        const expatKeywords = isExpatFocus ? "expats international meetup english community" : "";
+        const catKeywords = targetCategory ? `category ${targetCategory}` : "";
+        const baseSearchTerm = `agenda eventos valencia ${query} ${targetMonth} ${catKeywords} ${expatKeywords}`.trim();
+
+        // Comprehensive multi-site domain groups covering tourism, cultural venues, museums, ticketing & local magazines across Valencia region
+        const domainGroups = [
+          `site:visitvalencia.com OR site:comunitatvalenciana.com OR site:turisme.valencia.es OR site:cultural.valencia.es`,
+          `site:ivam.es OR site:palaudelamusica.com OR site:lesarts.com OR site:teatrolympia.com OR site:caixaforum.org OR site:larambleta.com OR site:teatroprincipalvalencia.com`,
+          `site:eventbrite.es OR site:valenciasecreta.com OR site:feverup.com OR site:lovevalencia.com OR site:lasprovincias.es OR site:levante-emv.com OR site:ticketmaster.es OR site:entradas.com`
+        ];
+
+        console.log(`[api/search-events] Executing multi-site parallel web searches via Tavily Search API across ${domainGroups.length} domain groups for Valencia & Valencian region...`);
+
+        const searchPromises = domainGroups.map(sitesFilter => {
+          const queryStr = `${baseSearchTerm} ${sitesFilter}`.trim();
+          return tvly.search(queryStr, {
+            searchDepth: "advanced",
+            maxResults: 25,
+            includeImages: true,
+            includeAnswer: true
+          }).catch(err => {
+            console.warn(`[api/search-events] Tavily group search warning:`, err?.message || err);
+            return { results: [], answer: "" };
+          });
+        });
+
+        const searchResponses = await Promise.all(searchPromises);
+        
+        // Collect and deduplicate results by URL
+        const seenUrls = new Set<string>();
+        const allTavilyResults: any[] = [];
+        let combinedAnswers = "";
+
+        searchResponses.forEach(res => {
+          if (res?.answer) {
+            combinedAnswers += res.answer + "\n";
+          }
+          if (Array.isArray(res?.results)) {
+            res.results.forEach((r: any) => {
+              if (r && r.url && !seenUrls.has(r.url)) {
+                seenUrls.add(r.url);
+                allTavilyResults.push(r);
+              }
+            });
+          }
+        });
+
+        console.log(`[api/search-events] Tavily collected a total of ${allTavilyResults.length} unique live web results across 18+ official Valencian sites.`);
+
+        if (allTavilyResults.length > 0) {
+          const formattedResults = allTavilyResults.map((r: any, idx: number) =>
+            `[Source ${idx + 1}] Title: ${r.title}\nURL: ${r.url}\nPublished Date: ${r.publishedDate || 'N/A'}\nSnippet / Content: ${r.content || ''}`
+          ).join("\n\n");
+
+          const promptWithTavily = `Here are VERIFIED, LIVE web search results retrieved from Tavily across 18+ official Valencia and Valencian Community websites for upcoming events in ${searchLocation} for "${targetMonth}" matching user query "${query}":
+
+${formattedResults}
+
+${combinedAnswers ? `Tavily Search Summary: ${combinedAnswers.trim()}\n\n` : ''}
+Based on these live web search results from multiple official Valencian sites, extract, structure, and deduplicate 18 to 25 verified upcoming events in Valencia according to the schema.
+Ensure each event contains:
+- Official title
+- Real start_date (standardized, e.g. "OCT 15", "NOV 02", or "YYYY-MM-DD") and end_date (null if single day)
+- Real start_time (e.g. "20:00")
+- Specific venue name and address in Valencia
+- Category ("Art", "Theater", "Music", "Culture", "Tech", "Gastronomy", "Community", "Sports", "Workshops")
+- Ticket pricing and official booking URL (from the Tavily search results)
+- Canonical 4-section markdown description (### ✨ What to expect, ### 🎯 Perfect for, ### 💡 Good to know, ### 🔗 More info)
+- Verified sources pointing directly to the Tavily result URLs where the event was found.`;
+
+          const extractionResp = await ai.models.generateContent({
+            model: "gemini-3.1-flash-lite",
+            contents: promptWithTavily,
+            config: {
+              systemInstruction: sysInstruction,
+              temperature: 0.1
+            }
+          });
+
+          if (extractionResp && extractionResp.text) {
+            response = extractionResp;
+            usedModel = "Tavily AI Multi-Site Search Engine (18+ Sites) + Gemini Structuring";
+            searchEngineUsed = "tavily";
+            tavilyDirectSources = allTavilyResults.map((r: any) => ({
+              title: r.title || "Tavily Verified Web Source",
+              url: r.url
+            }));
+            console.log("[api/search-events] Successfully extracted events from multi-site Tavily results!");
+          }
+        }
+      };
+
+      // 1. If Tavily is requested, execute Tavily exclusively. If auto mode, try Tavily if key is present.
+      if (isTavilyRequested) {
+        if (!hasTavilyKey) {
+          return res.status(400).json({ 
+            error: "La clé d'API Tavily (TAVILY_API_KEY) n'est pas configurée. Veuillez ajouter votre clé dans vos variables d'environnement pour utiliser la recherche exclusive Tavily." 
+          });
+        }
         try {
-          console.log(`[api/search-events] Attempting search with model: ${currentModel} (attempt ${i + 1}/${candidateModels.length})`);
+          await executeTavilySearch();
+          if (!response) {
+            return res.status(404).json({
+              error: "Tavily n'a retourné aucun résultat web pour cette recherche."
+            });
+          }
+        } catch (tavilyErr: any) {
+          console.error("[api/search-events] Tavily search error:", tavilyErr);
+          return res.status(500).json({
+            error: `Erreur Tavily API : ${tavilyErr?.message || 'Erreur inconnue'}`
+          });
+        }
+      } else if (preferredModel === "auto" && hasTavilyKey) {
+        try {
+          await executeTavilySearch();
+        } catch (tavilyErr: any) {
+          console.warn("[api/search-events] Tavily search failed, falling back to Gemini Search Grounding:", tavilyErr?.message || tavilyErr);
+          fallbackTriggered = true;
+          fallbackReason = `Recherche Tavily temporairement indisponible (${tavilyErr?.message || 'erreur'}). Basculement automatique sur Google Search Grounding.`;
+        }
+      }
+
+      // 2. If Tavily did not run or returned no events (in auto mode), try Gemini models with Google Search Grounding
+      if (!response && !isTavilyRequested) {
+        for (let i = 0; i < candidateModels.length; i++) {
+          const currentModel = candidateModels[i];
+          if (currentModel === "tavily") continue; // Skip tavily inside gemini models loop
+          try {
+            console.log(`[api/search-events] Attempting search with model: ${currentModel} (attempt ${i + 1}/${candidateModels.length})`);
           
-          const is25Model = currentModel.includes("2.5");
           const configObj: any = {
-            tools: [
-              { googleSearch: {} }
-            ],
             systemInstruction: sysInstruction,
-            temperature: 0.1
+            temperature: 0.2
           };
 
-          if (!is25Model) {
-            configObj.responseMimeType = "application/json";
-            configObj.responseSchema = {
-              type: Type.OBJECT,
-              properties: {
-                summary: { type: Type.STRING, description: "Detailed factual summary of the search results in English" },
-                events: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      title: { type: Type.STRING },
-                      start_date: { type: Type.STRING },
-                      end_date: { type: Type.STRING },
-                      start_time: { type: Type.STRING },
-                      end_time: { type: Type.STRING },
-                      location: { type: Type.STRING },
-                      category: { type: Type.STRING },
-                      image: { type: Type.STRING },
-                      is_free: { type: Type.BOOLEAN },
-                      price: { type: Type.STRING },
-                      ticket_url: { type: Type.STRING },
-                      description: { type: Type.STRING },
-                      coordinates: {
-                        type: Type.OBJECT,
-                        properties: {
-                          lat: { type: Type.NUMBER },
-                          lng: { type: Type.NUMBER }
-                        },
-                        required: ["lat", "lng"]
-                      },
-                      sources: {
-                        type: Type.ARRAY,
-                        items: {
-                          type: Type.OBJECT,
-                          properties: {
-                            title: { type: Type.STRING },
-                            url: { type: Type.STRING }
-                          },
-                          required: ["title", "url"]
-                        }
-                      },
-                      verified_real: { type: Type.BOOLEAN }
-                    },
-                    required: ["title", "start_date", "location", "category", "description"]
-                  }
-                }
-              },
-              required: ["events"]
-            };
-          }
 
-          const promptText = is25Model
-            ? `Perform a deep web search for REAL upcoming events in ${searchLocation} for target month/timeframe "${targetMonth}" matching request: "${query}". For every event, find the real dates, venue, ticket pricing, and official ticket booking URL. Return strictly a valid JSON object formatted as: {"summary": "...", "events": [{"title": "...", "start_date": "YYYY-MM-DD", "end_date": null, "start_time": "HH:MM", "location": "...", "category": "...", "description": "...", "ticket_url": "...", "price": "...", "is_free": false, "coordinates": {"lat": 39.4699, "lng": -0.3763}}]}. Output only the JSON object, with no conversational text.`
-            : `Perform a deep web search for REAL upcoming events in ${searchLocation} for target month/timeframe "${targetMonth}" matching request: "${query}". For every paid event, ensure you find and include the official ticket purchase URL and price details in the description and ticket_url. Return the most famous, popular, or relevant verified events.`;
+
+          const promptText = `Find and list 18 to 25 verified upcoming events, festivals, museum exhibitions, cultural shows, sports events, and local happenings in ${searchLocation} for "${targetMonth}" matching request: "${query}" across all domains and categories. Return strictly a valid JSON object formatted as: {"summary": "...", "events": [{"title": "...", "start_date": "YYYY-MM-DD", "end_date": null, "start_time": "HH:MM", "location": "...", "category": "...", "description": "...", "ticket_url": "...", "price": "...", "is_free": false, "coordinates": {"lat": 39.4699, "lng": -0.3763}}]}. Output only the JSON object, with no conversational text.`;
 
           response = await ai.models.generateContent({
             model: currentModel,
@@ -957,6 +1062,7 @@ CRITICAL EMOJI & FORMATTING DIRECTIVE:
           }
         }
       }
+    }
 
       // If all live web-grounded models fail due to search quotas, attempt AI knowledge search without search tool
       if (!response) {
@@ -1084,15 +1190,17 @@ CRITICAL EMOJI & FORMATTING DIRECTIVE:
       const parsed = extractJsonFromModelResponse(response.text || "{}");
       const rawEvents = Array.isArray(parsed.events) ? parsed.events : [];
 
-      // Extract search grounding metadata sources from Gemini response
+      // Extract search grounding metadata sources from Gemini or Tavily response
       const candidate = response.candidates?.[0];
       const groundingChunks = candidate?.groundingMetadata?.groundingChunks || [];
-      const defaultSources = groundingChunks
-        .filter((chunk: any) => chunk.web?.uri)
-        .map((chunk: any) => ({
-          title: chunk.web?.title || "Google Search Grounding Source",
-          url: chunk.web?.uri
-        }));
+      const defaultSources = (tavilyDirectSources && tavilyDirectSources.length > 0)
+        ? tavilyDirectSources
+        : groundingChunks
+            .filter((chunk: any) => chunk.web?.uri)
+            .map((chunk: any) => ({
+              title: chunk.web?.title || "Google Search Grounding Source",
+              url: chunk.web?.uri
+            }));
 
       const categoryFallbackImages: Record<string, string> = {
         Art: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&q=80&w=1000",
@@ -1138,7 +1246,7 @@ CRITICAL EMOJI & FORMATTING DIRECTIVE:
         desc = desc.replace(/^([ \t]*[-*•]\s*)([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]+\2)+/gmu, '$1$2');
         // 3. Remove duplicate emojis at line starts (e.g. "🎶 🎶 Jazz night")
         desc = desc.replace(/^([ \t]*)([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]+\2)+/gmu, '$1$2');
-        // 4. Clean decorative sparkle + emoji at start of bullets (e.g. "• ✨ 🎶" -> "• 🎶")
+        // 4. Clean decorative sparkle + emoji at start of bullets (e.g. "• ✨ 🎶" -> "• ������")
         desc = desc.replace(/^([ \t]*[-*•]\s*)✨\s+([\p{Extended_Pictographic}\u2600-\u27BF])/gmu, '$1$2');
         // 5. Clean header duplicate sparkles (e.g. "### ✨ ✨ What to expect" -> "### ✨ What to expect")
         desc = desc.replace(/^(#{1,6}\s*)✨\s+✨/gmu, '$1✨');
@@ -1204,6 +1312,7 @@ CRITICAL EMOJI & FORMATTING DIRECTIVE:
         events: formattedEvents,
         search_groundings: defaultSources,
         model_used: usedModel,
+        search_engine: searchEngineUsed,
         fallback_triggered: fallbackTriggered,
         fallback_reason: fallbackReason
       });

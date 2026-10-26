@@ -160,6 +160,10 @@ import {
   MarketplaceCardSkeletonGrid, 
   GuideCardSkeletonList 
 } from './components/CardSkeletons';
+import { partnerService, AppPartner } from './services/partnerService';
+import { PartnerHighlightCard } from './components/PartnerHighlightCard';
+import { ExpandedPartnerCard } from './components/ExpandedPartnerCard';
+import { PartnerAdminEditorModal } from './components/PartnerAdminEditorModal';
 
 export const PHONE_COUNTRY_CODES = [
   { code: '+34', flag: '🇪🇸', label: 'ES (+34)' },
@@ -1898,6 +1902,20 @@ export default function App() {
   const [favoriteProIds, setFavoriteProIds] = useState<string[]>([]);
   const [favoriteAdIds, setFavoriteAdIds] = useState<string[]>([]);
 
+  const [allPartners, setAllPartners] = useState<AppPartner[]>(() => partnerService.getPartners());
+  const [partnerMode, setPartnerMode] = useState<'partner' | 'pro' | 'both'>(() => partnerService.getHighlightMode());
+
+  useEffect(() => {
+    const handlePartnerUpdate = (e: any) => {
+      if (e.detail) {
+        if (e.detail.partners) setAllPartners(e.detail.partners);
+        if (e.detail.mode) setPartnerMode(e.detail.mode);
+      }
+    };
+    window.addEventListener('mycity_partner_highlight_updated', handlePartnerUpdate);
+    return () => window.removeEventListener('mycity_partner_highlight_updated', handlePartnerUpdate);
+  }, []);
+
   useEffect(() => {
     if (currentUser) {
       if (userProfile?.favorite_event_ids && Array.isArray(userProfile.favorite_event_ids)) {
@@ -2747,7 +2765,8 @@ export default function App() {
   useEffect(() => {
     // 0. Update Document Title
     if (typeof document !== 'undefined') {
-      document.title = unreadCount > 0 ? `(${unreadCount}) Unlocked` : 'Unlocked';
+      const defaultTitle = 'MyCityUnlocked - Local Professionals, Guides & Events';
+      document.title = (currentUser && unreadCount > 0) ? `(${unreadCount}) MyCityUnlocked` : defaultTitle;
     }
 
     // 1. Standard Web Badging API (iOS Safari 16.4+ standalone / PWA)
@@ -4495,6 +4514,8 @@ export default function App() {
                   onContactAdmin={handleContactAdmin}
                   favoriteProIds={favoriteProIds}
                   onToggleFavoritePro={toggleFavoritePro}
+                  allPartners={allPartners}
+                  partnerMode={partnerMode}
                 />
               </motion.div>
               <motion.div 
@@ -4680,6 +4701,10 @@ export default function App() {
                     onRefetchAnnouncements={fetchAnnouncementsFromDb}
                     discoveredEventTitle={discoveredEventTitle}
                     setDiscoveredEventTitle={setDiscoveredEventTitle}
+                    allPartners={allPartners}
+                    setAllPartners={setAllPartners}
+                    partnerMode={partnerMode}
+                    setPartnerMode={setPartnerMode}
                   />
                 </React.Suspense>
               )}
@@ -7245,7 +7270,11 @@ function AdminView({
   setGlobalAlert,
   onRefetchAnnouncements,
   discoveredEventTitle,
-  setDiscoveredEventTitle
+  setDiscoveredEventTitle,
+  allPartners: propAllPartners,
+  setAllPartners,
+  partnerMode: propPartnerMode,
+  setPartnerMode
 }: { 
   scrollToTop?: () => void, 
   onRefetchPros?: () => Promise<void>, 
@@ -7286,8 +7315,45 @@ function AdminView({
   setGlobalAlert: React.Dispatch<React.SetStateAction<any>>,
   onRefetchAnnouncements?: () => void,
   discoveredEventTitle?: string | null,
-  setDiscoveredEventTitle?: (title: string | null) => void
+  setDiscoveredEventTitle?: (title: string | null) => void,
+  allPartners?: AppPartner[],
+  setAllPartners?: React.Dispatch<React.SetStateAction<AppPartner[]>>,
+  partnerMode?: 'partner' | 'pro' | 'both',
+  setPartnerMode?: React.Dispatch<React.SetStateAction<'partner' | 'pro' | 'both'>>
 }) {
+  const [showPartnerModal, setShowPartnerModal] = useState(false);
+  const [adminPartners, setAdminPartners] = useState<AppPartner[]>(() => propAllPartners || partnerService.getPartners());
+  const [adminPartnerMode, setAdminPartnerMode] = useState<'partner' | 'pro' | 'both'>(() => propPartnerMode || partnerService.getHighlightMode());
+
+  useEffect(() => {
+    if (propAllPartners) setAdminPartners(propAllPartners);
+    if (propPartnerMode) setAdminPartnerMode(propPartnerMode);
+  }, [propAllPartners, propPartnerMode]);
+
+  const handleSavePartnersList = (updatedList: AppPartner[]) => {
+    setAdminPartners(updatedList);
+    if (setAllPartners) setAllPartners(updatedList);
+    const activeCount = updatedList.filter(p => p.is_active).length;
+    setMsg({
+      type: 'success',
+      text: `Saved ${updatedList.length} partners (${activeCount} active in carousel)!`
+    });
+  };
+
+  const handleSetPartnerDisplayMode = (mode: 'partner' | 'both' | 'pro') => {
+    partnerService.setHighlightMode(mode);
+    setAdminPartnerMode(mode);
+    if (setPartnerMode) setPartnerMode(mode);
+    setMsg({
+      type: 'success',
+      text: mode === 'partner'
+        ? 'Partner Only Carousel active on Discover!'
+        : mode === 'both'
+        ? 'Alternating (Pro + Partner Carousel) active!'
+        : 'Standard Meet a Local Pro active.'
+    });
+  };
+
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dashboardCategory, setDashboardCategory] = useState<'pros' | 'events' | 'testimonies' | 'reported_users' | 'highlights' | 'guides' | 'announcements' | 'analytics'>('pros');
@@ -10994,6 +11060,135 @@ function AdminView({
             <p className="text-xs text-slate-400 font-medium">Select what cards are displayed in the Discover section on the main landing page.</p>
           </div>
 
+          {/* Partner Highlight Manager Box */}
+          <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-white p-6 rounded-[32px] border border-emerald-200 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-emerald-100/80 pb-4">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 bg-emerald-500 text-white rounded-2xl shadow-xs">
+                  <Handshake className="w-5 h-5" />
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-slate-900 text-sm md:text-base font-display">
+                      Multi-Partner Carousel & Highlights
+                    </h4>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      {adminPartners.filter(p => p.is_active).length} Active Partners
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Highlight key app partners on the landing page in a multi-partner auto-rotating carousel, complete with logos, special offers, and direct contact options.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowPartnerModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>Manage Partners ({adminPartners.length})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Mode & Live Summary Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center">
+              
+              {/* Display Mode Selector */}
+              <div className="space-y-1.5 bg-white p-4 rounded-2xl border border-emerald-100 shadow-xs">
+                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                  Landing Page Display Mode:
+                </p>
+                <div className="grid grid-cols-1 gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSetPartnerDisplayMode('partner')}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                      adminPartnerMode === 'partner'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-slate-50 hover:bg-emerald-50 text-slate-700 border border-slate-150'
+                    }`}
+                  >
+                    <span>🤝 Partner Carousel Only (100%)</span>
+                    {adminPartnerMode === 'partner' && <Check className="w-3.5 h-3.5 shrink-0" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetPartnerDisplayMode('both')}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                      adminPartnerMode === 'both'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-slate-50 hover:bg-emerald-50 text-slate-700 border border-slate-150'
+                    }`}
+                  >
+                    <span>🔄 Alternating (Pros + Partners)</span>
+                    {adminPartnerMode === 'both' && <Check className="w-3.5 h-3.5 shrink-0" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetPartnerDisplayMode('pro')}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                      adminPartnerMode === 'pro'
+                        ? 'bg-slate-800 text-white shadow-xs'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-150'
+                    }`}
+                  >
+                    <span>⭐ Standard Meet a Local Pro</span>
+                    {adminPartnerMode === 'pro' && <Check className="w-3.5 h-3.5 shrink-0" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Partners Preview Grid */}
+              <div className="lg:col-span-2 bg-white p-4 rounded-2xl border border-emerald-100 shadow-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                    Carousel Partners Preview ({adminPartners.filter(p => p.is_active).length} Active):
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = partnerService.resetToDefaultMocks();
+                      setAdminPartners(updated);
+                      if (setAllPartners) setAllPartners(updated);
+                      setMsg({ type: 'success', text: 'Reset to 3 Valencia sample mockups!' });
+                    }}
+                    className="text-[10px] font-bold text-slate-500 hover:text-emerald-700 underline cursor-pointer"
+                  >
+                    Reset 3 Valencia Mocks
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                  {adminPartners.slice(0, 3).map((p) => (
+                    <div
+                      key={p.id}
+                      className={`p-2.5 rounded-xl border flex items-center gap-2.5 ${
+                        p.is_active
+                          ? 'bg-emerald-50/60 border-emerald-200'
+                          : 'bg-slate-50/60 border-slate-200 opacity-60'
+                      }`}
+                    >
+                      <img
+                        src={p.logo_url}
+                        alt=""
+                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <h6 className="font-bold text-slate-900 text-[11px] truncate">{p.business_name}</h6>
+                        <p className="text-[9px] text-emerald-800 font-semibold truncate">{p.job}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Pro Highlight Selector */}
@@ -12537,6 +12732,13 @@ Wrap up your guide with a warm closing thought for newcomers settling into Valen
         <AdminAnalytics />
       ) : null}
 
+      <PartnerAdminEditorModal
+        isOpen={showPartnerModal}
+        onClose={() => setShowPartnerModal(false)}
+        partners={adminPartners}
+        onSavePartners={handleSavePartnersList}
+      />
+
       {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {showConfirmModal && (
@@ -13410,7 +13612,9 @@ function HomeView({
   onToggleFavoritePro,
   prosLoading = false,
   eventsLoading = false,
-  guidesLoading = false
+  guidesLoading = false,
+  allPartners: propAllPartners = [],
+  partnerMode: propPartnerMode = 'partner'
 }: { 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   allPros: Professional[], 
@@ -13442,7 +13646,9 @@ function HomeView({
   onToggleFavoritePro?: (proId: string | number) => void,
   prosLoading?: boolean,
   eventsLoading?: boolean,
-  guidesLoading?: boolean
+  guidesLoading?: boolean,
+  allPartners?: AppPartner[],
+  partnerMode?: 'partner' | 'pro' | 'both'
 }) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [localSearch, setLocalSearch] = useState('');
@@ -13450,17 +13656,36 @@ function HomeView({
   const [janeSearch, setJaneSearch] = useState('');
   const janeInputRef = useRef<HTMLTextAreaElement>(null);
 
+  const partnersList = propAllPartners && propAllPartners.length > 0 ? propAllPartners : partnerService.getPartners();
+  const activePartners = partnersList.filter(p => p.is_active !== false);
+  const partnerMode = propPartnerMode || partnerService.getHighlightMode();
+
   const [sec1Idx, setSec1Idx] = useState(0);
   const [sec2Idx, setSec2Idx] = useState(0);
   const [sec3Idx, setSec3Idx] = useState(0);
   const [sec4Idx, setSec4Idx] = useState(0);
 
+  const [partnerCarouselIdx, setPartnerCarouselIdx] = useState(0);
   const [expandedLandingProId, setExpandedLandingProId] = useState<string | null>(null);
+  const [expandedLandingPartner, setExpandedLandingPartner] = useState(false);
+
+  // Auto-rotate multi-partner carousel every 10s if not expanded
+  useEffect(() => {
+    if (expandedLandingPartner || activePartners.length <= 1) return;
+    const timer = setInterval(() => {
+      setPartnerCarouselIdx(prev => (prev + 1) % activePartners.length);
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [expandedLandingPartner, activePartners.length]);
 
   const expandedLandingPro = useMemo(() => {
     if (!expandedLandingProId || !allPros) return null;
     return allPros.find(p => String(p.id) === String(expandedLandingProId)) || null;
   }, [expandedLandingProId, allPros]);
+
+  const currentPartnerToShow = activePartners.length > 0
+    ? activePartners[partnerCarouselIdx % activePartners.length]
+    : null;
 
   const [selectedArticle, setSelectedArticle] = useState<any | null>(null);
 
@@ -13684,8 +13909,44 @@ function HomeView({
           </h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 grid-flow-row-dense">
-          {/* Card 1: Top Rated Pro / Testimonial */}
+          {/* Card 1: Top Rated Pro / Testimonial / Multi-Partner Carousel */}
           {(() => {
+            const activePartners = partnersList.filter(p => p.is_active !== false);
+            const currentPartner = activePartners.length > 0
+              ? activePartners[partnerCarouselIdx % activePartners.length]
+              : null;
+
+            // Case A: Multi-Partner Carousel Only Mode
+            if (activePartners.length > 0 && partnerMode === 'partner' && currentPartner) {
+              return (
+                <div className="h-full">
+                  <PartnerHighlightCard
+                    partner={currentPartner}
+                    isExpanded={expandedLandingPartner}
+                    totalPartners={activePartners.length}
+                    currentIndex={partnerCarouselIdx % activePartners.length}
+                    onNextPartner={(e) => {
+                      e.stopPropagation();
+                      setPartnerCarouselIdx(prev => (prev + 1) % activePartners.length);
+                    }}
+                    onPrevPartner={(e) => {
+                      e.stopPropagation();
+                      setPartnerCarouselIdx(prev => (prev - 1 + activePartners.length) % activePartners.length);
+                    }}
+                    onToggleExpand={() => {
+                      setExpandedLandingPartner(prev => !prev);
+                      setExpandedLandingProId(null);
+                      if (!expandedLandingPartner) {
+                        setTimeout(() => {
+                          document.getElementById('landing-expanded-partner-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }, 120);
+                      }
+                    }}
+                  />
+                </div>
+              );
+            }
+
             const dbHighlightedPros = allPros.filter(p => p.is_highlighted === true || (p.is_highlighted as any) === 'true' || (p.is_highlighted as any) === 1);
             const highlightedPros = dbHighlightedPros.length > 0 
               ? dbHighlightedPros 
@@ -13697,7 +13958,13 @@ function HomeView({
               ? dbHighlightedTestimonies 
               : approvedTestimonies.filter(t => highlightedTestimoniesIds.includes(String(t.id)));
 
-            const section1Items: { type: 'pro' | 'testimony'; data: any }[] = [];
+            const section1Items: { type: 'pro' | 'testimony' | 'partner'; data: any }[] = [];
+
+            // Case B: Alternating Mode - Add active partner to carousel items
+            if (activePartners.length > 0 && partnerMode === 'both' && currentPartner) {
+              section1Items.push({ type: 'partner', data: currentPartner });
+            }
+
             highlightedPros.forEach(p => {
               section1Items.push({ type: 'pro', data: p });
             });
@@ -13705,7 +13972,7 @@ function HomeView({
               section1Items.push({ type: 'testimony', data: t });
             });
 
-            if (prosLoading || (allPros.length === 0 && isSupabaseConfigured)) {
+            if (prosLoading || (allPros.length === 0 && isSupabaseConfigured && activePartners.length === 0)) {
               return <DiscoverCardProSkeleton />;
             }
 
@@ -13714,7 +13981,60 @@ function HomeView({
             const activeIndex = sec1Idx % section1Items.length;
             const currentItem = section1Items[activeIndex];
 
-            // Determine details for rendering
+            // Render partner item inside carousel
+            if (currentItem.type === 'partner') {
+              return (
+                <div className="relative h-full">
+                  <PartnerHighlightCard
+                    partner={currentItem.data}
+                    isExpanded={expandedLandingPartner}
+                    totalPartners={activePartners.length}
+                    currentIndex={partnerCarouselIdx % activePartners.length}
+                    onNextPartner={(e) => {
+                      e.stopPropagation();
+                      setPartnerCarouselIdx(prev => (prev + 1) % activePartners.length);
+                    }}
+                    onPrevPartner={(e) => {
+                      e.stopPropagation();
+                      setPartnerCarouselIdx(prev => (prev - 1 + activePartners.length) % activePartners.length);
+                    }}
+                    onToggleExpand={() => {
+                      setExpandedLandingPartner(prev => !prev);
+                      setExpandedLandingProId(null);
+                      if (!expandedLandingPartner) {
+                        setTimeout(() => {
+                          document.getElementById('landing-expanded-partner-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }, 120);
+                      }
+                    }}
+                  />
+                  {section1Items.length >= 2 && (
+                    <>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
+                        }}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/70 backdrop-blur shadow text-slate-400 hover:text-emerald-700 hover:border-emerald-200 transition-all z-30 cursor-pointer"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSec1Idx((activeIndex + 1) % section1Items.length);
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/70 backdrop-blur shadow text-slate-400 hover:text-emerald-700 hover:border-emerald-200 transition-all z-30 cursor-pointer"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            }
+
+            // Determine details for rendering standard pro/testimony
             let proToShow = null;
             let ratingToShow = 5;
             let commentToShow = "Excellent communication in English, incredibly punctual, and provided perfect local help. Absolutely recommended!";
@@ -13758,6 +14078,7 @@ function HomeView({
                 id="discover-card-pro"
                 onClick={() => {
                   const targetId = String(proToShow.id);
+                  setExpandedLandingPartner(false);
                   setExpandedLandingProId(prev => (prev === targetId ? null : targetId));
                   if (expandedLandingProId !== targetId) {
                     setTimeout(() => {
@@ -13873,7 +14194,7 @@ function HomeView({
                         e.stopPropagation();
                         setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md group-hover:opacity-100 z-30"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
@@ -13882,7 +14203,7 @@ function HomeView({
                         e.stopPropagation();
                         setSec1Idx((activeIndex + 1) % section1Items.length);
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md group-hover:opacity-100 z-30"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
@@ -13891,6 +14212,24 @@ function HomeView({
               </div>
             );
           })()}
+
+          {/* Detailed Partner Card: Deployed directly under Card 1 when expanded */}
+          {expandedLandingPartner && currentPartnerToShow && (
+            <motion.div
+              key={`landing-expanded-partner-${currentPartnerToShow.id}`}
+              id="landing-expanded-partner-section"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              className="col-span-1 md:col-span-2 lg:col-span-3 w-full scroll-mt-28"
+            >
+              <ExpandedPartnerCard
+                partner={currentPartnerToShow}
+                onClose={() => setExpandedLandingPartner(false)}
+              />
+            </motion.div>
+          )}
 
           {/* Detailed Pro Card: Opens directly under the 'Meet a local pro' card */}
           {expandedLandingPro && (

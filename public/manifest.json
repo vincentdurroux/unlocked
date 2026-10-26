@@ -1,6 +1,6 @@
 {
-  "name": "Unlocked",
-  "short_name": "Unlocked",
+  "name": "MyCityUnlocked",
+  "short_name": "MyCityUnlocked",
   "description": "MyCityUnlocked is a local discovery platform helping international residents find trusted recommendations, local events, and practical guides in the city.",
   "start_url": "/",
   "scope": "/",
