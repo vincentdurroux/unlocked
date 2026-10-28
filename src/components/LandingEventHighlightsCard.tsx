@@ -78,16 +78,19 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => new Date());
-  const [dragOffset, setDragOffset] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
 
   const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const lastTouchXRef = useRef<number>(0);
   const lastTouchTimeRef = useRef<number>(0);
   const velocityXRef = useRef<number>(0);
   const mouseStartXRef = useRef<number | null>(null);
+  const dragOffsetRef = useRef<number>(0);
+  const isDraggingRef = useRef<boolean>(false);
+  const rafIdRef = useRef<number | null>(null);
+  const currentIndexRef = useRef<number>(currentIndex);
 
   // Automatically refresh date periodically so week shifts seamlessly as time progresses
   useEffect(() => {
@@ -105,14 +108,12 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     const { monday, sunday } = getCurrentWeekInterval(currentDate);
 
     const weekEvents = events.filter((e) => {
-      // Exclude permanent / Year round events from this weekly highlight
       if (isYearRoundEvent(e)) return false;
 
       const s = getEventStartDate(e, monday.getFullYear());
       const end = getEventEndDate(e, monday.getFullYear()) || s;
       if (!s) return false;
 
-      // Event must fall within the current week interval (Monday 00:00:00 to Sunday 23:59:59)
       return s.getTime() <= sunday.getTime() && end.getTime() >= monday.getTime();
     });
 
@@ -143,9 +144,57 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     }
   }, [count, currentIndex]);
 
+  // Keep currentIndexRef in sync
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+    updateCardStyles(0, false);
+  }, [currentIndex, count]);
+
+  // Direct DOM style mutator bypassing React re-renders during drag (120 FPS performance)
+  const updateCardStyles = (offsetPx: number, dragging: boolean) => {
+    if (count === 0) return;
+    const offsetIndex = offsetPx / 120;
+    const virtualIndex = currentIndexRef.current - offsetIndex;
+
+    activeEvents.forEach((_, idx) => {
+      const el = cardRefs.current[idx];
+      if (!el) return;
+
+      let diff = (idx - virtualIndex) % count;
+      if (diff > count / 2) diff -= count;
+      if (diff < -count / 2) diff += count;
+
+      const isCenter = Math.abs(diff) < 0.3;
+      const xOffset = diff * 120;
+      const rotateY = -diff * 25;
+      const scale = Math.max(0.55, 1 - Math.abs(diff) * 0.14);
+      const opacity = Math.max(0, 1 - Math.abs(diff) * 0.32);
+      const zIndex = Math.round(30 - Math.abs(diff) * 10);
+
+      el.style.transform = `translate3d(${xOffset}px, 0, 0) rotateY(${rotateY}deg) scale(${scale})`;
+      el.style.opacity = `${opacity}`;
+      el.style.zIndex = `${zIndex}`;
+      el.style.pointerEvents = opacity > 0.2 ? 'auto' : 'none';
+
+      if (dragging) {
+        el.style.transition = 'none';
+      } else {
+        el.style.transition = 'transform 0.52s cubic-bezier(0.12, 0.85, 0.25, 1), opacity 0.42s ease';
+      }
+
+      if (isCenter) {
+        el.classList.add('border-2', 'border-orange-500', 'shadow-2xl', 'shadow-orange-500/20');
+        el.classList.remove('border-slate-100');
+      } else {
+        el.classList.remove('border-2', 'border-orange-500', 'shadow-2xl', 'shadow-orange-500/20');
+        el.classList.add('border-slate-100');
+      }
+    });
+  };
+
   // Auto-rotation every 6 seconds (pauses on hover or while dragging)
   useEffect(() => {
-    if (count <= 1 || isPaused || isDragging) return;
+    if (count <= 1 || isPaused || isDraggingRef.current) return;
 
     autoScrollTimerRef.current = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % count);
@@ -154,7 +203,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     return () => {
       if (autoScrollTimerRef.current) clearInterval(autoScrollTimerRef.current);
     };
-  }, [count, isPaused, isDragging]);
+  }, [count, isPaused]);
 
   if (loading) {
     return <DiscoverCardEventSkeleton />;
@@ -190,9 +239,9 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     setCurrentIndex((prev) => (prev - 1 + count) % count);
   };
 
-  // Real-time finger & mouse 3D wheel rotation tracking
+  // Zero-re-render direct touch & mouse gesture engine
   const handleTouchStart = (e: React.TouchEvent) => {
-    setIsDragging(true);
+    isDraggingRef.current = true;
     const touchX = e.touches[0].clientX;
     const touchY = e.touches[0].clientY;
     touchStartXRef.current = touchX;
@@ -200,6 +249,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     lastTouchXRef.current = touchX;
     lastTouchTimeRef.current = Date.now();
     velocityXRef.current = 0;
+    dragOffsetRef.current = 0;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -209,8 +259,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     const deltaX = currentX - touchStartXRef.current;
     const deltaY = currentY - touchStartYRef.current;
 
-    // Allow vertical scrolling if drag is predominantly vertical
-    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(dragOffset) < 10) {
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(dragOffsetRef.current) < 10) {
       return;
     }
 
@@ -222,51 +271,53 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     lastTouchXRef.current = currentX;
     lastTouchTimeRef.current = now;
 
-    setDragOffset(deltaX);
+    dragOffsetRef.current = deltaX;
+
+    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+    rafIdRef.current = requestAnimationFrame(() => {
+      updateCardStyles(dragOffsetRef.current, true);
+    });
   };
 
   const handleTouchEnd = () => {
     if (touchStartXRef.current === null) return;
-    setIsDragging(false);
+    isDraggingRef.current = false;
 
-    const deltaX = dragOffset;
-    const velocity = velocityXRef.current; // px / ms
+    const deltaX = dragOffsetRef.current;
+    const velocity = velocityXRef.current;
 
-    // Wheel inertia momentum: flick speed determines how many cards the roulette spins through
     let stepShift = 0;
-    const stepThreshold = 110; // px displacement per event card
+    const stepThreshold = 110;
 
-    if (Math.abs(velocity) > 0.4) {
-      // High speed flick momentum calculation
-      const momentumPx = velocity * 350;
+    if (Math.abs(velocity) > 0.35) {
+      const momentumPx = velocity * 320;
       stepShift = -Math.round(momentumPx / stepThreshold);
     } else if (Math.abs(deltaX) > 30) {
-      // Normal drag shift
       stepShift = -Math.round(deltaX / stepThreshold);
     }
 
-    if (stepShift !== 0) {
-      setCurrentIndex((prev) => {
-        const next = (prev + stepShift) % count;
-        return next < 0 ? next + count : next;
-      });
-    }
+    const targetIndex = (currentIndexRef.current + stepShift) % count;
+    const normalizedTarget = targetIndex < 0 ? targetIndex + count : targetIndex;
 
-    setDragOffset(0);
+    updateCardStyles(0, false);
+    setCurrentIndex(normalizedTarget);
+
+    dragOffsetRef.current = 0;
     touchStartXRef.current = null;
     touchStartYRef.current = null;
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
+    isDraggingRef.current = true;
     mouseStartXRef.current = e.clientX;
     lastTouchXRef.current = e.clientX;
     lastTouchTimeRef.current = Date.now();
     velocityXRef.current = 0;
+    dragOffsetRef.current = 0;
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || mouseStartXRef.current === null) return;
+    if (!isDraggingRef.current || mouseStartXRef.current === null) return;
     const currentX = e.clientX;
     const deltaX = currentX - mouseStartXRef.current;
     const now = Date.now();
@@ -277,40 +328,40 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     lastTouchXRef.current = currentX;
     lastTouchTimeRef.current = now;
 
-    setDragOffset(deltaX);
+    dragOffsetRef.current = deltaX;
+
+    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+    rafIdRef.current = requestAnimationFrame(() => {
+      updateCardStyles(dragOffsetRef.current, true);
+    });
   };
 
   const handleMouseUp = () => {
-    if (!isDragging || mouseStartXRef.current === null) return;
-    setIsDragging(false);
+    if (!isDraggingRef.current || mouseStartXRef.current === null) return;
+    isDraggingRef.current = false;
 
-    const deltaX = dragOffset;
+    const deltaX = dragOffsetRef.current;
     const velocity = velocityXRef.current;
 
     let stepShift = 0;
     const stepThreshold = 110;
 
-    if (Math.abs(velocity) > 0.4) {
-      const momentumPx = velocity * 350;
+    if (Math.abs(velocity) > 0.35) {
+      const momentumPx = velocity * 320;
       stepShift = -Math.round(momentumPx / stepThreshold);
     } else if (Math.abs(deltaX) > 30) {
       stepShift = -Math.round(deltaX / stepThreshold);
     }
 
-    if (stepShift !== 0) {
-      setCurrentIndex((prev) => {
-        const next = (prev + stepShift) % count;
-        return next < 0 ? next + count : next;
-      });
-    }
+    const targetIndex = (currentIndexRef.current + stepShift) % count;
+    const normalizedTarget = targetIndex < 0 ? targetIndex + count : targetIndex;
 
-    setDragOffset(0);
+    updateCardStyles(0, false);
+    setCurrentIndex(normalizedTarget);
+
+    dragOffsetRef.current = 0;
     mouseStartXRef.current = null;
   };
-
-  // Continuous virtual index offset based on real-time finger position
-  const offsetIndex = dragOffset / 125;
-  const virtualIndex = currentIndex - offsetIndex;
 
   return (
     <div
@@ -359,7 +410,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
       </div>
 
-      {/* 3D Cylindrical Carousel: Real-time finger rotation + roulette momentum track */}
+      {/* 3D Cylindrical Carousel: Zero re-render direct DOM RAF wheel track */}
       <div 
         className="relative z-10 w-full flex-1 flex items-center justify-center py-2 select-none overflow-hidden touch-pan-y"
         style={{ perspective: 1000, minHeight: '340px' }}
@@ -375,53 +426,33 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
           onMouseLeave={handleMouseUp}
         >
           {activeEvents.map((event, idx) => {
-            // Calculate continuous cyclic position relative to active virtual index
-            let diff = (idx - virtualIndex) % count;
-            if (diff > count / 2) diff -= count;
-            if (diff < -count / 2) diff += count;
-
-            const isCenter = Math.abs(diff) < 0.3;
-
-            // Continuous 3D Cylinder geometry transforms
-            const xOffset = diff * 120;
-            const rotateY = -diff * 25;
-            const scale = Math.max(0.55, 1 - Math.abs(diff) * 0.14);
-            const opacity = Math.max(0, 1 - Math.abs(diff) * 0.32);
-            const zIndex = Math.round(30 - Math.abs(diff) * 10);
-
             const badge = getEventBadgeLabel(event);
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
 
             return (
               <div
                 key={event.id || idx}
+                ref={(el) => {
+                  cardRefs.current[idx] = el;
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (isCenter && !isDragging) {
-                    onNavigate('events', { eventId: event.id });
-                  } else if (Math.abs(dragOffset) < 10) {
-                    setCurrentIndex(idx);
+                  if (Math.abs(dragOffsetRef.current) < 10) {
+                    if (idx === currentIndexRef.current) {
+                      onNavigate('events', { eventId: event.id });
+                    } else {
+                      setCurrentIndex(idx);
+                    }
                   }
                 }}
                 style={{
-                  transform: `translate3d(${xOffset}px, 0, 0) rotateY(${rotateY}deg) scale(${scale})`,
-                  opacity: opacity,
-                  zIndex: zIndex,
-                  pointerEvents: opacity > 0.2 ? 'auto' : 'none',
-                  // Zero latency during active drag, silky momentum easing on release
-                  transition: isDragging 
-                    ? 'none' 
-                    : 'transform 0.55s cubic-bezier(0.12, 0.85, 0.25, 1), opacity 0.45s ease',
                   transformStyle: 'preserve-3d',
                   backfaceVisibility: 'hidden',
                   WebkitBackfaceVisibility: 'hidden',
                   willChange: 'transform, opacity',
                 }}
                 className={cn(
-                  "absolute w-[205px] sm:w-[235px] aspect-[3/4.2] rounded-2xl overflow-hidden shadow-xl cursor-pointer bg-white transform-gpu",
-                  isCenter 
-                    ? "border-2 border-orange-500 shadow-2xl shadow-orange-500/20" 
-                    : "border border-slate-100 hover:opacity-100"
+                  "absolute w-[205px] sm:w-[235px] aspect-[3/4.2] rounded-2xl overflow-hidden shadow-xl cursor-pointer bg-white transform-gpu border border-slate-100"
                 )}
               >
                 {/* Poster Background Image: Preloaded for zero flickering */}
@@ -523,6 +554,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     </div>
   );
 };
+
 
 
 
