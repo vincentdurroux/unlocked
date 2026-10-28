@@ -238,14 +238,14 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
       {/* 3D Cylindrical Carousel: Luminous, high clarity cards */}
       <div 
-        className="relative z-10 w-full flex-1 flex items-center justify-center py-2 select-none overflow-hidden"
-        style={{ perspective: 1100, minHeight: '340px' }}
+        className="relative z-10 w-full flex-1 flex items-center justify-center py-2 select-none overflow-hidden touch-pan-y"
+        style={{ perspective: 1000, minHeight: '340px' }}
       >
         <motion.div 
-          className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing"
+          className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing will-change-transform"
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.2}
+          dragElastic={0.15}
           onDragEnd={handleDragEnd}
         >
           {activeEvents.map((event, idx) => {
@@ -274,26 +274,26 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
               zIndex = 30;
               opacity = 1;
             } else if (isRight) {
-              xOffset = 135;
-              rotateY = -32;
-              scale = 0.85;
+              xOffset = 130;
+              rotateY = -28;
+              scale = 0.86;
               zIndex = 20;
               opacity = 0.88;
             } else if (isLeft) {
-              xOffset = -135;
-              rotateY = 32;
-              scale = 0.85;
+              xOffset = -130;
+              rotateY = 28;
+              scale = 0.86;
               zIndex = 20;
               opacity = 0.88;
             } else if (diff === 2) {
-              xOffset = 215;
-              rotateY = -52;
+              xOffset = 210;
+              rotateY = -48;
               scale = 0.72;
               zIndex = 10;
               opacity = 0.45;
             } else if (diff === -2) {
-              xOffset = -215;
-              rotateY = 52;
+              xOffset = -210;
+              rotateY = 48;
               scale = 0.72;
               zIndex = 10;
               opacity = 0.45;
@@ -320,19 +320,24 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   zIndex: zIndex,
                   opacity: opacity,
                 }}
-                // Fluid roulette deceleration easing: fast start with long, smooth deceleration glide
+                // Ultra-smooth spring physics for immediate, fluid roulette motion
                 transition={{
-                  duration: 0.85,
-                  ease: [0.16, 1, 0.3, 1],
+                  type: 'spring',
+                  stiffness: 320,
+                  damping: 32,
+                  mass: 0.6,
                 }}
                 style={{
                   transformStyle: 'preserve-3d',
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                  willChange: 'transform, opacity',
                 }}
                 className={cn(
-                  "absolute w-[215px] sm:w-[235px] aspect-[3/4.2] rounded-2xl overflow-hidden shadow-xl cursor-pointer transition-all duration-300 bg-white",
+                  "absolute w-[215px] sm:w-[235px] aspect-[3/4.2] rounded-2xl overflow-hidden shadow-xl cursor-pointer bg-white transform-gpu",
                   isCenter 
                     ? "border-2 border-orange-500 shadow-2xl shadow-orange-500/20" 
-                    : "border border-transparent hover:opacity-100"
+                    : "border border-slate-100 hover:opacity-100"
                 )}
               >
                 {/* Poster Background Image: Full clarity */}
@@ -341,14 +346,16 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   alt={event.title}
                   className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02]"
                   referrerPolicy="no-referrer"
+                  loading="eager"
+                  decoding="async"
                 />
 
                 {/* Subtle gradient strictly at the bottom 35% for text readability */}
                 <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-950/90 via-slate-900/45 to-transparent pointer-events-none" />
 
-                {/* Top Timing Badge: Clean, luminous frosted pill */}
+                {/* Top Timing Badge: Clean, high-contrast luminous pill */}
                 <div className="absolute top-2.5 left-2.5 z-20 pointer-events-none">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md backdrop-blur-md bg-white/90 text-slate-800 border border-white/80">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md bg-white/95 text-slate-800 border border-slate-200">
                     {badge}
                   </span>
                 </div>
@@ -356,7 +363,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                 {/* Free Badge if applicable */}
                 {event.is_free && (
                   <div className="absolute top-2.5 right-2.5 z-20 pointer-events-none">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-extrabold shadow-md backdrop-blur-md bg-emerald-500 text-white">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-extrabold shadow-md bg-emerald-500 text-white">
                       Free
                     </span>
                   </div>
@@ -390,13 +397,13 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
           type="button"
           onClick={handlePrev}
           aria-label="Previous event"
-          className="p-2.5 rounded-full bg-white hover:bg-orange-500 text-slate-700 hover:text-white transition-all cursor-pointer active:scale-95 border border-amber-200/80 shadow-xs hover:shadow-orange-500/25 flex items-center justify-center group/btn"
+          className="p-2.5 rounded-full bg-white hover:bg-orange-500 text-slate-700 hover:text-white transition-colors cursor-pointer active:scale-95 border border-amber-200/80 shadow-xs hover:shadow-orange-500/25 flex items-center justify-center group/btn"
         >
           <ChevronLeft className="w-4 h-4 group-hover/btn:-translate-x-0.5 transition-transform" />
         </button>
 
         {/* Clickable Dots Indicator */}
-        <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/90 border border-amber-200/80 backdrop-blur-xs shadow-2xs">
+        <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/95 border border-amber-200/80 shadow-2xs">
           {activeEvents.slice(0, Math.min(count, 8)).map((_, idx) => {
             const isActive = idx === currentIndex % count;
             return (
@@ -409,7 +416,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                 }}
                 aria-label={`Go to slide ${idx + 1}`}
                 className={cn(
-                  "h-1.5 rounded-full transition-all duration-500 cursor-pointer",
+                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
                   isActive
                     ? "w-6 bg-orange-500 shadow-sm shadow-orange-500/40"
                     : "w-1.5 bg-amber-200 hover:bg-amber-300"
@@ -424,7 +431,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
           type="button"
           onClick={handleNext}
           aria-label="Next event"
-          className="p-2.5 rounded-full bg-white hover:bg-orange-500 text-slate-700 hover:text-white transition-all cursor-pointer active:scale-95 border border-amber-200/80 shadow-xs hover:shadow-orange-500/25 flex items-center justify-center group/btn"
+          className="p-2.5 rounded-full bg-white hover:bg-orange-500 text-slate-700 hover:text-white transition-colors cursor-pointer active:scale-95 border border-amber-200/80 shadow-xs hover:shadow-orange-500/25 flex items-center justify-center group/btn"
         >
           <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform" />
         </button>
