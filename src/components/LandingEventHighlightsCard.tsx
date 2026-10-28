@@ -150,10 +150,10 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     updateCardStyles(0, false);
   }, [currentIndex, count]);
 
-  // Direct DOM style mutator bypassing React re-renders during drag (120 FPS performance)
+  // Direct DOM style mutator optimized for iOS Safari Metal compositor (120 FPS ProMotion)
   const updateCardStyles = (offsetPx: number, dragging: boolean) => {
     if (count === 0) return;
-    const offsetIndex = offsetPx / 120;
+    const offsetIndex = offsetPx / 115;
     const virtualIndex = currentIndexRef.current - offsetIndex;
 
     activeEvents.forEach((_, idx) => {
@@ -165,13 +165,14 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       if (diff < -count / 2) diff += count;
 
       const isCenter = Math.abs(diff) < 0.3;
-      const xOffset = diff * 120;
-      const rotateY = -diff * 25;
-      const scale = Math.max(0.55, 1 - Math.abs(diff) * 0.14);
+      const xOffset = diff * 115;
+      const yCurve = Math.abs(diff) * Math.abs(diff) * 6; // Parabolic arc creating cylindrical depth on iOS
+      const scale = Math.max(0.60, 1 - Math.abs(diff) * 0.14);
       const opacity = Math.max(0, 1 - Math.abs(diff) * 0.32);
       const zIndex = Math.round(30 - Math.abs(diff) * 10);
 
-      el.style.transform = `translate3d(${xOffset}px, 0, 0) rotateY(${rotateY}deg) scale(${scale})`;
+      // Hardware 2D Metal display plane compositing on iOS Safari (Zero WebKit 3D rasterization overhead)
+      el.style.transform = `translate3d(${xOffset}px, ${yCurve}px, 0) scale(${scale})`;
       el.style.opacity = `${opacity}`;
       el.style.zIndex = `${zIndex}`;
       el.style.pointerEvents = opacity > 0.2 ? 'auto' : 'none';
@@ -179,7 +180,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       if (dragging) {
         el.style.transition = 'none';
       } else {
-        el.style.transition = 'transform 0.52s cubic-bezier(0.12, 0.85, 0.25, 1), opacity 0.42s ease';
+        el.style.transition = 'transform 0.48s cubic-bezier(0.12, 0.85, 0.25, 1), opacity 0.38s ease';
       }
 
       if (isCenter) {
