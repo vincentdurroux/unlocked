@@ -79,6 +79,9 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   const [isPaused, setIsPaused] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const mouseStartXRef = useRef<number | null>(null);
 
   // Automatically refresh date periodically so week shifts seamlessly as time progresses
   useEffect(() => {
@@ -182,9 +185,6 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   };
 
   // Direct high-performance touch and mouse gesture tracking for 60fps mobile responsiveness
-  const touchStartXRef = useRef<number | null>(null);
-  const touchStartYRef = useRef<number | null>(null);
-  const mouseStartXRef = useRef<number | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartXRef.current = e.touches[0].clientX;
