@@ -414,15 +414,17 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   style={{ opacity: glowOpacity }}
                 />
 
-                {/* Poster Background Image */}
-                <img
-                  src={event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"}
-                  alt={event.title}
-                  className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02]"
-                  referrerPolicy="no-referrer"
-                  loading="eager"
-                  decoding="sync"
-                />
+                {/* Poster Background Image container clipped */}
+                <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none z-0">
+                  <img
+                    src={event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"}
+                    alt={event.title}
+                    className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02]"
+                    referrerPolicy="no-referrer"
+                    loading="eager"
+                    decoding="sync"
+                  />
+                </div>
 
                 {/* Subtle gradient strictly at the bottom 35% for text readability */}
                 <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-950/90 via-slate-900/45 to-transparent pointer-events-none" />
