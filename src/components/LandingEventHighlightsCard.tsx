@@ -181,23 +181,54 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     setCurrentIndex((prev) => (prev - 1 + count) % count);
   };
 
-  // Fluid roulette spin on drag/swipe: velocity determines how many cards to glide through
-  const handleDragEnd = (_e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    const vx = info.velocity.x;
-    const ox = info.offset.x;
+  // Direct high-performance touch and mouse gesture tracking for 60fps mobile responsiveness
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const mouseStartXRef = useRef<number | null>(null);
 
-    if (Math.abs(vx) > 200 || Math.abs(ox) > 25) {
-      // Roulette momentum calculation
-      let steps = 1;
-      if (Math.abs(vx) > 800) steps = 2;
-      if (Math.abs(vx) > 1600) steps = 3;
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+  };
 
-      if (vx < -80 || ox < -25) {
-        setCurrentIndex((prev) => (prev + steps) % count);
-      } else if (vx > 80 || ox > 25) {
-        setCurrentIndex((prev) => (prev - steps + count * 10) % count);
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+
+    const deltaX = touchEndX - touchStartXRef.current;
+    const deltaY = touchEndY - touchStartYRef.current;
+
+    // Trigger swipe if horizontal displacement is dominant and >= 25px
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) >= 25) {
+      if (deltaX < 0) {
+        setCurrentIndex((prev) => (prev + 1) % count);
+      } else {
+        setCurrentIndex((prev) => (prev - 1 + count) % count);
       }
     }
+
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    mouseStartXRef.current = e.clientX;
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (mouseStartXRef.current === null) return;
+    const deltaX = e.clientX - mouseStartXRef.current;
+
+    if (Math.abs(deltaX) >= 25) {
+      if (deltaX < 0) {
+        setCurrentIndex((prev) => (prev + 1) % count);
+      } else {
+        setCurrentIndex((prev) => (prev - 1 + count) % count);
+      }
+    }
+    mouseStartXRef.current = null;
   };
 
   return (
@@ -247,17 +278,17 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
       </div>
 
-      {/* 3D Cylindrical Carousel: Luminous, pre-loaded high clarity cards */}
+      {/* 3D Cylindrical Carousel: Mobile-optimized, ultra-smooth touch swipe track */}
       <div 
         className="relative z-10 w-full flex-1 flex items-center justify-center py-2 select-none overflow-hidden touch-pan-y"
         style={{ perspective: 1000, minHeight: '340px' }}
       >
-        <motion.div 
+        <div 
           className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing"
-          drag="x"
-          dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.12}
-          onDragEnd={handleDragEnd}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
         >
           {activeEvents.map((event, idx) => {
             // Calculate cyclic position relative to active card
@@ -270,7 +301,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
             const isFarRight = diff === 2;
             const isFarLeft = diff === -2;
 
-            // 3D Cylinder geometry transforms
+            // Mobile responsive offset calculations (slightly tighter on mobile for perfect viewport display)
             let xOffset = 0;
             let rotateY = 0;
             let scale = 1;
@@ -284,33 +315,33 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
               zIndex = 30;
               opacity = 1;
             } else if (isRight) {
-              xOffset = 130;
-              rotateY = -28;
-              scale = 0.86;
+              xOffset = 115;
+              rotateY = -24;
+              scale = 0.88;
               zIndex = 20;
               opacity = 0.88;
             } else if (isLeft) {
-              xOffset = -130;
-              rotateY = 28;
-              scale = 0.86;
+              xOffset = -115;
+              rotateY = 24;
+              scale = 0.88;
               zIndex = 20;
               opacity = 0.88;
             } else if (isFarRight) {
-              xOffset = 210;
-              rotateY = -48;
-              scale = 0.72;
+              xOffset = 185;
+              rotateY = -42;
+              scale = 0.74;
               zIndex = 10;
               opacity = 0.45;
             } else if (isFarLeft) {
-              xOffset = -210;
-              rotateY = 48;
-              scale = 0.72;
+              xOffset = -185;
+              rotateY = 42;
+              scale = 0.74;
               zIndex = 10;
               opacity = 0.45;
             } else {
-              // Off-screen cards kept mounted in DOM for instant GPU hardware transition
-              xOffset = diff > 0 ? 270 : -270;
-              rotateY = diff > 0 ? -60 : 60;
+              // Off-screen cards kept mounted in GPU memory for 60fps instant transitions
+              xOffset = diff > 0 ? 250 : -250;
+              rotateY = diff > 0 ? -55 : 55;
               scale = 0.55;
               zIndex = 0;
               opacity = 0;
@@ -335,14 +366,14 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   opacity: opacity,
                   zIndex: zIndex,
                   pointerEvents: opacity > 0 ? 'auto' : 'none',
-                  transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease',
+                  transition: 'transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.28s ease',
                   transformStyle: 'preserve-3d',
                   backfaceVisibility: 'hidden',
                   WebkitBackfaceVisibility: 'hidden',
                   willChange: 'transform, opacity',
                 }}
                 className={cn(
-                  "absolute w-[215px] sm:w-[235px] aspect-[3/4.2] rounded-2xl overflow-hidden shadow-xl cursor-pointer bg-white transform-gpu",
+                  "absolute w-[205px] sm:w-[235px] aspect-[3/4.2] rounded-2xl overflow-hidden shadow-xl cursor-pointer bg-white transform-gpu",
                   isCenter 
                     ? "border-2 border-orange-500 shadow-2xl shadow-orange-500/20" 
                     : "border border-slate-100 hover:opacity-100"
@@ -395,7 +426,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
               </div>
             );
           })}
-        </motion.div>
+        </div>
       </div>
 
       {/* Navigation Controls: Centered Arrows & Dots placed directly below the event cards */}
@@ -447,6 +478,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     </div>
   );
 };
+
 
 
 
