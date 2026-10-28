@@ -183,58 +183,55 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     return () => cancelAnimationFrame(timer);
   }, [count]);
 
-  // Continuous 1:1 scroll position listener to calculate smooth scale & orange glow morphing on every frame
+  // Continuous 1:1 synchronous scroll position listener to calculate instant scale & orange glow morphing on every frame
   const handleScroll = () => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    
-    rafRef.current = requestAnimationFrame(() => {
-      if (!scrollContainerRef.current || count === 0) return;
-      const container = scrollContainerRef.current;
-      const currentScrollLeft = container.scrollLeft;
+    if (!scrollContainerRef.current || count === 0) return;
+    const container = scrollContainerRef.current;
+    const currentScrollLeft = container.scrollLeft;
 
-      setScrollLeftState(currentScrollLeft);
+    // Instant synchronous state update for zero waiting time
+    setScrollLeftState(currentScrollLeft);
 
-      const containerCenter = currentScrollLeft + container.clientWidth / 2;
-      const children = container.children;
-      if (children.length === 0) return;
+    const containerCenter = currentScrollLeft + container.clientWidth / 2;
+    const children = container.children;
+    if (children.length === 0) return;
 
-      let minDistance = Infinity;
-      let centeredVirtualIndex = 0;
+    let minDistance = Infinity;
+    let centeredVirtualIndex = 0;
 
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i] as HTMLElement;
-        const childCenter = child.offsetLeft + child.offsetWidth / 2;
-        const dist = Math.abs(childCenter - containerCenter);
-        if (dist < minDistance) {
-          minDistance = dist;
-          centeredVirtualIndex = i;
-        }
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i] as HTMLElement;
+      const childCenter = child.offsetLeft + child.offsetWidth / 2;
+      const dist = Math.abs(childCenter - containerCenter);
+      if (dist < minDistance) {
+        minDistance = dist;
+        centeredVirtualIndex = i;
       }
+    }
 
-      // Infinite Circular Teleportation:
-      if (centeredVirtualIndex < count) {
-        const itemWidth = children.length > 1 
-          ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
-          : 210;
-        container.scrollLeft += count * itemWidth;
-        setScrollLeftState(container.scrollLeft);
-        centeredVirtualIndex += count;
-      } else if (centeredVirtualIndex >= 2 * count) {
-        const itemWidth = children.length > 1 
-          ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
-          : 210;
-        container.scrollLeft -= count * itemWidth;
-        setScrollLeftState(container.scrollLeft);
-        centeredVirtualIndex -= count;
-      }
+    // Infinite Circular Teleportation:
+    if (centeredVirtualIndex < count) {
+      const itemWidth = children.length > 1 
+        ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
+        : 210;
+      container.scrollLeft += count * itemWidth;
+      setScrollLeftState(container.scrollLeft);
+      centeredVirtualIndex += count;
+    } else if (centeredVirtualIndex >= 2 * count) {
+      const itemWidth = children.length > 1 
+        ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
+        : 210;
+      container.scrollLeft -= count * itemWidth;
+      setScrollLeftState(container.scrollLeft);
+      centeredVirtualIndex -= count;
+    }
 
-      setRawScrollIndex(centeredVirtualIndex);
+    setRawScrollIndex(centeredVirtualIndex);
 
-      const normalizedIndex = centeredVirtualIndex % count;
-      if (normalizedIndex !== currentIndexRef.current) {
-        setCurrentIndex(normalizedIndex);
-      }
-    });
+    const normalizedIndex = centeredVirtualIndex % count;
+    if (normalizedIndex !== currentIndexRef.current) {
+      setCurrentIndex(normalizedIndex);
+    }
   };
 
   // Calculate dynamic scale, opacity and glow opacity based on physical distance from container center
@@ -270,27 +267,18 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       : 210;
 
     const ratio = Math.min(1, offsetPx / itemWidth);
-    const smoothFactor = Math.max(0, 1 - Math.pow(ratio, 1.2));
+    // Instant responsive curve (0ms lag as card approaches center)
+    const smoothFactor = Math.max(0, 1 - ratio * 1.15);
 
     const scale = 0.90 + (1.08 - 0.90) * smoothFactor;
     const opacity = 0.70 + (1.00 - 0.70) * smoothFactor;
     const glowOpacity = smoothFactor;
-    const isCenterCard = ratio < 0.4;
+    const isCenterCard = ratio < 0.35;
 
     return { scale, opacity, glowOpacity, isCenterCard };
   };
 
-  // Auto-rotation every 6 seconds in continuous infinite loop
-  useEffect(() => {
-    if (count <= 1 || isPaused || isScrollingTouchRef.current) return;
-
-    const autoScrollTimer = setInterval(() => {
-      if (!scrollContainerRef.current) return;
-      scrollToVirtualIndex(rawScrollIndex + 1, true);
-    }, 6000);
-
-    return () => clearInterval(autoScrollTimer);
-  }, [count, isPaused, rawScrollIndex]);
+  // Auto-rotation disabled as requested: cards move strictly upon user interaction (touch swipe or arrow/dot clicks)
 
   if (loading) {
     return <DiscoverCardEventSkeleton />;
@@ -373,7 +361,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
       </div>
 
-      {/* 120Hz Infinite Continuous WebKit CSS Scroll Snap Track with Zoom-In effect */}
+      {/* 120Hz Infinite Continuous WebKit CSS Scroll Snap Track with Instant Zoom-In effect */}
       <div className="relative z-10 w-full flex-1 flex items-center py-2 overflow-hidden min-h-[340px]">
         <div
           ref={scrollContainerRef}
@@ -408,13 +396,13 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                 style={{
                   transform: `scale(${scale})`,
                   opacity: opacity,
-                  transition: isScrollingTouchRef.current ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-out',
+                  willChange: 'transform, opacity',
                 }}
                 className="shrink-0 snap-center w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border border-slate-200/90 shadow-md transform-gpu relative group/card select-none z-10"
               >
-                {/* Dynamic Glowing Orange Border Overlay that morphs continuously with touch distance */}
+                {/* Instant Dynamic Glowing Orange Border Overlay that morphs directly with touch position */}
                 <div 
-                  className="absolute inset-0 rounded-2xl border-2 border-orange-500 shadow-2xl shadow-orange-500/35 ring-4 ring-orange-500/20 pointer-events-none z-30 transition-opacity duration-150"
+                  className="absolute inset-0 rounded-2xl border-2 border-orange-500 shadow-2xl shadow-orange-500/35 ring-4 ring-orange-500/20 pointer-events-none z-30"
                   style={{ opacity: glowOpacity }}
                 />
 
