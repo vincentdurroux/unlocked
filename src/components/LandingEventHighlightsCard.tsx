@@ -114,6 +114,17 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     });
   }, [events, currentDate]);
 
+  // Preload all event poster images up-front into browser cache for instant rendering & 60fps sliding
+  useEffect(() => {
+    if (!activeEvents || activeEvents.length === 0) return;
+    
+    activeEvents.forEach((event) => {
+      const imageUrl = event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80";
+      const img = new Image();
+      img.src = imageUrl;
+    });
+  }, [activeEvents]);
+
   const count = activeEvents.length;
 
   // Reset index if count changes
@@ -175,15 +186,15 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     const vx = info.velocity.x;
     const ox = info.offset.x;
 
-    if (Math.abs(vx) > 250 || Math.abs(ox) > 30) {
+    if (Math.abs(vx) > 200 || Math.abs(ox) > 25) {
       // Roulette momentum calculation
       let steps = 1;
-      if (Math.abs(vx) > 900) steps = 2;
-      if (Math.abs(vx) > 1700) steps = 3;
+      if (Math.abs(vx) > 800) steps = 2;
+      if (Math.abs(vx) > 1600) steps = 3;
 
-      if (vx < -100 || ox < -30) {
+      if (vx < -80 || ox < -25) {
         setCurrentIndex((prev) => (prev + steps) % count);
-      } else if (vx > 100 || ox > 30) {
+      } else if (vx > 80 || ox > 25) {
         setCurrentIndex((prev) => (prev - steps + count * 10) % count);
       }
     }
@@ -236,16 +247,16 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
       </div>
 
-      {/* 3D Cylindrical Carousel: Luminous, high clarity cards */}
+      {/* 3D Cylindrical Carousel: Luminous, pre-loaded high clarity cards */}
       <div 
         className="relative z-10 w-full flex-1 flex items-center justify-center py-2 select-none overflow-hidden touch-pan-y"
         style={{ perspective: 1000, minHeight: '340px' }}
       >
         <motion.div 
-          className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing will-change-transform"
+          className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing"
           drag="x"
           dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.15}
+          dragElastic={0.12}
           onDragEnd={handleDragEnd}
         >
           {activeEvents.map((event, idx) => {
@@ -256,9 +267,8 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
             const isCenter = diff === 0;
             const isRight = diff === 1;
             const isLeft = diff === -1;
-            const isVisible = Math.abs(diff) <= 2;
-
-            if (!isVisible) return null;
+            const isFarRight = diff === 2;
+            const isFarLeft = diff === -2;
 
             // 3D Cylinder geometry transforms
             let xOffset = 0;
@@ -285,25 +295,32 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
               scale = 0.86;
               zIndex = 20;
               opacity = 0.88;
-            } else if (diff === 2) {
+            } else if (isFarRight) {
               xOffset = 210;
               rotateY = -48;
               scale = 0.72;
               zIndex = 10;
               opacity = 0.45;
-            } else if (diff === -2) {
+            } else if (isFarLeft) {
               xOffset = -210;
               rotateY = 48;
               scale = 0.72;
               zIndex = 10;
               opacity = 0.45;
+            } else {
+              // Off-screen cards kept mounted in DOM for instant GPU hardware transition
+              xOffset = diff > 0 ? 270 : -270;
+              rotateY = diff > 0 ? -60 : 60;
+              scale = 0.55;
+              zIndex = 0;
+              opacity = 0;
             }
 
             const badge = getEventBadgeLabel(event);
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
 
             return (
-              <motion.div
+              <div
                 key={event.id || idx}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -313,21 +330,12 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                     setCurrentIndex(idx);
                   }
                 }}
-                animate={{
-                  x: xOffset,
-                  rotateY: rotateY,
-                  scale: scale,
-                  zIndex: zIndex,
-                  opacity: opacity,
-                }}
-                // Ultra-smooth spring physics for immediate, fluid roulette motion
-                transition={{
-                  type: 'spring',
-                  stiffness: 320,
-                  damping: 32,
-                  mass: 0.6,
-                }}
                 style={{
+                  transform: `translate3d(${xOffset}px, 0, 0) rotateY(${rotateY}deg) scale(${scale})`,
+                  opacity: opacity,
+                  zIndex: zIndex,
+                  pointerEvents: opacity > 0 ? 'auto' : 'none',
+                  transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease',
                   transformStyle: 'preserve-3d',
                   backfaceVisibility: 'hidden',
                   WebkitBackfaceVisibility: 'hidden',
@@ -340,14 +348,14 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                     : "border border-slate-100 hover:opacity-100"
                 )}
               >
-                {/* Poster Background Image: Full clarity */}
+                {/* Poster Background Image: Preloaded for zero flickering */}
                 <img
                   src={event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"}
                   alt={event.title}
                   className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02]"
                   referrerPolicy="no-referrer"
                   loading="eager"
-                  decoding="async"
+                  decoding="sync"
                 />
 
                 {/* Subtle gradient strictly at the bottom 35% for text readability */}
@@ -384,7 +392,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                     <span className="truncate">{formattedDate}</span>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             );
           })}
         </motion.div>
@@ -439,3 +447,6 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     </div>
   );
 };
+
+
+
