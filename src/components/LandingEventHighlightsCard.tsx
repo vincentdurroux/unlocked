@@ -7,6 +7,7 @@ import {
   getEventEndDate,
   isYearRoundEvent 
 } from '../utils/eventFormatter';
+import { cn } from '../lib/utils';
 import { DiscoverCardEventSkeleton } from './CardSkeletons';
 
 interface LandingEventHighlightsCardProps {
@@ -73,23 +74,15 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   onNavigate,
   loading = false,
 }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
-  const offsetRef = useRef(0);
-  const targetRef = useRef(0);
-  const animatingRef = useRef(false);
-
-  // Direct DOM references for 120Hz GPU animation with 0 React re-renders during drag
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const dotsContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // Drag interaction refs
-  const isDraggingRef = useRef(false);
-  const dragStartXRef = useRef(0);
-  const dragStartOffsetRef = useRef(0);
-  const dragLastXRef = useRef(0);
-  const dragLastTimeRef = useRef(0);
-  const dragVelocityXRef = useRef(0);
+  const currentIndexRef = useRef(0);
+  const itemStepRef = useRef(211);
+  const rafRef = useRef<number | null>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Automatically refresh date periodically so weekend shifts seamlessly as time progresses
   useEffect(() => {
@@ -131,6 +124,20 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
   const count = activeEvents.length;
 
+  // 7-Set Array for 100% smooth, uninterrupted native iOS WebKit momentum scrolling
+  const repeatedEvents = useMemo(() => {
+    if (!activeEvents || activeEvents.length === 0) return [];
+    return [
+      ...activeEvents, 
+      ...activeEvents, 
+      ...activeEvents, 
+      ...activeEvents, // Set 3 [MIDDLE SAFE ZONE]
+      ...activeEvents, 
+      ...activeEvents, 
+      ...activeEvents
+    ];
+  }, [activeEvents]);
+
   // Preload all event poster images up-front into browser cache for instant rendering
   useEffect(() => {
     if (!activeEvents || activeEvents.length === 0) return;
@@ -142,39 +149,43 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     });
   }, [activeEvents]);
 
-  // Step distance helper
-  const getStep = () => {
-    if (typeof window === 'undefined') return 210;
-    return window.innerWidth >= 640 ? 250 : 210;
+  // Measure exact item step distance dynamically
+  const measureStep = () => {
+    if (!scrollContainerRef.current || count === 0) return;
+    const container = scrollContainerRef.current;
+    if (container.children.length >= 2) {
+      const c0 = container.children[0] as HTMLElement;
+      const c1 = container.children[1] as HTMLElement;
+      if (c0 && c1) {
+        const step = c1.offsetLeft - c0.offsetLeft;
+        if (step > 50) {
+          itemStepRef.current = step;
+        }
+      }
+    }
   };
 
-  // Ultra-fast Direct DOM Mutation for 120Hz Hardware Acceleration (0 React re-renders)
-  const updateCardDOMs = (offsetVal: number) => {
+  // Sync card DOM transforms/scales directly without triggering React re-renders during active scroll
+  const updateCardScales = (currentScrollLeft: number) => {
     if (count === 0) return;
-    const step = getStep();
-    const activeIdx = Math.round(((offsetVal % count) + count) % count);
+    const step = itemStepRef.current || (window.innerWidth >= 640 ? 250 : 211);
+    const totalCards = count * 7;
 
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < totalCards; i++) {
       const cardEl = cardRefs.current[i];
       if (!cardEl) continue;
 
-      let diff = i - offsetVal;
-      while (diff < -count / 2) diff += count;
-      while (diff >= count / 2) diff -= count;
-
-      const translateX = diff * step;
-      const absDiff = Math.abs(diff);
-      const smoothFactor = Math.max(0, 1 - absDiff * 1.12);
+      const cardPos = i * step;
+      const offsetPx = Math.abs(cardPos - currentScrollLeft);
+      const ratio = Math.min(1, offsetPx / step);
+      const smoothFactor = Math.max(0, 1 - ratio * 1.15);
 
       const scale = 0.90 + 0.18 * smoothFactor;
-      const opacity = absDiff > 2.2 ? 0 : 0.65 + 0.35 * smoothFactor;
+      const opacity = ratio > 2.2 ? 0 : 0.65 + 0.35 * smoothFactor;
       const glowOpacity = smoothFactor;
-      const zIndex = Math.round(100 - absDiff * 10);
 
-      cardEl.style.transform = `translate3d(${translateX}px, 0, 0) scale(${scale})`;
+      cardEl.style.transform = `scale(${scale})`;
       cardEl.style.opacity = `${opacity}`;
-      cardEl.style.zIndex = `${zIndex}`;
-      cardEl.style.pointerEvents = absDiff > 1.8 ? 'none' : 'auto';
 
       const glowEl = cardEl.querySelector('.glow-overlay') as HTMLElement;
       if (glowEl) glowEl.style.opacity = `${glowOpacity}`;
@@ -184,7 +195,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
       const badgeEl = cardEl.querySelector('.badge-pill') as HTMLElement;
       if (badgeEl) {
-        if (absDiff < 0.35) {
+        if (ratio < 0.35) {
           badgeEl.style.backgroundColor = '#f97316';
           badgeEl.style.color = '#ffffff';
           badgeEl.style.borderColor = '#fb923c';
@@ -195,124 +206,98 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         }
       }
     }
-
-    if (dotsContainerRef.current) {
-      const dots = dotsContainerRef.current.children;
-      for (let d = 0; d < dots.length; d++) {
-        const dot = dots[d] as HTMLElement;
-        if (d === activeIdx) {
-          dot.className = "h-1.5 rounded-full transition-all duration-300 cursor-pointer w-6 bg-orange-500 shadow-sm shadow-orange-500/40";
-        } else {
-          dot.className = "h-1.5 rounded-full transition-all duration-300 cursor-pointer w-1.5 bg-amber-200 hover:bg-amber-300";
-        }
-      }
-    }
   };
 
-  // Sync DOMs on initial mount, resize or event list change
+  // Initialize position in middle set (Set 3) upon mount or activeEvents change
   useEffect(() => {
-    offsetRef.current = 0;
-    targetRef.current = 0;
-    updateCardDOMs(0);
+    if (count === 0 || !scrollContainerRef.current) return;
+    measureStep();
 
-    const handleResize = () => updateCardDOMs(offsetRef.current);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [count]);
+    const timer = requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      
+      const step = itemStepRef.current || (window.innerWidth >= 640 ? 250 : 211);
+      const initialScroll = 3 * count * step;
+      container.scrollLeft = initialScroll;
+      updateCardScales(initialScroll);
+    });
 
-  // 120Hz RAF Smooth Spring Lerp Loop using direct DOM updates (0 React re-renders)
-  const animateTo = (target: number) => {
-    targetRef.current = target;
-    if (animatingRef.current) return;
-    animatingRef.current = true;
-
-    const stepAnim = () => {
-      if (isDraggingRef.current) {
-        animatingRef.current = false;
-        return;
+    const handleResize = () => {
+      measureStep();
+      if (scrollContainerRef.current) {
+        updateCardScales(scrollContainerRef.current.scrollLeft);
       }
-
-      const diff = targetRef.current - offsetRef.current;
-      if (Math.abs(diff) < 0.001) {
-        let finalVal = targetRef.current;
-        if (count > 0) {
-          finalVal = ((finalVal % count) + count) % count;
-        }
-        offsetRef.current = finalVal;
-        targetRef.current = finalVal;
-        updateCardDOMs(finalVal);
-        animatingRef.current = false;
-        return;
-      }
-
-      // Fast responsive spring lerp (0.22 factor for ultra snappy smooth motion)
-      offsetRef.current += diff * 0.22;
-      updateCardDOMs(offsetRef.current);
-      requestAnimationFrame(stepAnim);
     };
 
-    requestAnimationFrame(stepAnim);
-  };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      cancelAnimationFrame(timer);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [count]);
 
-  // Drag Gesture Handlers with Pointer Capture
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (count <= 1) return;
-    if (e.button && e.button !== 0) return;
+  // 120Hz Native WebKit Scroll Listener: Uninterrupted hardware momentum on iOS
+  const handleScroll = () => {
+    if (!scrollContainerRef.current || count === 0) return;
 
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {}
+    if (rafRef.current !== null) return;
 
-    isDraggingRef.current = true;
-    dragStartXRef.current = e.clientX;
-    dragStartOffsetRef.current = offsetRef.current;
-    dragLastXRef.current = e.clientX;
-    dragLastTimeRef.current = performance.now();
-    dragVelocityXRef.current = 0;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
 
-    animatingRef.current = false;
-  };
+      if (!scrollContainerRef.current) return;
+      const container = scrollContainerRef.current;
+      const currentScrollLeft = container.scrollLeft;
+      const step = itemStepRef.current || (window.innerWidth >= 640 ? 250 : 211);
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current || count <= 1) return;
+      // Update card scales instantly on GPU without interrupting WebKit momentum
+      updateCardScales(currentScrollLeft);
 
-    const currentX = e.clientX;
-    const now = performance.now();
-    const dt = now - dragLastTimeRef.current;
+      const vIdx = Math.round(currentScrollLeft / step);
+      const normIdx = ((vIdx % count) + count) % count;
 
-    if (dt > 0) {
-      const dx = currentX - dragLastXRef.current;
-      dragVelocityXRef.current = dx / dt;
-    }
-
-    dragLastXRef.current = currentX;
-    dragLastTimeRef.current = now;
-
-    const deltaX = currentX - dragStartXRef.current;
-    const step = getStep();
-    const deltaOffset = -deltaX / step;
-
-    const newOffset = dragStartOffsetRef.current + deltaOffset;
-    offsetRef.current = newOffset;
-    updateCardDOMs(newOffset);
-  };
-
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current) return;
-    isDraggingRef.current = false;
-
-    try {
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
+      if (normIdx !== currentIndexRef.current) {
+        currentIndexRef.current = normIdx;
+        setCurrentIndex(normIdx);
       }
-    } catch {}
 
-    const velocity = dragVelocityXRef.current; // px/ms
-    const step = getStep();
-    const velocityOffset = -velocity * 160 / step;
+      // Silent reset ONLY when scroll comes completely to rest (idle), 0ms flicker during swipe
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = setTimeout(() => {
+        if (!scrollContainerRef.current) return;
+        const currentPos = scrollContainerRef.current.scrollLeft;
+        const currentVIdx = Math.round(currentPos / step);
 
-    const target = Math.round(offsetRef.current + velocityOffset);
-    animateTo(target);
+        const middleSetStart = 3 * count;
+        const middleSetEnd = 4 * count;
+
+        if (currentVIdx < middleSetStart || currentVIdx >= middleSetEnd) {
+          const targetNormIdx = ((currentVIdx % count) + count) % count;
+          const targetVIdx = middleSetStart + targetNormIdx;
+          const targetScroll = targetVIdx * step;
+
+          // Silent shift while at rest: 100% invisible to human eye
+          const prevSnap = container.style.scrollSnapType;
+          container.style.scrollSnapType = 'none';
+          container.scrollLeft = targetScroll;
+          void container.offsetWidth;
+          container.style.scrollSnapType = prevSnap;
+
+          updateCardScales(targetScroll);
+        }
+      }, 150);
+    });
+  };
+
+  const scrollToVirtualIndex = (vIndex: number) => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const step = itemStepRef.current || (window.innerWidth >= 640 ? 250 : 211);
+    container.scrollTo({
+      left: vIndex * step,
+      behavior: 'smooth',
+    });
   };
 
   if (loading) {
@@ -341,12 +326,18 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
   const handleNext = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    animateTo(targetRef.current + 1);
+    if (!scrollContainerRef.current) return;
+    const step = itemStepRef.current || (window.innerWidth >= 640 ? 250 : 211);
+    const currentVIdx = Math.round(scrollContainerRef.current.scrollLeft / step);
+    scrollToVirtualIndex(currentVIdx + 1);
   };
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    animateTo(targetRef.current - 1);
+    if (!scrollContainerRef.current) return;
+    const step = itemStepRef.current || (window.innerWidth >= 640 ? 250 : 211);
+    const currentVIdx = Math.round(scrollContainerRef.current.scrollLeft / step);
+    scrollToVirtualIndex(currentVIdx - 1);
   };
 
   return (
@@ -354,7 +345,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       id="discover-card-event"
       className="flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-amber-50/30 to-orange-50/15 text-slate-900 border border-amber-200/70 hover:border-orange-400/60 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden h-full min-h-[480px] select-none"
     >
-      {/* Decorative ambient glowing lights: soft warm sunny glow */}
+      {/* Decorative ambient glowing lights */}
       <div className="absolute -top-20 -right-20 w-56 h-56 bg-orange-200/20 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-amber-200/20 rounded-full blur-3xl pointer-events-none" />
 
@@ -394,37 +385,39 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
       </div>
 
-      {/* 100% Flicker-Free Continuous Interactive Drag Track with 120Hz Hardware Acceleration */}
-      <div 
-        className="relative z-10 w-full flex-1 flex items-center justify-center py-2 overflow-hidden min-h-[340px] touch-pan-y cursor-grab active:cursor-grabbing"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      >
-        <div className="relative w-full h-[320px] sm:h-[340px] flex items-center justify-center">
-          {activeEvents.map((event, i) => {
+      {/* 100% Native WebKit iOS 120Hz Hardware Momentum Scroll Track */}
+      <div className="relative z-10 w-full flex-1 flex items-center py-2 overflow-hidden min-h-[340px]">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="w-full flex items-center gap-4 sm:gap-5 overflow-x-auto snap-x snap-mandatory py-6 px-[calc(50%-97.5px)] sm:px-[calc(50%-115px)] touch-pan-x [&::-webkit-scrollbar]:hidden"
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+        >
+          {repeatedEvents.map((event, virtualIdx) => {
             const badge = getEventBadgeLabel(event);
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
 
             return (
               <div
-                key={event.id || `evt-${i}`}
-                ref={(el) => { cardRefs.current[i] = el; }}
+                key={`${event.id || 'evt'}-${virtualIdx}`}
+                ref={(el) => { cardRefs.current[virtualIdx] = el; }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  let target = targetRef.current;
-                  let currDiff = i - target;
-                  while (currDiff < -count / 2) currDiff += count;
-                  while (currDiff >= count / 2) currDiff -= count;
-
-                  if (Math.abs(currDiff) < 0.35) {
-                    onNavigate('events', { eventId: event.id });
-                  } else {
-                    animateTo(target + currDiff);
+                  const step = itemStepRef.current || (window.innerWidth >= 640 ? 250 : 211);
+                  if (scrollContainerRef.current) {
+                    const currentVIdx = Math.round(scrollContainerRef.current.scrollLeft / step);
+                    if (virtualIdx === currentVIdx) {
+                      onNavigate('events', { eventId: event.id });
+                    } else {
+                      scrollToVirtualIndex(virtualIdx);
+                    }
                   }
                 }}
-                className="absolute w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border border-slate-200/90 shadow-md transform-gpu select-none group/cardWillChange"
+                className="shrink-0 snap-center w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border border-slate-200/90 shadow-md transform-gpu relative group/card select-none z-10"
                 style={{
                   willChange: 'transform, opacity',
                 }}
@@ -495,26 +488,28 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
 
         {/* Clickable Dots Indicator */}
-        <div 
-          ref={dotsContainerRef}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/95 border border-amber-200/80 shadow-2xs"
-        >
+        <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/95 border border-amber-200/80 shadow-2xs">
           {activeEvents.slice(0, Math.min(count, 8)).map((_, idx) => {
+            const isActive = idx === currentIndex % count;
             return (
               <button
                 key={idx}
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  let currTarget = targetRef.current;
-                  let normalizedTarget = ((currTarget % count) + count) % count;
-                  let diff = idx - normalizedTarget;
-                  while (diff < -count / 2) diff += count;
-                  while (diff >= count / 2) diff -= count;
-                  animateTo(currTarget + diff);
+                  if (!scrollContainerRef.current) return;
+                  const step = itemStepRef.current || (window.innerWidth >= 640 ? 250 : 211);
+                  const currentVIdx = Math.round(scrollContainerRef.current.scrollLeft / step);
+                  const setBase = Math.floor(currentVIdx / count) * count;
+                  scrollToVirtualIndex(setBase + idx);
                 }}
                 aria-label={`Go to slide ${idx + 1}`}
-                className="h-1.5 rounded-full transition-all duration-300 cursor-pointer w-1.5 bg-amber-200 hover:bg-amber-300"
+                className={cn(
+                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
+                  isActive
+                    ? "w-6 bg-orange-500 shadow-sm shadow-orange-500/40"
+                    : "w-1.5 bg-amber-200 hover:bg-amber-300"
+                )}
               />
             );
           })}
