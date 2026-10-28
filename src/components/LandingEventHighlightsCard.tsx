@@ -18,27 +18,27 @@ interface LandingEventHighlightsCardProps {
   loading?: boolean;
 }
 
-export function getCurrentWeekInterval(refDate = new Date()) {
+export function getCurrentWeekendInterval(refDate = new Date()) {
   const now = new Date(refDate);
   const day = now.getDay();
-  // In JS getDay(): 0 is Sunday, 1 is Monday ... 6 is Saturday
-  const diffToMon = day === 0 ? -6 : 1 - day;
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon, 0, 0, 0, 0);
-  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6, 23, 59, 59, 999);
-  return { monday, sunday };
+  // In JS getDay(): 0 is Sunday, 1 is Monday ... 5 is Friday, 6 is Saturday
+  const diffToFriday = day === 0 ? -2 : 5 - day;
+  const friday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToFriday, 0, 0, 0, 0);
+  const sunday = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate() + 2, 23, 59, 59, 999);
+  return { friday, sunday };
 }
 
-function formatWeekDateRange(refDate = new Date()): string {
-  const { monday, sunday } = getCurrentWeekInterval(refDate);
+function formatWeekendDateRange(refDate = new Date()): string {
+  const { friday, sunday } = getCurrentWeekendInterval(refDate);
 
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const sM = months[monday.getMonth()];
+  const sM = months[friday.getMonth()];
   const eM = months[sunday.getMonth()];
 
   if (sM === eM) {
-    return `${monday.getDate()}–${sunday.getDate()} ${sM}`;
+    return `${friday.getDate()}–${sunday.getDate()} ${sM}`;
   }
-  return `${monday.getDate()} ${sM} – ${sunday.getDate()} ${eM}`;
+  return `${friday.getDate()} ${sM} – ${sunday.getDate()} ${eM}`;
 }
 
 function getEventBadgeLabel(event: Event, refDate = new Date()): string {
@@ -77,6 +77,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [rawScrollIndex, setRawScrollIndex] = useState(0);
+  const [scrollLeftState, setScrollLeftState] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
@@ -85,7 +86,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   const isScrollingTouchRef = useRef<boolean>(false);
   const rafRef = useRef<number | null>(null);
 
-  // Automatically refresh date periodically so week shifts seamlessly as time progresses
+  // Automatically refresh date periodically so weekend shifts seamlessly as time progresses
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentDate(new Date());
@@ -93,24 +94,30 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     return () => clearInterval(timer);
   }, []);
 
-  // Compute current week range dynamically (e.g. "26 Oct – 1 Nov")
-  const weekRange = useMemo(() => formatWeekDateRange(currentDate), [currentDate]);
+  // Compute current upcoming weekend range dynamically (e.g. "30 Oct – 1 Nov")
+  const weekendRange = useMemo(() => formatWeekendDateRange(currentDate), [currentDate]);
 
-  // Strictly filter events occurring within the active week interval (Monday to Sunday)
+  // Strictly filter events occurring within the active upcoming weekend interval (Friday to Sunday)
   const activeEvents = useMemo(() => {
-    const { monday, sunday } = getCurrentWeekInterval(currentDate);
+    const { friday, sunday } = getCurrentWeekendInterval(currentDate);
 
-    const weekEvents = events.filter((e) => {
+    const weekendEvents = events.filter((e) => {
+      // Explicitly exclude Year Round / permanent events
       if (isYearRoundEvent(e)) return false;
 
-      const s = getEventStartDate(e, monday.getFullYear());
-      const end = getEventEndDate(e, monday.getFullYear()) || s;
+      const s = getEventStartDate(e, friday.getFullYear());
+      const end = getEventEndDate(e, friday.getFullYear()) || s;
       if (!s) return false;
 
-      return s.getTime() <= sunday.getTime() && end.getTime() >= monday.getTime();
+      return s.getTime() <= sunday.getTime() && end.getTime() >= friday.getTime();
     });
 
-    return [...weekEvents].sort((a, b) => {
+    // Fall back to general non-year-round upcoming events if no specific weekend event matches
+    const finalEvents = weekendEvents.length > 0 
+      ? weekendEvents 
+      : events.filter((e) => !isYearRoundEvent(e)).slice(0, 8);
+
+    return [...finalEvents].sort((a, b) => {
       const aTime = getEventStartDate(a)?.getTime() || 0;
       const bTime = getEventStartDate(b)?.getTime() || 0;
       return aTime - bTime;
@@ -168,6 +175,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         const targetCenter = targetChild.offsetLeft + targetChild.offsetWidth / 2;
         const scrollPos = targetCenter - container.clientWidth / 2;
         container.scrollLeft = scrollPos;
+        setScrollLeftState(scrollPos);
         setRawScrollIndex(count);
       }
     });
@@ -175,14 +183,18 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     return () => cancelAnimationFrame(timer);
   }, [count]);
 
-  // Precise DOM distance scroll listener to pinpoint the exact centered card & handle infinite loop teleporting
+  // Continuous 1:1 scroll position listener to calculate smooth scale & orange glow morphing on every frame
   const handleScroll = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     
     rafRef.current = requestAnimationFrame(() => {
       if (!scrollContainerRef.current || count === 0) return;
       const container = scrollContainerRef.current;
-      const containerCenter = container.scrollLeft + container.clientWidth / 2;
+      const currentScrollLeft = container.scrollLeft;
+
+      setScrollLeftState(currentScrollLeft);
+
+      const containerCenter = currentScrollLeft + container.clientWidth / 2;
       const children = container.children;
       if (children.length === 0) return;
 
@@ -203,14 +215,16 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       if (centeredVirtualIndex < count) {
         const itemWidth = children.length > 1 
           ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
-          : 231;
+          : 210;
         container.scrollLeft += count * itemWidth;
+        setScrollLeftState(container.scrollLeft);
         centeredVirtualIndex += count;
       } else if (centeredVirtualIndex >= 2 * count) {
         const itemWidth = children.length > 1 
           ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
-          : 231;
+          : 210;
         container.scrollLeft -= count * itemWidth;
+        setScrollLeftState(container.scrollLeft);
         centeredVirtualIndex -= count;
       }
 
@@ -221,6 +235,49 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         setCurrentIndex(normalizedIndex);
       }
     });
+  };
+
+  // Calculate dynamic scale, opacity and glow opacity based on physical distance from container center
+  const getCardProgress = (virtualIdx: number) => {
+    if (!scrollContainerRef.current) {
+      const isCenter = virtualIdx === rawScrollIndex;
+      return {
+        scale: isCenter ? 1.08 : 0.90,
+        opacity: isCenter ? 1.0 : 0.70,
+        glowOpacity: isCenter ? 1.0 : 0.0,
+        isCenterCard: isCenter,
+      };
+    }
+
+    const container = scrollContainerRef.current;
+    const child = container.children[virtualIdx] as HTMLElement;
+    if (!child) {
+      const isCenter = virtualIdx === rawScrollIndex;
+      return {
+        scale: isCenter ? 1.08 : 0.90,
+        opacity: isCenter ? 1.0 : 0.70,
+        glowOpacity: isCenter ? 1.0 : 0.0,
+        isCenterCard: isCenter,
+      };
+    }
+
+    const containerCenter = scrollLeftState + container.clientWidth / 2;
+    const childCenter = child.offsetLeft + child.offsetWidth / 2;
+    const offsetPx = Math.abs(childCenter - containerCenter);
+
+    const itemWidth = container.children.length > 1
+      ? (container.children[1] as HTMLElement).offsetLeft - (container.children[0] as HTMLElement).offsetLeft
+      : 210;
+
+    const ratio = Math.min(1, offsetPx / itemWidth);
+    const smoothFactor = Math.max(0, 1 - Math.pow(ratio, 1.2));
+
+    const scale = 0.90 + (1.08 - 0.90) * smoothFactor;
+    const opacity = 0.70 + (1.00 - 0.70) * smoothFactor;
+    const glowOpacity = smoothFactor;
+    const isCenterCard = ratio < 0.4;
+
+    return { scale, opacity, glowOpacity, isCenterCard };
   };
 
   // Auto-rotation every 6 seconds in continuous infinite loop
@@ -248,7 +305,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
-            <h3 className="text-lg font-bold font-display text-slate-900">This Week&apos;s Events</h3>
+            <h3 className="text-lg font-bold font-display text-slate-900">This Weekend&apos;s Events</h3>
           </div>
           <p className="text-sm text-slate-500">Discover festivals, exhibitions, concerts, and weekend plans in Valencia.</p>
         </div>
@@ -280,7 +337,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       <div className="absolute -top-20 -right-20 w-56 h-56 bg-orange-200/20 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-amber-200/20 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Header: This Week's Events + Week date range + All events link */}
+      {/* Header: This Weekend's Events + Weekend date range + All events link */}
       <div className="relative z-10 flex items-center justify-between gap-3 mb-3 w-full">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white shadow-md shadow-orange-500/20 shrink-0">
@@ -289,7 +346,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
           <div className="text-left">
             <div className="flex items-center gap-1.5">
               <h3 className="font-extrabold font-display text-sm sm:text-base text-slate-900 tracking-tight leading-none">
-                This Week&apos;s Events
+                This Weekend&apos;s Events
               </h3>
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
@@ -297,7 +354,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
               </span>
             </div>
             <p className="text-[10px] text-slate-500 font-semibold mt-1">
-              {weekRange} • Culture & outings
+              {weekendRange} • Culture & weekend plans
             </p>
           </div>
         </div>
@@ -334,8 +391,8 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
             const badge = getEventBadgeLabel(event);
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
             
-            // Calculate whether this item is currently dead-center
-            const isCenterCard = virtualIdx === rawScrollIndex;
+            // Continuous proportional morphing calculations
+            const { scale, opacity, glowOpacity, isCenterCard } = getCardProgress(virtualIdx);
 
             return (
               <div
@@ -348,21 +405,25 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                     scrollToVirtualIndex(virtualIdx, true);
                   }
                 }}
-                className={cn(
-                  "shrink-0 snap-center w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border transition-all duration-300 transform-gpu relative group/card select-none",
-                  isCenterCard
-                    ? "border-2 border-orange-500 shadow-2xl shadow-orange-500/35 scale-105 sm:scale-110 z-20 opacity-100 ring-4 ring-orange-500/20"
-                    : "border-slate-200/90 shadow-sm scale-90 sm:scale-95 z-0 opacity-70 hover:opacity-90"
-                )}
+                style={{
+                  transform: `scale(${scale})`,
+                  opacity: opacity,
+                  transition: isScrollingTouchRef.current ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-out',
+                }}
+                className="shrink-0 snap-center w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border border-slate-200/90 shadow-md transform-gpu relative group/card select-none z-10"
               >
-                {/* Poster Background Image with internal zoom effect on active card */}
+                {/* Dynamic Glowing Orange Border Overlay that morphs continuously with touch distance */}
+                <div 
+                  className="absolute inset-0 rounded-2xl border-2 border-orange-500 shadow-2xl shadow-orange-500/35 ring-4 ring-orange-500/20 pointer-events-none z-30 transition-opacity duration-150"
+                  style={{ opacity: glowOpacity }}
+                />
+
+                {/* Poster Background Image with smooth dynamic internal zoom */}
                 <img
                   src={event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"}
                   alt={event.title}
-                  className={cn(
-                    "w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02] transition-transform duration-500",
-                    isCenterCard ? "scale-105 group-hover:scale-110" : "scale-100"
-                  )}
+                  className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02] transition-transform duration-300"
+                  style={{ transform: `scale(${1 + (scale - 0.9) * 0.4})` }}
                   referrerPolicy="no-referrer"
                   loading="eager"
                   decoding="sync"
