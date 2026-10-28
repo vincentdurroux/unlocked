@@ -1295,6 +1295,102 @@ const MOCK_EVENTS: Event[] = [
     verified_real: true
   },
   {
+    id: '2b',
+    title: 'Ruzafa Artisan Craft, Vinyl & Tapas Night Market',
+    date: 'OCT 30',
+    start_date: 'OCT 30',
+    time: '07:00 PM',
+    start_time: '07:00 PM',
+    end_time: '11:00 PM',
+    location: 'Plaça del Doctor Landete & Ruzafa Market, Valencia',
+    category: 'Gastronomy',
+    image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=800',
+    is_free: true,
+    price: 'Free Entry',
+    ticket_url: 'https://valenciabonita.es/agenda-valencia/',
+    sources: [
+      { title: 'Ruzafa Cultural Association', url: 'https://valenciabonita.es/agenda-valencia/' }
+    ],
+    description: `**✨ What can you expect?**
+- Stroll among dozens of illuminated evening artisan stalls featuring ceramicists, local leather craftsmen, and independent vinyl sellers.
+- Savor authentic Valencian pinchos, artisan cheeses, local craft beers, and organic wines at pop-up food stands.
+- Live acoustic guitar sessions and friendly neighborhood ambiance under fairy lights.
+
+**🎯 Perfect for**
+- Families, couples, food lovers, and friends kicking off Friday night in vibrant Ruzafa.
+
+**💡 Good to know (tips)**
+- 🎟️ **Admission**: Free open-air market entry.
+- 🚇 Nearest Metro: Xàtiva or Bailén (10 min walk).
+- 🚲 Plenty of Valenbisi docking stations around Plaça de Manuel Granero.`,
+    coordinates: { lat: 39.4621, lng: -0.3725 },
+    verified_real: true
+  },
+  {
+    id: '2c',
+    title: 'Turia Gardens Sunset Acoustic Concert & Family Picnic',
+    date: 'OCT 31',
+    start_date: 'OCT 31',
+    time: '04:30 PM',
+    start_time: '04:30 PM',
+    end_time: '08:30 PM',
+    location: 'Jardín del Turia (Near Palau de la Música, Tram 9), Valencia',
+    category: 'Music',
+    image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=800',
+    is_free: true,
+    price: 'Free Community Event',
+    ticket_url: 'https://palaudelamusica.valencia.es',
+    sources: [
+      { title: 'Palau de la Música Turia Series', url: 'https://palaudelamusica.valencia.es' }
+    ],
+    description: `**✨ What can you expect?**
+- Relax on the green lawns of the former Turia riverbed listening to live acoustic folk, bossa nova, and Mediterranean indie melodies.
+- Bring your picnic blanket, games for kids, and afternoon snacks while the sunset illuminates the iconic Palau fountains.
+- Family-friendly atmosphere with bubble artists and creative workshops for children.
+
+**🎯 Perfect for**
+- Families with children, music enthusiasts, dog owners, and weekend park strollers.
+
+**💡 Good to know (tips)**
+- 🎟️ **Tickets**: Completely free open-air lawn access.
+- 🧺 Bring a blanket and reusable cups.
+- 🚇 Nearest Metro: Alameda (Lines 3, 5, 7, 9).`,
+    coordinates: { lat: 39.4678, lng: -0.3601 },
+    verified_real: true
+  },
+  {
+    id: '2d',
+    title: 'El Carmen Historic Courtyards & Acoustic Flamenco Walk',
+    date: 'NOV 01',
+    start_date: 'NOV 01',
+    time: '11:30 AM',
+    start_time: '11:30 AM',
+    end_time: '02:00 PM',
+    location: 'Plaza del Tossal & Centre del Carme (CCCC), Valencia',
+    category: 'Culture',
+    image: 'https://images.unsplash.com/photo-1544928141-52593e7f54fa?auto=format&fit=crop&q=80&w=800',
+    is_free: true,
+    price: 'Free Entry',
+    ticket_url: 'https://www.carmencultura.org',
+    sources: [
+      { title: 'CCCC Centre del Carme', url: 'https://www.carmencultura.org' }
+    ],
+    description: `**✨ What can you expect?**
+- Sunday morning cultural stroll exploring the Gothic and Renaissance cloisters of Centre del Carme Cultura Contemporània (CCCC).
+- Soulful live Spanish guitar and impromptu flamenco clapping in shaded historic courtyards.
+- Finish with vermut de grifo and traditional Sunday tapas on Plaza del Doctor Collado.
+
+**🎯 Perfect for**
+- Expats, curious travelers, photography buffs, and cultural weekend strollers.
+
+**💡 Good to know (tips)**
+- 🎟️ **Tickets**: Free admission to CCCC cloisters and courtyard spaces.
+- 🚶 Wear comfortable walking shoes for historic cobblestone alleyways.
+- 📍 Meeting point: Plaza del Tossal fountain.`,
+    coordinates: { lat: 39.4772, lng: -0.3809 },
+    verified_real: true
+  },
+  {
     id: '3',
     title: 'Traditional Valencian Paella & Tapas Masterclass',
     date: 'NOV 04',
@@ -13973,7 +14069,15 @@ function HomeView({
           </h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 grid-flow-row-dense">
-          {/* Card 1: Top Rated Pro / Testimonial / Multi-Partner Carousel */}
+          {/* Card 1: Event Highlights (Weekly & Weekend Spotlight) */}
+          <LandingEventHighlightsCard
+            events={events}
+            highlightedEventIds={highlightedEventIds}
+            onNavigate={onNavigate}
+            loading={eventsLoading}
+          />
+
+          {/* Card 2: Top Rated Pro / Testimonial / Multi-Partner Carousel */}
           {(() => {
             const activePartners = partnersList.filter(p => p.is_active !== false);
             const currentPartner = activePartners.length > 0
@@ -14134,10 +14238,10 @@ function HomeView({
             return (
               <div 
                 className={cn(
-                  "flex flex-col justify-between p-6 rounded-3xl bg-white border transition-all duration-300 cursor-pointer group relative overflow-hidden h-full",
+                  "flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-sky-50/25 to-blue-50/15 border transition-all duration-300 cursor-pointer group relative overflow-hidden h-full min-h-[480px]",
                   isCardProExpanded
-                    ? "border-brand-blue ring-2 ring-brand-blue/30 shadow-md bg-blue-50/15"
-                    : "border-slate-100 hover:border-brand-blue/30 shadow-sm hover:shadow-md hover:-translate-y-1"
+                    ? "border-brand-blue ring-2 ring-brand-blue/30 shadow-xl bg-blue-50/35"
+                    : "border-blue-100/90 hover:border-brand-blue/40 shadow-sm hover:shadow-xl hover:-translate-y-1"
                 )}
                 id="discover-card-pro"
                 onClick={() => {
@@ -14151,7 +14255,25 @@ function HomeView({
                   }
                 }}
               >
-                <div className="relative flex-1">
+                {/* Subtle soft ambient light */}
+                <div className="absolute -top-20 -right-20 w-52 h-52 bg-sky-200/20 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-20 -left-20 w-52 h-52 bg-blue-200/15 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="relative z-10 flex-1 flex flex-col justify-between">
+                  {/* Distinctive Header: Meet a local Pro */}
+                  <div className="flex items-center justify-between gap-3 mb-4 w-full">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue to-sky-500 flex items-center justify-center text-white shadow-md shadow-brand-blue/20 shrink-0">
+                        <Star className="w-4 h-4 fill-current" />
+                      </div>
+                      <div className="text-left">
+                        <h3 className="font-extrabold font-display text-sm sm:text-base text-slate-900 tracking-tight leading-none">
+                          Meet a local Pro
+                        </h3>
+                      </div>
+                    </div>
+                  </div>
+
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div
                       key={activeIndex}
@@ -14159,34 +14281,26 @@ function HomeView({
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -20 }}
                       transition={{ duration: 0.2 }}
-                      className="h-full flex flex-col items-center justify-center text-center"
+                      className="h-full flex flex-col items-center justify-center text-center flex-1 my-auto"
                     >
-                      <div className="flex items-center justify-between gap-2 mb-4">
-                        {currentItem.type !== 'testimony' && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-brand-blue/5 text-brand-blue border border-brand-blue/10 uppercase tracking-widest shrink-0">
-                            <Star className="w-3 h-3 fill-current" /> Meet a local Pro
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="flex-1 flex flex-col h-full">
+                      <div className="flex-1 flex flex-col justify-center items-center h-full w-full">
                         {currentItem.type === 'testimony' ? (
-                          <div className="space-y-4 flex flex-col h-full items-center justify-center">
-                            <div className="flex items-center gap-2.5">
+                          <div className="space-y-4 flex flex-col h-full items-center justify-center w-full">
+                            <div className="flex items-center gap-3">
                               <img 
                                 src={proToShow.image || "/people.png"} 
                                 alt={proToShow.name} 
-                                className="w-7 h-7 rounded-full object-cover ring-2 ring-blue-50"
+                                className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-100 shadow-sm"
                                 referrerPolicy="no-referrer"
                               />
-                              <div>
-                                <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors max-w-[150px] truncate leading-tight uppercase tracking-tight text-[11px]">{proToShow.name}</h4>
+                              <div className="text-left">
+                                <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors max-w-[170px] truncate leading-tight uppercase tracking-tight text-xs">{proToShow.name}</h4>
                                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">{proToShow.category}</p>
                               </div>
                             </div>
 
-                            <div className="relative bg-brand-blue/5 p-5 rounded-3xl border border-brand-blue/10">
-                              <p className="text-[12px] text-slate-700 leading-relaxed font-medium italic">
+                            <div className="relative bg-white/90 p-5 rounded-2xl border border-blue-100/80 shadow-xs backdrop-blur-xs text-left w-full">
+                              <p className="text-xs sm:text-[13px] text-slate-700 leading-relaxed font-medium italic">
                                 "{commentToShow}"
                               </p>
                               <div className="mt-3 flex items-center justify-end gap-2">
@@ -14195,40 +14309,22 @@ function HomeView({
                                   {formatName(authorToShow)}
                                 </span>
                               </div>
-                              {/* Decorative bubble tail */}
-                              <div className="absolute -bottom-2 left-6 w-4 h-4 bg-brand-blue/5 border-r border-b border-brand-blue/10 rotate-45" />
                             </div>
                           </div>
                         ) : (
-                          <div className="flex flex-col space-y-4 flex-1 items-center justify-center h-full">
-                            <div className="flex items-center gap-4">
+                          <div className="flex flex-col space-y-3.5 flex-1 items-center justify-center h-full w-full py-2">
+                            <div className="relative">
                               <img 
                                 src={proToShow.image || "/people.png"} 
                                 alt={proToShow.name} 
-                                className="w-16 h-16 md:w-28 md:h-28 rounded-2xl md:rounded-3xl object-cover shadow-sm ring-4 ring-slate-50 group-hover:scale-105 transition-all duration-300"
+                                className="w-20 h-20 md:w-24 md:h-24 rounded-3xl object-cover shadow-md ring-4 ring-white border border-blue-100/80 group-hover:scale-105 transition-all duration-300"
                                 referrerPolicy="no-referrer"
                               />
                             </div>
-                            <div className="space-y-1 text-center">
-                              <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-base leading-tight">{proToShow.name}</h4>
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">{proToShow.category}</p>
-                              {proToShow.top_qualities && proToShow.top_qualities.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 pt-1.5 justify-center">
-                                  {proToShow.top_qualities.map((quality: string) => {
-                                    const cfg = getQualityConfig(quality);
-                                    const QualityIcon = cfg.icon;
-                                    return (
-                                      <span 
-                                        key={quality} 
-                                        className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-bold border ${cfg.color} shrink-0`}
-                                      >
-                                        <QualityIcon className={`w-3 h-3 ${cfg.iconColor} shrink-0`} />
-                                        {quality}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              )}
+                            <div className="space-y-1 text-center w-full px-2">
+                              <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-base md:text-lg leading-tight truncate">{proToShow.name}</h4>
+                              <p className="text-xs font-bold text-brand-blue uppercase tracking-wide truncate">{proToShow.category}</p>
+                              
                               {((proToShow.review_count && proToShow.review_count > 0) || proApprovedTestimoniesCount > 0) ? (
                                 <div className="flex items-center gap-1 pt-1 justify-center">
                                   {[...Array(5)].map((_, i) => (
@@ -14237,19 +14333,55 @@ function HomeView({
                                       className={`w-3.5 h-3.5 ${i < Math.floor(ratingToShow) ? 'text-brand-yellow fill-current' : 'text-slate-200'}`} 
                                     />
                                   ))}
-                                  <span className="text-[10px] text-slate-400 font-extrabold ml-1">({reviewCountToShow})</span>
+                                  <span className="text-[11px] text-slate-500 font-extrabold ml-1">({reviewCountToShow})</span>
                                 </div>
                               ) : null}
+
+                              {proToShow.top_qualities && proToShow.top_qualities.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pt-2 justify-center">
+                                  {proToShow.top_qualities.slice(0, 2).map((quality: string) => {
+                                    const cfg = getQualityConfig(quality);
+                                    const QualityIcon = cfg.icon;
+                                    return (
+                                      <span 
+                                        key={quality} 
+                                        className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[9px] font-bold border ${cfg.color} shrink-0 bg-white/80 shadow-3xs`}
+                                      >
+                                        <QualityIcon className={`w-3 h-3 ${cfg.iconColor} shrink-0`} />
+                                        {quality}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
                       </div>
                     </motion.div>
                   </AnimatePresence>
+
+                  {/* Clean Footer */}
+                  <div className="pt-3 border-t border-blue-100/70 flex items-center justify-between mt-auto w-full">
+                    {section1Items.length > 1 && (
+                      <div className="flex items-center gap-1.5">
+                        {section1Items.slice(0, 6).map((_, idx) => (
+                          <span 
+                            key={idx}
+                            className={cn(
+                              "h-1.5 rounded-full transition-all duration-300",
+                              idx === activeIndex ? "w-5 bg-brand-blue" : "w-1.5 bg-blue-200"
+                            )}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <div className="text-[11px] font-bold text-brand-blue flex items-center gap-1 group-hover:translate-x-0.5 transition-transform ml-auto">
+                      <span>{isCardProExpanded ? "Close profile" : "View profile"}</span>
+                      <span>→</span>
+                    </div>
+                  </div>
                 </div>
-
-
-
 
                 {section1Items.length >= 2 && (
                   <>
@@ -14258,7 +14390,7 @@ function HomeView({
                         e.stopPropagation();
                         setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md group-hover:opacity-100 z-30"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
@@ -14267,7 +14399,7 @@ function HomeView({
                         e.stopPropagation();
                         setSec1Idx((activeIndex + 1) % section1Items.length);
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md group-hover:opacity-100 z-30"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
@@ -14328,13 +14460,6 @@ function HomeView({
             </motion.div>
           )}
 
-          {/* Card 2: Event Highlights of the Month (Automatic & Manual Carousel) */}
-          <LandingEventHighlightsCard
-            events={events}
-            highlightedEventIds={highlightedEventIds}
-            onNavigate={onNavigate}
-            loading={eventsLoading}
-          />
 
           {/* Card 3: Guide Highlight */}
           {(() => {
@@ -14378,11 +14503,32 @@ function HomeView({
 
             return (
               <div 
-                className="flex flex-col justify-between p-5 sm:p-6 rounded-3xl bg-white border border-slate-100 hover:border-[#00C2A8]/30 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full md:col-span-2 lg:col-span-1 md:max-w-md lg:max-w-none md:mx-auto lg:mx-0 w-full"
+                className="flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-teal-50/25 to-emerald-50/15 border border-teal-100/90 hover:border-teal-500/40 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full min-h-[480px] md:col-span-2 lg:col-span-1 md:max-w-md lg:max-w-none md:mx-auto lg:mx-0 w-full"
                 id="discover-card-guide"
                 onClick={() => onNavigate('guides', { guideId: featuredArticle.id })}
               >
-                <div className="relative flex-1 flex flex-col justify-between h-full">
+                {/* Subtle soft ambient light */}
+                <div className="absolute -top-20 -right-20 w-52 h-52 bg-teal-200/20 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-20 -left-20 w-52 h-52 bg-emerald-200/15 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="relative z-10 flex-1 flex flex-col justify-between h-full">
+                  {/* Distinctive Header: Tips of the Week */}
+                  <div className="flex items-center justify-between gap-3 mb-3 w-full">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center text-white shadow-md shadow-teal-500/20 shrink-0">
+                        <BookOpen className="w-4 h-4" />
+                      </div>
+                      <div className="text-left">
+                        <h3 className="font-extrabold font-display text-sm sm:text-base text-slate-900 tracking-tight leading-none">
+                          Tips of the Week
+                        </h3>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200/60 shrink-0">
+                      Guides 📖
+                    </span>
+                  </div>
+
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div
                       key={activeIndex}
@@ -14390,48 +14536,50 @@ function HomeView({
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -12 }}
                       transition={{ duration: 0.25, ease: 'easeOut' }}
-                      className="space-y-4 flex-1 flex flex-col justify-between"
+                      className="space-y-3.5 flex-1 flex flex-col justify-between"
                     >
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-[#00C2A8] border border-emerald-150/40 shrink-0 shadow-3xs">
-                            <BookOpen className="w-3.5 h-3.5" /> Tips of the week
-                          </span>
+                      <div className="space-y-3.5 text-left flex-1 flex flex-col">
+                        {/* Clear, vibrant image with category overlay */}
+                        <div className="aspect-[16/10] w-full rounded-2xl overflow-hidden bg-slate-100 relative border border-teal-100/80 shadow-md">
+                          <img 
+                            src={featuredArticle.imageUrl || "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=600&q=80"} 
+                            alt={featuredArticle.title} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 brightness-100 contrast-[1.02]"
+                            referrerPolicy="no-referrer"
+                          />
                         </div>
-                        
-                        <div className="space-y-4 text-left">
-                          <div className="aspect-[16/10] w-full rounded-2xl overflow-hidden bg-slate-50 relative border border-slate-100 shadow-3xs">
-                            <img 
-                              src={featuredArticle.imageUrl || "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=400&q=80"} 
-                              alt={featuredArticle.title} 
-                              className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
-                              referrerPolicy="no-referrer"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                          </div>
-                          <div className="space-y-2">
-                            <h4 className="font-extrabold text-slate-900 group-hover:text-[#00C2A8] transition-colors text-base leading-tight tracking-tight line-clamp-2">
-                              {featuredArticle.title}
-                            </h4>
-                            <p className="text-xs text-slate-500 leading-relaxed font-medium line-clamp-2">
-                              {featuredArticle.excerpt}
-                            </p>
-                          </div>
+
+                        {/* ONLY the hooking excerpt displayed under the image (entire text shown, no truncation) */}
+                        <div className="py-2 flex-1 flex flex-col justify-center">
+                          <p className="text-sm sm:text-[14.5px] text-slate-700 font-medium leading-relaxed italic before:content-['“'] after:content-['”']">
+                            {(featuredArticle.excerpt || '').replace(/(\s*\.{3}|\s*…)+$/, '')}
+                          </p>
                         </div>
                       </div>
 
-                      <div className="pt-4 flex items-center justify-end border-t border-slate-100/80 mt-auto">
-                        <div className="text-[10px] font-extrabold text-[#00C2A8] uppercase tracking-widest flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                      {/* Clean Footer */}
+                      <div className="pt-3 border-t border-teal-100/70 flex items-center justify-between mt-auto w-full">
+                        {section3Items.length > 1 && (
+                          <div className="flex items-center gap-1.5">
+                            {section3Items.slice(0, 6).map((_, idx) => (
+                              <span 
+                                key={idx}
+                                className={cn(
+                                  "h-1.5 rounded-full transition-all duration-300",
+                                  idx === activeIndex ? "w-5 bg-teal-600" : "w-1.5 bg-teal-200"
+                                )}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <div className="text-[11px] font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform ml-auto">
                           <span>Read full guide</span>
-                          <span className="text-xs font-black">→</span>
+                          <span>→</span>
                         </div>
                       </div>
                     </motion.div>
                   </AnimatePresence>
                 </div>
-
-
-
 
                 {section3Items.length >= 2 && (
                   <>
@@ -14440,7 +14588,7 @@ function HomeView({
                         e.stopPropagation();
                         setSec3Idx((activeIndex - 1 + section3Items.length) % section3Items.length);
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-[#00C2A8] hover:border-[#00C2A8]/20 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-teal-600 hover:border-teal-200 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
@@ -14449,7 +14597,7 @@ function HomeView({
                         e.stopPropagation();
                         setSec3Idx((activeIndex + 1) % section3Items.length);
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/60 backdrop-blur shadow text-slate-400 hover:text-[#00C2A8] hover:border-[#00C2A8]/20 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-teal-600 hover:border-teal-200 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>

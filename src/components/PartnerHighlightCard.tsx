@@ -44,10 +44,10 @@ export const PartnerHighlightCard: React.FC<PartnerHighlightCardProps> = ({
       id="discover-card-partner"
       onClick={onToggleExpand}
       className={cn(
-        "flex flex-col justify-between p-6 rounded-3xl bg-gradient-to-b from-white via-slate-50/50 to-emerald-50/30 border-2 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full shadow-sm hover:shadow-xl hover:-translate-y-1",
+        "flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-slate-50/40 to-emerald-50/25 border transition-all duration-300 cursor-pointer group relative overflow-hidden h-full min-h-[480px] shadow-sm hover:shadow-xl hover:-translate-y-1",
         isExpanded
-          ? "border-emerald-500 ring-4 ring-emerald-500/20 shadow-xl bg-emerald-50/40"
-          : "border-emerald-200/90 hover:border-emerald-400"
+          ? "border-emerald-500 ring-2 ring-emerald-500/30 shadow-xl bg-emerald-50/35"
+          : "border-emerald-100/90 hover:border-emerald-400/80"
       )}
     >
       {/* Top Spotlight Glow Accent */}
@@ -57,7 +57,7 @@ export const PartnerHighlightCard: React.FC<PartnerHighlightCardProps> = ({
       {/* Main Content Area */}
       <div className="relative flex-1 flex flex-col items-center justify-between text-center z-10 space-y-3">
         
-        {/* Top Header Badge & VIP Tag */}
+        {/* Top Header Badge */}
         <div className="flex items-center justify-between w-full">
           <span className={cn(
             "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-widest shrink-0 shadow-2xs backdrop-blur-xs",
@@ -66,10 +66,6 @@ export const PartnerHighlightCard: React.FC<PartnerHighlightCardProps> = ({
             <Crown className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
             {partner.badge_label || "Official Partner"}
           </span>
-
-          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-white/80 px-2.5 py-0.5 rounded-full border border-slate-100 shadow-2xs">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Verified
-          </div>
         </div>
 
         {/* Logo and Partner Identity */}
