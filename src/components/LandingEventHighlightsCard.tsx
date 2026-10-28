@@ -76,21 +76,14 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   loading = false,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [rawScrollIndex, setRawScrollIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
-  const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const touchStartXRef = useRef<number | null>(null);
-  const touchStartYRef = useRef<number | null>(null);
-  const lastTouchXRef = useRef<number>(0);
-  const lastTouchTimeRef = useRef<number>(0);
-  const velocityXRef = useRef<number>(0);
-  const mouseStartXRef = useRef<number | null>(null);
-  const dragOffsetRef = useRef<number>(0);
-  const isDraggingRef = useRef<boolean>(false);
-  const rafIdRef = useRef<number | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const currentIndexRef = useRef<number>(currentIndex);
+  const isScrollingTouchRef = useRef<boolean>(false);
+  const rafRef = useRef<number | null>(null);
 
   // Automatically refresh date periodically so week shifts seamlessly as time progresses
   useEffect(() => {
@@ -124,7 +117,13 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     });
   }, [events, currentDate]);
 
-  // Preload all event poster images up-front into browser cache for instant rendering & 60fps sliding
+  // Triplicated list for seamless infinite circular scrolling (3 sets: Set 0, Set 1 [Middle], Set 2)
+  const repeatedEvents = useMemo(() => {
+    if (!activeEvents || activeEvents.length === 0) return [];
+    return [...activeEvents, ...activeEvents, ...activeEvents];
+  }, [activeEvents]);
+
+  // Preload all event poster images up-front into browser cache for instant rendering
   useEffect(() => {
     if (!activeEvents || activeEvents.length === 0) return;
     
@@ -137,74 +136,104 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
   const count = activeEvents.length;
 
-  // Reset index if count changes
-  useEffect(() => {
-    if (currentIndex >= count && count > 0) {
-      setCurrentIndex(0);
-    }
-  }, [count, currentIndex]);
-
-  // Keep currentIndexRef in sync
+  // Sync currentIndexRef
   useEffect(() => {
     currentIndexRef.current = currentIndex;
-    updateCardStyles(0, false);
-  }, [currentIndex, count]);
+  }, [currentIndex]);
 
-  // Direct DOM style mutator optimized for iOS Safari Metal compositor (120 FPS ProMotion)
-  const updateCardStyles = (offsetPx: number, dragging: boolean) => {
-    if (count === 0) return;
-    const offsetIndex = offsetPx / 115;
-    const virtualIndex = currentIndexRef.current - offsetIndex;
+  const scrollToVirtualIndex = (vIndex: number, smooth = true) => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const targetChild = container.children[vIndex] as HTMLElement;
+    if (targetChild) {
+      const targetCenter = targetChild.offsetLeft + targetChild.offsetWidth / 2;
+      const scrollPos = targetCenter - container.clientWidth / 2;
+      container.scrollTo({
+        left: scrollPos,
+        behavior: smooth ? 'smooth' : 'instant' as ScrollBehavior,
+      });
+    }
+  };
 
-    activeEvents.forEach((_, idx) => {
-      const el = cardRefs.current[idx];
-      if (!el) return;
+  // Center strictly on middle set start card upon mounting or when event count changes
+  useEffect(() => {
+    if (count === 0 || !scrollContainerRef.current) return;
+    
+    const timer = requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (!container || container.children.length <= count) return;
+      
+      const targetChild = container.children[count] as HTMLElement;
+      if (targetChild) {
+        const targetCenter = targetChild.offsetLeft + targetChild.offsetWidth / 2;
+        const scrollPos = targetCenter - container.clientWidth / 2;
+        container.scrollLeft = scrollPos;
+        setRawScrollIndex(count);
+      }
+    });
 
-      let diff = (idx - virtualIndex) % count;
-      if (diff > count / 2) diff -= count;
-      if (diff < -count / 2) diff += count;
+    return () => cancelAnimationFrame(timer);
+  }, [count]);
 
-      const isCenter = Math.abs(diff) < 0.3;
-      const xOffset = diff * 115;
-      const yCurve = Math.abs(diff) * Math.abs(diff) * 6; // Parabolic arc creating cylindrical depth on iOS
-      const scale = Math.max(0.60, 1 - Math.abs(diff) * 0.14);
-      const opacity = Math.max(0, 1 - Math.abs(diff) * 0.32);
-      const zIndex = Math.round(30 - Math.abs(diff) * 10);
+  // Precise DOM distance scroll listener to pinpoint the exact centered card & handle infinite loop teleporting
+  const handleScroll = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    
+    rafRef.current = requestAnimationFrame(() => {
+      if (!scrollContainerRef.current || count === 0) return;
+      const container = scrollContainerRef.current;
+      const containerCenter = container.scrollLeft + container.clientWidth / 2;
+      const children = container.children;
+      if (children.length === 0) return;
 
-      // Hardware 2D Metal display plane compositing on iOS Safari (Zero WebKit 3D rasterization overhead)
-      el.style.transform = `translate3d(${xOffset}px, ${yCurve}px, 0) scale(${scale})`;
-      el.style.opacity = `${opacity}`;
-      el.style.zIndex = `${zIndex}`;
-      el.style.pointerEvents = opacity > 0.2 ? 'auto' : 'none';
+      let minDistance = Infinity;
+      let centeredVirtualIndex = 0;
 
-      if (dragging) {
-        el.style.transition = 'none';
-      } else {
-        el.style.transition = 'transform 0.48s cubic-bezier(0.12, 0.85, 0.25, 1), opacity 0.38s ease';
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i] as HTMLElement;
+        const childCenter = child.offsetLeft + child.offsetWidth / 2;
+        const dist = Math.abs(childCenter - containerCenter);
+        if (dist < minDistance) {
+          minDistance = dist;
+          centeredVirtualIndex = i;
+        }
       }
 
-      if (isCenter) {
-        el.classList.add('border-2', 'border-orange-500', 'shadow-2xl', 'shadow-orange-500/20');
-        el.classList.remove('border-slate-100');
-      } else {
-        el.classList.remove('border-2', 'border-orange-500', 'shadow-2xl', 'shadow-orange-500/20');
-        el.classList.add('border-slate-100');
+      // Infinite Circular Teleportation:
+      if (centeredVirtualIndex < count) {
+        const itemWidth = children.length > 1 
+          ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
+          : 231;
+        container.scrollLeft += count * itemWidth;
+        centeredVirtualIndex += count;
+      } else if (centeredVirtualIndex >= 2 * count) {
+        const itemWidth = children.length > 1 
+          ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
+          : 231;
+        container.scrollLeft -= count * itemWidth;
+        centeredVirtualIndex -= count;
+      }
+
+      setRawScrollIndex(centeredVirtualIndex);
+
+      const normalizedIndex = centeredVirtualIndex % count;
+      if (normalizedIndex !== currentIndexRef.current) {
+        setCurrentIndex(normalizedIndex);
       }
     });
   };
 
-  // Auto-rotation every 6 seconds (pauses on hover or while dragging)
+  // Auto-rotation every 6 seconds in continuous infinite loop
   useEffect(() => {
-    if (count <= 1 || isPaused || isDraggingRef.current) return;
+    if (count <= 1 || isPaused || isScrollingTouchRef.current) return;
 
-    autoScrollTimerRef.current = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % count);
+    const autoScrollTimer = setInterval(() => {
+      if (!scrollContainerRef.current) return;
+      scrollToVirtualIndex(rawScrollIndex + 1, true);
     }, 6000);
 
-    return () => {
-      if (autoScrollTimerRef.current) clearInterval(autoScrollTimerRef.current);
-    };
-  }, [count, isPaused]);
+    return () => clearInterval(autoScrollTimer);
+  }, [count, isPaused, rawScrollIndex]);
 
   if (loading) {
     return <DiscoverCardEventSkeleton />;
@@ -232,136 +261,12 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
   const handleNext = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setCurrentIndex((prev) => (prev + 1) % count);
+    scrollToVirtualIndex(rawScrollIndex + 1, true);
   };
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setCurrentIndex((prev) => (prev - 1 + count) % count);
-  };
-
-  // Zero-re-render direct touch & mouse gesture engine
-  const handleTouchStart = (e: React.TouchEvent) => {
-    isDraggingRef.current = true;
-    const touchX = e.touches[0].clientX;
-    const touchY = e.touches[0].clientY;
-    touchStartXRef.current = touchX;
-    touchStartYRef.current = touchY;
-    lastTouchXRef.current = touchX;
-    lastTouchTimeRef.current = Date.now();
-    velocityXRef.current = 0;
-    dragOffsetRef.current = 0;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartXRef.current === null) return;
-    const currentX = e.touches[0].clientX;
-    const currentY = e.touches[0].clientY;
-    const deltaX = currentX - touchStartXRef.current;
-    const deltaY = currentY - touchStartYRef.current;
-
-    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(dragOffsetRef.current) < 10) {
-      return;
-    }
-
-    const now = Date.now();
-    const dt = now - lastTouchTimeRef.current;
-    if (dt > 0) {
-      velocityXRef.current = (currentX - lastTouchXRef.current) / dt;
-    }
-    lastTouchXRef.current = currentX;
-    lastTouchTimeRef.current = now;
-
-    dragOffsetRef.current = deltaX;
-
-    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-    rafIdRef.current = requestAnimationFrame(() => {
-      updateCardStyles(dragOffsetRef.current, true);
-    });
-  };
-
-  const handleTouchEnd = () => {
-    if (touchStartXRef.current === null) return;
-    isDraggingRef.current = false;
-
-    const deltaX = dragOffsetRef.current;
-    const velocity = velocityXRef.current;
-
-    let stepShift = 0;
-    const stepThreshold = 110;
-
-    if (Math.abs(velocity) > 0.35) {
-      const momentumPx = velocity * 320;
-      stepShift = -Math.round(momentumPx / stepThreshold);
-    } else if (Math.abs(deltaX) > 30) {
-      stepShift = -Math.round(deltaX / stepThreshold);
-    }
-
-    const targetIndex = (currentIndexRef.current + stepShift) % count;
-    const normalizedTarget = targetIndex < 0 ? targetIndex + count : targetIndex;
-
-    updateCardStyles(0, false);
-    setCurrentIndex(normalizedTarget);
-
-    dragOffsetRef.current = 0;
-    touchStartXRef.current = null;
-    touchStartYRef.current = null;
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    isDraggingRef.current = true;
-    mouseStartXRef.current = e.clientX;
-    lastTouchXRef.current = e.clientX;
-    lastTouchTimeRef.current = Date.now();
-    velocityXRef.current = 0;
-    dragOffsetRef.current = 0;
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDraggingRef.current || mouseStartXRef.current === null) return;
-    const currentX = e.clientX;
-    const deltaX = currentX - mouseStartXRef.current;
-    const now = Date.now();
-    const dt = now - lastTouchTimeRef.current;
-    if (dt > 0) {
-      velocityXRef.current = (currentX - lastTouchXRef.current) / dt;
-    }
-    lastTouchXRef.current = currentX;
-    lastTouchTimeRef.current = now;
-
-    dragOffsetRef.current = deltaX;
-
-    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-    rafIdRef.current = requestAnimationFrame(() => {
-      updateCardStyles(dragOffsetRef.current, true);
-    });
-  };
-
-  const handleMouseUp = () => {
-    if (!isDraggingRef.current || mouseStartXRef.current === null) return;
-    isDraggingRef.current = false;
-
-    const deltaX = dragOffsetRef.current;
-    const velocity = velocityXRef.current;
-
-    let stepShift = 0;
-    const stepThreshold = 110;
-
-    if (Math.abs(velocity) > 0.35) {
-      const momentumPx = velocity * 320;
-      stepShift = -Math.round(momentumPx / stepThreshold);
-    } else if (Math.abs(deltaX) > 30) {
-      stepShift = -Math.round(deltaX / stepThreshold);
-    }
-
-    const targetIndex = (currentIndexRef.current + stepShift) % count;
-    const normalizedTarget = targetIndex < 0 ? targetIndex + count : targetIndex;
-
-    updateCardStyles(0, false);
-    setCurrentIndex(normalizedTarget);
-
-    dragOffsetRef.current = 0;
-    mouseStartXRef.current = null;
+    scrollToVirtualIndex(rawScrollIndex - 1, true);
   };
 
   return (
@@ -411,56 +316,53 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
       </div>
 
-      {/* 3D Cylindrical Carousel: Zero re-render direct DOM RAF wheel track */}
-      <div 
-        className="relative z-10 w-full flex-1 flex items-center justify-center py-2 select-none overflow-hidden touch-pan-y"
-        style={{ perspective: 1000, minHeight: '340px' }}
-      >
-        <div 
-          className="relative w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+      {/* 120Hz Infinite Continuous WebKit CSS Scroll Snap Track with Zoom-In effect */}
+      <div className="relative z-10 w-full flex-1 flex items-center py-2 overflow-hidden min-h-[340px]">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          onTouchStart={() => { isScrollingTouchRef.current = true; setIsPaused(true); }}
+          onTouchEnd={() => { isScrollingTouchRef.current = false; setIsPaused(false); }}
+          className="w-full flex items-center gap-3.5 sm:gap-5 overflow-x-auto snap-x snap-mandatory py-6 px-[calc(50%-97.5px)] sm:px-[calc(50%-115px)] touch-pan-x [&::-webkit-scrollbar]:hidden"
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
         >
-          {activeEvents.map((event, idx) => {
+          {repeatedEvents.map((event, virtualIdx) => {
             const badge = getEventBadgeLabel(event);
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
+            
+            // Calculate whether this item is currently dead-center
+            const isCenterCard = virtualIdx === rawScrollIndex;
 
             return (
               <div
-                key={event.id || idx}
-                ref={(el) => {
-                  cardRefs.current[idx] = el;
-                }}
+                key={`${event.id || 'evt'}-${virtualIdx}`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (Math.abs(dragOffsetRef.current) < 10) {
-                    if (idx === currentIndexRef.current) {
-                      onNavigate('events', { eventId: event.id });
-                    } else {
-                      setCurrentIndex(idx);
-                    }
+                  if (isCenterCard) {
+                    onNavigate('events', { eventId: event.id });
+                  } else {
+                    scrollToVirtualIndex(virtualIdx, true);
                   }
                 }}
-                style={{
-                  transformStyle: 'preserve-3d',
-                  backfaceVisibility: 'hidden',
-                  WebkitBackfaceVisibility: 'hidden',
-                  willChange: 'transform, opacity',
-                }}
                 className={cn(
-                  "absolute w-[205px] sm:w-[235px] aspect-[3/4.2] rounded-2xl overflow-hidden shadow-xl cursor-pointer bg-white transform-gpu border border-slate-100"
+                  "shrink-0 snap-center w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border transition-all duration-300 transform-gpu relative group/card select-none",
+                  isCenterCard
+                    ? "border-2 border-orange-500 shadow-2xl shadow-orange-500/35 scale-105 sm:scale-110 z-20 opacity-100 ring-4 ring-orange-500/20"
+                    : "border-slate-200/90 shadow-sm scale-90 sm:scale-95 z-0 opacity-70 hover:opacity-90"
                 )}
               >
-                {/* Poster Background Image: Preloaded for zero flickering */}
+                {/* Poster Background Image with internal zoom effect on active card */}
                 <img
                   src={event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"}
                   alt={event.title}
-                  className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02]"
+                  className={cn(
+                    "w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02] transition-transform duration-500",
+                    isCenterCard ? "scale-105 group-hover:scale-110" : "scale-100"
+                  )}
                   referrerPolicy="no-referrer"
                   loading="eager"
                   decoding="sync"
@@ -471,7 +373,12 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
                 {/* Top Timing Badge: Clean, high-contrast luminous pill */}
                 <div className="absolute top-2.5 left-2.5 z-20 pointer-events-none">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md bg-white/95 text-slate-800 border border-slate-200">
+                  <span className={cn(
+                    "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md transition-colors",
+                    isCenterCard 
+                      ? "bg-orange-500 text-white border border-orange-400" 
+                      : "bg-white/95 text-slate-800 border border-slate-200"
+                  )}>
                     {badge}
                   </span>
                 </div>
@@ -528,7 +435,8 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setCurrentIndex(idx);
+                  const setBase = Math.floor(rawScrollIndex / count) * count;
+                  scrollToVirtualIndex(setBase + idx, true);
                 }}
                 aria-label={`Go to slide ${idx + 1}`}
                 className={cn(
@@ -555,6 +463,8 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     </div>
   );
 };
+
+
 
 
 
