@@ -7,7 +7,6 @@ import {
   getEventEndDate,
   isYearRoundEvent 
 } from '../utils/eventFormatter';
-import { cn } from '../lib/utils';
 import { DiscoverCardEventSkeleton } from './CardSkeletons';
 
 interface LandingEventHighlightsCardProps {
@@ -75,11 +74,14 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   loading = false,
 }) => {
   const [currentDate, setCurrentDate] = useState(() => new Date());
-  const [offsetState, setOffsetState] = useState(0);
 
   const offsetRef = useRef(0);
   const targetRef = useRef(0);
   const animatingRef = useRef(false);
+
+  // Direct DOM references for 120Hz GPU animation with 0 React re-renders during drag
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const dotsContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Drag interaction refs
   const isDraggingRef = useRef(false);
@@ -146,7 +148,79 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     return window.innerWidth >= 640 ? 250 : 210;
   };
 
-  // 120Hz RAF Smooth Spring Lerp Loop for 100% flicker-free continuous motion
+  // Ultra-fast Direct DOM Mutation for 120Hz Hardware Acceleration (0 React re-renders)
+  const updateCardDOMs = (offsetVal: number) => {
+    if (count === 0) return;
+    const step = getStep();
+    const activeIdx = Math.round(((offsetVal % count) + count) % count);
+
+    for (let i = 0; i < count; i++) {
+      const cardEl = cardRefs.current[i];
+      if (!cardEl) continue;
+
+      let diff = i - offsetVal;
+      while (diff < -count / 2) diff += count;
+      while (diff >= count / 2) diff -= count;
+
+      const translateX = diff * step;
+      const absDiff = Math.abs(diff);
+      const smoothFactor = Math.max(0, 1 - absDiff * 1.12);
+
+      const scale = 0.90 + 0.18 * smoothFactor;
+      const opacity = absDiff > 2.2 ? 0 : 0.65 + 0.35 * smoothFactor;
+      const glowOpacity = smoothFactor;
+      const zIndex = Math.round(100 - absDiff * 10);
+
+      cardEl.style.transform = `translate3d(${translateX}px, 0, 0) scale(${scale})`;
+      cardEl.style.opacity = `${opacity}`;
+      cardEl.style.zIndex = `${zIndex}`;
+      cardEl.style.pointerEvents = absDiff > 1.8 ? 'none' : 'auto';
+
+      const glowEl = cardEl.querySelector('.glow-overlay') as HTMLElement;
+      if (glowEl) glowEl.style.opacity = `${glowOpacity}`;
+
+      const imgEl = cardEl.querySelector('img') as HTMLElement;
+      if (imgEl) imgEl.style.transform = `scale(${1 + (scale - 0.9) * 0.4})`;
+
+      const badgeEl = cardEl.querySelector('.badge-pill') as HTMLElement;
+      if (badgeEl) {
+        if (absDiff < 0.35) {
+          badgeEl.style.backgroundColor = '#f97316';
+          badgeEl.style.color = '#ffffff';
+          badgeEl.style.borderColor = '#fb923c';
+        } else {
+          badgeEl.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
+          badgeEl.style.color = '#1e293b';
+          badgeEl.style.borderColor = '#e2e8f0';
+        }
+      }
+    }
+
+    if (dotsContainerRef.current) {
+      const dots = dotsContainerRef.current.children;
+      for (let d = 0; d < dots.length; d++) {
+        const dot = dots[d] as HTMLElement;
+        if (d === activeIdx) {
+          dot.className = "h-1.5 rounded-full transition-all duration-300 cursor-pointer w-6 bg-orange-500 shadow-sm shadow-orange-500/40";
+        } else {
+          dot.className = "h-1.5 rounded-full transition-all duration-300 cursor-pointer w-1.5 bg-amber-200 hover:bg-amber-300";
+        }
+      }
+    }
+  };
+
+  // Sync DOMs on initial mount, resize or event list change
+  useEffect(() => {
+    offsetRef.current = 0;
+    targetRef.current = 0;
+    updateCardDOMs(0);
+
+    const handleResize = () => updateCardDOMs(offsetRef.current);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [count]);
+
+  // 120Hz RAF Smooth Spring Lerp Loop using direct DOM updates (0 React re-renders)
   const animateTo = (target: number) => {
     targetRef.current = target;
     if (animatingRef.current) return;
@@ -166,24 +240,28 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         }
         offsetRef.current = finalVal;
         targetRef.current = finalVal;
-        setOffsetState(finalVal);
+        updateCardDOMs(finalVal);
         animatingRef.current = false;
         return;
       }
 
-      // Smooth exponential spring lerp
-      offsetRef.current += diff * 0.18;
-      setOffsetState(offsetRef.current);
+      // Fast responsive spring lerp (0.22 factor for ultra snappy smooth motion)
+      offsetRef.current += diff * 0.22;
+      updateCardDOMs(offsetRef.current);
       requestAnimationFrame(stepAnim);
     };
 
     requestAnimationFrame(stepAnim);
   };
 
-  // Drag Gesture Handlers
-  const handlePointerDown = (e: React.PointerEvent) => {
+  // Drag Gesture Handlers with Pointer Capture
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (count <= 1) return;
     if (e.button && e.button !== 0) return;
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
 
     isDraggingRef.current = true;
     dragStartXRef.current = e.clientX;
@@ -195,7 +273,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     animatingRef.current = false;
   };
 
-  const handlePointerMove = (e: React.PointerEvent) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDraggingRef.current || count <= 1) return;
 
     const currentX = e.clientX;
@@ -216,16 +294,22 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
     const newOffset = dragStartOffsetRef.current + deltaOffset;
     offsetRef.current = newOffset;
-    setOffsetState(newOffset);
+    updateCardDOMs(newOffset);
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
 
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch {}
+
     const velocity = dragVelocityXRef.current; // px/ms
     const step = getStep();
-    const velocityOffset = -velocity * 180 / step;
+    const velocityOffset = -velocity * 160 / step;
 
     const target = Math.round(offsetRef.current + velocityOffset);
     animateTo(target);
@@ -264,8 +348,6 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     e?.stopPropagation();
     animateTo(targetRef.current - 1);
   };
-
-  const activeDotIndex = Math.round(((offsetState % count) + count) % count);
 
   return (
     <div
@@ -312,9 +394,9 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
       </div>
 
-      {/* 100% Flicker-Free Continuous Interactive Drag Track */}
+      {/* 100% Flicker-Free Continuous Interactive Drag Track with 120Hz Hardware Acceleration */}
       <div 
-        className="relative z-10 w-full flex-1 flex items-center justify-center py-2 overflow-hidden min-h-[340px] touch-none cursor-grab active:cursor-grabbing"
+        className="relative z-10 w-full flex-1 flex items-center justify-center py-2 overflow-hidden min-h-[340px] touch-pan-y cursor-grab active:cursor-grabbing"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -325,60 +407,36 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
             const badge = getEventBadgeLabel(event);
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
 
-            // Calculate continuous shortest distance around circle
-            let diff = i - offsetState;
-            if (count > 0) {
-              while (diff < -count / 2) diff += count;
-              while (diff >= count / 2) diff -= count;
-            }
-
-            const step = getStep();
-            const translateX = diff * step;
-
-            const absDiff = Math.abs(diff);
-            const smoothFactor = Math.max(0, 1 - absDiff * 1.12);
-
-            const scale = 0.90 + 0.18 * smoothFactor;
-            const opacity = absDiff > 2.2 ? 0 : 0.65 + 0.35 * smoothFactor;
-            const glowOpacity = smoothFactor;
-            const isCenterCard = absDiff < 0.35;
-            const zIndex = Math.round(100 - absDiff * 10);
-
             return (
               <div
                 key={event.id || `evt-${i}`}
-                style={{
-                  transform: `translate3d(${translateX}px, 0, 0) scale(${scale})`,
-                  opacity,
-                  zIndex,
-                  pointerEvents: absDiff > 1.8 ? 'none' : 'auto',
-                }}
+                ref={(el) => { cardRefs.current[i] = el; }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (isCenterCard) {
+                  let target = targetRef.current;
+                  let currDiff = i - target;
+                  while (currDiff < -count / 2) currDiff += count;
+                  while (currDiff >= count / 2) currDiff -= count;
+
+                  if (Math.abs(currDiff) < 0.35) {
                     onNavigate('events', { eventId: event.id });
                   } else {
-                    let target = targetRef.current;
-                    let currDiff = i - target;
-                    while (currDiff < -count / 2) currDiff += count;
-                    while (currDiff >= count / 2) currDiff -= count;
                     animateTo(target + currDiff);
                   }
                 }}
-                className="absolute w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border border-slate-200/90 shadow-md transform-gpu select-none group/card"
+                className="absolute w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border border-slate-200/90 shadow-md transform-gpu select-none group/cardWillChange"
+                style={{
+                  willChange: 'transform, opacity',
+                }}
               >
                 {/* Dynamic Glowing Orange Border Overlay */}
-                <div 
-                  className="absolute inset-0 rounded-2xl border-2 border-orange-500 shadow-2xl shadow-orange-500/35 ring-4 ring-orange-500/20 pointer-events-none z-30"
-                  style={{ opacity: glowOpacity }}
-                />
+                <div className="glow-overlay absolute inset-0 rounded-2xl border-2 border-orange-500 shadow-2xl shadow-orange-500/35 ring-4 ring-orange-500/20 pointer-events-none z-30 transition-opacity duration-75" />
 
                 {/* Poster Background Image */}
                 <img
                   src={event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"}
                   alt={event.title}
                   className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02]"
-                  style={{ transform: `scale(${1 + (scale - 0.9) * 0.4})` }}
                   referrerPolicy="no-referrer"
                   loading="eager"
                   decoding="sync"
@@ -389,12 +447,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
                 {/* Top Timing Badge */}
                 <div className="absolute top-2.5 left-2.5 z-20 pointer-events-none">
-                  <span className={cn(
-                    "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md transition-colors",
-                    isCenterCard 
-                      ? "bg-orange-500 text-white border border-orange-400" 
-                      : "bg-white/95 text-slate-800 border border-slate-200"
-                  )}>
+                  <span className="badge-pill inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md transition-colors bg-white/95 text-slate-800 border border-slate-200">
                     {badge}
                   </span>
                 </div>
@@ -442,9 +495,11 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
 
         {/* Clickable Dots Indicator */}
-        <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/95 border border-amber-200/80 shadow-2xs">
+        <div 
+          ref={dotsContainerRef}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/95 border border-amber-200/80 shadow-2xs"
+        >
           {activeEvents.slice(0, Math.min(count, 8)).map((_, idx) => {
-            const isActive = idx === activeDotIndex;
             return (
               <button
                 key={idx}
@@ -459,12 +514,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   animateTo(currTarget + diff);
                 }}
                 aria-label={`Go to slide ${idx + 1}`}
-                className={cn(
-                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
-                  isActive
-                    ? "w-6 bg-orange-500 shadow-sm shadow-orange-500/40"
-                    : "w-1.5 bg-amber-200 hover:bg-amber-300"
-                )}
+                className="h-1.5 rounded-full transition-all duration-300 cursor-pointer w-1.5 bg-amber-200 hover:bg-amber-300"
               />
             );
           })}
