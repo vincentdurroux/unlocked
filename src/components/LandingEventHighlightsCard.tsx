@@ -246,8 +246,8 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     if (!scrollContainerRef.current) {
       const isCenter = virtualIdx === rawScrollIndex;
       return {
-        scale: isCenter ? 1.08 : 0.90,
-        opacity: isCenter ? 1.0 : 0.70,
+        scale: 1.0,
+        opacity: isCenter ? 1.0 : 0.75,
         glowOpacity: isCenter ? 1.0 : 0.0,
         isCenterCard: isCenter,
       };
@@ -258,8 +258,8 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     if (!child) {
       const isCenter = virtualIdx === rawScrollIndex;
       return {
-        scale: isCenter ? 1.08 : 0.90,
-        opacity: isCenter ? 1.0 : 0.70,
+        scale: 1.0,
+        opacity: isCenter ? 1.0 : 0.75,
         glowOpacity: isCenter ? 1.0 : 0.0,
         isCenterCard: isCenter,
       };
@@ -276,8 +276,8 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     const ratio = Math.min(1, offsetPx / itemWidth);
     const smoothFactor = Math.max(0, 1 - Math.pow(ratio, 1.2));
 
-    const scale = 0.90 + (1.08 - 0.90) * smoothFactor;
-    const opacity = 0.70 + (1.00 - 0.70) * smoothFactor;
+    const scale = 1.0;
+    const opacity = 0.75 + (1.00 - 0.75) * smoothFactor;
     const glowOpacity = smoothFactor;
     const isCenterCard = ratio < 0.4;
 
@@ -410,24 +410,28 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   }
                 }}
                 style={{
-                  transform: `scale(${scale})`,
+                  transform: `translateY(${isCenterCard ? '-6px' : '0px'})`,
                   opacity: opacity,
-                  transition: isScrollingTouchRef.current ? 'none' : 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease-out',
+                  transition: isScrollingTouchRef.current ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-out',
                 }}
-                className="shrink-0 w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border border-slate-200/90 shadow-md transform-gpu relative group/card select-none z-10"
+                className={cn(
+                  "shrink-0 w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border transform-gpu relative group/card select-none z-10 transition-shadow duration-300",
+                  isCenterCard
+                    ? "border-orange-500 shadow-2xl shadow-orange-500/30 ring-2 ring-orange-500/30"
+                    : "border-slate-200/90 shadow-sm opacity-75"
+                )}
               >
                 {/* Dynamic Glowing Orange Border Overlay that morphs continuously with touch distance */}
                 <div 
-                  className="absolute inset-0 rounded-2xl border-2 border-orange-500 shadow-2xl shadow-orange-500/35 ring-4 ring-orange-500/20 pointer-events-none z-30 transition-opacity duration-150"
+                  className="absolute inset-0 rounded-2xl border-2 border-orange-500 shadow-xl shadow-orange-500/25 pointer-events-none z-30 transition-opacity duration-150"
                   style={{ opacity: glowOpacity }}
                 />
 
-                {/* Poster Background Image with smooth dynamic internal zoom */}
+                {/* Poster Background Image */}
                 <img
                   src={event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"}
                   alt={event.title}
-                  className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02] transition-transform duration-300"
-                  style={{ transform: `scale(${1 + (scale - 0.9) * 0.4})` }}
+                  className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02]"
                   referrerPolicy="no-referrer"
                   loading="eager"
                   decoding="sync"
