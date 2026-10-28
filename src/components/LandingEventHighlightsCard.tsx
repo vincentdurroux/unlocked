@@ -183,7 +183,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     return () => cancelAnimationFrame(timer);
   }, [count]);
 
-  // Continuous 1:1 scroll position listener to calculate smooth scale & orange glow morphing on every frame
+  // Ultra-lightweight 120Hz scroll listener using refs only (Zero React state re-renders during touch move)
   const handleScroll = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     
@@ -191,8 +191,6 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       if (!scrollContainerRef.current || count === 0) return;
       const container = scrollContainerRef.current;
       const currentScrollLeft = container.scrollLeft;
-
-      setScrollLeftState(currentScrollLeft);
 
       const containerCenter = currentScrollLeft + container.clientWidth / 2;
       const children = container.children;
@@ -211,28 +209,23 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         }
       }
 
-      // Infinite Circular Teleportation with instant jump to prevent animation stuttering:
+      // Infinite Circular Teleportation with instant jump:
       if (centeredVirtualIndex < count) {
         const itemWidth = children.length > 1 
           ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
           : 210;
-        container.style.scrollSnapType = 'none';
         container.scrollLeft += count * itemWidth;
-        container.style.scrollSnapType = 'x mandatory';
-        setScrollLeftState(container.scrollLeft);
         centeredVirtualIndex += count;
       } else if (centeredVirtualIndex >= 2 * count) {
         const itemWidth = children.length > 1 
           ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
           : 210;
-        container.style.scrollSnapType = 'none';
         container.scrollLeft -= count * itemWidth;
-        container.style.scrollSnapType = 'x mandatory';
-        setScrollLeftState(container.scrollLeft);
         centeredVirtualIndex -= count;
       }
 
       setRawScrollIndex(centeredVirtualIndex);
+      setScrollLeftState(container.scrollLeft);
 
       const normalizedIndex = centeredVirtualIndex % count;
       if (normalizedIndex !== currentIndexRef.current) {
@@ -308,7 +301,6 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       >
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
             <h3 className="text-lg font-bold font-display text-slate-900">This Weekend&apos;s Events</h3>
           </div>
           <p className="text-sm text-slate-500">Discover festivals, exhibitions, concerts, and weekend plans in Valencia.</p>
@@ -337,9 +329,8 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       onMouseLeave={() => setIsPaused(false)}
       className="flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-amber-50/30 to-orange-50/15 text-slate-900 border border-amber-200/70 hover:border-orange-400/60 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden h-full min-h-[480px]"
     >
-      {/* Decorative ambient glowing lights: soft warm sunny glow */}
-      <div className="absolute -top-20 -right-20 w-56 h-56 bg-orange-200/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-amber-200/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-20 -right-20 w-56 h-56 bg-amber-100/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-slate-100/40 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header: This Weekend's Events + Weekend date range + All events link */}
       <div className="relative z-10 flex items-center justify-between gap-3 mb-3 w-full">
@@ -352,10 +343,6 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
               <h3 className="font-extrabold font-display text-sm sm:text-base text-slate-900 tracking-tight leading-none">
                 This Weekend&apos;s Events
               </h3>
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
-              </span>
             </div>
             <p className="text-[10px] text-slate-500 font-semibold mt-1">
               {weekendRange} • Culture & weekend plans
@@ -415,7 +402,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   transition: isScrollingTouchRef.current ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-out',
                 }}
                 className={cn(
-                  "shrink-0 w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border transform-gpu relative group/card select-none z-10 transition-shadow duration-300",
+                  "shrink-0 w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden isolation-auto cursor-pointer bg-white border transform-gpu relative group/card select-none z-10 transition-shadow duration-300",
                   isCenterCard
                     ? "border-orange-500 shadow-2xl shadow-orange-500/30 ring-2 ring-orange-500/30"
                     : "border-slate-200/90 shadow-sm opacity-75"
