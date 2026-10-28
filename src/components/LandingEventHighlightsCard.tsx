@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Calendar, Clock, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
-import { motion, PanInfo } from 'motion/react';
 import { Event } from '../App';
 import { 
   formatEventDate, 
@@ -75,16 +74,20 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   onNavigate,
   loading = false,
 }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [rawScrollIndex, setRawScrollIndex] = useState(0);
-  const [scrollLeftState, setScrollLeftState] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [offsetState, setOffsetState] = useState(0);
 
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const currentIndexRef = useRef<number>(currentIndex);
-  const isScrollingTouchRef = useRef<boolean>(false);
-  const rafRef = useRef<number | null>(null);
+  const offsetRef = useRef(0);
+  const targetRef = useRef(0);
+  const animatingRef = useRef(false);
+
+  // Drag interaction refs
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartOffsetRef = useRef(0);
+  const dragLastXRef = useRef(0);
+  const dragLastTimeRef = useRef(0);
+  const dragVelocityXRef = useRef(0);
 
   // Automatically refresh date periodically so weekend shifts seamlessly as time progresses
   useEffect(() => {
@@ -124,11 +127,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     });
   }, [events, currentDate]);
 
-  // Triplicated list for seamless infinite circular scrolling (3 sets: Set 0, Set 1 [Middle], Set 2)
-  const repeatedEvents = useMemo(() => {
-    if (!activeEvents || activeEvents.length === 0) return [];
-    return [...activeEvents, ...activeEvents, ...activeEvents];
-  }, [activeEvents]);
+  const count = activeEvents.length;
 
   // Preload all event poster images up-front into browser cache for instant rendering
   useEffect(() => {
@@ -141,144 +140,96 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     });
   }, [activeEvents]);
 
-  const count = activeEvents.length;
-
-  // Sync currentIndexRef
-  useEffect(() => {
-    currentIndexRef.current = currentIndex;
-  }, [currentIndex]);
-
-  const scrollToVirtualIndex = (vIndex: number, smooth = true) => {
-    if (!scrollContainerRef.current) return;
-    const container = scrollContainerRef.current;
-    const targetChild = container.children[vIndex] as HTMLElement;
-    if (targetChild) {
-      const targetCenter = targetChild.offsetLeft + targetChild.offsetWidth / 2;
-      const scrollPos = targetCenter - container.clientWidth / 2;
-      container.scrollTo({
-        left: scrollPos,
-        behavior: smooth ? 'smooth' : 'instant' as ScrollBehavior,
-      });
-    }
+  // Step distance helper
+  const getStep = () => {
+    if (typeof window === 'undefined') return 210;
+    return window.innerWidth >= 640 ? 250 : 210;
   };
 
-  // Center strictly on middle set start card upon mounting or when event count changes
-  useEffect(() => {
-    if (count === 0 || !scrollContainerRef.current) return;
-    
-    const timer = requestAnimationFrame(() => {
-      const container = scrollContainerRef.current;
-      if (!container || container.children.length <= count) return;
-      
-      const targetChild = container.children[count] as HTMLElement;
-      if (targetChild) {
-        const targetCenter = targetChild.offsetLeft + targetChild.offsetWidth / 2;
-        const scrollPos = targetCenter - container.clientWidth / 2;
-        container.scrollLeft = scrollPos;
-        setScrollLeftState(scrollPos);
-        setRawScrollIndex(count);
+  // 120Hz RAF Smooth Spring Lerp Loop for 100% flicker-free continuous motion
+  const animateTo = (target: number) => {
+    targetRef.current = target;
+    if (animatingRef.current) return;
+    animatingRef.current = true;
+
+    const stepAnim = () => {
+      if (isDraggingRef.current) {
+        animatingRef.current = false;
+        return;
       }
-    });
 
-    return () => cancelAnimationFrame(timer);
-  }, [count]);
-
-  // Continuous 1:1 synchronous scroll position listener to calculate instant scale & orange glow morphing on every frame
-  const handleScroll = () => {
-    if (!scrollContainerRef.current || count === 0) return;
-    const container = scrollContainerRef.current;
-    const currentScrollLeft = container.scrollLeft;
-
-    // Instant synchronous state update for zero waiting time
-    setScrollLeftState(currentScrollLeft);
-
-    const containerCenter = currentScrollLeft + container.clientWidth / 2;
-    const children = container.children;
-    if (children.length === 0) return;
-
-    let minDistance = Infinity;
-    let centeredVirtualIndex = 0;
-
-    for (let i = 0; i < children.length; i++) {
-      const child = children[i] as HTMLElement;
-      const childCenter = child.offsetLeft + child.offsetWidth / 2;
-      const dist = Math.abs(childCenter - containerCenter);
-      if (dist < minDistance) {
-        minDistance = dist;
-        centeredVirtualIndex = i;
+      const diff = targetRef.current - offsetRef.current;
+      if (Math.abs(diff) < 0.001) {
+        let finalVal = targetRef.current;
+        if (count > 0) {
+          finalVal = ((finalVal % count) + count) % count;
+        }
+        offsetRef.current = finalVal;
+        targetRef.current = finalVal;
+        setOffsetState(finalVal);
+        animatingRef.current = false;
+        return;
       }
-    }
 
-    // Infinite Circular Teleportation:
-    if (centeredVirtualIndex < count) {
-      const itemWidth = children.length > 1 
-        ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
-        : 210;
-      container.scrollLeft += count * itemWidth;
-      setScrollLeftState(container.scrollLeft);
-      centeredVirtualIndex += count;
-    } else if (centeredVirtualIndex >= 2 * count) {
-      const itemWidth = children.length > 1 
-        ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
-        : 210;
-      container.scrollLeft -= count * itemWidth;
-      setScrollLeftState(container.scrollLeft);
-      centeredVirtualIndex -= count;
-    }
+      // Smooth exponential spring lerp
+      offsetRef.current += diff * 0.18;
+      setOffsetState(offsetRef.current);
+      requestAnimationFrame(stepAnim);
+    };
 
-    setRawScrollIndex(centeredVirtualIndex);
-
-    const normalizedIndex = centeredVirtualIndex % count;
-    if (normalizedIndex !== currentIndexRef.current) {
-      setCurrentIndex(normalizedIndex);
-    }
+    requestAnimationFrame(stepAnim);
   };
 
-  // Calculate dynamic scale, opacity and glow opacity based on physical distance from container center
-  const getCardProgress = (virtualIdx: number) => {
-    if (!scrollContainerRef.current) {
-      const isCenter = virtualIdx === rawScrollIndex;
-      return {
-        scale: isCenter ? 1.08 : 0.90,
-        opacity: isCenter ? 1.0 : 0.70,
-        glowOpacity: isCenter ? 1.0 : 0.0,
-        isCenterCard: isCenter,
-      };
-    }
+  // Drag Gesture Handlers
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (count <= 1) return;
+    if (e.button && e.button !== 0) return;
 
-    const container = scrollContainerRef.current;
-    const child = container.children[virtualIdx] as HTMLElement;
-    if (!child) {
-      const isCenter = virtualIdx === rawScrollIndex;
-      return {
-        scale: isCenter ? 1.08 : 0.90,
-        opacity: isCenter ? 1.0 : 0.70,
-        glowOpacity: isCenter ? 1.0 : 0.0,
-        isCenterCard: isCenter,
-      };
-    }
+    isDraggingRef.current = true;
+    dragStartXRef.current = e.clientX;
+    dragStartOffsetRef.current = offsetRef.current;
+    dragLastXRef.current = e.clientX;
+    dragLastTimeRef.current = performance.now();
+    dragVelocityXRef.current = 0;
 
-    const containerCenter = scrollLeftState + container.clientWidth / 2;
-    const childCenter = child.offsetLeft + child.offsetWidth / 2;
-    const offsetPx = Math.abs(childCenter - containerCenter);
-
-    const itemWidth = container.children.length > 1
-      ? (container.children[1] as HTMLElement).offsetLeft - (container.children[0] as HTMLElement).offsetLeft
-      : 210;
-
-    const ratio = Math.min(1, offsetPx / itemWidth);
-    // Instant responsive curve (0ms lag as card approaches center)
-    const smoothFactor = Math.max(0, 1 - ratio * 1.15);
-
-    const scale = 0.90 + (1.08 - 0.90) * smoothFactor;
-    const opacity = 0.70 + (1.00 - 0.70) * smoothFactor;
-    const glowOpacity = smoothFactor;
-    const isCenterCard = ratio < 0.35;
-
-    return { scale, opacity, glowOpacity, isCenterCard };
+    animatingRef.current = false;
   };
 
-  // Auto-rotation disabled as requested: cards move strictly upon user interaction (touch swipe or arrow/dot clicks)
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingRef.current || count <= 1) return;
+
+    const currentX = e.clientX;
+    const now = performance.now();
+    const dt = now - dragLastTimeRef.current;
+
+    if (dt > 0) {
+      const dx = currentX - dragLastXRef.current;
+      dragVelocityXRef.current = dx / dt;
+    }
+
+    dragLastXRef.current = currentX;
+    dragLastTimeRef.current = now;
+
+    const deltaX = currentX - dragStartXRef.current;
+    const step = getStep();
+    const deltaOffset = -deltaX / step;
+
+    const newOffset = dragStartOffsetRef.current + deltaOffset;
+    offsetRef.current = newOffset;
+    setOffsetState(newOffset);
+  };
+
+  const handlePointerUp = () => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+
+    const velocity = dragVelocityXRef.current; // px/ms
+    const step = getStep();
+    const velocityOffset = -velocity * 180 / step;
+
+    const target = Math.round(offsetRef.current + velocityOffset);
+    animateTo(target);
+  };
 
   if (loading) {
     return <DiscoverCardEventSkeleton />;
@@ -306,20 +257,20 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
   const handleNext = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    scrollToVirtualIndex(rawScrollIndex + 1, true);
+    animateTo(targetRef.current + 1);
   };
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    scrollToVirtualIndex(rawScrollIndex - 1, true);
+    animateTo(targetRef.current - 1);
   };
+
+  const activeDotIndex = Math.round(((offsetState % count) + count) % count);
 
   return (
     <div
       id="discover-card-event"
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
-      className="flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-amber-50/30 to-orange-50/15 text-slate-900 border border-amber-200/70 hover:border-orange-400/60 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden h-full min-h-[480px]"
+      className="flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-amber-50/30 to-orange-50/15 text-slate-900 border border-amber-200/70 hover:border-orange-400/60 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden h-full min-h-[480px] select-none"
     >
       {/* Decorative ambient glowing lights: soft warm sunny glow */}
       <div className="absolute -top-20 -right-20 w-56 h-56 bg-orange-200/20 rounded-full blur-3xl pointer-events-none" />
@@ -361,66 +312,82 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
       </div>
 
-      {/* 120Hz Infinite Continuous WebKit CSS Scroll Snap Track with Instant Zoom-In effect */}
-      <div className="relative z-10 w-full flex-1 flex items-center py-2 overflow-hidden min-h-[340px]">
-        <div
-          ref={scrollContainerRef}
-          onScroll={handleScroll}
-          onTouchStart={() => { isScrollingTouchRef.current = true; setIsPaused(true); }}
-          onTouchEnd={() => { isScrollingTouchRef.current = false; setIsPaused(false); }}
-          className="w-full flex items-center gap-3.5 sm:gap-5 overflow-x-auto snap-x snap-mandatory py-6 px-[calc(50%-97.5px)] sm:px-[calc(50%-115px)] touch-pan-x [&::-webkit-scrollbar]:hidden"
-          style={{
-            WebkitOverflowScrolling: 'touch',
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-          }}
-        >
-          {repeatedEvents.map((event, virtualIdx) => {
+      {/* 100% Flicker-Free Continuous Interactive Drag Track */}
+      <div 
+        className="relative z-10 w-full flex-1 flex items-center justify-center py-2 overflow-hidden min-h-[340px] touch-none cursor-grab active:cursor-grabbing"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        <div className="relative w-full h-[320px] sm:h-[340px] flex items-center justify-center">
+          {activeEvents.map((event, i) => {
             const badge = getEventBadgeLabel(event);
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
-            
-            // Continuous proportional morphing calculations
-            const { scale, opacity, glowOpacity, isCenterCard } = getCardProgress(virtualIdx);
+
+            // Calculate continuous shortest distance around circle
+            let diff = i - offsetState;
+            if (count > 0) {
+              while (diff < -count / 2) diff += count;
+              while (diff >= count / 2) diff -= count;
+            }
+
+            const step = getStep();
+            const translateX = diff * step;
+
+            const absDiff = Math.abs(diff);
+            const smoothFactor = Math.max(0, 1 - absDiff * 1.12);
+
+            const scale = 0.90 + 0.18 * smoothFactor;
+            const opacity = absDiff > 2.2 ? 0 : 0.65 + 0.35 * smoothFactor;
+            const glowOpacity = smoothFactor;
+            const isCenterCard = absDiff < 0.35;
+            const zIndex = Math.round(100 - absDiff * 10);
 
             return (
               <div
-                key={`${event.id || 'evt'}-${virtualIdx}`}
+                key={event.id || `evt-${i}`}
+                style={{
+                  transform: `translate3d(${translateX}px, 0, 0) scale(${scale})`,
+                  opacity,
+                  zIndex,
+                  pointerEvents: absDiff > 1.8 ? 'none' : 'auto',
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (isCenterCard) {
                     onNavigate('events', { eventId: event.id });
                   } else {
-                    scrollToVirtualIndex(virtualIdx, true);
+                    let target = targetRef.current;
+                    let currDiff = i - target;
+                    while (currDiff < -count / 2) currDiff += count;
+                    while (currDiff >= count / 2) currDiff -= count;
+                    animateTo(target + currDiff);
                   }
                 }}
-                style={{
-                  transform: `scale(${scale})`,
-                  opacity: opacity,
-                  willChange: 'transform, opacity',
-                }}
-                className="shrink-0 snap-center w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border border-slate-200/90 shadow-md transform-gpu relative group/card select-none z-10"
+                className="absolute w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden cursor-pointer bg-white border border-slate-200/90 shadow-md transform-gpu select-none group/card"
               >
-                {/* Instant Dynamic Glowing Orange Border Overlay that morphs directly with touch position */}
+                {/* Dynamic Glowing Orange Border Overlay */}
                 <div 
                   className="absolute inset-0 rounded-2xl border-2 border-orange-500 shadow-2xl shadow-orange-500/35 ring-4 ring-orange-500/20 pointer-events-none z-30"
                   style={{ opacity: glowOpacity }}
                 />
 
-                {/* Poster Background Image with smooth dynamic internal zoom */}
+                {/* Poster Background Image */}
                 <img
                   src={event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"}
                   alt={event.title}
-                  className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02] transition-transform duration-300"
+                  className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02]"
                   style={{ transform: `scale(${1 + (scale - 0.9) * 0.4})` }}
                   referrerPolicy="no-referrer"
                   loading="eager"
                   decoding="sync"
                 />
 
-                {/* Subtle gradient strictly at the bottom 35% for text readability */}
+                {/* Subtle bottom gradient */}
                 <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-950/90 via-slate-900/45 to-transparent pointer-events-none" />
 
-                {/* Top Timing Badge: Clean, high-contrast luminous pill */}
+                {/* Top Timing Badge */}
                 <div className="absolute top-2.5 left-2.5 z-20 pointer-events-none">
                   <span className={cn(
                     "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md transition-colors",
@@ -477,15 +444,19 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         {/* Clickable Dots Indicator */}
         <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/95 border border-amber-200/80 shadow-2xs">
           {activeEvents.slice(0, Math.min(count, 8)).map((_, idx) => {
-            const isActive = idx === currentIndex % count;
+            const isActive = idx === activeDotIndex;
             return (
               <button
                 key={idx}
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const setBase = Math.floor(rawScrollIndex / count) * count;
-                  scrollToVirtualIndex(setBase + idx, true);
+                  let currTarget = targetRef.current;
+                  let normalizedTarget = ((currTarget % count) + count) % count;
+                  let diff = idx - normalizedTarget;
+                  while (diff < -count / 2) diff += count;
+                  while (diff >= count / 2) diff -= count;
+                  animateTo(currTarget + diff);
                 }}
                 aria-label={`Go to slide ${idx + 1}`}
                 className={cn(
@@ -512,11 +483,3 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     </div>
   );
 };
-
-
-
-
-
-
-
-
