@@ -280,12 +280,11 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     });
   };
 
-  // Calculate dynamic scale, opacity and center status based on physical distance from container center
+  // Calculate dynamic opacity and center status based on physical distance from container center
   const getCardProgress = (virtualIdx: number) => {
     if (!scrollContainerRef.current) {
       const isCenter = virtualIdx === rawScrollIndex;
       return {
-        scale: isCenter ? 1.14 : 1.0,
         opacity: isCenter ? 1.0 : 0.75,
         isCenterCard: isCenter,
       };
@@ -296,7 +295,6 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     if (!child) {
       const isCenter = virtualIdx === rawScrollIndex;
       return {
-        scale: isCenter ? 1.14 : 1.0,
         opacity: isCenter ? 1.0 : 0.75,
         isCenterCard: isCenter,
       };
@@ -311,14 +309,12 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       : 210;
 
     const ratio = Math.min(1, offsetPx / itemWidth);
-    // Smooth raised-cosine bell curve for organic, progressive scaling with the slide
-    const smoothFactor = Math.pow(Math.cos(ratio * Math.PI * 0.5), 2);
+    const smoothFactor = Math.max(0, 1 - Math.pow(ratio, 1.2));
 
-    const scale = 1.00 + 0.14 * smoothFactor;
     const opacity = 0.75 + (1.00 - 0.75) * smoothFactor;
     const isCenterCard = virtualIdx === rawScrollIndex;
 
-    return { scale, opacity, isCenterCard };
+    return { opacity, isCenterCard };
   };
 
   // Auto-rotation every 6 seconds in continuous infinite loop
@@ -422,7 +418,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
             setIsPaused(false); 
             scheduleNormalization(500);
           }}
-          className="w-full flex items-center gap-3.5 sm:gap-5 overflow-x-auto py-8 px-[calc(50%-97.5px)] sm:px-[calc(50%-115px)] touch-pan-x [&::-webkit-scrollbar]:hidden"
+          className="w-full flex items-center gap-3.5 sm:gap-5 overflow-x-auto py-6 px-[calc(50%-97.5px)] sm:px-[calc(50%-115px)] touch-pan-x [&::-webkit-scrollbar]:hidden"
           style={{
             WebkitOverflowScrolling: 'touch',
             scrollbarWidth: 'none',
@@ -434,11 +430,11 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
             
             // Continuous proportional morphing calculations
-            const { scale, opacity, isCenterCard } = getCardProgress(virtualIdx);
+            const { opacity, isCenterCard } = getCardProgress(virtualIdx);
 
             const syncTransition = isScrollingTouchRef.current
               ? 'none'
-              : 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease-out, border-color 0.15s ease-out, box-shadow 0.15s ease-out';
+              : 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)';
 
             return (
               <div
@@ -452,17 +448,16 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   }
                 }}
                 style={{
-                  transform: `scale(${scale.toFixed(3)})`,
                   opacity: opacity,
                   WebkitMaskImage: '-webkit-radial-gradient(white, black)',
                   maskImage: 'radial-gradient(white, black)',
                   transition: syncTransition,
                 }}
                 className={cn(
-                  "shrink-0 w-[195px] h-[275px] sm:w-[230px] sm:h-[325px] rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border-2 transform-gpu relative group/card select-none transition-shadow duration-200",
+                  "shrink-0 w-[195px] h-[275px] sm:w-[230px] sm:h-[325px] rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border-2 transform-gpu relative group/card select-none z-10",
                   isCenterCard
-                    ? "z-20 border-orange-500 shadow-2xl shadow-orange-500/35 ring-2 ring-orange-500/20"
-                    : "z-10 border-slate-200/90 shadow-sm opacity-75"
+                    ? "border-orange-500 shadow-xl shadow-orange-500/30 ring-2 ring-orange-500/20 scale-[1.04]"
+                    : "border-slate-200/90 shadow-sm opacity-75 scale-100"
                 )}
               >
                 {/* Poster Background Image directly inside card */}
