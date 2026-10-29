@@ -266,7 +266,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     const smoothFactor = Math.max(0, 1 - Math.pow(ratio, 1.2));
 
     const opacity = 0.75 + (1.00 - 0.75) * smoothFactor;
-    const isCenterCard = ratio < 0.4;
+    const isCenterCard = virtualIdx === rawScrollIndex;
 
     return { opacity, isCenterCard };
   };
@@ -379,6 +379,10 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
             // Continuous proportional morphing calculations
             const { opacity, isCenterCard } = getCardProgress(virtualIdx);
 
+            const syncTransition = isScrollingTouchRef.current
+              ? 'none'
+              : 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)';
+
             return (
               <div
                 key={`${event.id || 'evt'}-${virtualIdx}`}
@@ -394,7 +398,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   opacity: opacity,
                   WebkitMaskImage: '-webkit-radial-gradient(white, black)',
                   maskImage: 'radial-gradient(white, black)',
-                  transition: isScrollingTouchRef.current ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-out, border-color 0.2s ease-out, box-shadow 0.2s ease-out',
+                  transition: syncTransition,
                 }}
                 className={cn(
                   "shrink-0 w-[195px] h-[275px] sm:w-[230px] sm:h-[325px] rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border-2 transform-gpu relative group/card select-none z-10",
@@ -418,12 +422,15 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
                 {/* Top Timing Badge: Clean, high-contrast luminous pill */}
                 <div className="absolute top-2.5 left-2.5 z-20 pointer-events-none">
-                  <span className={cn(
-                    "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md transition-colors",
-                    isCenterCard 
-                      ? "bg-orange-500 text-white border border-orange-400" 
-                      : "bg-white/95 text-slate-800 border border-slate-200"
-                  )}>
+                  <span 
+                    style={{ transition: syncTransition }}
+                    className={cn(
+                      "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md border",
+                      isCenterCard 
+                        ? "bg-orange-500 text-white border-orange-400" 
+                        : "bg-white/95 text-slate-800 border-slate-200"
+                    )}
+                  >
                     {badge}
                   </span>
                 </div>
