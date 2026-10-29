@@ -571,7 +571,7 @@ const getQualityConfig = (name: string) => {
   return cfg;
 };
 
-function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPlain?: boolean }) {
+export function SimpleMarkdown({ children, isPlain = false }: { children?: string; isPlain?: boolean }) {
   if (!children) return null;
 
   // If this text contains structured event sections, render them with themed cards and friendly emojis
