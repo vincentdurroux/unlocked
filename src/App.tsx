@@ -14674,83 +14674,43 @@ function HomeView({
 
 
 
-      {/* Modernized "Why people love Unlocked" Section */}
-      <div className="space-y-6 md:space-y-10 py-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-600 font-extrabold text-[11px] uppercase tracking-wider border border-rose-100/80">
-              <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-              <span>Community Values</span>
-            </div>
-            <h3 className="font-extrabold text-2xl md:text-3xl font-display text-brand-navy tracking-tight">
-              Why people love Unlocked
-            </h3>
-          </div>
-          <p className="text-slate-500 text-xs sm:text-sm font-medium max-w-sm leading-relaxed">
-            Building a trusted, authentic bridge between expats and top local professionals in Valencia.
-          </p>
-        </div>
+      {/* Why people love Unlocked Section (visible only on tablet & desktop) */}
+      <div className="hidden md:block space-y-8 md:space-y-12 py-4">
+        <h3 className="font-semibold text-2xl font-display text-brand-navy flex items-center gap-2">
+          <Heart className="w-6 h-6 text-brand-blue" />
+          Why people love Unlocked
+        </h3>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 max-w-5xl mx-auto">
           {[
             {
-              title: "Community Powered",
-              subtitle: "Real People & Real Insights",
-              desc: "100% authentic recommendations from expat and local members who actually live in Valencia.",
-              tag: "100% Organic",
-              badgeBg: "bg-emerald-50 text-emerald-700 border-emerald-200/80",
-              iconBg: "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20",
-              cardBg: "from-emerald-50/40 via-white to-white border-emerald-100/80 hover:border-emerald-300",
-              icon: <Users className="w-6 h-6" />
+              title: "Community powered",
+              desc: "Real recommendations from real people like you.",
+              icon: <Users className="w-6 h-6 md:w-8 md:h-8 text-emerald-500" />,
+              bg: "bg-emerald-50/50",
+              className: ""
             },
             {
-              title: "Trust & Quality First",
-              subtitle: "Zero Fake Reviews",
-              desc: "No paid sponsored placements or hidden algorithm bias. Only trusted help vetted by real experiences.",
-              tag: "Verified Standards",
-              badgeBg: "bg-blue-50 text-brand-blue border-blue-200/80",
-              iconBg: "bg-gradient-to-br from-brand-blue to-sky-600 text-white shadow-md shadow-brand-blue/20",
-              cardBg: "from-blue-50/40 via-white to-white border-blue-100/80 hover:border-brand-blue/30",
-              icon: <ShieldCheck className="w-6 h-6" />
+              title: "Trust-based recommendations",
+              desc: "Reviewed by members.",
+              icon: <ShieldCheck className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />,
+              bg: "bg-blue-50/50",
+              className: ""
             },
             {
-              title: "Local First",
-              subtitle: "Valencia Neighborhood Focus",
-              desc: "Tailored specifically for life in Valencia — from legal gestors and doctors to local mechanics.",
-              tag: "Valencia First",
-              badgeBg: "bg-amber-50 text-amber-700 border-amber-200/80",
-              iconBg: "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/20",
-              cardBg: "from-amber-50/40 via-white to-white border-amber-100/80 hover:border-amber-300",
-              icon: <MapPin className="w-6 h-6" />
+              title: "Local first",
+              desc: "Focused on what matters in your city and neighborhood.",
+              icon: <MapPin className="w-6 h-6 md:w-8 md:h-8 text-amber-500" />,
+              bg: "bg-amber-50/50",
+              className: "col-span-2 justify-self-center w-[calc(50%-0.375rem)] md:col-span-1 md:w-full md:justify-self-stretch"
             }
           ].map((item, idx) => (
-            <div 
-              key={idx} 
-              className={`bg-gradient-to-b ${item.cardBg} p-6 sm:p-7 rounded-3xl border shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between space-y-4 group relative overflow-hidden`}
-            >
-              <div className="space-y-4 text-left relative z-10">
-                <div className="flex items-center justify-between gap-3">
-                  <div className={`w-12 h-12 rounded-2xl ${item.iconBg} flex items-center justify-center transition-transform group-hover:scale-110 duration-300`}>
-                    {item.icon}
-                  </div>
-                  <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full border ${item.badgeBg}`}>
-                    {item.tag}
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <h4 className="font-extrabold text-slate-900 text-base md:text-lg tracking-tight group-hover:text-brand-blue transition-colors">
-                    {item.title}
-                  </h4>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    {item.subtitle}
-                  </p>
-                </div>
-
-                <p className="text-slate-600 text-xs sm:text-sm leading-relaxed font-medium">
-                  {item.desc}
-                </p>
+            <div key={idx} className={`bg-white p-4 md:p-8 lg:p-10 rounded-3xl border border-slate-100 flex flex-col items-center text-center space-y-3 md:space-y-5 shadow-sm hover:shadow-md transition-shadow ${item.className}`}>
+              <div className={`w-12 h-12 md:w-16 md:h-16 rounded-full ${item.bg} flex items-center justify-center`}>
+                {item.icon}
               </div>
+              <h4 className="font-bold text-slate-900 text-xs md:text-base leading-tight">{item.title}</h4>
+              <p className="text-[10px] md:text-sm text-slate-500 leading-relaxed">{item.desc}</p>
             </div>
           ))}
         </div>
