@@ -218,56 +218,68 @@ input, textarea, [contenteditable="true"] {
   mask-image: linear-gradient(to right, black 85%, transparent 100%);
 }
 
-/* Global numeric font normalization for all Modals on Android and iOS */
+/* Global numeric font & kerning normalization for Android & iOS cross-platform parity */
+*,
+*::before,
+*::after {
+  font-variant-numeric: lining-nums proportional-nums !important;
+  font-feature-settings: "lnum" 1, "pnum" 1, "tnum" 0, "kern" 1 !important;
+}
+
+html,
+body,
+#root,
+p,
+span,
+div,
+h1, h2, h3, h4, h5, h6,
+button,
+input,
+textarea,
+select,
+a,
+label,
+time,
+li,
+strong,
+b,
+em,
+article,
+section,
+form,
+main,
+header,
+footer,
 [role="dialog"],
 .modal-container,
 .modal-card,
 .modal-body,
-.tabular-nums {
-  font-variant-numeric: lining-nums proportional-nums;
-  font-feature-settings: "lnum" 1, "pnum" 1, "kern" 1;
-  letter-spacing: normal !important;
-  word-spacing: normal !important;
-}
-
-[role="dialog"] p,
-[role="dialog"] span,
-[role="dialog"] div,
-[role="dialog"] time,
-[role="dialog"] h1,
-[role="dialog"] h2,
-[role="dialog"] h3,
-[role="dialog"] h4,
-[role="dialog"] h5,
-[role="dialog"] h6,
-[role="dialog"] button,
-[role="dialog"] a,
-[role="dialog"] label,
-[role="dialog"] input,
-[role="dialog"] strong,
-[role="dialog"] b,
-[role="dialog"] li {
-  font-variant-numeric: lining-nums proportional-nums;
-  font-feature-settings: "lnum" 1, "pnum" 1, "kern" 1;
+.tabular-nums,
+.markdown-body {
+  font-variant-numeric: lining-nums proportional-nums !important;
+  font-feature-settings: "lnum" 1, "pnum" 1, "tnum" 0, "kern" 1 !important;
   letter-spacing: normal;
+  word-spacing: normal;
 }
 
 .markdown-body {
   text-align: left;
   font-family: var(--font-sans);
   font-variant-emoji: emoji;
-  font-variant-numeric: lining-nums proportional-nums;
-  font-feature-settings: "lnum" 1, "pnum" 1, "kern" 1;
+  font-variant-numeric: lining-nums proportional-nums !important;
+  font-feature-settings: "lnum" 1, "pnum" 1, "tnum" 0, "kern" 1 !important;
   letter-spacing: normal;
   word-spacing: normal;
 }
 .markdown-body p,
 .markdown-body span,
 .markdown-body div,
-.markdown-body li {
-  font-variant-numeric: lining-nums proportional-nums;
-  font-feature-settings: "lnum" 1, "pnum" 1, "kern" 1;
-  letter-spacing: normal;
+.markdown-body li,
+.markdown-body time {
+  font-variant-numeric: lining-nums proportional-nums !important;
+  font-feature-settings: "lnum" 1, "pnum" 1, "tnum" 0, "kern" 1 !important;
+  letter-spacing: -0.005em;
+  word-spacing: normal;
 }
 .markdown-body h1 {
   font-size: 1.75rem;

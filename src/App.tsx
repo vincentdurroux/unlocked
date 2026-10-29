@@ -346,6 +346,7 @@ export function cleanAdDescription(desc?: string): string {
     .replace(/\[\s*Handover:[^\]]*\]/gi, '')
     .replace(/\[\s*Delivery:[^\]]*\]/gi, '')
     .replace(/\[\s*Details:[^\]]*\]/gi, '')
+    .replace(/(\d)\s+([:\/.-])\s+(\d)/g, '$1$2$3')
     .replace(/(\d)[ \t\u00A0\u202F]{2,}(\d)/g, '$1 $2')
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
@@ -14075,15 +14076,15 @@ function HomeView({
                   <span className="text-amber-500">🌟</span>
                 </h4>
                 <p className="text-slate-600 text-[11px] sm:text-xs leading-tight">
-                  Recommend a local pro in Valencia to help the community!
+                  Recommend a local pro in your City to help the community!
                 </p>
               </div>
             </div>
 
             <div className="shrink-0 self-end sm:self-center w-full sm:w-auto">
-              <div className="px-3 py-1.5 bg-slate-900 group-hover/rec:bg-amber-600 text-white rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs">
+              <div className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 group-hover/rec:bg-amber-600 text-slate-950 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs rounded-xl">
                 <span>Recommend a Pro</span>
-                <ArrowRight className="w-3 h-3 group-hover/rec:translate-x-0.5 transition-transform" />
+                <ArrowRight className="w-3.5 h-3.5 group-hover/rec:translate-x-0.5 transition-transform" />
               </div>
             </div>
           </div>

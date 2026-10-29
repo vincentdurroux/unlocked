@@ -440,7 +440,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
             setIsPaused(false); 
             scheduleNormalization(500);
           }}
-          className="w-full flex items-center gap-3.5 sm:gap-5 overflow-x-auto py-6 px-[calc(50%-97.5px)] sm:px-[calc(50%-115px)] touch-pan-x [&::-webkit-scrollbar]:hidden"
+          className="w-full flex items-center gap-3.5 sm:gap-5 overflow-x-auto py-3 px-[calc(50%-102.5px)] sm:px-[calc(50%-120px)] touch-pan-x [&::-webkit-scrollbar]:hidden"
           style={{
             WebkitOverflowScrolling: 'touch',
             scrollbarWidth: 'none',
@@ -472,7 +472,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   transition: syncTransition,
                 }}
                 className={cn(
-                  "shrink-0 w-[195px] h-[275px] sm:w-[230px] sm:h-[325px] rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border-2 transform-gpu relative group/card select-none z-10",
+                  "shrink-0 w-[205px] h-[290px] sm:w-[240px] sm:h-[345px] rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border-2 transform-gpu relative group/card select-none z-10",
                   isCenterCard
                     ? "border-orange-500 shadow-xl shadow-orange-500/30 ring-2 ring-orange-500/20 -translate-y-1.5"
                     : "border-slate-200/90 shadow-sm opacity-75 translate-y-0"
@@ -536,54 +536,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </div>
       </div>
 
-      {/* Navigation Controls: Centered Arrows & Dots placed directly below the event cards */}
-      <div className="relative z-10 flex items-center justify-center gap-3 mt-1 pt-2 border-t border-amber-200/60">
-        {/* Left Arrow Button */}
-        <button
-          type="button"
-          onClick={handlePrev}
-          aria-label="Previous event"
-          className="p-2.5 rounded-full bg-white hover:bg-orange-500 text-slate-700 hover:text-white transition-colors cursor-pointer active:scale-95 border border-amber-200/80 shadow-xs hover:shadow-orange-500/25 flex items-center justify-center group/btn"
-        >
-          <ChevronLeft className="w-4 h-4 group-hover/btn:-translate-x-0.5 transition-transform" />
-        </button>
 
-        {/* Clickable Dots Indicator */}
-        <div className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/95 border border-amber-200/80 shadow-2xs">
-          {activeEvents.slice(0, Math.min(count, 8)).map((_, idx) => {
-            const isActive = idx === currentIndex % count;
-            return (
-              <button
-                key={idx}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const targetIndex = 2 * count + idx;
-                  scrollToVirtualIndex(targetIndex, true);
-                  scheduleNormalization(450);
-                }}
-                aria-label={`Go to slide ${idx + 1}`}
-                className={cn(
-                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
-                  isActive
-                    ? "w-6 bg-orange-500 shadow-sm shadow-orange-500/40"
-                    : "w-1.5 bg-amber-200 hover:bg-amber-300"
-                )}
-              />
-            );
-          })}
-        </div>
-
-        {/* Right Arrow Button */}
-        <button
-          type="button"
-          onClick={handleNext}
-          aria-label="Next event"
-          className="p-2.5 rounded-full bg-white hover:bg-orange-500 text-slate-700 hover:text-white transition-colors cursor-pointer active:scale-95 border border-amber-200/80 shadow-xs hover:shadow-orange-500/25 flex items-center justify-center group/btn"
-        >
-          <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform" />
-        </button>
-      </div>
 
       {/* Event Details Modal on Landing Page */}
       {typeof document !== 'undefined' && createPortal(
