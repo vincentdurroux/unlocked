@@ -234,14 +234,12 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     });
   };
 
-  // Calculate dynamic scale, opacity and glow opacity based on physical distance from container center
+  // Calculate dynamic opacity and center status based on physical distance from container center
   const getCardProgress = (virtualIdx: number) => {
     if (!scrollContainerRef.current) {
       const isCenter = virtualIdx === rawScrollIndex;
       return {
-        scale: 1.0,
         opacity: isCenter ? 1.0 : 0.75,
-        glowOpacity: isCenter ? 1.0 : 0.0,
         isCenterCard: isCenter,
       };
     }
@@ -251,9 +249,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     if (!child) {
       const isCenter = virtualIdx === rawScrollIndex;
       return {
-        scale: 1.0,
         opacity: isCenter ? 1.0 : 0.75,
-        glowOpacity: isCenter ? 1.0 : 0.0,
         isCenterCard: isCenter,
       };
     }
@@ -269,12 +265,10 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     const ratio = Math.min(1, offsetPx / itemWidth);
     const smoothFactor = Math.max(0, 1 - Math.pow(ratio, 1.2));
 
-    const scale = 1.0;
     const opacity = 0.75 + (1.00 - 0.75) * smoothFactor;
-    const glowOpacity = smoothFactor;
     const isCenterCard = ratio < 0.4;
 
-    return { scale, opacity, glowOpacity, isCenterCard };
+    return { opacity, isCenterCard };
   };
 
   // Auto-rotation every 6 seconds in continuous infinite loop
@@ -383,7 +377,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
             
             // Continuous proportional morphing calculations
-            const { scale, opacity, glowOpacity, isCenterCard } = getCardProgress(virtualIdx);
+            const { opacity, isCenterCard } = getCardProgress(virtualIdx);
 
             return (
               <div
@@ -397,37 +391,30 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   }
                 }}
                 style={{
-                  transform: `translateY(${isCenterCard ? '-6px' : '0px'})`,
                   opacity: opacity,
-                  transition: isScrollingTouchRef.current ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-out',
+                  WebkitMaskImage: '-webkit-radial-gradient(white, black)',
+                  maskImage: 'radial-gradient(white, black)',
+                  transition: isScrollingTouchRef.current ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease-out, border-color 0.2s ease-out, box-shadow 0.2s ease-out',
                 }}
                 className={cn(
-                  "shrink-0 w-[195px] sm:w-[230px] aspect-[3/4.2] rounded-2xl overflow-hidden isolation-auto cursor-pointer bg-white border transform-gpu relative group/card select-none z-10 transition-shadow duration-300",
+                  "shrink-0 w-[195px] h-[275px] sm:w-[230px] sm:h-[325px] rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border-2 transform-gpu relative group/card select-none z-10",
                   isCenterCard
-                    ? "border-orange-500 shadow-2xl shadow-orange-500/30 ring-2 ring-orange-500/30"
-                    : "border-slate-200/90 shadow-sm opacity-75"
+                    ? "border-orange-500 shadow-xl shadow-orange-500/30 ring-2 ring-orange-500/20 -translate-y-1.5"
+                    : "border-slate-200/90 shadow-sm opacity-75 translate-y-0"
                 )}
               >
-                {/* Dynamic Glowing Orange Border Overlay that morphs continuously with touch distance */}
-                <div 
-                  className="absolute inset-0 rounded-2xl border-2 border-orange-500 shadow-xl shadow-orange-500/25 pointer-events-none z-30 transition-opacity duration-150"
-                  style={{ opacity: glowOpacity }}
+                {/* Poster Background Image directly inside card */}
+                <img
+                  src={event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"}
+                  alt={event.title}
+                  className="absolute inset-0 w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02]"
+                  referrerPolicy="no-referrer"
+                  loading="eager"
+                  decoding="sync"
                 />
 
-                {/* Poster Background Image container clipped */}
-                <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none z-0">
-                  <img
-                    src={event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"}
-                    alt={event.title}
-                    className="w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02]"
-                    referrerPolicy="no-referrer"
-                    loading="eager"
-                    decoding="sync"
-                  />
-                </div>
-
-                {/* Subtle gradient strictly at the bottom 35% for text readability */}
-                <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-950/90 via-slate-900/45 to-transparent pointer-events-none" />
+                {/* Subtle gradient strictly at the bottom 40% for text readability */}
+                <div className="absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-slate-950/95 via-slate-900/60 to-transparent pointer-events-none" />
 
                 {/* Top Timing Badge: Clean, high-contrast luminous pill */}
                 <div className="absolute top-2.5 left-2.5 z-20 pointer-events-none">
