@@ -122,6 +122,8 @@ body,
   background-color: var(--color-bg);
   color: var(--color-brand-navy);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
   height: 100%;
   width: 100%;
