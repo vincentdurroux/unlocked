@@ -23,11 +23,14 @@ function cn(...inputs: ClassValue[]) {
 function cleanAdDescription(desc?: string): string {
   if (!desc) return '';
   return desc
+    .replace(/[\u00A0\u202F\u2000-\u200B\u2028\u2029]/g, ' ')
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/\[\s*Details:\s*Handover:[^\]]*\]/gi, '')
     .replace(/\[\s*Handover:[^\]]*\]/gi, '')
     .replace(/\[\s*Delivery:[^\]]*\]/gi, '')
     .replace(/\[\s*Details:[^\]]*\]/gi, '')
+    .replace(/(\d)[ \t\u00A0\u202F]{2,}(\d)/g, '$1 $2')
+    .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
 

@@ -148,7 +148,7 @@ export function ReferralSurveyModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm"
+          className="fixed inset-0 bg-slate-950/75"
           onClick={handleDismiss}
         />
 
@@ -157,8 +157,8 @@ export function ReferralSurveyModal({
           initial={{ opacity: 0, scale: 0.95, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 12 }}
-          transition={{ type: "spring", duration: 0.3, bounce: 0.1 }}
-          className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-10 my-auto"
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-10 my-auto will-change-transform transform-gpu"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header Banner */}

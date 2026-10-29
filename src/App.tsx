@@ -336,15 +336,18 @@ export function formatSellerName(name?: string): string {
 }
 
 /**
- * Clean legacy handover/delivery bracketed tags from ad description.
+ * Clean legacy handover/delivery bracketed tags from ad description and normalize NBSP / digit spacing for Android.
  */
 export function cleanAdDescription(desc?: string): string {
   if (!desc) return '';
   return desc
+    .replace(/[\u00A0\u202F\u2000-\u200B\u2028\u2029]/g, ' ')
     .replace(/\[\s*Details:\s*Handover:[^\]]*\]/gi, '')
     .replace(/\[\s*Handover:[^\]]*\]/gi, '')
     .replace(/\[\s*Delivery:[^\]]*\]/gi, '')
     .replace(/\[\s*Details:[^\]]*\]/gi, '')
+    .replace(/(\d)[ \t\u00A0\u202F]{2,}(\d)/g, '$1 $2')
+    .replace(/[ \t]{2,}/g, ' ')
     .trim();
 }
 
@@ -353,9 +356,9 @@ export function cleanAdDescription(desc?: string): string {
  */
 export function formatDisplayPrice(price?: string | number): string {
   if (price === undefined || price === null || price === '') return 'Free';
-  const str = String(price).trim();
+  const str = String(price).replace(/[\u00A0\u202F\u2000-\u200B]/g, ' ').trim();
   if (str.toLowerCase() === 'free' || str.toLowerCase() === 'gratuit' || str === '0') return 'Free';
-  const clean = str.replace(/€/g, '').trim();
+  const clean = str.replace(/€/g, '').replace(/\s+/g, ' ').trim();
   if (!clean) return 'Free';
   return `€${clean}`;
 }
@@ -646,13 +649,17 @@ export function SimpleMarkdown({ children, isPlain = false }: { children?: strin
   }
 
   // Standard Markdown for articles and guides with full emoji, iframe/map embed and header support
-  const cleanText = children.replace(/\r\n/g, '\n').replace(/<iframe[\s\S]*?<\/iframe>/gi, (match) => {
-    return match.replace(/\n\s*/g, ' ');
-  });
+  const cleanText = children
+    .replace(/[\u00A0\u202F\u2000-\u200B\u2028\u2029]/g, ' ')
+    .replace(/(\d)[ \t\u00A0\u202F]{2,}(\d)/g, '$1 $2')
+    .replace(/\r\n/g, '\n')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, (match) => {
+      return match.replace(/\n\s*/g, ' ');
+    });
   const lines = cleanText.split('\n');
 
   return (
-    <div className="space-y-3 whitespace-pre-wrap text-sm sm:text-base text-slate-700 leading-relaxed font-sans">
+    <div className="space-y-3 whitespace-pre-wrap text-sm sm:text-base text-slate-700 leading-relaxed font-sans tabular-nums tracking-normal [font-variant-numeric:lining-nums_proportional-nums] [font-feature-settings:'lnum'_1,'pnum'_1,'kern'_1]">
       {lines.map((line, idx) => {
         const trimmed = line.trim();
         if (!trimmed) {
@@ -4934,12 +4941,12 @@ export default function App() {
 
           {showAddPro && (
             <div 
-              className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/15 backdrop-blur-2xs z-[100] overflow-y-auto overscroll-contain" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
+              className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-950/75 z-[100] overflow-y-auto overscroll-contain touch-pan-y" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
               onClick={() => setShowAddPro(false)}
             >
               <div className="min-h-full flex items-center justify-center p-4 sm:p-6 my-auto">
                 <div 
-                  className="bg-white w-full max-w-lg rounded-3xl overflow-hidden relative shadow-2xl shadow-slate-950/15 flex flex-col my-auto border border-slate-100"
+                  className="bg-white w-full max-w-lg rounded-3xl overflow-hidden relative shadow-2xl shadow-slate-950/20 flex flex-col my-auto border border-slate-100 will-change-transform transform-gpu"
                   onClick={e => e.stopPropagation()}
                 >
                 {/* Modal Header */}
@@ -5183,16 +5190,16 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-900/70 backdrop-blur-md z-[100] overflow-y-auto overscroll-contain touch-pan-y" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
+              className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-950/80 z-[100] overflow-y-auto overscroll-contain touch-pan-y" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }}
               onClick={() => handleCloseAddAd(false)}
             >
               <div className="min-h-full flex items-start justify-center p-3 sm:p-6 py-6">
                 <motion.div 
-                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  initial={{ opacity: 0, y: 16, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 20, scale: 0.98 }}
+                  exit={{ opacity: 0, y: 16, scale: 0.98 }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
-                  className="bg-white w-full max-w-2xl rounded-[28px] p-5 sm:p-7 space-y-6 relative shadow-2xl my-auto border border-slate-100"
+                  className="bg-white w-full max-w-2xl rounded-[28px] p-5 sm:p-7 space-y-6 relative shadow-2xl my-auto border border-slate-100 will-change-transform transform-gpu"
                   onClick={e => e.stopPropagation()}
                 >
                 {/* Modal Header */}
@@ -6160,14 +6167,14 @@ function AdDetailModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-slate-900/80 backdrop-blur-md -z-10"
+          className="fixed inset-0 bg-slate-950/85 -z-10"
         />
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 15 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="relative w-full max-w-lg bg-white rounded-[32px] overflow-hidden shadow-2xl flex flex-col my-auto"
+          className="relative w-full max-w-lg bg-white rounded-[32px] overflow-hidden shadow-2xl flex flex-col my-auto will-change-transform transform-gpu"
           onClick={e => e.stopPropagation()}
         >
           <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
@@ -14764,15 +14771,15 @@ function ExpertGuideModal({ isOpen, onClose, article: rawArticle }: { isOpen: bo
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
             onClick={onClose}
-            className="absolute inset-0 bg-brand-navy/60 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-950/80"
           />
           
           <motion.div 
-            initial={{ scale: 0.92, opacity: 0 }}
+            initial={{ scale: 0.94, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.92, opacity: 0 }}
+            exit={{ scale: 0.94, opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="bg-white w-full max-w-4xl h-full md:h-auto md:max-h-[85vh] rounded-[24px] md:rounded-[40px] shadow-2xl relative flex flex-col overflow-hidden"
+            className="bg-white w-full max-w-4xl h-full md:h-auto md:max-h-[85vh] rounded-[24px] md:rounded-[40px] shadow-2xl relative flex flex-col overflow-hidden will-change-transform transform-gpu"
             onClick={e => e.stopPropagation()}
           >
           {/* Header Image Section - Compact, Stable, and High Contrast */}
@@ -19497,17 +19504,17 @@ function ProfessionalDetailView({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-950/75 backdrop-blur-xl z-[100] overflow-y-auto overscroll-contain flex justify-center selection:bg-brand-blue selection:text-white" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
+      className="fixed inset-x-0 bottom-[80px] md:inset-0 bg-slate-950/85 z-[100] overflow-y-auto overscroll-contain touch-pan-y flex justify-center selection:bg-brand-blue selection:text-white" style={{ top: 'calc(60px + env(safe-area-inset-top, 0px))' }} 
       onClick={onClose}
     >
       <div className="min-h-full w-full max-w-5xl flex items-start justify-center py-5 md:py-10 px-3 sm:px-4 md:px-8">
         <motion.div 
-          initial={{ opacity: 0, scale: 0.94, y: 16 }}
+          initial={{ opacity: 0, scale: 0.95, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.94, y: 16 }}
-          transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+          exit={{ opacity: 0, scale: 0.95, y: 12 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           className={cn(
-            "bg-white w-full rounded-3xl md:rounded-[36px] overflow-hidden shadow-2xl relative transition-all",
+            "bg-white w-full rounded-3xl md:rounded-[36px] overflow-hidden shadow-2xl relative transition-all will-change-transform transform-gpu",
             pro.is_recommended !== false ? "border-2 border-emerald-500" : "border border-slate-200/90"
           )}
           onClick={e => e.stopPropagation()}
@@ -22254,7 +22261,7 @@ function MarketplaceView({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAds.map((ad) => {
               const isSaved = effectiveSavedIds.includes(String(ad.id));
-              const displayPrice = ad.price?.includes('€') ? ad.price : `${ad.price}€`;
+              const displayPrice = formatDisplayPrice(ad.price);
               const cardImages = (ad.images && Array.isArray(ad.images) && ad.images.length > 0)
                 ? ad.images
                 : [ad.image_url || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400'];
@@ -22450,7 +22457,7 @@ function MarketplaceView({
           <div className="space-y-3">
             {filteredAds.map((ad) => {
               const isSaved = effectiveSavedIds.includes(String(ad.id));
-              const displayPrice = ad.price?.includes('€') ? ad.price : `${ad.price}€`;
+              const displayPrice = formatDisplayPrice(ad.price);
               const cardImages = (ad.images && Array.isArray(ad.images) && ad.images.length > 0)
                 ? ad.images
                 : [ad.image_url || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400'];
@@ -25746,13 +25753,13 @@ function ProfileView({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setChatToArchive(null)}
-                className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs"
+                className="absolute inset-0 bg-slate-950/75"
               />
               <motion.div 
                 initial={{ scale: 0.95, opacity: 0, y: 15 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.95, opacity: 0, y: 15 }}
-                className="bg-white rounded-3xl border border-slate-150 shadow-2xl overflow-hidden max-w-sm w-full relative z-10 p-6 space-y-4 text-center"
+                className="bg-white rounded-3xl border border-slate-150 shadow-2xl overflow-hidden max-w-sm w-full relative z-10 p-6 space-y-4 text-center will-change-transform transform-gpu"
               >
                 <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
                   <Archive className="w-6 h-6" />
@@ -25802,13 +25809,13 @@ function ProfileView({
                   setDeleteConfirmText("");
                 }
               }}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-950/75"
             />
             <motion.div 
               initial={{ scale: 0.95, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="bg-white rounded-3xl border border-slate-105 shadow-2xl overflow-hidden max-w-md w-full relative z-10 p-6 space-y-6"
+              className="bg-white rounded-3xl border border-slate-105 shadow-2xl overflow-hidden max-w-md w-full relative z-10 p-6 space-y-6 will-change-transform transform-gpu"
             >
               <div className="flex items-center gap-3 border-b border-rose-50 pb-4">
                 <div className="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center flex-shrink-0 animate-pulse">

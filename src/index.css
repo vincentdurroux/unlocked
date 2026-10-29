@@ -222,6 +222,18 @@ input, textarea, [contenteditable="true"] {
   text-align: left;
   font-family: var(--font-sans);
   font-variant-emoji: emoji;
+  font-variant-numeric: lining-nums proportional-nums;
+  font-feature-settings: "lnum" 1, "pnum" 1, "kern" 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+}
+.markdown-body p,
+.markdown-body span,
+.markdown-body div,
+.markdown-body li {
+  font-variant-numeric: lining-nums proportional-nums;
+  font-feature-settings: "lnum" 1, "pnum" 1, "kern" 1;
+  letter-spacing: normal;
 }
 .markdown-body h1 {
   font-size: 1.75rem;
