@@ -23030,14 +23030,18 @@ function ProfileView({
       .catch(() => {});
 
     const initPush = async () => {
+      const dev = oneSignalService.getDeviceInfo();
       if (oneSignalService.getAppId()) {
         try {
           await oneSignalService.init(currentUser?.id);
           const sub = await oneSignalService.isSubscribed();
           setIsPushSubscribed(sub);
           const subId = await oneSignalService.getSubscriptionId();
-          setOneSignalSubId(subId);
-          if (typeof window !== 'undefined' && 'Notification' in window) {
+          setOneSignalSubId(subId || (dev.isNativeWrapper ? 'native-registered' : null));
+          
+          if (dev.isNativeWrapper) {
+            setPushStatus('granted');
+          } else if (typeof window !== 'undefined' && 'Notification' in window) {
             setPushStatus(Notification.permission);
           }
         } catch (e) {
