@@ -14465,24 +14465,24 @@ function HomeView({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
                     onClick={() => setExpandedLandingProId(null)}
-                    className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm cursor-pointer"
+                    className="fixed inset-0 bg-slate-950/80 cursor-pointer"
                   />
 
                   {/* Modal Card */}
                   <motion.div
                     role="dialog"
                     aria-modal="true"
-                    initial={{ opacity: 0, scale: 0.95, y: 16 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 16 }}
-                    transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 12 }}
+                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                     onClick={(e) => e.stopPropagation()}
-                    className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200/90 my-auto z-10 max-h-[92vh] flex flex-col overflow-hidden modal-container [font-variant-numeric:lining-nums_proportional-nums]"
+                    className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200/90 my-auto z-10 max-h-[92vh] flex flex-col overflow-hidden modal-container [font-variant-numeric:lining-nums_proportional-nums] will-change-transform transform-gpu"
                   >
                     {/* Modal Header Bar with Close Cross */}
-                    <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-3 bg-white/95 backdrop-blur-sm shrink-0 z-20">
+                    <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-3 bg-white shrink-0 z-20">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue to-sky-500 flex items-center justify-center text-white shadow-md shadow-brand-blue/20 shrink-0">
                           <Star className="w-4 h-4 fill-current" />
@@ -14500,7 +14500,7 @@ function HomeView({
                       <button
                         type="button"
                         onClick={() => setExpandedLandingProId(null)}
-                        aria-label="Fermer la modale"
+                        aria-label="Close modal"
                         className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-all active:scale-90 cursor-pointer shadow-xs border border-slate-200/80"
                       >
                         <X className="w-5 h-5 stroke-[2.5]" />

@@ -222,8 +222,9 @@ input, textarea, [contenteditable="true"] {
 *,
 *::before,
 *::after {
-  font-variant-numeric: lining-nums proportional-nums !important;
-  font-feature-settings: "lnum" 1, "pnum" 1, "tnum" 0, "kern" 1 !important;
+  font-variant-numeric: tabular-nums lining-nums !important;
+  font-feature-settings: "tnum" 1, "lnum" 1, "kern" 0 !important;
+  letter-spacing: -0.01em !important;
 }
 
 html,
@@ -256,10 +257,11 @@ footer,
 .modal-body,
 .tabular-nums,
 .markdown-body {
-  font-variant-numeric: lining-nums proportional-nums !important;
-  font-feature-settings: "lnum" 1, "pnum" 1, "tnum" 0, "kern" 1 !important;
-  letter-spacing: normal;
-  word-spacing: normal;
+  font-variant-numeric: tabular-nums lining-nums !important;
+  font-feature-settings: "tnum" 1, "lnum" 1, "kern" 0 !important;
+  letter-spacing: -0.01em !important;
+  word-spacing: normal !important;
+  font-kerning: none !important;
 }
 
 .markdown-body {
