@@ -124,10 +124,16 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     });
   }, [events, currentDate]);
 
-  // Triplicated list for seamless infinite circular scrolling (3 sets: Set 0, Set 1 [Middle], Set 2)
+  // 5 buffered sets for completely seamless infinite sliding without any teleportation jumps between cards
   const repeatedEvents = useMemo(() => {
     if (!activeEvents || activeEvents.length === 0) return [];
-    return [...activeEvents, ...activeEvents, ...activeEvents];
+    return [
+      ...activeEvents,
+      ...activeEvents,
+      ...activeEvents, // Set 2 (Middle Primary)
+      ...activeEvents,
+      ...activeEvents,
+    ];
   }, [activeEvents]);
 
   // Preload all event poster images up-front into browser cache for instant rendering
@@ -148,6 +154,18 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
 
+  const rawScrollIndexRef = useRef<number>(2 * count);
+  const normalizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const getItemWidth = () => {
+    if (!scrollContainerRef.current) return 210;
+    const children = scrollContainerRef.current.children;
+    if (children.length > 1) {
+      return (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft;
+    }
+    return (children[0] as HTMLElement)?.offsetWidth || 210;
+  };
+
   const scrollToVirtualIndex = (vIndex: number, smooth = true) => {
     if (!scrollContainerRef.current) return;
     const container = scrollContainerRef.current;
@@ -162,28 +180,51 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     }
   };
 
+  // Silently re-center into Set 2 (middle set) when stationary so the user is never near the boundary
+  const scheduleNormalization = (delay = 400) => {
+    if (normalizeTimeoutRef.current) clearTimeout(normalizeTimeoutRef.current);
+    normalizeTimeoutRef.current = setTimeout(() => {
+      if (!scrollContainerRef.current || count === 0 || isScrollingTouchRef.current) return;
+      const container = scrollContainerRef.current;
+      const currentIdx = rawScrollIndexRef.current;
+      const normalized = currentIdx % count;
+      const targetIdx = 2 * count + normalized;
+
+      if (targetIdx !== currentIdx) {
+        const itemWidth = getItemWidth();
+        const diff = targetIdx - currentIdx;
+        container.scrollLeft += diff * itemWidth;
+        rawScrollIndexRef.current = targetIdx;
+        setRawScrollIndex(targetIdx);
+        setScrollLeftState(container.scrollLeft);
+      }
+    }, delay);
+  };
+
   // Center strictly on middle set start card upon mounting or when event count changes
   useEffect(() => {
     if (count === 0 || !scrollContainerRef.current) return;
     
     const timer = requestAnimationFrame(() => {
       const container = scrollContainerRef.current;
-      if (!container || container.children.length <= count) return;
+      const targetVirtualIndex = 2 * count;
+      if (!container || container.children.length <= targetVirtualIndex) return;
       
-      const targetChild = container.children[count] as HTMLElement;
+      const targetChild = container.children[targetVirtualIndex] as HTMLElement;
       if (targetChild) {
         const targetCenter = targetChild.offsetLeft + targetChild.offsetWidth / 2;
         const scrollPos = targetCenter - container.clientWidth / 2;
         container.scrollLeft = scrollPos;
         setScrollLeftState(scrollPos);
-        setRawScrollIndex(count);
+        setRawScrollIndex(targetVirtualIndex);
+        rawScrollIndexRef.current = targetVirtualIndex;
       }
     });
 
     return () => cancelAnimationFrame(timer);
   }, [count]);
 
-  // Ultra-lightweight 120Hz scroll listener using refs only (Zero React state re-renders during touch move)
+  // Ultra-lightweight 120Hz scroll listener using refs only
   const handleScroll = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     
@@ -209,27 +250,32 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         }
       }
 
-      // Infinite Circular Teleportation with instant jump:
-      if (centeredVirtualIndex < count) {
-        const itemWidth = children.length > 1 
-          ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
-          : 210;
-        container.scrollLeft += count * itemWidth;
-        centeredVirtualIndex += count;
-      } else if (centeredVirtualIndex >= 2 * count) {
-        const itemWidth = children.length > 1 
-          ? (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft 
-          : 210;
-        container.scrollLeft -= count * itemWidth;
-        centeredVirtualIndex -= count;
+      // ONLY emergency boundary protection if the user scrolls to the extreme edges (Set 0 or Set 4)
+      // Never teleports during normal sliding between Set 1, 2, or 3!
+      if (!isScrollingTouchRef.current) {
+        if (centeredVirtualIndex < count) {
+          const itemWidth = getItemWidth();
+          container.scrollLeft += 2 * count * itemWidth;
+          centeredVirtualIndex += 2 * count;
+        } else if (centeredVirtualIndex >= 4 * count) {
+          const itemWidth = getItemWidth();
+          container.scrollLeft -= 2 * count * itemWidth;
+          centeredVirtualIndex -= 2 * count;
+        }
       }
 
+      rawScrollIndexRef.current = centeredVirtualIndex;
       setRawScrollIndex(centeredVirtualIndex);
       setScrollLeftState(container.scrollLeft);
 
       const normalizedIndex = centeredVirtualIndex % count;
       if (normalizedIndex !== currentIndexRef.current) {
         setCurrentIndex(normalizedIndex);
+      }
+
+      // Schedule seamless invisible normalization when movement rests
+      if (!isScrollingTouchRef.current) {
+        scheduleNormalization(350);
       }
     });
   };
@@ -277,11 +323,12 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
     const autoScrollTimer = setInterval(() => {
       if (!scrollContainerRef.current) return;
-      scrollToVirtualIndex(rawScrollIndex + 1, true);
+      scrollToVirtualIndex(rawScrollIndexRef.current + 1, true);
+      scheduleNormalization(450);
     }, 6000);
 
     return () => clearInterval(autoScrollTimer);
-  }, [count, isPaused, rawScrollIndex]);
+  }, [count, isPaused]);
 
   if (loading) {
     return <DiscoverCardEventSkeleton />;
@@ -308,12 +355,14 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
   const handleNext = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    scrollToVirtualIndex(rawScrollIndex + 1, true);
+    scrollToVirtualIndex(rawScrollIndexRef.current + 1, true);
+    scheduleNormalization(450);
   };
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    scrollToVirtualIndex(rawScrollIndex - 1, true);
+    scrollToVirtualIndex(rawScrollIndexRef.current - 1, true);
+    scheduleNormalization(450);
   };
 
   return (
@@ -364,7 +413,11 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
           ref={scrollContainerRef}
           onScroll={handleScroll}
           onTouchStart={() => { isScrollingTouchRef.current = true; setIsPaused(true); }}
-          onTouchEnd={() => { isScrollingTouchRef.current = false; setIsPaused(false); }}
+          onTouchEnd={() => { 
+            isScrollingTouchRef.current = false; 
+            setIsPaused(false); 
+            scheduleNormalization(500);
+          }}
           className="w-full flex items-center gap-3.5 sm:gap-5 overflow-x-auto py-6 px-[calc(50%-97.5px)] sm:px-[calc(50%-115px)] touch-pan-x [&::-webkit-scrollbar]:hidden"
           style={{
             WebkitOverflowScrolling: 'touch',
@@ -487,8 +540,9 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const setBase = Math.floor(rawScrollIndex / count) * count;
-                  scrollToVirtualIndex(setBase + idx, true);
+                  const targetIndex = 2 * count + idx;
+                  scrollToVirtualIndex(targetIndex, true);
+                  scheduleNormalization(450);
                 }}
                 aria-label={`Go to slide ${idx + 1}`}
                 className={cn(
