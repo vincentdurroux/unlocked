@@ -218,6 +218,40 @@ input, textarea, [contenteditable="true"] {
   mask-image: linear-gradient(to right, black 85%, transparent 100%);
 }
 
+/* Global numeric font normalization for all Modals on Android and iOS */
+[role="dialog"],
+.modal-container,
+.modal-card,
+.modal-body,
+.tabular-nums {
+  font-variant-numeric: lining-nums proportional-nums;
+  font-feature-settings: "lnum" 1, "pnum" 1, "kern" 1;
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+}
+
+[role="dialog"] p,
+[role="dialog"] span,
+[role="dialog"] div,
+[role="dialog"] time,
+[role="dialog"] h1,
+[role="dialog"] h2,
+[role="dialog"] h3,
+[role="dialog"] h4,
+[role="dialog"] h5,
+[role="dialog"] h6,
+[role="dialog"] button,
+[role="dialog"] a,
+[role="dialog"] label,
+[role="dialog"] input,
+[role="dialog"] strong,
+[role="dialog"] b,
+[role="dialog"] li {
+  font-variant-numeric: lining-nums proportional-nums;
+  font-feature-settings: "lnum" 1, "pnum" 1, "kern" 1;
+  letter-spacing: normal;
+}
+
 .markdown-body {
   text-align: left;
   font-family: var(--font-sans);

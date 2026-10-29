@@ -109,7 +109,11 @@ export const PartnerAdminEditorModal: React.FC<PartnerAdminEditorModalProps> = (
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-[28px] max-w-4xl w-full border border-slate-100 shadow-2xl overflow-hidden my-6 text-left animate-in fade-in zoom-in-95 duration-200">
+      <div 
+        role="dialog"
+        aria-modal="true"
+        className="bg-white rounded-[28px] max-w-4xl w-full border border-slate-100 shadow-2xl overflow-hidden my-6 text-left animate-in fade-in zoom-in-95 duration-200 modal-container [font-variant-numeric:lining-nums_proportional-nums]"
+      >
         
         {/* Modal Header */}
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">

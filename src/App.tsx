@@ -6170,11 +6170,13 @@ function AdDetailModal({
           className="fixed inset-0 bg-slate-950/85 -z-10"
         />
         <motion.div
+          role="dialog"
+          aria-modal="true"
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 15 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="relative w-full max-w-lg bg-white rounded-[32px] overflow-hidden shadow-2xl flex flex-col my-auto will-change-transform transform-gpu"
+          className="relative w-full max-w-lg bg-white rounded-[32px] overflow-hidden shadow-2xl flex flex-col my-auto will-change-transform transform-gpu modal-container [font-variant-numeric:lining-nums_proportional-nums]"
           onClick={e => e.stopPropagation()}
         >
           <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
@@ -12668,10 +12670,12 @@ Wrap up your guide with a warm closing thought for newcomers settling into Valen
             {pushConfirmModal?.isOpen && (
               <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
                 <motion.div
+                  role="dialog"
+                  aria-modal="true"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 text-left"
+                  className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 text-left modal-container [font-variant-numeric:lining-nums_proportional-nums]"
                 >
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-xs">
@@ -12747,10 +12751,12 @@ Wrap up your guide with a warm closing thought for newcomers settling into Valen
             {showDirectPushModal && (
               <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
                 <motion.div
+                  role="dialog"
+                  aria-modal="true"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 text-left"
+                  className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 text-left modal-container [font-variant-numeric:lining-nums_proportional-nums]"
                 >
                   <div className="flex items-start justify-between border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-3">
@@ -14311,12 +14317,12 @@ function HomeView({
                               <img 
                                 src={proToShow.image || "/people.png"} 
                                 alt={proToShow.name} 
-                                className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-100 shadow-sm"
+                                className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover ring-2 ring-blue-100 shadow-md shrink-0"
                                 referrerPolicy="no-referrer"
                               />
-                              <div className="text-left">
-                                <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors max-w-[170px] truncate leading-tight uppercase tracking-tight text-xs">{proToShow.name}</h4>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">{proToShow.category}</p>
+                              <div className="text-left min-w-0">
+                                <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors max-w-[220px] truncate leading-tight uppercase tracking-tight text-xs sm:text-sm">{proToShow.name}</h4>
+                                <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-tight truncate">{proToShow.category}</p>
                               </div>
                             </div>
 
@@ -14338,7 +14344,7 @@ function HomeView({
                               <img 
                                 src={proToShow.image || "/people.png"} 
                                 alt={proToShow.name} 
-                                className="w-20 h-20 md:w-24 md:h-24 rounded-3xl object-cover shadow-md ring-4 ring-white border border-blue-100/80 group-hover:scale-105 transition-all duration-300"
+                                className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-3xl object-cover shadow-lg ring-4 ring-white border border-blue-100/80 group-hover:scale-105 transition-all duration-300"
                                 referrerPolicy="no-referrer"
                               />
                             </div>
@@ -14465,12 +14471,14 @@ function HomeView({
 
                   {/* Modal Card */}
                   <motion.div
+                    role="dialog"
+                    aria-modal="true"
                     initial={{ opacity: 0, scale: 0.95, y: 16 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 16 }}
                     transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                     onClick={(e) => e.stopPropagation()}
-                    className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200/90 my-auto z-10 max-h-[92vh] flex flex-col overflow-hidden"
+                    className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200/90 my-auto z-10 max-h-[92vh] flex flex-col overflow-hidden modal-container [font-variant-numeric:lining-nums_proportional-nums]"
                   >
                     {/* Modal Header Bar with Close Cross */}
                     <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-3 bg-white/95 backdrop-blur-sm shrink-0 z-20">
@@ -14775,11 +14783,13 @@ function ExpertGuideModal({ isOpen, onClose, article: rawArticle }: { isOpen: bo
           />
           
           <motion.div 
+            role="dialog"
+            aria-modal="true"
             initial={{ scale: 0.94, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.94, opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="bg-white w-full max-w-4xl h-full md:h-auto md:max-h-[85vh] rounded-[24px] md:rounded-[40px] shadow-2xl relative flex flex-col overflow-hidden will-change-transform transform-gpu"
+            className="bg-white w-full max-w-4xl h-full md:h-auto md:max-h-[85vh] rounded-[24px] md:rounded-[40px] shadow-2xl relative flex flex-col overflow-hidden will-change-transform transform-gpu modal-container [font-variant-numeric:lining-nums_proportional-nums]"
             onClick={e => e.stopPropagation()}
           >
           {/* Header Image Section - Compact, Stable, and High Contrast */}
@@ -19093,10 +19103,12 @@ function MessagesView({
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[210] flex items-center justify-center p-4"
           >
             <motion.div 
+               role="dialog"
+               aria-modal="true"
                initial={{ scale: 0.95, y: 15 }}
                animate={{ scale: 1, y: 0 }}
                exit={{ scale: 0.95, y: 15 }}
-               className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl relative border border-slate-100"
+               className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl relative border border-slate-100 modal-container [font-variant-numeric:lining-nums_proportional-nums]"
             >
               <button 
                 onClick={() => setShowReportModal(false)}
@@ -19175,10 +19187,12 @@ function MessagesView({
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[210] flex items-center justify-center p-4"
           >
             <motion.div 
+              role="dialog"
+              aria-modal="true"
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl relative border border-slate-100"
+              className="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl relative border border-slate-100 modal-container [font-variant-numeric:lining-nums_proportional-nums]"
             >
               <div className="space-y-4 text-center">
                 <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center mx-auto">
@@ -19231,10 +19245,12 @@ function MessagesView({
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[210] flex items-center justify-center p-4"
           >
             <motion.div 
+              role="dialog"
+              aria-modal="true"
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl relative border border-slate-100"
+              className="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl relative border border-slate-100 modal-container [font-variant-numeric:lining-nums_proportional-nums]"
             >
               <div className="space-y-4 text-center">
                 <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">

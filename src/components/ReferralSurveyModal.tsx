@@ -154,11 +154,13 @@ export function ReferralSurveyModal({
 
         {/* Modal Window */}
         <motion.div 
+          role="dialog"
+          aria-modal="true"
           initial={{ opacity: 0, scale: 0.95, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 12 }}
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-10 my-auto will-change-transform transform-gpu"
+          className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-10 my-auto will-change-transform transform-gpu modal-container [font-variant-numeric:lining-nums_proportional-nums]"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header Banner */}

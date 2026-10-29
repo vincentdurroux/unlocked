@@ -350,11 +350,13 @@ export function InAppNotificationCenter({
 
       {/* Main Notification Popover */}
       <motion.div
+        role="dialog"
+        aria-modal="true"
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
         transition={{ duration: 0.15, ease: "easeOut" }}
-        className="absolute top-full right-0 mt-3 w-[calc(100vw-32px)] sm:w-[480px] bg-white rounded-3xl shadow-2xl z-50 border border-slate-100 flex flex-col overflow-hidden max-h-[85vh]"
+        className="absolute top-full right-0 mt-3 w-[calc(100vw-32px)] sm:w-[480px] bg-white rounded-3xl shadow-2xl z-50 border border-slate-100 flex flex-col overflow-hidden max-h-[85vh] modal-container [font-variant-numeric:lining-nums_proportional-nums]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Caret Arrow pointing to the Bell */}

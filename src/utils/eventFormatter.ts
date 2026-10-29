@@ -102,22 +102,23 @@ export function normalizeSingleDate(dateStr?: string | null): string {
   }
 
   // Return uppercase clean representation if unrecognized
-  return trimmed.toUpperCase();
+  return trimmed.replace(/[\u00A0\u202F\u2000-\u200B]/g, ' ').replace(/\s+/g, ' ').toUpperCase();
 }
 
 /**
  * Harmonizes and formats the full date display of an event (handling start & optional end date)
  */
 export function formatEventDate(startDate?: string | null, endDate?: string | null, legacyDate?: string | null): string {
-  const startRaw = startDate || legacyDate || '';
+  const startRaw = (startDate || legacyDate || '').replace(/[\u00A0\u202F\u2000-\u200B]/g, ' ').replace(/\s+/g, ' ').trim();
   const sNorm = normalizeSingleDate(startRaw);
 
   if (!sNorm) return 'UPCOMING';
 
   if (!endDate) return sNorm;
 
-  const eNorm = normalizeSingleDate(endDate);
-  if (!eNorm || eNorm === sNorm || isSameDay(startRaw, endDate)) {
+  const endRaw = endDate.replace(/[\u00A0\u202F\u2000-\u200B]/g, ' ').replace(/\s+/g, ' ').trim();
+  const eNorm = normalizeSingleDate(endRaw);
+  if (!eNorm || eNorm === sNorm || isSameDay(startRaw, endRaw)) {
     return sNorm;
   }
 
@@ -128,10 +129,19 @@ export function formatEventDate(startDate?: string | null, endDate?: string | nu
  * Harmonizes time display (e.g. "19:00" or "10:00 AM - 01:00 PM")
  */
 export function formatEventTime(startTime?: string | null, endTime?: string | null, legacyTime?: string | null): string {
-  const start = startTime || legacyTime || '';
+  const start = (startTime || legacyTime || '')
+    .replace(/[\u00A0\u202F\u2000-\u200B]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!start) return '';
-  if (!endTime || endTime.trim() === start.trim()) return start.trim();
-  return `${start.trim()} - ${endTime.trim()}`;
+
+  const end = (endTime || '')
+    .replace(/[\u00A0\u202F\u2000-\u200B]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!end || end === start) return start;
+  return `${start} - ${end}`;
 }
 
 /**

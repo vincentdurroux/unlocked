@@ -71,7 +71,7 @@ export const PartnerHighlightCard: React.FC<PartnerHighlightCardProps> = ({
         {/* Logo and Partner Identity */}
         <div className="flex flex-col items-center space-y-3 flex-1 justify-center my-1 w-full">
           <div className="relative">
-            <div className="w-22 h-22 md:w-26 md:h-26 rounded-2xl md:rounded-3xl overflow-hidden bg-white p-2 shadow-lg ring-4 ring-emerald-100 group-hover:ring-emerald-300 group-hover:scale-105 transition-all duration-300 border border-slate-100">
+            <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-2xl md:rounded-3xl overflow-hidden bg-white p-2 shadow-lg ring-4 ring-emerald-100 group-hover:ring-emerald-300 group-hover:scale-105 transition-all duration-300 border border-slate-100">
               <img
                 src={partner.logo_url || "https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=240&auto=format&fit=crop&q=80"}
                 alt={partner.business_name}
