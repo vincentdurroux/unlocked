@@ -456,8 +456,8 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                 className={cn(
                   "shrink-0 w-[195px] h-[275px] sm:w-[230px] sm:h-[325px] rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border-2 transform-gpu relative group/card select-none z-10",
                   isCenterCard
-                    ? "border-orange-500 shadow-xl shadow-orange-500/30 ring-2 ring-orange-500/20 scale-[1.04]"
-                    : "border-slate-200/90 shadow-sm opacity-75 scale-100"
+                    ? "border-orange-500 shadow-xl shadow-orange-500/30 ring-2 ring-orange-500/20 -translate-y-1.5"
+                    : "border-slate-200/90 shadow-sm opacity-75 translate-y-0"
                 )}
               >
                 {/* Poster Background Image directly inside card */}
