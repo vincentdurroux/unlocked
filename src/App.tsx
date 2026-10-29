@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import Papa from 'papaparse';
 import { parseProfessionalCSV, rowToPro, detectColumnMappings, parseEventCSV, detectEventColumnMappings, rowToEvent } from './utils/csvParser';
 import { Logo } from './components/Logo';
@@ -13872,6 +13873,24 @@ function HomeView({
     return () => clearInterval(timer);
   }, [expandedLandingProId]);
 
+  // Body scroll lock and Escape key listener when pro modal is open
+  useEffect(() => {
+    if (!expandedLandingProId) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setExpandedLandingProId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [expandedLandingProId]);
+
   return (
     <div className="px-6 pt-12 md:pt-20 pb-12 md:pb-24 xl:pb-6 space-y-12 md:space-y-20 lg:space-y-28 max-w-7xl mx-auto w-full overflow-hidden">
 
@@ -14019,39 +14038,40 @@ function HomeView({
               <span>100% secure. Jane is here to help.</span>
             </div>
           </div>
-        </div>
 
-        {/* Hero Recommend Pro Card */}
-        <div 
-          onClick={onAddPro}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onAddPro();
-            }
-          }}
-          className="relative z-10 mt-4 max-w-3xl mx-auto w-full overflow-hidden rounded-3xl bg-gradient-to-br from-white to-[#fffdf5] p-5 md:p-7 border border-amber-200/70 hover:border-amber-300/90 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] group/rec-card cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-brand-yellow"
-        >
-          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100/80 border border-amber-200/60 flex items-center justify-center text-amber-700 shrink-0 shadow-sm group-hover/rec-card:scale-105 transition-transform">
-                <UserPlus className="w-6 h-6" />
+          {/* Compact, elegant "Know someone great?" box directly under Find Pro search */}
+          <div 
+            onClick={onAddPro}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onAddPro();
+              }
+            }}
+            className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-amber-50/60 hover:bg-amber-50 rounded-2xl p-3.5 sm:px-4 sm:py-3 border border-amber-200/70 transition-all cursor-pointer group/rec"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0 font-bold">
+                <UserPlus className="w-4 h-4 text-amber-600" />
               </div>
-              <div className="space-y-1 text-left">
-                <h3 className="text-base md:text-lg font-bold text-brand-navy tracking-tight">Know someone great?</h3>
-                <p className="text-slate-600 text-[11px] md:text-[13px] font-medium leading-relaxed">
-                  Recommend a pro and help other members find the best.
+              <div className="space-y-0.5 text-left min-w-0">
+                <h4 className="font-bold text-slate-900 text-xs sm:text-sm tracking-tight flex items-center gap-1">
+                  <span>Know someone great?</span>
+                  <span className="text-amber-500">🌟</span>
+                </h4>
+                <p className="text-slate-600 text-[11px] sm:text-xs leading-tight">
+                  Recommend a local pro in Valencia to help the community!
                 </p>
               </div>
             </div>
 
-            <div 
-              className="w-fit self-center sm:self-auto shrink-0 inline-flex items-center justify-center gap-2 px-6 py-2.5 md:px-7 md:py-3 bg-brand-yellow group-hover/rec-card:bg-amber-400 text-brand-navy rounded-xl font-bold text-xs md:text-sm shadow-sm transition-all"
-            >
-              <UserPlus className="w-3.5 h-3.5 md:w-4 h-4 text-brand-navy shrink-0" />
-              <span>Recommend a pro</span>
+            <div className="shrink-0 self-end sm:self-center w-full sm:w-auto">
+              <div className="px-3 py-1.5 bg-slate-900 group-hover/rec:bg-amber-600 text-white rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs">
+                <span>Recommend a Pro</span>
+                <ArrowRight className="w-3 h-3 group-hover/rec:translate-x-0.5 transition-transform" />
+              </div>
             </div>
           </div>
         </div>
@@ -14245,14 +14265,8 @@ function HomeView({
                 )}
                 id="discover-card-pro"
                 onClick={() => {
-                  const targetId = String(proToShow.id);
                   setExpandedLandingPartner(false);
-                  setExpandedLandingProId(prev => (prev === targetId ? null : targetId));
-                  if (expandedLandingProId !== targetId) {
-                    setTimeout(() => {
-                      document.getElementById('landing-expanded-pro-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }, 120);
-                  }
+                  setExpandedLandingProId(String(proToShow.id));
                 }}
               >
                 {/* Subtle soft ambient light */}
@@ -14427,37 +14441,86 @@ function HomeView({
             </motion.div>
           )}
 
-          {/* Detailed Pro Card: Opens directly under the 'Meet a local pro' card */}
-          {expandedLandingPro && (
-            <motion.div
-              key={`landing-expanded-pro-${expandedLandingPro.id}`}
-              id="landing-expanded-pro-section"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              className="col-span-1 md:col-span-2 lg:col-span-3 w-full scroll-mt-28"
-            >
-              <DirectoryProCardItem
-                key={expandedLandingPro.id}
-                pro={expandedLandingPro}
-                index={0}
-                isExpanded={true}
-                onToggleExpand={() => {
-                  setExpandedLandingProId(null);
-                }}
-                currentUser={currentUser}
-                userProfile={userProfile}
-                blockedUsers={blockedUsers}
-                usersWhoBlockedMe={usersWhoBlockedMe}
-                onNavigate={onNavigate}
-                onProUpdate={onProUpdate}
-                userLocation={null}
-                hasRealLocation={false}
-                favoriteProIds={favoriteProIds}
-                onToggleFavoritePro={onToggleFavoritePro}
-              />
-            </motion.div>
+          {/* Detailed Pro Modal: Opens in a centered modal dialog instead of underneath */}
+          {typeof document !== 'undefined' && createPortal(
+            <AnimatePresence>
+              {expandedLandingPro && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+                  {/* Backdrop */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    onClick={() => setExpandedLandingProId(null)}
+                    className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm cursor-pointer"
+                  />
+
+                  {/* Modal Card */}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 16 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 16 }}
+                    transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200/90 my-auto z-10 max-h-[92vh] flex flex-col overflow-hidden"
+                  >
+                    {/* Modal Header Bar with Close Cross */}
+                    <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-3 bg-white/95 backdrop-blur-sm shrink-0 z-20">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue to-sky-500 flex items-center justify-center text-white shadow-md shadow-brand-blue/20 shrink-0">
+                          <Star className="w-4 h-4 fill-current" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-bold text-brand-blue uppercase tracking-wider block">
+                            Meet a local Pro
+                          </span>
+                          <h3 className="font-extrabold font-display text-slate-900 text-sm sm:text-base leading-tight truncate">
+                            {expandedLandingPro.name}
+                          </h3>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setExpandedLandingProId(null)}
+                        aria-label="Fermer la modale"
+                        className="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-all active:scale-90 cursor-pointer shadow-xs border border-slate-200/80"
+                      >
+                        <X className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+                    </div>
+
+                    {/* Modal Scrollable Body */}
+                    <div className="overflow-y-auto p-4 sm:p-6 flex-1 bg-slate-50/50">
+                      <DirectoryProCardItem
+                        key={expandedLandingPro.id}
+                        pro={expandedLandingPro}
+                        index={0}
+                        isExpanded={true}
+                        onToggleExpand={() => {
+                          setExpandedLandingProId(null);
+                        }}
+                        currentUser={currentUser}
+                        userProfile={userProfile}
+                        blockedUsers={blockedUsers}
+                        usersWhoBlockedMe={usersWhoBlockedMe}
+                        onNavigate={(view, params) => {
+                          setExpandedLandingProId(null);
+                          onNavigate(view, params);
+                        }}
+                        onProUpdate={onProUpdate}
+                        userLocation={null}
+                        hasRealLocation={false}
+                        favoriteProIds={favoriteProIds}
+                        onToggleFavoritePro={onToggleFavoritePro}
+                      />
+                    </div>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>,
+            document.body
           )}
 
 
@@ -14608,6 +14671,8 @@ function HomeView({
           })()}
         </div>
       </div>
+
+
 
       {/* Why people love Unlocked Section (placed after Discover on Unlocked for tablet and desktop) */}
       <div className="hidden md:block space-y-8 md:space-y-12 py-4">
