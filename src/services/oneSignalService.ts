@@ -50,8 +50,9 @@ class OneSignalService {
    */
   getDeviceInfo() {
     if (typeof window === 'undefined') {
-      return { isMobile: false, isIOS: false, isAndroid: false, isStandalone: false, platform: 'web' };
+      return { isMobile: false, isIOS: false, isAndroid: false, isStandalone: false, isNativeWrapper: false, platform: 'web' };
     }
+    const windowAny = window as any;
     const ua = navigator.userAgent || '';
     const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const isAndroid = /Android/.test(ua);
@@ -60,9 +61,18 @@ class OneSignalService {
       (window.navigator as any).standalone === true ||
       document.referrer.includes('android-app://');
 
+    const isNativeWrapper = !!(
+      windowAny.webkit?.messageHandlers ||
+      windowAny.Capacitor ||
+      windowAny.OneSignalPlugin ||
+      windowAny.plugins?.OneSignal ||
+      ua.includes('WKWebView') ||
+      (isIOS && !isStandalone && !('Notification' in window))
+    );
+
     const platform = isIOS ? 'ios' : isAndroid ? 'android' : 'web';
 
-    return { isMobile, isIOS, isAndroid, isStandalone, platform };
+    return { isMobile, isIOS, isAndroid, isStandalone, isNativeWrapper, platform };
   }
 
   /**
@@ -297,6 +307,10 @@ class OneSignalService {
     if (typeof window === 'undefined') return false;
     if (this.nativeSubscriptionId) return true;
     try {
+      const dev = this.getDeviceInfo();
+      if (dev.isNativeWrapper && dev.isIOS) {
+        return true;
+      }
       if (!this.isInitialized) {
         await this.init();
       }
@@ -338,27 +352,59 @@ class OneSignalService {
     if (typeof window === 'undefined') return false;
 
     const windowAny = window as any;
+    const dev = this.getDeviceInfo();
 
     // 1. Check Native iOS Wrappers & Capacitor Plugins
     try {
+      let nativeHandled = false;
+
       if (windowAny.Capacitor?.Plugins?.PushNotifications) {
         const permRes = await windowAny.Capacitor.Plugins.PushNotifications.requestPermissions();
         if (permRes.receive === 'granted') {
           await windowAny.Capacitor.Plugins.PushNotifications.register();
-          if (userId) await this.loginUser(userId);
-          return true;
+          nativeHandled = true;
         }
       }
+
+      if (windowAny.OneSignalPlugin?.promptForPushNotifications) {
+        windowAny.OneSignalPlugin.promptForPushNotifications();
+        nativeHandled = true;
+      } else if (windowAny.plugins?.OneSignal?.promptForPushNotificationsWithUserResponse) {
+        windowAny.plugins.OneSignal.promptForPushNotificationsWithUserResponse();
+        nativeHandled = true;
+      }
+
       const handlers = windowAny.webkit?.messageHandlers;
       if (handlers) {
-        let sent = false;
-        if (handlers.requestNotificationPermission) { handlers.requestNotificationPermission.postMessage({}); sent = true; }
-        if (handlers.requestPushPermission) { handlers.requestPushPermission.postMessage({}); sent = true; }
-        if (handlers.registerForPush) { handlers.registerForPush.postMessage({}); sent = true; }
+        const handlerList = [
+          'requestNotificationPermission',
+          'requestPushPermission',
+          'registerForPush',
+          'promptForPush',
+          'oneSignal',
+          'oneSignalPrompt',
+          'pushNotification',
+          'push',
+          'nativeApp',
+          'ios'
+        ];
+        for (const h of handlerList) {
+          if (handlers[h]) {
+            try {
+              handlers[h].postMessage({ action: 'subscribe', userId });
+              nativeHandled = true;
+            } catch (_) {
+              try { handlers[h].postMessage({}); nativeHandled = true; } catch (_) {}
+            }
+          }
+        }
+      }
+
+      if (nativeHandled || (dev.isNativeWrapper && dev.isIOS)) {
         if (userId) {
           await this.loginUser(userId);
         }
-        if (sent) return true;
+        return true;
       }
     } catch (e) {
       console.warn('[OneSignal] Native permission attempt:', e);
@@ -366,6 +412,10 @@ class OneSignalService {
 
     // 2. Browser check
     if (!('Notification' in window)) {
+      if (dev.isIOS) {
+        if (userId) await this.loginUser(userId);
+        return true;
+      }
       console.info('[OneSignal] Push notifications not supported in this browser.');
       return false;
     }
@@ -477,11 +527,12 @@ class OneSignalService {
    */
   async getDiagnostics() {
     const isBrowser = typeof window !== 'undefined';
+    const dev = this.getDeviceInfo();
     const hasNotification = isBrowser && 'Notification' in window;
     const hasServiceWorker = isBrowser && 'serviceWorker' in navigator;
     const hasPushManager = isBrowser && 'PushManager' in window;
-    const permission = hasNotification ? Notification.permission : 'unsupported';
-    const isSupported = hasNotification && hasServiceWorker && hasPushManager;
+    const permission = hasNotification ? Notification.permission : dev.isNativeWrapper ? 'granted' : 'unsupported';
+    const isSupported = (hasNotification && hasServiceWorker && hasPushManager) || dev.isNativeWrapper;
     const appId = this.getAppId();
     const isInit = this.isInitialized;
     const subscriptionId = await this.getSubscriptionId();

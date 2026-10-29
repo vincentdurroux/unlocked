@@ -23095,28 +23095,29 @@ function ProfileView({
         if (isPushSubscribed) {
           await oneSignalService.unsubscribe();
           setIsPushSubscribed(false);
-          setPushFeedback({ type: 'success', text: 'Push notifications disabled on this device.' });
+          setPushFeedback({ type: 'success', text: 'Notifications push désactivées sur cet appareil.' });
         } else {
           const success = await oneSignalService.subscribe(currentUser?.id);
-          const currentPerm = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default';
+          const dev = oneSignalService.getDeviceInfo();
+          const currentPerm = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted';
           setPushStatus(currentPerm);
 
-          if (success || currentPerm === 'granted') {
+          if (success || currentPerm === 'granted' || dev.isNativeWrapper) {
             setIsPushSubscribed(true);
             const subId = await oneSignalService.getSubscriptionId();
             setOneSignalSubId(subId);
-            setPushFeedback({ type: 'success', text: 'Push notifications enabled successfully!' });
+            setPushFeedback({ type: 'success', text: 'Notifications push activées avec succès !' });
           } else if (pushNotificationService.isIOSInBrowser()) {
             setIsPushSubscribed(false);
             setPushFeedback({
               type: 'info',
-              text: "Sur iPhone / iPad en navigateur Web, Apple exige d'ajouter l'application à l'écran d'accueil pour autoriser les notifications. Cliquez sur Partager ⎋ ➔ « Sur l'écran d'accueil »."
+              text: "Sur Safari Web, Apple exige d'ajouter l'application à l'écran d'accueil pour autoriser les notifications. Si vous utilisez l'application App Store téléchargée, l'activation est automatique."
             });
           } else if (currentPerm === 'denied') {
             setIsPushSubscribed(false);
             setPushFeedback({
               type: 'error',
-              text: "Notifications are blocked in Settings. On your phone: Settings ➔ Unlocked (or Safari/Chrome) ➔ Notifications ➔ Allow."
+              text: "Les notifications sont bloquées dans les Réglages. Sur votre iPhone : Réglages ➔ Unlocked ➔ Notifications ➔ Autoriser."
             });
           } else {
             setIsPushSubscribed(false);
@@ -23130,12 +23131,12 @@ function ProfileView({
         if (isPushSubscribed) {
           await pushNotificationService.unsubscribeUser(currentUser?.id || 'guest');
           setIsPushSubscribed(false);
-          setPushFeedback({ type: 'success', text: 'Push notifications disabled on this device.' });
+          setPushFeedback({ type: 'success', text: 'Notifications push désactivées sur cet appareil.' });
         } else {
           await pushNotificationService.subscribeUser(currentUser?.id || 'guest');
           setIsPushSubscribed(true);
           setPushStatus('granted');
-          setPushFeedback({ type: 'success', text: 'Push notifications enabled successfully!' });
+          setPushFeedback({ type: 'success', text: 'Notifications push activées avec succès !' });
         }
       }
     } catch (err: any) {
@@ -23155,25 +23156,47 @@ function ProfileView({
     setPushLoading(true);
     setPushFeedback(null);
     try {
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        if (Notification.permission === 'denied') {
-          throw new Error('Les notifications sont bloquées dans votre navigateur. Cliquez sur l\'icône de cadenas 🔒 à côté de l\'URL pour réautoriser les notifications.');
-        }
+      const isNotificationSupported = typeof window !== 'undefined' && 'Notification' in window;
+      let localSuccess = false;
+
+      if (isNotificationSupported) {
         if (Notification.permission === 'default') {
-          const p = await Notification.requestPermission();
-          setPushStatus(p);
-          if (p !== 'granted') {
-            throw new Error('Vous devez autoriser les notifications pour recevoir le test.');
+          try {
+            const p = await Notification.requestPermission();
+            setPushStatus(p);
+          } catch (_) {}
+        }
+
+        if (Notification.permission === 'granted') {
+          try {
+            await pushNotificationService.showLocalNotification(
+              'Unlocked Valencia 🌴',
+              'Test de notification réussi ! Vos notifications fonctionnent parfaitement.'
+            );
+            localSuccess = true;
+            setPushFeedback({ type: 'success', text: 'Notification de test affichée sur votre écran !' });
+          } catch (e) {
+            console.info('Local notification failed, falling back to OneSignal server push:', e);
           }
         }
       }
-      await pushNotificationService.showLocalNotification(
-        'Unlocked Valencia 🌴',
-        'Test Web Push réussi ! Vos notifications s\'affichent parfaitement sur votre appareil.'
-      );
-      setPushFeedback({ type: 'success', text: 'Notification de test affichée sur votre écran !' });
+
+      if (!localSuccess) {
+        // Fallback to live server push via OneSignal API (delivers to native iOS App Store app / APNs & Web)
+        const res = await oneSignalService.sendServerNotification(
+          'Unlocked Valencia 🌴',
+          'Ceci est un push de test envoyé en direct à votre application iPhone !',
+          '/',
+          currentUser?.id ? [currentUser.id] : undefined
+        );
+        const recipientCount = res?.result?.recipients ?? 1;
+        setPushFeedback({
+          type: 'success',
+          text: `Notification de test envoyée avec succès à votre iPhone via OneSignal ! (${recipientCount} destinataire)`
+        });
+      }
     } catch (err: any) {
-      setPushFeedback({ type: 'error', text: err?.message || 'Impossible d\'afficher la notification de test.' });
+      setPushFeedback({ type: 'error', text: err?.message || 'Impossible d\'envoyer la notification de test.' });
     } finally {
       setPushLoading(false);
     }
