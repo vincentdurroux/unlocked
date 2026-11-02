@@ -134,8 +134,23 @@ const COMMON_CATEGORIES = [
   { label: '👨‍👩‍👧 Family', value: 'Family' },
   { label: '🌟 Festival', value: 'Festival' },
   { label: '🛠️ Workshops', value: 'Workshops' },
-  { label: '🏛️ Culture', value: 'Culture' }
 ];
+
+export function getEventSummaryText(description?: string): string {
+  if (!description) return '';
+  const parsed = parseDescriptionSections(description);
+  let text = parsed.fullDescription || parsed.expect || '';
+  if (!text) {
+    text = description;
+  }
+  const cleaned = text
+    .replace(/^#{1,6}\s+[^\n]+/gm, '')
+    .replace(/[*_#`>]/g, '')
+    .replace(/^\s*[-•]\s*/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleanDuplicateEmojis(cleaned);
+}
 
 interface AdminEventsManagerProps {
   events: AdminEventItem[];
@@ -1716,11 +1731,15 @@ Live music performances, artists, and event highlights
                 >
                   {/* Top Image & Badges */}
                   <div>
-                    <div className="relative h-48 overflow-hidden bg-slate-100">
+                    <div
+                      onClick={() => setPreviewModalEvent(event)}
+                      className="relative h-48 overflow-hidden bg-slate-100 cursor-pointer group/img"
+                      title="Click to preview full event card"
+                    >
                       <img
                         src={event.image_url || event.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=1200'}
                         alt={event.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-500"
                         referrerPolicy="no-referrer"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
@@ -1728,12 +1747,13 @@ Live music performances, artists, and event highlights
                       {/* Select checkbox */}
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setSelectedEventIds(prev =>
                             prev.includes(event.id) ? prev.filter(id => id !== event.id) : [...prev, event.id]
                           );
                         }}
-                        className="absolute top-3 left-3 p-1 rounded-lg bg-white/90 backdrop-blur-md border border-white/40 cursor-pointer transition-transform active:scale-95 shadow-sm"
+                        className="absolute top-3 left-3 p-1 rounded-lg bg-white/90 backdrop-blur-md border border-white/40 cursor-pointer transition-transform active:scale-95 shadow-sm z-10"
                       >
                         <div className={cn(
                           "w-4 h-4 rounded border flex items-center justify-center transition-colors",
@@ -1776,21 +1796,40 @@ Live music performances, artists, and event highlights
 
                     {/* Content */}
                     <div className="p-5 space-y-3">
-                      <h4 className="font-bold text-slate-900 text-base leading-snug line-clamp-2">
+                      <h4
+                        onClick={() => setPreviewModalEvent(event)}
+                        className="font-bold text-slate-900 text-base leading-snug line-clamp-2 hover:text-brand-blue cursor-pointer transition-colors"
+                        title="Click to preview event"
+                      >
                         {event.title}
                       </h4>
 
                       <div className="space-y-1.5 text-xs text-slate-600">
+                        {/* Date & Time */}
+                        <div className="flex items-center gap-2 text-brand-blue font-semibold">
+                          <Calendar className="w-3.5 h-3.5 text-brand-blue shrink-0" />
+                          <span>
+                            {event.start_date || event.date || 'Upcoming'}
+                            {!isSingleDay && event.end_date && ` - ${event.end_date}`}
+                          </span>
+                          {(event.start_time || event.time) && (
+                            <>
+                              <span className="text-slate-300">•</span>
+                              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="text-slate-600 font-normal">
+                                {event.start_time || event.time} {event.end_time ? `- ${event.end_time}` : ''}
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Location */}
                         <div className="flex items-center gap-2">
                           <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span className="truncate">{event.location || 'Valencia, Spain'}</span>
                         </div>
-                        {(event.start_time || event.time) && (
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span>{event.start_time || event.time} {event.end_time ? `- ${event.end_time}` : ''}</span>
-                          </div>
-                        )}
+
+                        {/* Price & Tickets if present */}
                         {(event.price || event.ticket_url || event.is_free !== undefined) && (
                           <div className="flex items-center gap-2">
                             <Ticket className="w-3.5 h-3.5 text-orange-500 shrink-0" />
@@ -1812,9 +1851,20 @@ Live music performances, artists, and event highlights
                         )}
                       </div>
 
+                      {/* Compact Description Excerpt */}
                       {event.description && (
-                        <div className="pt-2 border-t border-slate-100 max-h-72 overflow-y-auto">
-                          <SimpleMarkdown>{event.description}</SimpleMarkdown>
+                        <div className="pt-2.5 border-t border-slate-100">
+                          <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">
+                            {getEventSummaryText(event.description) || 'No description preview available.'}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewModalEvent(event)}
+                            className="mt-1.5 text-[11px] font-bold text-brand-blue hover:text-blue-700 flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Read more (Preview)</span>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1825,9 +1875,10 @@ Live music performances, artists, and event highlights
                     <button
                       type="button"
                       onClick={() => setPreviewModalEvent(event)}
-                      className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200/80 shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                      className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200/80 shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="Preview full event card"
                     >
-                      <Eye className="w-3.5 h-3.5 text-slate-500" />
+                      <Eye className="w-3.5 h-3.5 text-brand-blue" />
                       <span>Preview</span>
                     </button>
 
