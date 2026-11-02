@@ -488,8 +488,8 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   decoding="sync"
                 />
 
-                {/* Subtle gradient strictly at the bottom 40% for text readability */}
-                <div className="absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-slate-950/95 via-slate-900/60 to-transparent pointer-events-none" />
+                {/* Deep gradient at the bottom for crystal-clear readability with full titles */}
+                <div className="absolute bottom-0 left-0 right-0 h-44 sm:h-52 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent pointer-events-none" />
 
                 {/* Top Timing Badge: Clean, high-contrast luminous pill showing opening/closing dates */}
                 <div className="absolute top-2.5 left-2.5 z-20 pointer-events-none">
@@ -515,13 +515,13 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   </div>
                 )}
 
-                {/* Bottom Content: Category & Title */}
-                <div className="absolute bottom-0 left-0 right-0 p-3.5 z-20 pointer-events-none text-left space-y-1">
+                {/* Bottom Content: Category & Full Title */}
+                <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-3.5 z-20 pointer-events-none text-left space-y-1">
                   <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider block truncate">
                     {event.category}
                   </span>
 
-                  <h4 className="font-bold font-display text-white text-[13px] sm:text-[14px] leading-snug line-clamp-2 drop-shadow-md">
+                  <h4 className="font-bold font-display text-white text-[12px] sm:text-[13px] leading-snug drop-shadow-md break-words">
                     {event.title}
                   </h4>
                 </div>
@@ -604,7 +604,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                         </span>
                       )}
                     </div>
-                    <h3 className="text-xl sm:text-2xl font-bold font-display text-white drop-shadow-md leading-tight line-clamp-2">
+                    <h3 className="text-xl sm:text-2xl font-bold font-display text-white drop-shadow-md leading-tight break-words">
                       {selectedEventForModal.title}
                     </h3>
                   </div>

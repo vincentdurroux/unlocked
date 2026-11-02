@@ -11526,8 +11526,8 @@ function AdminView({
                               >
                                 <div className="flex items-center gap-3 min-w-0 overflow-hidden">
                                   <img src={currentHighlight.image || `https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=400&q=80`} alt="" className="w-8 h-8 rounded-full object-cover" />
-                                  <div className="min-w-0">
-                                    <h5 className="font-bold text-slate-900 text-xs truncate">{currentHighlight.title}</h5>
+                                  <div className="min-w-0 flex-1">
+                                    <h5 className="font-bold text-slate-900 text-xs break-words">{currentHighlight.title}</h5>
                                     <p className="text-[10px] text-slate-400 truncate">{currentHighlight.start_date || currentHighlight.date} • {currentHighlight.location}</p>
                                   </div>
                                 </div>
@@ -11566,8 +11566,8 @@ function AdminView({
                               >
                                 <div className="flex items-center gap-3 min-w-0 overflow-hidden">
                                   <img src={evt.image || `https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=400&q=80`} alt="" className="w-8 h-8 rounded-full object-cover" />
-                                  <div className="min-w-0">
-                                    <h5 className="font-bold text-slate-900 text-xs truncate">{evt.title}</h5>
+                                  <div className="min-w-0 flex-1">
+                                    <h5 className="font-bold text-slate-900 text-xs break-words">{evt.title}</h5>
                                     <p className="text-[10px] text-slate-400 truncate">{evt.start_date || evt.date} • {evt.location}</p>
                                   </div>
                                 </div>
