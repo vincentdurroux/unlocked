@@ -195,21 +195,23 @@ export function AdminEventsManager({
   const [pushingEventId, setPushingEventId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 4-box Structured Description Editor State (Harmonized with repository & published events)
+  // 5-box Structured Description Editor State (Harmonized with repository & published events)
   const [descMode, setDescMode] = useState<'sections' | 'raw'>('sections');
+  const [descFull, setDescFull] = useState('');
   const [descExpect, setDescExpect] = useState('');
   const [descPerfectFor, setDescPerfectFor] = useState('');
   const [descGoodToKnow, setDescGoodToKnow] = useState('');
   const [descMoreInfo, setDescMoreInfo] = useState('');
   const prevDescRef = useRef<string | null>(null);
 
-  // Automatically sync and parse the 4 canonical sections whenever editing an event or when newEvent.description changes
+  // Automatically sync and parse the canonical sections whenever editing an event or when newEvent.description changes
   useEffect(() => {
     if (activeTab === 'edit_event' || activeTab === 'add_event') {
       const rawDesc = newEvent.description || '';
       if (rawDesc !== prevDescRef.current) {
         prevDescRef.current = rawDesc;
         const parsed = parseDescriptionSections(rawDesc);
+        setDescFull(parsed.fullDescription || '');
         setDescExpect(parsed.expect || '');
         setDescPerfectFor(parsed.perfectFor || '');
         setDescGoodToKnow(parsed.goodToKnow || '');
@@ -222,6 +224,9 @@ export function AdminEventsManager({
   const getCompiledDescription = () => {
     if (descMode === 'sections') {
       const parts: string[] = [];
+      if (descFull.trim()) {
+        parts.push(`### 📝 Description\n${descFull.trim()}`);
+      }
       if (descExpect.trim()) {
         parts.push(`### ✨ What to expect\n${descExpect.trim()}`);
       }
@@ -239,18 +244,21 @@ export function AdminEventsManager({
     return cleanDuplicateEmojis(newEvent.description || '');
   };
 
-  const handleSectionChange = (field: 'expect' | 'perfectFor' | 'goodToKnow' | 'moreInfo', value: string) => {
+  const handleSectionChange = (field: 'fullDescription' | 'expect' | 'perfectFor' | 'goodToKnow' | 'moreInfo', value: string) => {
+    let nextFull = descFull;
     let nextExpect = descExpect;
     let nextPerfectFor = descPerfectFor;
     let nextGoodToKnow = descGoodToKnow;
     let nextMoreInfo = descMoreInfo;
 
+    if (field === 'fullDescription') { nextFull = value; setDescFull(value); }
     if (field === 'expect') { nextExpect = value; setDescExpect(value); }
     if (field === 'perfectFor') { nextPerfectFor = value; setDescPerfectFor(value); }
     if (field === 'goodToKnow') { nextGoodToKnow = value; setDescGoodToKnow(value); }
     if (field === 'moreInfo') { nextMoreInfo = value; setDescMoreInfo(value); }
 
     const parts: string[] = [];
+    if (nextFull.trim()) parts.push(`### 📝 Description\n${nextFull.trim()}`);
     if (nextExpect.trim()) parts.push(`### ✨ What to expect\n${nextExpect.trim()}`);
     if (nextPerfectFor.trim()) parts.push(`### 🎯 Perfect for\n${nextPerfectFor.trim()}`);
     if (nextGoodToKnow.trim()) parts.push(`### 💡 Good to know\n${nextGoodToKnow.trim()}`);
@@ -375,6 +383,7 @@ export function AdminEventsManager({
     const eDate = event.end_date && !isSameDay(sDate, event.end_date) ? event.end_date : '';
     const rawDesc = event.description || '';
     const parsed = parseDescriptionSections(rawDesc);
+    setDescFull(parsed.fullDescription || '');
     setDescExpect(parsed.expect || '');
     setDescPerfectFor(parsed.perfectFor || '');
     setDescGoodToKnow(parsed.goodToKnow || '');
@@ -411,6 +420,7 @@ export function AdminEventsManager({
     const eDate = event.end_date && !isSameDay(sDate, event.end_date) ? event.end_date : '';
     const rawDesc = event.description || '';
     const parsed = parseDescriptionSections(rawDesc);
+    setDescFull(parsed.fullDescription || '');
     setDescExpect(parsed.expect || '');
     setDescPerfectFor(parsed.perfectFor || '');
     setDescGoodToKnow(parsed.goodToKnow || '');
@@ -1224,7 +1234,7 @@ export function AdminEventsManager({
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4 text-emerald-500" />
                   <h4 className="text-sm font-extrabold uppercase tracking-widest text-slate-700">
-                    3. Article Description (4 Boxes — Same Organization as Repository)
+                    3. Article Description (5 Cases / Sections — Description, What to expect, Perfect for, Good to know, More info)
                   </h4>
                 </div>
                 
@@ -1236,6 +1246,7 @@ export function AdminEventsManager({
                       onClick={() => {
                         if (descMode === 'raw') {
                           const p = parseDescriptionSections(newEvent.description || '');
+                          setDescFull(p.fullDescription);
                           setDescExpect(p.expect);
                           setDescPerfectFor(p.perfectFor);
                           setDescGoodToKnow(p.goodToKnow);
@@ -1248,7 +1259,7 @@ export function AdminEventsManager({
                         descMode === 'sections' ? "bg-white text-emerald-700 shadow-xs" : "text-slate-500 hover:text-slate-800"
                       )}
                     >
-                      4 Cases
+                      5 Cases
                     </button>
                     <button
                       type="button"
@@ -1271,6 +1282,7 @@ export function AdminEventsManager({
                     type="button"
                     onClick={() => {
                       if (descMode === 'sections') {
+                        setDescFull(prev => cleanDuplicateEmojis(prev));
                         setDescExpect(prev => cleanDuplicateEmojis(prev));
                         setDescPerfectFor(prev => cleanDuplicateEmojis(prev));
                         setDescGoodToKnow(prev => cleanDuplicateEmojis(prev));
@@ -1291,6 +1303,23 @@ export function AdminEventsManager({
 
               {descMode === 'sections' ? (
                 <div className="space-y-4">
+                  {/* Box 0: Full Description */}
+                  <div className="bg-indigo-50/40 p-4 rounded-2xl border border-indigo-200/80 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-black text-indigo-950 flex items-center gap-1.5 uppercase tracking-wider">
+                        <span>📝 FULL DESCRIPTION</span>
+                      </label>
+                      <span className="text-[10px] text-indigo-600/70 font-medium">Présentation générale / Introduction de l'article</span>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={descFull}
+                      onChange={(e) => handleSectionChange('fullDescription', e.target.value)}
+                      placeholder="Description complète ou résumé introductif de l'événement..."
+                      className="w-full p-3 bg-white rounded-xl border border-indigo-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-indigo-500/20 resize-y"
+                    />
+                  </div>
+
                   {/* Box 1: What to expect */}
                   <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200 space-y-1.5">
                     <div className="flex items-center justify-between">

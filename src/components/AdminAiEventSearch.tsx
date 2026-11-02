@@ -126,7 +126,7 @@ const PRESET_PROMPTS = [
 
 const EMOJI_REGEX = /[\p{Extended_Pictographic}\u2600-\u27BF]/u;
 
-export function enrichSectionTextWithEmojis(text: string, sectionType: 'expect' | 'perfectFor' | 'goodToKnow' | 'moreInfo'): string {
+export function enrichSectionTextWithEmojis(text: string, sectionType: 'fullDescription' | 'description' | 'expect' | 'perfectFor' | 'goodToKnow' | 'moreInfo'): string {
   if (!text) return '';
   const lines = text.split('\n');
   return lines.map(line => {
@@ -149,7 +149,9 @@ export function enrichSectionTextWithEmojis(text: string, sectionType: 'expect' 
 
     let emoji = '✨';
 
-    if (sectionType === 'expect') {
+    if (sectionType === 'fullDescription' || sectionType === 'description') {
+      emoji = '📝';
+    } else if (sectionType === 'expect') {
       if (/music|concert|jazz|song|band|singer|orchestra|dj|acoustic/i.test(lower)) emoji = '🎶';
       else if (/art|paint|sculpture|exhibit|gallery|visual|museum|photo/i.test(lower)) emoji = '🎨';
       else if (/theat|drama|stage|actor|play|comedy|performance/i.test(lower)) emoji = '🎭';
@@ -229,23 +231,28 @@ function cleanExtractedSectionContent(content: string): string {
   if (!content) return '';
   let cleaned = content.trim();
   // Remove any internal duplicate header lines that might have been captured
-  cleaned = cleaned.replace(/^[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[\p{Extended_Pictographic}\uFE0F\s]*)(?:What (?:can you |to |you can )?expect\??|About (?:the )?event|Overview|Description|Event details|Perfect for|Target audience|Who should attend|Ideal for|Who is (?:this|it) for|Good to know(?:\s*\(tips\))?|Practical (?:info|information)|Need to know|Important info(?:rmation)?|Tickets & Timing|More info(?:rmation)?|Useful links|Tickets & (?:Info|Links)|Official links|Plus d'infos|A quoi s'attendre\??|Infos pratiques|Public cible|Para quién|Qué esperar\??)(?:\*\*?|__|:|\s)*\n?/gimu, '');
+  cleaned = cleaned.replace(/^[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[\p{Extended_Pictographic}\uFE0F\s]*)(?:Full Description|Description complète|Description générale|Description|Présentation|About (?:the )?event|Overview|À propos|What (?:can you |to |you can )?expect\??|Event details|Perfect for|Target audience|Who should attend|Ideal for|Who is (?:this|it) for|Good to know(?:\s*\(tips\))?|Practical (?:info|information)|Need to know|Important info(?:rmation)?|Tickets & Timing|More info(?:rmation)?|Useful links|Tickets & (?:Info|Links)|Official links|Plus d'infos|A quoi s'attendre\??|Infos pratiques|Public cible|Para quién|Qué esperar\??)(?:\*\*?|__|:|\s)*\n?/gimu, '');
   return cleanDuplicateEmojis(cleaned);
 }
 
 export function parseDescriptionSections(description: string) {
+  let fullDescription = '';
   let expect = '';
   let perfectFor = '';
   let goodToKnow = '';
   let moreInfo = '';
 
-  if (!description) return { expect, perfectFor, goodToKnow, moreInfo, hasRealSections: false };
+  if (!description) return { fullDescription, expect, perfectFor, goodToKnow, moreInfo, hasRealSections: false };
 
-  // Flexible regexes matching common variations of the 4 canonical section titles (Markdown headers ###, bold **, or standard headers)
+  // Flexible regexes matching common variations of canonical section titles (Markdown headers ###, bold **, or standard headers)
   const headerMatchers = [
     {
+      key: 'fullDescription',
+      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[📝📄ℹ️\s]*)?(?:Full Description|Description complète|Description générale|Description|Présentation|About (?:the )?event|Overview|À propos)(?:\*\*?|__|:|\s)*(?:\n|$)/i
+    },
+    {
       key: 'expect',
-      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[✨\s]*)?(?:What (?:can you |to |you can )?expect\??|About (?:the )?event|Overview|Description|Event details|A quoi s'attendre\??|Ce à quoi vous attendre\??|Qué esperar\??)(?:\*\*?|__|:|\s)*(?:\n|$)/i
+      regex: /(?:^|\n)[ \t]*(?:#{1,6}\s*|\*\*?|__)?(?:\d+[\.\)]\s+)?(?:[✨\s]*)?(?:What (?:can you |to |you can )?expect\??|Event details|A quoi s'attendre\??|Ce à quoi vous attendre\??|Qué esperar\??)(?:\*\*?|__|:|\s)*(?:\n|$)/i
     },
     {
       key: 'perfectFor',
@@ -283,7 +290,7 @@ export function parseDescriptionSections(description: string) {
   if (hasRealSections) {
     if (sections[0].start > 0) {
       const preamble = cleanExtractedSectionContent(description.substring(0, sections[0].start));
-      if (preamble) expect = preamble;
+      if (preamble) fullDescription = preamble;
     }
 
     for (let i = 0; i < sections.length; i++) {
@@ -293,7 +300,10 @@ export function parseDescriptionSections(description: string) {
       const contentEnd = next ? next.start : description.length;
       const content = cleanExtractedSectionContent(description.substring(contentStart, contentEnd));
 
-      if (current.key === 'expect') {
+      if (current.key === 'fullDescription') {
+        fullDescription = fullDescription ? `${fullDescription}\n\n${content}` : content;
+      }
+      else if (current.key === 'expect') {
         expect = expect ? `${expect}\n\n${content}` : content;
       }
       else if (current.key === 'perfectFor') perfectFor = content;
@@ -303,11 +313,11 @@ export function parseDescriptionSections(description: string) {
   }
 
   // Fallback if no sections matched at all:
-  if (!expect && !perfectFor && !goodToKnow && !moreInfo) {
-    expect = cleanDuplicateEmojis(description.trim());
+  if (!fullDescription && !expect && !perfectFor && !goodToKnow && !moreInfo) {
+    fullDescription = cleanDuplicateEmojis(description.trim());
   }
 
-  return { expect, perfectFor, goodToKnow, moreInfo, hasRealSections };
+  return { fullDescription, expect, perfectFor, goodToKnow, moreInfo, hasRealSections };
 }
 
 export function getCategoryWithEmoji(cat: string) {
@@ -489,10 +499,21 @@ export function SimpleMarkdown({ children }: { children: string }) {
   const cleaned = cleanDuplicateEmojis(children);
   const parsed = parseDescriptionSections(cleaned);
 
-  // If there is any content in expect, perfectFor, goodToKnow or moreInfo, render with canonical structured cards
-  if (parsed.expect || parsed.perfectFor || parsed.goodToKnow || parsed.moreInfo) {
+  // If there is any content in fullDescription, expect, perfectFor, goodToKnow or moreInfo, render with canonical structured cards
+  if (parsed.fullDescription || parsed.expect || parsed.perfectFor || parsed.goodToKnow || parsed.moreInfo) {
     return (
       <div className="space-y-3.5 text-xs sm:text-sm text-slate-700 not-italic">
+        {parsed.fullDescription && (
+          <div className="space-y-1.5 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-black text-indigo-950 text-xs uppercase tracking-wider">
+              <span>📝 DESCRIPTION</span>
+            </div>
+            <div className="leading-relaxed text-slate-800 font-normal">
+              {renderFormattedContent(parsed.fullDescription, "font-extrabold text-slate-950")}
+            </div>
+          </div>
+        )}
+
         {parsed.expect && (
           <div className="space-y-1.5 bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90 shadow-2xs">
             <div className="flex items-center gap-1.5 font-black text-brand-blue text-xs uppercase tracking-wider">
@@ -739,6 +760,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
   const [editLng, setEditLng] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editDescMode, setEditDescMode] = useState<'sections' | 'raw'>('sections');
+  const [editFullDescription, setEditFullDescription] = useState('');
   const [editExpect, setEditExpect] = useState('');
   const [editPerfectFor, setEditPerfectFor] = useState('');
   const [editGoodToKnow, setEditGoodToKnow] = useState('');
@@ -781,6 +803,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
     
     const rawDesc = ev.description || '';
     const parsed = parseDescriptionSections(rawDesc);
+    setEditFullDescription(parsed.fullDescription || '');
     setEditExpect(parsed.expect || '');
     setEditPerfectFor(parsed.perfectFor || '');
     setEditGoodToKnow(parsed.goodToKnow || '');
@@ -796,6 +819,9 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
   const getCompiledDescription = () => {
     if (editDescMode === 'sections') {
       const parts: string[] = [];
+      if (editFullDescription.trim()) {
+        parts.push(`### 📝 Description\n${editFullDescription.trim()}`);
+      }
       if (editExpect.trim()) {
         parts.push(`### ✨ What to expect\n${editExpect.trim()}`);
       }
@@ -2711,12 +2737,12 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                   </div>
                 </div>
 
-                {/* Event Description Section / 4 Boxes Editor */}
+                {/* Event Description Section / 5 Boxes Editor */}
                 <div className="space-y-3 pt-3 border-t border-slate-100">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <label className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
-                      Sections de l'événement (4 Cases)
+                      Sections de l'événement (5 Cases)
                     </label>
 
                     {/* Mode Selector Toggle */}
@@ -2726,6 +2752,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                         onClick={() => {
                           if (editDescMode === 'raw') {
                             const p = parseDescriptionSections(editDescription);
+                            setEditFullDescription(p.fullDescription);
                             setEditExpect(p.expect);
                             setEditPerfectFor(p.perfectFor);
                             setEditGoodToKnow(p.goodToKnow);
@@ -2738,7 +2765,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                           editDescMode === 'sections' ? "bg-white text-brand-blue shadow-xs" : "text-slate-500 hover:text-slate-800"
                         )}
                       >
-                        4 Cases
+                        5 Cases
                       </button>
                       <button
                         type="button"
@@ -2760,6 +2787,23 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
                   {editDescMode === 'sections' ? (
                     <div className="space-y-4">
+                      {/* Box 0: Full Description */}
+                      <div className="bg-indigo-50/40 p-3.5 rounded-2xl border border-indigo-200 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-black text-indigo-950 flex items-center gap-1.5 uppercase tracking-wider">
+                            <span>📝 FULL DESCRIPTION</span>
+                          </label>
+                          <span className="text-[10px] text-indigo-600/70 font-medium">Présentation générale de l'événement</span>
+                        </div>
+                        <textarea
+                          rows={3}
+                          value={editFullDescription}
+                          onChange={(e) => setEditFullDescription(e.target.value)}
+                          placeholder="Description complète ou présentation générale de l'événement..."
+                          className="w-full p-3 bg-white rounded-xl border border-indigo-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-indigo-500/20 resize-y"
+                        />
+                      </div>
+
                       {/* Box 1: What to expect */}
                       <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200 space-y-1.5">
                         <div className="flex items-center justify-between">

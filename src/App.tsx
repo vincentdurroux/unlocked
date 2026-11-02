@@ -583,9 +583,20 @@ export function SimpleMarkdown({ children, isPlain = false }: { children?: strin
   const cleaned = cleanDuplicateEmojis(children);
   const parsed = parseDescriptionSections(cleaned);
 
-  if (!isPlain && (parsed.expect || parsed.perfectFor || parsed.goodToKnow || parsed.moreInfo)) {
+  if (!isPlain && (parsed.fullDescription || parsed.expect || parsed.perfectFor || parsed.goodToKnow || parsed.moreInfo)) {
     return (
       <div className="space-y-3.5 text-xs sm:text-sm text-slate-700 not-italic">
+        {parsed.fullDescription && (
+          <div className="space-y-1.5 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-200/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-black text-indigo-950 text-xs uppercase tracking-wider">
+              <span>📝 DESCRIPTION</span>
+            </div>
+            <div className="leading-relaxed text-slate-800 font-normal">
+              {renderFormattedContent(parsed.fullDescription, "font-extrabold text-slate-950")}
+            </div>
+          </div>
+        )}
+
         {parsed.expect && (
           <div className="space-y-1.5 bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90 shadow-2xs">
             <div className="flex items-center gap-1.5 font-black text-brand-blue text-xs uppercase tracking-wider">
@@ -23018,42 +23029,52 @@ function ProfileView({
   const [showPushSqlModal, setShowPushSqlModal] = useState(false);
   const [showOneSignalGuide, setShowOneSignalGuide] = useState(false);
   const [hasServerApiKey, setHasServerApiKey] = useState(false);
+  const [serverKeyStatus, setServerKeyStatus] = useState<'valid' | 'is_app_id' | 'missing'>('missing');
+  const [serverKeyMessage, setServerKeyMessage] = useState<string>('');
+  const [serverKeyPreview, setServerKeyPreview] = useState<string | null>(null);
+  const [tempRestApiKey, setTempRestApiKey] = useState<string>('');
+  const [isEditingServerKey, setIsEditingServerKey] = useState<boolean>(false);
   const [copiedSubId, setCopiedSubId] = useState(false);
 
-  useEffect(() => {
-    // Check if server has ONESIGNAL_REST_API_KEY configured
-    fetch('/api/onesignal-config')
-      .then(r => r.json())
-      .then(d => {
-        if (d && d.hasServerApiKey) setHasServerApiKey(true);
-      })
-      .catch(() => {});
+  const refreshPushStatus = async () => {
+    const dev = oneSignalService.getDeviceInfo();
+    try {
+      const config = await oneSignalService.fetchServerConfig();
+      if (config) {
+        setHasServerApiKey(config.hasServerApiKey);
+        setServerKeyStatus(config.keyStatus || 'missing');
+        setServerKeyMessage(config.keyMessage || '');
+        setServerKeyPreview(config.keyPreview || null);
+        if (config.appId && config.appId !== oneSignalAppId) {
+          setOneSignalAppId(config.appId);
+          setTempAppId(config.appId);
+        }
+      }
 
-    const initPush = async () => {
-      const dev = oneSignalService.getDeviceInfo();
       if (oneSignalService.getAppId()) {
-        try {
-          await oneSignalService.init(currentUser?.id);
-          const sub = await oneSignalService.isSubscribed();
-          setIsPushSubscribed(sub);
-          const subId = await oneSignalService.getSubscriptionId();
-          setOneSignalSubId(subId || (dev.isNativeWrapper ? 'native-registered' : null));
-          
-          if (dev.isNativeWrapper) {
-            setPushStatus('granted');
-          } else if (typeof window !== 'undefined' && 'Notification' in window) {
-            setPushStatus(Notification.permission);
-          }
-        } catch (e) {
-          console.warn('OneSignal check failed:', e);
+        await oneSignalService.init(currentUser?.id);
+        const sub = await oneSignalService.isSubscribed();
+        setIsPushSubscribed(sub);
+        const subId = await oneSignalService.getSubscriptionId();
+        setOneSignalSubId(subId);
+
+        if (dev.isNativeWrapper && dev.isIOS) {
+          setPushStatus('granted');
+        } else if (typeof window !== 'undefined' && 'Notification' in window) {
+          setPushStatus(Notification.permission);
         }
       } else if (pushNotificationService.isSupported()) {
         setPushStatus(pushNotificationService.getPermission());
         const sub = await pushNotificationService.getExistingSubscription();
         setIsPushSubscribed(!!sub);
       }
-    };
-    initPush();
+    } catch (e) {
+      console.warn('OneSignal refresh check failed:', e);
+    }
+  };
+
+  useEffect(() => {
+    refreshPushStatus();
 
     // Listen for live OneSignal subscription changes
     const unsub = oneSignalService.addPushSubscriptionObserver((newId) => {
@@ -23066,26 +23087,43 @@ function ProfileView({
     return () => unsub();
   }, [currentUser, oneSignalAppId]);
 
-  const handleSaveAppId = async () => {
-    const trimmed = tempAppId.trim();
-    if (!trimmed) {
-      setPushFeedback({ type: 'error', text: 'Veuillez saisir un App ID valide.' });
+  const handleSaveOneSignalCredentials = async () => {
+    const trimmedAppId = tempAppId.trim();
+    const trimmedKey = tempRestApiKey.trim();
+
+    if (!trimmedAppId) {
+      setPushFeedback({ type: 'error', text: 'Veuillez saisir un OneSignal App ID valide.' });
       return;
     }
+
+    if (trimmedKey) {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmedKey);
+      if (isUUID) {
+        setPushFeedback({
+          type: 'error',
+          text: "Attention : La clé saisie est un App ID (format UUID), et non la clé API REST secrète. Dans OneSignal Dashboard > Settings > Keys & IDs, copiez la 'REST API Key' (commence par os_v2_app_ ou chaîne de 48 caractères)."
+        });
+        return;
+      }
+    }
+
     setPushLoading(true);
     setPushFeedback(null);
     try {
-      oneSignalService.setAppId(trimmed);
-      setOneSignalAppId(trimmed);
+      const res = await oneSignalService.saveServerConfig(trimmedAppId, trimmedKey || undefined);
+      oneSignalService.setAppId(trimmedAppId);
+      setOneSignalAppId(trimmedAppId);
       setIsEditingAppId(false);
-      await oneSignalService.init(currentUser?.id);
-      const sub = await oneSignalService.isSubscribed();
-      setIsPushSubscribed(sub);
-      const subId = await oneSignalService.getSubscriptionId();
-      setOneSignalSubId(subId);
-      setPushFeedback({ type: 'success', text: 'OneSignal App ID configuré et initialisé avec succès !' });
+      setIsEditingServerKey(false);
+      setTempRestApiKey('');
+
+      await refreshPushStatus();
+      setPushFeedback({
+        type: 'success',
+        text: res.message || 'Configuration OneSignal enregistrée avec succès !'
+      });
     } catch (err: any) {
-      setPushFeedback({ type: 'error', text: err?.message || 'Erreur lors de la configuration de OneSignal.' });
+      setPushFeedback({ type: 'error', text: err?.message || 'Erreur lors de la sauvegarde.' });
     } finally {
       setPushLoading(false);
     }
@@ -23156,75 +23194,95 @@ function ProfileView({
     }
   };
 
-  const handleSendTestNotification = async () => {
+  // Test 1: Send push notification directly to current device / user via OneSignal REST API
+  const handleSendTestToMyDevice = async () => {
     setPushLoading(true);
     setPushFeedback(null);
     try {
-      const isNotificationSupported = typeof window !== 'undefined' && 'Notification' in window;
-      let localSuccess = false;
+      const currentSub = await oneSignalService.getSubscriptionId();
+      const targetSubs = currentSub ? [currentSub] : undefined;
+      const targetUsers = currentUser?.id ? [currentUser.id] : undefined;
 
-      if (isNotificationSupported) {
-        if (Notification.permission === 'default') {
-          try {
-            const p = await Notification.requestPermission();
-            setPushStatus(p);
-          } catch (_) {}
-        }
+      const res = await oneSignalService.sendServerNotification(
+        'Unlocked Valencia 🌴',
+        'Test de push OneSignal direct réussi sur votre appareil !',
+        '/',
+        targetUsers,
+        targetSubs
+      );
 
-        if (Notification.permission === 'granted') {
-          try {
-            await pushNotificationService.showLocalNotification(
-              'Unlocked Valencia 🌴',
-              'Test de notification réussi ! Vos notifications fonctionnent parfaitement.'
-            );
-            localSuccess = true;
-            setPushFeedback({ type: 'success', text: 'Notification de test affichée sur votre écran !' });
-          } catch (e) {
-            console.info('Local notification failed, falling back to OneSignal server push:', e);
-          }
-        }
-      }
-
-      if (!localSuccess) {
-        // Fallback to live server push via OneSignal API (delivers to native iOS App Store app / APNs & Web)
-        const res = await oneSignalService.sendServerNotification(
-          'Unlocked Valencia 🌴',
-          'Ceci est un push de test envoyé en direct à votre application iPhone !',
-          '/',
-          currentUser?.id ? [currentUser.id] : undefined
-        );
-        const recipientCount = res?.result?.recipients ?? 1;
+      const count = res?.recipients ?? (res?.result?.recipients ?? 1);
+      if (count === 0 && res?.warning) {
+        setPushFeedback({
+          type: 'info',
+          text: res.warning
+        });
+      } else {
         setPushFeedback({
           type: 'success',
-          text: `Notification de test envoyée avec succès à votre iPhone via OneSignal ! (${recipientCount} destinataire)`
+          text: `Push OneSignal envoyé avec succès à votre appareil (${count} destinataire ciblé) !`
         });
       }
     } catch (err: any) {
-      setPushFeedback({ type: 'error', text: err?.message || 'Impossible d\'envoyer la notification de test.' });
+      setPushFeedback({
+        type: 'error',
+        text: err?.message || "Impossible d'envoyer la notification de test OneSignal."
+      });
     } finally {
       setPushLoading(false);
     }
   };
 
+  // Test 2: Send real broadcast push to ALL subscribed mobile & web users via OneSignal REST API
   const handleSendServerPushNotification = async () => {
     setPushLoading(true);
     setPushFeedback(null);
     try {
       const res = await oneSignalService.sendServerNotification(
         'Unlocked Valencia 🌴',
-        'Ceci est un push en direct envoyé via OneSignal ! Le service fonctionne parfaitement.',
+        'Ceci est un push en direct envoyé via OneSignal à tous les abonnés !',
         '/'
       );
-      const recipientCount = res?.result?.recipients ?? 'tous vos abonnés';
+      const recipientCount = res?.recipients ?? res?.result?.recipients ?? 'tous vos abonnés';
       setPushFeedback({
         type: 'success',
-        text: `Push serveur envoyé avec succès via OneSignal ! (${recipientCount} destinataires)`
+        text: `Push OneSignal diffusé avec succès ! (${recipientCount} destinataires)`
       });
     } catch (err: any) {
       setPushFeedback({
         type: 'error',
-        text: err?.message || 'Erreur lors de l\'envoi du push serveur. Vérifiez ONESIGNAL_REST_API_KEY sur Vercel.'
+        text: err?.message || 'Erreur lors de l\'envoi du push serveur.'
       });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  // Test 3: Local visual notification test on current screen
+  const handleSendLocalNotification = async () => {
+    setPushLoading(true);
+    setPushFeedback(null);
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'default') {
+          const p = await Notification.requestPermission();
+          setPushStatus(p);
+        }
+        if (Notification.permission === 'granted') {
+          await pushNotificationService.showLocalNotification(
+            'Unlocked Valencia 🌴',
+            'Notification visuelle locale affichée sur cet écran avec succès !'
+          );
+          setPushFeedback({ type: 'success', text: 'Notification locale affichée sur votre écran !' });
+          return;
+        }
+      }
+      setPushFeedback({
+        type: 'info',
+        text: "Les notifications locales de navigateur ne sont pas autorisées ou non supportées sur cette vue. Utilisez le bouton 'Tester Push OneSignal' ci-dessous pour envoyer un vrai push système."
+      });
+    } catch (err: any) {
+      setPushFeedback({ type: 'error', text: err?.message || 'Impossible d\'afficher la notification locale.' });
     } finally {
       setPushLoading(false);
     }
@@ -25232,73 +25290,144 @@ function ProfileView({
                 {/* Admin-only Diagnostics, Tools & Configuration */}
                 {isAdmin && (
                   <div className="space-y-4 pt-3 border-t border-slate-100">
-                    {/* Diagnostics and Player ID Row */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1">
-                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">État navigateur</span>
-                        <div className="flex items-center gap-1.5 font-medium text-slate-800">
-                          {pushStatus === 'granted' ? (
-                            <span className="text-emerald-600 flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> Autorisé
-                            </span>
-                          ) : pushStatus === 'denied' ? (
-                            <span className="text-rose-600 flex items-center gap-1">
-                              <AlertCircle className="w-3.5 h-3.5" /> Bloqué (vérifiez cadenas URL)
-                            </span>
-                          ) : (
-                            <span className="text-amber-600 flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5" /> En attente d'autorisation
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                    {/* Device & Platform Diagnostics Row */}
+                    {(() => {
+                      const dev = oneSignalService.getDeviceInfo();
+                      const platformLabel = (dev.isIOS && dev.isNativeWrapper)
+                        ? "iPhone (Application App Store)"
+                        : (dev.isIOS && dev.isStandalone)
+                        ? "iPhone (Écran d'accueil PWA)"
+                        : dev.isIOS
+                        ? "iPhone (Safari Web)"
+                        : dev.isAndroid
+                        ? "Android (Application / Mobile)"
+                        : "Navigateur Ordinateur / Web";
 
-                      <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Player ID OneSignal</span>
-                          {oneSignalSubId && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(oneSignalSubId);
-                                setCopiedSubId(true);
-                                setTimeout(() => setCopiedSubId(false), 2000);
-                              }}
-                              className="text-[10px] text-brand-blue font-bold hover:underline cursor-pointer flex items-center gap-1"
-                            >
-                              <Copy className="w-3 h-3" />
-                              {copiedSubId ? 'Copié !' : 'Copier'}
-                            </button>
-                          )}
-                        </div>
-                        <div className="font-mono text-[11px] text-slate-700 truncate">
-                          {oneSignalSubId ? oneSignalSubId : isPushSubscribed ? 'En cours de synchronisation...' : 'Non abonné'}
-                        </div>
-                      </div>
-                    </div>
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                          {/* Device Detection */}
+                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1">
+                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Appareil actuel</span>
+                            <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                              <Smartphone className="w-3.5 h-3.5 text-brand-blue shrink-0" />
+                              <span className="truncate">{platformLabel}</span>
+                            </div>
+                          </div>
 
-                    {/* App ID configuration row */}
-                    <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-100 space-y-2">
+                          {/* Authorization Status */}
+                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1">
+                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Autorisation Push</span>
+                            <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                              {pushStatus === 'granted' ? (
+                                <span className="text-emerald-600 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Accordée
+                                </span>
+                              ) : dev.isNativeWrapper && dev.isIOS ? (
+                                <span className="text-blue-600 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Gérée par iOS (Réglages)
+                                </span>
+                              ) : pushStatus === 'denied' ? (
+                                <span className="text-rose-600 flex items-center gap-1">
+                                  <AlertCircle className="w-3.5 h-3.5" /> Bloquée (Réglages)
+                                </span>
+                              ) : (
+                                <span className="text-amber-600 flex items-center gap-1">
+                                  <Clock className="w-3.5 h-3.5" /> En attente d'activation
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Subscription ID */}
+                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Player ID OneSignal</span>
+                              {oneSignalSubId && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(oneSignalSubId);
+                                    setCopiedSubId(true);
+                                    setTimeout(() => setCopiedSubId(false), 2000);
+                                  }}
+                                  className="text-[10px] text-brand-blue font-bold hover:underline cursor-pointer flex items-center gap-1"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                  {copiedSubId ? 'Copié !' : 'Copier'}
+                                </button>
+                              )}
+                            </div>
+                            <div className="font-mono text-[11px] text-slate-700 truncate">
+                              {oneSignalSubId ? (
+                                <span>{oneSignalSubId}</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={handleTogglePush}
+                                  className="text-brand-blue font-sans font-semibold hover:underline text-[11px]"
+                                >
+                                  Activer / Lier cet iPhone
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Server REST API Key Alert if misconfigured */}
+                    {serverKeyStatus === 'is_app_id' && (
+                      <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-xs space-y-2 text-amber-950 animate-in fade-in">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <p className="font-bold text-amber-900">
+                              Attention : La variable ONESIGNAL_REST_API_KEY contient un App ID (UUID) et non la clé API REST secrète.
+                            </p>
+                            <p className="text-[11px] text-amber-800 leading-relaxed">
+                              OneSignal refuse d'expédier les notifications push tant que la vraie clé API REST n'est pas renseignée. Rendez-vous dans votre tableau de bord OneSignal : <strong>Settings &gt; Keys &amp; IDs</strong>, puis copiez la <strong>« REST API Key »</strong> (commençant par <code>os_v2_app_</code> ou une clé de 48 caractères).
+                            </p>
+                          </div>
+                        </div>
+                        {!isEditingServerKey && (
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingServerKey(true)}
+                            className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-lg text-xs cursor-pointer ml-6"
+                          >
+                            Saisir ma vraie clé REST API OneSignal
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Credentials Configuration Row (App ID & REST API Key) */}
+                    <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-100 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-slate-700">OneSignal App ID</span>
+                          <span className="text-xs font-bold text-slate-700">Configuration OneSignal (Serveur &amp; Client)</span>
                           <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-mono">Admin</span>
                         </div>
-                        {!isEditingAppId ? (
+                        {(!isEditingAppId && !isEditingServerKey) ? (
                           <button
                             type="button"
                             onClick={() => {
                               setTempAppId(oneSignalAppId);
                               setIsEditingAppId(true);
+                              setIsEditingServerKey(true);
                             }}
                             className="text-xs text-brand-blue font-bold hover:underline cursor-pointer"
                           >
-                            {oneSignalAppId ? 'Modifier' : 'Configurer'}
+                            Modifier les clés
                           </button>
                         ) : (
                           <button
                             type="button"
-                            onClick={() => setIsEditingAppId(false)}
+                            onClick={() => {
+                              setIsEditingAppId(false);
+                              setIsEditingServerKey(false);
+                              setTempRestApiKey('');
+                            }}
                             className="text-xs text-slate-400 font-medium hover:underline cursor-pointer"
                           >
                             Annuler
@@ -25306,30 +25435,78 @@ function ProfileView({
                         )}
                       </div>
 
-                      {isEditingAppId ? (
-                        <div className="flex items-center gap-2 pt-1">
-                          <input
-                            type="text"
-                            value={tempAppId}
-                            onChange={(e) => setTempAppId(e.target.value)}
-                            placeholder="Ex: 10a14311-a42a-4681-9682-ce965d80ae75"
-                            className="flex-1 px-3 py-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-blue font-mono"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleSaveAppId}
-                            disabled={pushLoading}
-                            className="px-3 py-2 bg-brand-blue text-white text-xs font-bold rounded-lg hover:bg-brand-blue/90 cursor-pointer disabled:opacity-50"
-                          >
-                            Enregistrer
-                          </button>
+                      {(isEditingAppId || isEditingServerKey) ? (
+                        <div className="space-y-2.5 pt-1">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 mb-1">OneSignal App ID :</label>
+                            <input
+                              type="text"
+                              value={tempAppId}
+                              onChange={(e) => setTempAppId(e.target.value)}
+                              placeholder="Ex: 10a14311-a42a-4681-9682-ce965d80ae75"
+                              className="w-full px-3 py-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-blue font-mono"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                              Clé secrète OneSignal REST API Key :
+                              <span className="text-slate-400 font-normal ml-1">(OneSignal &gt; Settings &gt; Keys &amp; IDs)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={tempRestApiKey}
+                              onChange={(e) => setTempRestApiKey(e.target.value)}
+                              placeholder="Ex: os_v2_app_xxxxxxxx ou clé 48 caractères (pas un UUID)"
+                              className="w-full px-3 py-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-blue font-mono"
+                            />
+                          </div>
+
+                          <div className="flex justify-end gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsEditingAppId(false);
+                                setIsEditingServerKey(false);
+                                setTempRestApiKey('');
+                              }}
+                              className="px-3 py-1.5 text-xs text-slate-500 font-medium hover:bg-slate-100 rounded-lg cursor-pointer"
+                            >
+                              Annuler
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleSaveOneSignalCredentials}
+                              disabled={pushLoading}
+                              className="px-4 py-1.5 bg-brand-blue text-white text-xs font-bold rounded-lg hover:bg-brand-blue/90 cursor-pointer disabled:opacity-50"
+                            >
+                              {pushLoading ? 'Validation en cours...' : 'Valider & Enregistrer'}
+                            </button>
+                          </div>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
-                          <span>{oneSignalAppId ? `${oneSignalAppId.slice(0, 8)}...${oneSignalAppId.slice(-6)}` : 'Non configuré'}</span>
-                          <span className="text-[10px] text-emerald-600 font-sans font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                            Worker: OneSignalSDKWorker.js
-                          </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/80 font-mono text-slate-600">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 font-sans">App ID</span>
+                            <span className="text-[11px] truncate max-w-[140px]">{oneSignalAppId ? `${oneSignalAppId.slice(0, 8)}...${oneSignalAppId.slice(-6)}` : 'Non configuré'}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/80 text-slate-600">
+                            <span className="text-[10px] uppercase font-bold text-slate-400">REST API Key</span>
+                            {serverKeyStatus === 'valid' ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active
+                              </span>
+                            ) : serverKeyStatus === 'is_app_id' ? (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-amber-600" /> App ID au lieu de REST Key
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                Non configurée
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -25339,9 +25516,9 @@ function ProfileView({
                       <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed">
                         <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-bold">Configuration requise sur iPhone / iPad (iOS 16.4+) :</p>
+                          <p className="font-bold">Configuration requise sur Safari iPhone / iPad :</p>
                           <p className="text-[11px] text-amber-800 mt-0.5">
-                            Apple autorise les notifications push uniquement si l'application est ajoutée à votre écran d'accueil. Appuyez sur le bouton <strong>Partager ⎋</strong> de Safari puis sur <strong>« Sur l'écran d'accueil »</strong>.
+                            Si vous accédez depuis le navigateur Safari, Apple autorise les notifications uniquement si l'application est ajoutée à votre écran d'accueil (Partager ⎋ &gt; Sur l'écran d'accueil). Si vous utilisez l'application téléchargée depuis l'App Store, cette étape n'est pas requise.
                           </p>
                         </div>
                       </div>
@@ -25349,40 +25526,43 @@ function ProfileView({
 
                     {/* Actions Row */}
                     <div className="pt-2 flex flex-wrap items-center gap-2.5 border-t border-slate-150/60">
+                      {/* Button 1: Test Push to my current iPhone device */}
                       <button
                         type="button"
-                        onClick={handleSendTestNotification}
+                        onClick={handleSendTestToMyDevice}
                         disabled={pushLoading}
                         className="px-3.5 py-1.5 bg-brand-blue hover:bg-blue-600 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
+                        title="Envoie un push de test direct via l'API OneSignal à cet appareil / cet utilisateur"
                       >
                         <Zap className="w-3.5 h-3.5 text-amber-300" />
-                        <span>Tester une notification</span>
+                        <span>Tester Push sur mon iPhone</span>
                       </button>
 
+                      {/* Button 2: Broadcast to all subscribed users via OneSignal */}
                       <button
                         type="button"
                         onClick={handleSendServerPushNotification}
                         disabled={pushLoading}
                         className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                        title={hasServerApiKey ? "Envoyer un vrai push OneSignal à tous les abonnés via l'API REST" : "Configurez ONESIGNAL_REST_API_KEY sur le serveur pour activer le broadcast"}
+                        title="Envoyer un push OneSignal réel à tous les abonnés via l'API REST"
                       >
                         <Send className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Push OneSignal réel (Serveur)</span>
+                        <span>Diffuser Push (Tous les abonnés)</span>
                       </button>
 
+                      {/* Button 3: Local visual notification test on this screen */}
                       <button
                         type="button"
-                        onClick={() => {
-                          localStorage.removeItem('onesignal_verification_dialog_shown');
-                          window.location.reload();
-                        }}
+                        onClick={handleSendLocalNotification}
+                        disabled={pushLoading}
                         className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                        title="Réinitialiser et afficher le dialogue de vérification OneSignal"
+                        title="Affiche une notification locale directement sur cet écran"
                       >
-                        <Bell className="w-3.5 h-3.5 text-red-500" />
-                        <span>Dialogue vérification SDK</span>
+                        <Bell className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Tester notification locale</span>
                       </button>
 
+                      {/* Button 4: Guide */}
                       <button
                         type="button"
                         onClick={() => setShowOneSignalGuide(!showOneSignalGuide)}
@@ -25414,34 +25594,36 @@ function ProfileView({
                         <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5 text-amber-900">
                           <p className="font-bold flex items-center gap-1.5">
                             <AlertTriangle className="w-4 h-4 text-amber-600" />
-                            Point clé pour que les notifications fonctionnent :
+                            Où trouver vos clés dans OneSignal :
                           </p>
-                          <p className="text-[11px] text-amber-800">
-                            Dans votre tableau de bord OneSignal (<strong>Settings &gt; Platforms &gt; Web Push</strong>), vérifiez que le <strong>Site URL</strong> correspond à l'adresse de votre application (ex: <code>https://votre-projet.vercel.app</code>) ou que l'option <strong>« Localhost Testing »</strong> est activée si vous testez en environnement local ou prévisualisation.
+                          <p className="text-[11px] text-amber-800 leading-relaxed">
+                            Dans votre tableau de bord OneSignal, allez dans <strong>Settings &gt; Keys &amp; IDs</strong> :<br />
+                            • <strong>OneSignal App ID :</strong> Format UUID (ex: <code>10a14311-a42a-4681-9682-ce965d80ae75</code>)<br />
+                            • <strong>REST API Key :</strong> Clé secrète serveur (ex: commence par <code>os_v2_app_...</code>). Ne confondez pas cette clé avec l'App ID !
                           </p>
                         </div>
 
                         <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1.5 text-blue-900">
                           <p className="font-bold flex items-center gap-1.5">
                             <Smartphone className="w-4 h-4 text-brand-blue" />
-                            Sur les smartphones de vos utilisateurs (iOS & Android) :
+                            Sur iPhone (Application App Store ou Écran d'accueil) :
                           </p>
-                          <p className="text-[11px] text-blue-800">
-                            • <strong>Invite automatique :</strong> Une bannière d'activation s'affiche automatiquement en bas de l'écran après quelques secondes.<br />
-                            • <strong>Android :</strong> Fonctionne instantanément dès que l'utilisateur clique sur « Activer ».<br />
-                            • <strong>iPhone / iPad :</strong> Requiert que l'utilisateur ait ajouté l'application sur son écran d'accueil (Partager &gt; Sur l'écran d'accueil) en raison des règles d'Apple pour Web Push (iOS 16.4+).
+                          <p className="text-[11px] text-blue-800 leading-relaxed">
+                            • <strong>Application App Store :</strong> Les notifications sont gérées par les Réglages iOS (Réglages ➔ Unlocked ➔ Notifications ➔ Autoriser).<br />
+                            • <strong>Safari Web :</strong> Requiert d'avoir ajouté le site à l'écran d'accueil (Partager &gt; Sur l'écran d'accueil) conformément aux règles d'Apple (iOS 16.4+).<br />
+                            • <strong>Test direct :</strong> Cliquez sur <em>« Tester Push sur mon iPhone »</em> pour envoyer un push en temps réel via l'API serveur OneSignal.
                           </p>
                         </div>
 
                         <ol className="list-decimal pl-4 space-y-2">
                           <li>
-                            <strong>Tester immédiatement :</strong> Cliquez sur le bouton bleu <em>« Tester une notification »</em> ci-dessus pour vérifier que votre navigateur affiche bien la bannière de notification.
+                            <strong>Vérifier la clé REST API :</strong> Assurez-vous que l'indicateur de la clé REST API affiche bien <em>Active</em> en vert. Si elle affiche <em>App ID au lieu de REST Key</em>, cliquez sur « Modifier les clés » et collez la vraie REST API Key.
                           </li>
                           <li>
-                            <strong>Vérifier votre inscription dans OneSignal :</strong> Une fois abonné, copiez votre <strong>Player ID</strong> ci-dessus et vérifiez qu'il apparaît bien dans votre console OneSignal sous <em>Audience &gt; All Users</em>.
+                            <strong>Tester immédiatement :</strong> Cliquez sur le bouton bleu <em>« Tester Push sur mon iPhone »</em> ci-dessus.
                           </li>
                           <li>
-                            <strong>Envoyer un push réel depuis OneSignal :</strong> Dans votre console OneSignal, rendez-vous dans <em>Messages &gt; New Message &gt; Push Notification</em> pour envoyer un message à tous vos utilisateurs.
+                            <strong>Vérifier dans la console OneSignal :</strong> Rendez-vous dans <em>Audience &gt; All Users</em> pour vérifier que votre appareil iPhone y figure bien.
                           </li>
                         </ol>
                       </div>

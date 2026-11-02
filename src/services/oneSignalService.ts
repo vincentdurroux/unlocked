@@ -67,7 +67,7 @@ class OneSignalService {
       windowAny.OneSignalPlugin ||
       windowAny.plugins?.OneSignal ||
       ua.includes('WKWebView') ||
-      (isIOS && !isStandalone && !('Notification' in window))
+      windowAny.setNativeOneSignalSubscriptionId
     );
 
     const platform = isIOS ? 'ios' : isAndroid ? 'android' : 'web';
@@ -76,24 +76,53 @@ class OneSignalService {
   }
 
   /**
-   * Fetch OneSignal App ID securely from the backend server
-   * (Ensures no secrets or keys are exposed via client-side VITE_ environment variables)
+   * Fetch OneSignal configuration securely from the backend server
    */
-  async fetchAppIdFromServer(): Promise<string> {
-    if (this.currentAppId) return this.currentAppId;
+  async fetchServerConfig(): Promise<any> {
     try {
       const res = await fetch('/api/onesignal-config');
       if (res.ok) {
         const data = await res.json();
         if (data.appId) {
           this.currentAppId = data.appId;
-          return data.appId;
         }
+        return data;
       }
     } catch (err) {
-      console.warn('[OneSignal] Could not fetch config from server proxy, using default:', err);
+      console.warn('[OneSignal] Could not fetch config from server proxy:', err);
     }
-    return this.getAppId();
+    return {
+      appId: this.getAppId(),
+      hasServerApiKey: false,
+      keyStatus: 'missing'
+    };
+  }
+
+  /**
+   * Save OneSignal configuration to backend server
+   */
+  async saveServerConfig(appId?: string, restApiKey?: string): Promise<any> {
+    const res = await fetch('/api/onesignal-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appId, restApiKey })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Erreur lors de la sauvegarde de la configuration OneSignal.');
+    }
+    if (appId) {
+      this.setAppId(appId);
+    }
+    return data;
+  }
+
+  /**
+   * Fetch OneSignal App ID securely from the backend server
+   */
+  async fetchAppIdFromServer(): Promise<string> {
+    const config = await this.fetchServerConfig();
+    return config?.appId || this.getAppId();
   }
 
   /**
@@ -102,7 +131,7 @@ class OneSignalService {
   getAppId(): string {
     if (this.currentAppId) return this.currentAppId;
     const stored = typeof window !== 'undefined' ? localStorage.getItem('onesignal_app_id') : null;
-    if (stored && stored !== '4653c1cf-3dbe-494d-8897-cfa37b9d4d41') {
+    if (stored) {
       return stored;
     }
     return ONESIGNAL_APP_ID;
@@ -305,12 +334,10 @@ class OneSignalService {
    */
   async isSubscribed(): Promise<boolean> {
     if (typeof window === 'undefined') return false;
-    if (this.nativeSubscriptionId) return true;
+    const subId = await this.getSubscriptionId();
+    if (subId) return true;
+
     try {
-      const dev = this.getDeviceInfo();
-      if (dev.isNativeWrapper && dev.isIOS) {
-        return true;
-      }
       if (!this.isInitialized) {
         await this.init();
       }
@@ -332,12 +359,44 @@ class OneSignalService {
   async getSubscriptionId(): Promise<string | null> {
     if (typeof window === 'undefined') return null;
     if (this.nativeSubscriptionId) return this.nativeSubscriptionId;
+
     try {
+      const windowAny = window as any;
+      const windowOS = windowAny.OneSignal;
+
+      const webSubId = OneSignal.User?.PushSubscription?.id || windowOS?.User?.PushSubscription?.id;
+      if (webSubId) {
+        this.nativeSubscriptionId = webSubId;
+        return webSubId;
+      }
+
+      const globalId = windowAny.OneSignalUserId || windowAny.OneSignalPlayerId || windowAny.OneSignalSubscriptionId;
+      if (globalId && typeof globalId === 'string' && !globalId.startsWith('local-')) {
+        this.nativeSubscriptionId = globalId;
+        return globalId;
+      }
+
+      const medianId = windowAny.median?.onesignal?.playerId || windowAny.gonative?.onesignal?.playerId;
+      if (medianId && typeof medianId === 'string') {
+        this.nativeSubscriptionId = medianId;
+        return medianId;
+      }
+
+      const stored = localStorage.getItem('onesignal_subscription_id') || localStorage.getItem('onesignal_player_id');
+      if (stored && typeof stored === 'string' && !stored.startsWith('local-')) {
+        return stored;
+      }
+
       if (!this.isInitialized) {
         await this.init();
+        const postInitId = OneSignal.User?.PushSubscription?.id || (window as any).OneSignal?.User?.PushSubscription?.id;
+        if (postInitId) {
+          this.nativeSubscriptionId = postInitId;
+          return postInitId;
+        }
       }
-      const windowOS = (window as any).OneSignal;
-      return OneSignal.User?.PushSubscription?.id || windowOS?.User?.PushSubscription?.id || null;
+
+      return null;
     } catch (err) {
       return null;
     }
@@ -705,11 +764,25 @@ class OneSignalService {
    * Send a push notification securely through the backend server proxy
    * (Keeps the OneSignal REST API secret key strictly protected on the server)
    */
-  async sendServerNotification(title: string, message: string, url: string = '/', targetUserIds?: string[]): Promise<any> {
+  async sendServerNotification(
+    title: string,
+    message: string,
+    url: string = '/',
+    targetUserIds?: string[],
+    targetSubscriptionIds?: string[]
+  ): Promise<any> {
+    const appId = this.getAppId();
     const res = await fetch('/api/send-push-notification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, message, url, targetUserIds })
+      body: JSON.stringify({
+        title,
+        message,
+        url,
+        appId,
+        targetUserIds,
+        targetSubscriptionIds
+      })
     });
     const data = await res.json();
     if (!res.ok) {
