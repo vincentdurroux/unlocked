@@ -591,8 +591,8 @@ export function SimpleMarkdown({ children, isPlain = false }: { children?: strin
             <div className="flex items-center gap-1.5 font-black text-indigo-950 text-xs uppercase tracking-wider">
               <span>📝 DESCRIPTION</span>
             </div>
-            <div className="leading-relaxed text-slate-800 font-normal">
-              {renderFormattedContent(parsed.fullDescription, "font-extrabold text-slate-950")}
+            <div className="space-y-1 leading-relaxed text-slate-800 font-normal">
+              {renderFormattedContent(parsed.fullDescription, "font-extrabold text-slate-950", "text-indigo-600")}
             </div>
           </div>
         )}
@@ -602,8 +602,8 @@ export function SimpleMarkdown({ children, isPlain = false }: { children?: strin
             <div className="flex items-center gap-1.5 font-black text-brand-blue text-xs uppercase tracking-wider">
               <span>✨ WHAT TO EXPECT</span>
             </div>
-            <div className="leading-relaxed text-slate-700 font-normal">
-              {renderFormattedContent(parsed.expect, "font-extrabold text-slate-950")}
+            <div className="space-y-1 leading-relaxed text-slate-700 font-normal">
+              {renderFormattedContent(parsed.expect, "font-extrabold text-slate-950", "text-brand-blue")}
             </div>
           </div>
         )}
@@ -619,7 +619,7 @@ export function SimpleMarkdown({ children, isPlain = false }: { children?: strin
                 return (
                   <div key={idx} className="flex items-start gap-2">
                     <span className="text-emerald-600 font-extrabold mt-0.5">•</span>
-                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-emerald-950")}</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-emerald-950", "text-emerald-600")}</span>
                   </div>
                 );
               })}
@@ -637,8 +637,8 @@ export function SimpleMarkdown({ children, isPlain = false }: { children?: strin
                 const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
                 return (
                   <div key={idx} className="flex items-start gap-2">
-                    <span className="text-amber-700 font-bold mt-0.5">-</span>
-                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-amber-950")}</span>
+                    <span className="text-amber-600 font-extrabold mt-0.5">•</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-amber-950", "text-amber-600")}</span>
                   </div>
                 );
               })}
@@ -652,7 +652,7 @@ export function SimpleMarkdown({ children, isPlain = false }: { children?: strin
               <span>🔗 MORE INFO</span>
             </div>
             <div className="space-y-1 leading-relaxed text-sky-950 font-normal">
-              {renderFormattedContent(parsed.moreInfo, "font-extrabold text-sky-950")}
+              {renderFormattedContent(parsed.moreInfo, "font-extrabold text-sky-950", "text-sky-600")}
             </div>
           </div>
         )}
@@ -718,11 +718,11 @@ export function SimpleMarkdown({ children, isPlain = false }: { children?: strin
         }
 
         // List items
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ')) {
           return (
-            <div key={idx} className="flex gap-2.5 pl-3 items-start">
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5 shrink-0" />
-              <div className="flex-1 text-slate-700">{parseInlineMarkdown(trimmed.substring(2))}</div>
+            <div key={idx} className="flex gap-2 items-start my-1 leading-relaxed">
+              <span className="text-orange-500 font-extrabold mt-0.5 select-none leading-none shrink-0">•</span>
+              <div className="flex-1 text-slate-700">{parseInlineMarkdown(trimmed.replace(/^[-*•]\s*/, ''))}</div>
             </div>
           );
         }

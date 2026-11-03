@@ -341,7 +341,11 @@ export function getCategoryWithEmoji(cat: string) {
   return "🏷️ " + trimmed;
 }
 
-export function renderFormattedContent(text: string, defaultBoldClass = "font-extrabold text-slate-950") {
+export function renderFormattedContent(
+  text: string, 
+  defaultBoldClass = "font-extrabold text-slate-950",
+  bulletDotClass = "text-emerald-600"
+) {
   if (!text) return null;
 
   const normalizedText = text.replace(/\r\n/g, '\n').replace(/<iframe[\s\S]*?<\/iframe>/gi, (match) => {
@@ -381,6 +385,13 @@ export function renderFormattedContent(text: string, defaultBoldClass = "font-ex
     if (cleanLine.startsWith('#')) {
       isHeader = true;
       cleanLine = cleanLine.replace(/^#{1,6}\s*/, '');
+    }
+
+    // Handle bullet points: any dash '-', bullet '•', asterisk '*'
+    let isBullet = false;
+    if (/^[-*•]\s+/.test(cleanLine) || (/^[-*•]\s*(?=[A-Za-z0-9\p{Extended_Pictographic}])/u.test(cleanLine) && !/^-\d+([.,]\d+)?\s*(€|\$|EUR|USD|%)/i.test(cleanLine))) {
+      isBullet = true;
+      cleanLine = cleanLine.replace(/^[-*•]\s*/, '');
     }
 
     const linkRegex = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s]+)/g;
@@ -485,11 +496,19 @@ export function renderFormattedContent(text: string, defaultBoldClass = "font-ex
       );
     }
 
+    if (isBullet) {
+      return (
+        <div key={lineIdx} className="flex items-start gap-2 my-1 leading-relaxed">
+          <span className={cn(bulletDotClass, "font-extrabold mt-0.5 select-none leading-none shrink-0")}>•</span>
+          <span className="flex-1">{parts}</span>
+        </div>
+      );
+    }
+
     return (
-      <React.Fragment key={lineIdx}>
-        {lineIdx > 0 && <br />}
+      <div key={lineIdx} className="leading-relaxed">
         {parts}
-      </React.Fragment>
+      </div>
     );
   });
 }
@@ -508,8 +527,8 @@ export function SimpleMarkdown({ children }: { children: string }) {
             <div className="flex items-center gap-1.5 font-black text-indigo-950 text-xs uppercase tracking-wider">
               <span>📝 DESCRIPTION</span>
             </div>
-            <div className="leading-relaxed text-slate-800 font-normal">
-              {renderFormattedContent(parsed.fullDescription, "font-extrabold text-slate-950")}
+            <div className="space-y-1 leading-relaxed text-slate-800 font-normal">
+              {renderFormattedContent(parsed.fullDescription, "font-extrabold text-slate-950", "text-indigo-600")}
             </div>
           </div>
         )}
@@ -519,8 +538,8 @@ export function SimpleMarkdown({ children }: { children: string }) {
             <div className="flex items-center gap-1.5 font-black text-brand-blue text-xs uppercase tracking-wider">
               <span>✨ WHAT TO EXPECT</span>
             </div>
-            <div className="leading-relaxed text-slate-700 font-normal">
-              {renderFormattedContent(parsed.expect, "font-extrabold text-slate-950")}
+            <div className="space-y-1 leading-relaxed text-slate-700 font-normal">
+              {renderFormattedContent(parsed.expect, "font-extrabold text-slate-950", "text-brand-blue")}
             </div>
           </div>
         )}
@@ -536,7 +555,7 @@ export function SimpleMarkdown({ children }: { children: string }) {
                 return (
                   <div key={idx} className="flex items-start gap-2">
                     <span className="text-emerald-600 font-extrabold mt-0.5">•</span>
-                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-emerald-950")}</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-emerald-950", "text-emerald-600")}</span>
                   </div>
                 );
               })}
@@ -554,8 +573,8 @@ export function SimpleMarkdown({ children }: { children: string }) {
                 const cleanItem = line.replace(/^[\s\-*•\d\.]+\s*/, '');
                 return (
                   <div key={idx} className="flex items-start gap-2">
-                    <span className="text-amber-700 font-bold mt-0.5">-</span>
-                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-amber-950")}</span>
+                    <span className="text-amber-600 font-extrabold mt-0.5">•</span>
+                    <span className="flex-1">{renderFormattedContent(cleanItem, "font-extrabold text-amber-950", "text-amber-600")}</span>
                   </div>
                 );
               })}
@@ -569,7 +588,7 @@ export function SimpleMarkdown({ children }: { children: string }) {
               <span>🔗 MORE INFO</span>
             </div>
             <div className="space-y-1 leading-relaxed text-sky-950 font-normal">
-              {renderFormattedContent(parsed.moreInfo, "font-extrabold text-sky-950")}
+              {renderFormattedContent(parsed.moreInfo, "font-extrabold text-sky-950", "text-sky-600")}
             </div>
           </div>
         )}
@@ -578,8 +597,8 @@ export function SimpleMarkdown({ children }: { children: string }) {
   }
 
   return (
-    <div className="space-y-3 text-slate-700 leading-relaxed text-xs sm:text-sm">
-      {renderFormattedContent(cleaned, "font-bold text-slate-900")}
+    <div className="space-y-1.5 text-slate-700 leading-relaxed text-xs sm:text-sm">
+      {renderFormattedContent(cleaned, "font-bold text-slate-900", "text-brand-blue")}
     </div>
   );
 }

@@ -886,7 +886,7 @@ export function AdminEventsManager({
                 </label>
                 <input
                   required
-                  value={newEvent.title}
+                  value={newEvent.title || ''}
                   onChange={e => setNewEvent({ ...newEvent, title: e.target.value })}
                   placeholder="Ex: Valencia Jazz & Soul Festival"
                   className="w-full h-12 bg-slate-50 hover:bg-slate-100/60 focus:bg-white border border-slate-200 rounded-2xl px-4 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all text-sm"
@@ -970,7 +970,7 @@ export function AdminEventsManager({
                   <input
                     required
                     type="text"
-                    value={newEvent.start_date}
+                    value={newEvent.start_date || ''}
                     onChange={e => setNewEvent({ ...newEvent, start_date: e.target.value })}
                     placeholder="YYYY-MM-DD or 15 OCT"
                     className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-4 font-medium text-slate-900 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
@@ -1087,7 +1087,7 @@ export function AdminEventsManager({
                 </div>
                 <input
                   required
-                  value={newEvent.location}
+                  value={newEvent.location || ''}
                   onChange={e => setNewEvent({ ...newEvent, location: e.target.value })}
                   placeholder="Ex: Palau de les Arts Reina Sofía, Valencia"
                   className="w-full h-12 bg-slate-50 border border-slate-200 rounded-2xl px-4 font-medium text-slate-900 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
@@ -1205,7 +1205,7 @@ export function AdminEventsManager({
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">Image Web URL</label>
                 <input
-                  value={newEvent.image}
+                  value={newEvent.image || ''}
                   onChange={e => {
                     setNewEvent({ ...newEvent, image: e.target.value });
                     setPreviewUrl(e.target.value);
@@ -1328,7 +1328,7 @@ export function AdminEventsManager({
                     </div>
                     <textarea
                       rows={3}
-                      value={descFull}
+                      value={descFull || ''}
                       onChange={(e) => handleSectionChange('fullDescription', e.target.value)}
                       placeholder="Description complète ou résumé introductif de l'événement..."
                       className="w-full p-3 bg-white rounded-xl border border-indigo-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-indigo-500/20 resize-y"
@@ -1345,7 +1345,7 @@ export function AdminEventsManager({
                     </div>
                     <textarea
                       rows={3}
-                      value={descExpect}
+                      value={descExpect || ''}
                       onChange={(e) => handleSectionChange('expect', e.target.value)}
                       placeholder="Description of atmosphere, guest artists, program highlights, activities..."
                       className="w-full p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-brand-blue/20 resize-y"
@@ -1362,7 +1362,7 @@ export function AdminEventsManager({
                     </div>
                     <textarea
                       rows={2}
-                      value={descPerfectFor}
+                      value={descPerfectFor || ''}
                       onChange={(e) => handleSectionChange('perfectFor', e.target.value)}
                       placeholder="- 🌍 Expats & newcomers in Valencia&#10;- 🎨 Art and live music lovers&#10;- 👥 Outings with friends or family"
                       className="w-full p-3 bg-white rounded-xl border border-emerald-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-emerald-500/20 resize-y"
@@ -1379,7 +1379,7 @@ export function AdminEventsManager({
                     </div>
                     <textarea
                       rows={3}
-                      value={descGoodToKnow}
+                      value={descGoodToKnow || ''}
                       onChange={(e) => handleSectionChange('goodToKnow', e.target.value)}
                       placeholder="- 🎟️ **Tickets & Pricing**: 6€ / Free&#10;- 📍 **Venue & Location**: Address and hall&#10;- ⏰ **Schedule & Timing**: Doors open at 19:30&#10;- 🚇 **Access**: Metro line 3 / 5"
                       className="w-full p-3 bg-white rounded-xl border border-amber-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-amber-500/20 resize-y"
@@ -1396,7 +1396,7 @@ export function AdminEventsManager({
                     </div>
                     <textarea
                       rows={2}
-                      value={descMoreInfo}
+                      value={descMoreInfo || ''}
                       onChange={(e) => handleSectionChange('moreInfo', e.target.value)}
                       placeholder="- 🌐 **Official Website**: [Venue Website](https://...)&#10;- 🎟️ **Tickets**: [Buy Tickets](https://...)"
                       className="w-full p-3 bg-white rounded-xl border border-sky-200 text-xs text-slate-900 leading-relaxed outline-none focus:ring-2 focus:ring-sky-500/20 resize-y"

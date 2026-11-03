@@ -321,7 +321,7 @@ export const PartnerAdminEditorModal: React.FC<PartnerAdminEditorModalProps> = (
                   <input
                     type="text"
                     required
-                    value={currentPartner.business_name}
+                    value={currentPartner.business_name || ''}
                     onChange={(e) => handleUpdateCurrentField('business_name', e.target.value)}
                     placeholder="e.g. Valencia Expat Hub & Legal"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
@@ -335,7 +335,7 @@ export const PartnerAdminEditorModal: React.FC<PartnerAdminEditorModalProps> = (
                   <input
                     type="text"
                     required
-                    value={currentPartner.job}
+                    value={currentPartner.job || ''}
                     onChange={(e) => handleUpdateCurrentField('job', e.target.value)}
                     placeholder="e.g. Relocation, NIE & Expat Tax Advisory"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
@@ -350,7 +350,7 @@ export const PartnerAdminEditorModal: React.FC<PartnerAdminEditorModalProps> = (
                   </label>
                   <input
                     type="text"
-                    value={currentPartner.badge_label}
+                    value={currentPartner.badge_label || ''}
                     onChange={(e) => handleUpdateCurrentField('badge_label', e.target.value)}
                     placeholder="e.g. Gold Partner"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
@@ -395,7 +395,7 @@ export const PartnerAdminEditorModal: React.FC<PartnerAdminEditorModalProps> = (
                     <input
                       type="url"
                       required
-                      value={currentPartner.logo_url}
+                      value={currentPartner.logo_url || ''}
                       onChange={(e) => handleUpdateCurrentField('logo_url', e.target.value)}
                       placeholder="https://..."
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium text-xs"
@@ -444,7 +444,7 @@ export const PartnerAdminEditorModal: React.FC<PartnerAdminEditorModalProps> = (
                 <textarea
                   required
                   rows={2}
-                  value={currentPartner.summary}
+                  value={currentPartner.summary || ''}
                   onChange={(e) => handleUpdateCurrentField('summary', e.target.value)}
                   placeholder="Concise pitch for the expanded card..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"

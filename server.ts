@@ -837,7 +837,10 @@ FOR EACH REAL EVENT FOUND:
 - is_free: Boolean (true if 100% free admission, false if paid)
 - price: Formatted price string (e.g. "Free", "From 20€", "35€")
 - ticket_url: Official ticketing or booking URL if paid, or registration URL
-- description: A clear, engaging, and structured Markdown description formatted STRICTLY into these 4 canonical sections (using these exact headers):
+- description: A clear, engaging, and structured Markdown description formatted STRICTLY into these 5 canonical sections (using these exact headers):
+
+### 📝 Description
+[1-2 engaging introductory paragraphs presenting the event, its concept, theme, and key highlights.]
 
 ### ✨ What to expect
 [2-3 engaging paragraphs describing the atmosphere, artists, program highlights, activities, and experience. Use natural, varied emojis and **bold** formatting for important names, artists, and highlights.]
@@ -859,7 +862,7 @@ FOR EACH REAL EVENT FOUND:
 
 CRITICAL EMOJI & FORMATTING DIRECTIVE:
 - NEVER output duplicate or double emojis (e.g. NEVER write "🎶 🎶", "🎟️ 🎟️", or "✨ ✨"). Use each emoji at most once per line/item.
-- Always cleanly divide the content into the 4 sections above so each piece of information is placed in its dedicated box.
+- Always cleanly divide the content into the 5 sections above so each piece of information is placed in its dedicated box.
 - coordinates: Estimated GPS coordinates { lat: number, lng: number } in Valencia region
 - sources: List of 1-3 official website URLs and verified search source links for this event (e.g. { "title": "Official Venue Website", "url": "https://www.lesarts.com" })
 - verified_real: true`;
@@ -963,7 +966,7 @@ Ensure each event contains:
 - Specific venue name and address in Valencia
 - Category ("Art", "Theater", "Music", "Culture", "Tech", "Gastronomy", "Community", "Sports", "Workshops")
 - Ticket pricing and official booking URL (from the Tavily search results)
-- Canonical 4-section markdown description (### ✨ What to expect, ### 🎯 Perfect for, ### 💡 Good to know, ### 🔗 More info)
+- Canonical 5-section markdown description (### 📝 Description, ### ✨ What to expect, ### 🎯 Perfect for, ### 💡 Good to know, ### 🔗 More info)
 - Verified sources pointing directly to the Tavily result URLs where the event was found.`;
 
           const extractionResp = await ai.models.generateContent({
@@ -1246,7 +1249,7 @@ Ensure each event contains:
         desc = desc.replace(/^([ \t]*[-*•]\s*)([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]+\2)+/gmu, '$1$2');
         // 3. Remove duplicate emojis at line starts (e.g. "🎶 🎶 Jazz night")
         desc = desc.replace(/^([ \t]*)([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]+\2)+/gmu, '$1$2');
-        // 4. Clean decorative sparkle + emoji at start of bullets (e.g. "• ✨ 🎶" -> "• ������")
+        // 4. Clean decorative sparkle + emoji at start of bullets (e.g. "• ✨ 🎶" -> "• 🎶")
         desc = desc.replace(/^([ \t]*[-*•]\s*)✨\s+([\p{Extended_Pictographic}\u2600-\u27BF])/gmu, '$1$2');
         // 5. Clean header duplicate sparkles (e.g. "### ✨ ✨ What to expect" -> "### ✨ What to expect")
         desc = desc.replace(/^(#{1,6}\s*)✨\s+✨/gmu, '$1✨');
