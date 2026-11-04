@@ -304,36 +304,56 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
   // Calculate dynamic opacity and center status based on physical distance from container center
   const getCardProgress = (virtualIdx: number) => {
+    const isCenterFallback = virtualIdx === rawScrollIndex;
+    const defaultProgress = {
+      opacity: isCenterFallback ? 1.0 : 0.75,
+      isCenterCard: isCenterFallback,
+    };
+
     if (!scrollContainerRef.current) {
-      const isCenter = virtualIdx === rawScrollIndex;
-      return {
-        opacity: isCenter ? 1.0 : 0.75,
-        isCenterCard: isCenter,
-      };
+      return defaultProgress;
     }
 
     const container = scrollContainerRef.current;
     const child = container.children[virtualIdx] as HTMLElement;
     if (!child) {
-      const isCenter = virtualIdx === rawScrollIndex;
-      return {
-        opacity: isCenter ? 1.0 : 0.75,
-        isCenterCard: isCenter,
-      };
+      return defaultProgress;
     }
 
     const containerCenter = scrollLeftState + container.clientWidth / 2;
     const childCenter = child.offsetLeft + child.offsetWidth / 2;
     const offsetPx = Math.abs(childCenter - containerCenter);
 
-    const itemWidth = container.children.length > 1
-      ? (container.children[1] as HTMLElement).offsetLeft - (container.children[0] as HTMLElement).offsetLeft
-      : 210;
+    let itemWidth = 210;
+    if (container.children.length > 1) {
+      const child0 = container.children[0] as HTMLElement;
+      const child1 = container.children[1] as HTMLElement;
+      if (child0 && child1) {
+        const diff = child1.offsetLeft - child0.offsetLeft;
+        if (diff > 0) {
+          itemWidth = diff;
+        }
+      }
+    }
 
-    const ratio = Math.min(1, offsetPx / itemWidth);
-    const smoothFactor = Math.max(0, 1 - Math.pow(ratio, 1.2));
+    let ratio = itemWidth > 0 ? offsetPx / itemWidth : 0;
+    if (isNaN(ratio) || !isFinite(ratio)) {
+      ratio = 0;
+    }
+    ratio = Math.min(1, Math.max(0, ratio));
 
-    const opacity = 0.75 + (1.00 - 0.75) * smoothFactor;
+    let smoothFactor = Math.max(0, 1 - Math.pow(ratio, 1.2));
+    if (isNaN(smoothFactor) || !isFinite(smoothFactor)) {
+      smoothFactor = 1;
+    }
+
+    let opacity = 0.75 + (1.00 - 0.75) * smoothFactor;
+    if (isNaN(opacity) || !isFinite(opacity)) {
+      opacity = isCenterFallback ? 1.0 : 0.75;
+    } else {
+      opacity = Math.max(0.75, Math.min(1.0, opacity));
+    }
+
     const isCenterCard = virtualIdx === rawScrollIndex;
 
     return { opacity, isCenterCard };
@@ -466,7 +486,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                   setSelectedEventForModal(event);
                 }}
                 style={{
-                  opacity: opacity,
+                  opacity: typeof opacity === 'number' && !isNaN(opacity) && isFinite(opacity) ? opacity : 1,
                   WebkitMaskImage: '-webkit-radial-gradient(white, black)',
                   maskImage: 'radial-gradient(white, black)',
                   transition: syncTransition,

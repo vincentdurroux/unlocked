@@ -165,6 +165,7 @@ import { partnerService, AppPartner } from './services/partnerService';
 import { PartnerHighlightCard } from './components/PartnerHighlightCard';
 import { ExpandedPartnerCard } from './components/ExpandedPartnerCard';
 import { PartnerAdminEditorModal } from './components/PartnerAdminEditorModal';
+import { AdminNotificationHub, getPushLogs } from './components/AdminNotificationHub';
 
 export const PHONE_COUNTRY_CODES = [
   { code: '+34', flag: '🇪🇸', label: 'ES (+34)' },
@@ -1601,6 +1602,9 @@ interface GuideArticle {
   imageUrl?: string;
   businessName?: string;
   isOnline?: boolean;
+  is_updated_2026?: boolean;
+  is_highlighted?: boolean;
+  tag?: string;
   author?: {
     name: string;
     role?: string;
@@ -2854,6 +2858,33 @@ export default function App() {
           console.warn('Error fetching chat notifications for notification center:', chatNotifErr);
         }
       }
+      // 4. Merge sent push notifications from Admin Announce hub
+      try {
+        const pushLogs = getPushLogs();
+        const existingKeys = new Set(list.map(item => `${(item.title || '').trim()}|${(item.content || '').trim()}`));
+        
+        for (const log of pushLogs) {
+          if (log.status !== 'sent') continue;
+          const key = `${(log.title || '').trim()}|${(log.body || '').trim()}`;
+          if (!existingKeys.has(key)) {
+            existingKeys.add(key);
+            list.push({
+              id: log.id,
+              title: log.title,
+              content: log.body,
+              created_at: log.timestamp || new Date().toISOString(),
+              type: log.type === 'article' ? 'guide' : log.type,
+              icon: log.type === 'event' || log.type === 'weekend' ? 'event' : log.type === 'article' ? 'guide' : log.type === 'pro' ? 'star' : 'megaphone',
+              target_id: log.targetId,
+              cta_type: log.type,
+              cta_link: log.url,
+              is_active: true
+            });
+          }
+        }
+      } catch (pushLogErr) {
+        console.warn('Error reading push logs in notification center:', pushLogErr);
+      }
 
       list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setAnnouncementsList(list);
@@ -3160,6 +3191,12 @@ export default function App() {
   const [guideCategories, setGuideCategories] = useState<any[]>([]);
   const [guidesLoading, setGuidesLoading] = useState(true);
   const allArticles = useMemo(() => {
+    let updated2026Ids: string[] = [];
+    try {
+      const saved2026 = localStorage.getItem('unlocked_updated_2026_ids');
+      if (saved2026) updated2026Ids = JSON.parse(saved2026);
+    } catch (_) {}
+
     const map = new globalThis.Map<string, any>();
     const mockArticles = (MOCK_GUIDE_CATEGORIES_DATA.flatMap(cat => 
       (cat.articles || []).map((art: any) => ({
@@ -3171,9 +3208,12 @@ export default function App() {
       }))
     ) as any[]);
     mockArticles.forEach(art => {
+      const isUp = updated2026Ids.includes(String(art.id)) || art.is_updated_2026 === true || art.tag === '2026 UPDATE' || (typeof art.title === 'string' && art.title.includes('2026 UPDATE'));
       map.set(String(art.id), {
         ...art,
-        imageUrl: art.imageUrl || art.image_url
+        imageUrl: art.imageUrl || art.image_url,
+        is_updated_2026: isUp,
+        tag: art.tag || (isUp ? '2026 UPDATE' : undefined)
       });
     });
     const dbArticles = guideCategories.flatMap(cat => 
@@ -3186,9 +3226,12 @@ export default function App() {
       }))
     );
     dbArticles.forEach(art => {
+      const isUp = updated2026Ids.includes(String(art.id)) || art.is_updated_2026 === true || art.tag === '2026 UPDATE' || (typeof art.title === 'string' && art.title.includes('2026 UPDATE'));
       map.set(String(art.id), {
         ...art,
-        imageUrl: art.imageUrl || art.image_url
+        imageUrl: art.imageUrl || art.image_url,
+        is_updated_2026: isUp,
+        tag: art.tag || (isUp ? '2026 UPDATE' : undefined)
       });
     });
     return Array.from(map.values()) as any[];
@@ -7563,6 +7606,8 @@ function AdminView({
   const [articleFormImageUrl, setArticleFormImageUrl] = useState('');
   const [articleFormBusinessName, setArticleFormBusinessName] = useState('');
   const [articleFormIsOnline, setArticleFormIsOnline] = useState(true);
+  const [articleFormIsUpdated2026, setArticleFormIsUpdated2026] = useState(false);
+  const [articleFormPushToHomepage, setArticleFormPushToHomepage] = useState(false);
 
   const [articleFormAuthorName, setArticleFormAuthorName] = useState('');
   const [articleFormAuthorRole, setArticleFormAuthorRole] = useState('');
@@ -8031,6 +8076,8 @@ function AdminView({
       imageUrl: articleFormImageUrl || undefined,
       businessName: articleFormBusinessName || undefined,
       categoryTitle: categoryTitle,
+      is_updated_2026: articleFormIsUpdated2026,
+      tag: articleFormIsUpdated2026 ? '2026 UPDATE' : undefined,
       author: hasAnyAuthorField ? {
         name: articleFormAuthorName.trim() || undefined,
         role: articleFormAuthorRole.trim() || undefined,
@@ -8066,6 +8113,10 @@ function AdminView({
     setArticleFormImageUrl(art.imageUrl || art.image_url || '');
     setArticleFormBusinessName(art.businessName || art.business_name || '');
     setArticleFormIsOnline(art.isOnline !== false);
+    const isUp = !!(art.is_updated_2026 || art.tag === '2026 UPDATE' || (typeof art.title === 'string' && art.title.includes('2026 UPDATE')));
+    setArticleFormIsUpdated2026(isUp);
+    const isHighlighted = highlightedArticleIds.includes(String(art.id)) || art.is_highlighted === true;
+    setArticleFormPushToHomepage(isHighlighted);
     
     if (art.author) {
       setArticleFormAuthorName(art.author.name || '');
@@ -8121,6 +8172,9 @@ function AdminView({
         imageUrl: articleFormImageUrl || undefined,
         businessName: articleFormBusinessName || undefined,
         isOnline: articleFormIsOnline,
+        is_updated_2026: articleFormIsUpdated2026,
+        tag: articleFormIsUpdated2026 ? '2026 UPDATE' : undefined,
+        is_highlighted: articleFormPushToHomepage,
         author: authorObj || undefined
       };
 
@@ -8130,6 +8184,36 @@ function AdminView({
       } else {
         await guideService.createArticle(articlePayload, guideFormCategory);
         setMsg({ type: 'success', text: 'Article created successfully!' });
+      }
+
+      // Handle Push to Homepage (Tips of the Week)
+      if (articleFormPushToHomepage) {
+        const newIds = [String(artId)];
+        setHighlightedArticleIds(newIds);
+        setHighlightedArticleId(String(artId));
+        localStorage.setItem('highlighted_article_ids', newIds.join(','));
+        localStorage.setItem('highlighted_article_id', String(artId));
+
+        if (isSupabaseConfigured) {
+          try {
+            await supabase.from('guide_articles').update({ is_highlighted: false }).neq('id', artId);
+            await supabase.from('guide_articles').update({ is_highlighted: true }).eq('id', artId);
+          } catch (_) {}
+        }
+      } else if (editingArticle && highlightedArticleIds.includes(String(artId))) {
+        // Un-highlight if unchecked
+        const remaining = highlightedArticleIds.filter(id => id !== String(artId));
+        const finalIds = remaining.length > 0 ? remaining : ['gs-1'];
+        setHighlightedArticleIds(finalIds);
+        setHighlightedArticleId(finalIds[0]);
+        localStorage.setItem('highlighted_article_ids', finalIds.join(','));
+        localStorage.setItem('highlighted_article_id', finalIds[0]);
+
+        if (isSupabaseConfigured) {
+          try {
+            await supabase.from('guide_articles').update({ is_highlighted: false }).eq('id', artId);
+          } catch (_) {}
+        }
       }
 
       setShowArticleForm(false);
@@ -8449,6 +8533,8 @@ function AdminView({
     } else if (dashboardCategory === 'announcements') {
       fetchAdminAnnouncements();
       fetchAllUsers();
+      fetchGuides();
+      fetchCompletedPros();
     }
   }, [dashboardCategory]);
 
@@ -11856,29 +11942,75 @@ function AdminView({
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Online Status</label>
-                  <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-150 w-full sm:w-fit">
+                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Online Status & Featured Tags</label>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Online / Draft toggle */}
+                    <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-150">
+                      <button
+                        type="button"
+                        onClick={() => setArticleFormIsOnline(true)}
+                        className={cn(
+                          "px-3.5 py-2 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all cursor-pointer",
+                          articleFormIsOnline ? "bg-emerald-500 text-white shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        )}
+                      >
+                        Article Online
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setArticleFormIsOnline(false)}
+                        className={cn(
+                          "px-3.5 py-2 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all cursor-pointer",
+                          !articleFormIsOnline ? "bg-slate-400 text-white shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        )}
+                      >
+                        Draft / Offline
+                      </button>
+                    </div>
+
+                    {/* 2026 UPDATE Red Badge Toggle */}
                     <button
                       type="button"
-                      onClick={() => setArticleFormIsOnline(true)}
+                      onClick={() => setArticleFormIsUpdated2026(!articleFormIsUpdated2026)}
                       className={cn(
-                        "flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all",
-                        articleFormIsOnline ? "bg-emerald-500 text-white shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        "px-4 py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 border cursor-pointer",
+                        articleFormIsUpdated2026
+                          ? "bg-rose-500 text-white border-rose-600 shadow-md shadow-rose-500/25 ring-2 ring-rose-500/20"
+                          : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200"
                       )}
+                      title="Activate to display the vibrant 2026 UPDATE red badge on the article card and header"
                     >
-                      Article Online
+                      <span className={cn(
+                        "w-2 h-2 rounded-full",
+                        articleFormIsUpdated2026 ? "bg-white animate-pulse" : "bg-slate-300"
+                      )} />
+                      <span>🔴 2026 UPDATE Tag</span>
+                      {articleFormIsUpdated2026 && (
+                        <span className="text-[9px] bg-white/25 px-1.5 py-0.5 rounded-md font-extrabold">Active</span>
+                      )}
                     </button>
+
+                    {/* Push to Homepage: Tips of the Week Toggle */}
                     <button
                       type="button"
-                      onClick={() => setArticleFormIsOnline(false)}
+                      onClick={() => setArticleFormPushToHomepage(!articleFormPushToHomepage)}
                       className={cn(
-                        "flex-1 sm:flex-none px-4 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all",
-                        !articleFormIsOnline ? "bg-slate-400 text-white shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        "px-4 py-2 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 border cursor-pointer",
+                        articleFormPushToHomepage
+                          ? "bg-teal-600 text-white border-teal-700 shadow-md shadow-teal-600/25 ring-2 ring-teal-500/20"
+                          : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-200"
                       )}
+                      title="Promote this article to the homepage 'Tips of the Week' spotlight"
                     >
-                      Draft / Offline
+                      <span>⭐ Featured in Tips of the Week</span>
+                      {articleFormPushToHomepage && (
+                        <span className="text-[9px] bg-white/25 px-1.5 py-0.5 rounded-md font-extrabold">Featured</span>
+                      )}
                     </button>
                   </div>
+                  <p className="text-[11px] text-slate-400 italic">
+                    Activating "🔴 2026 UPDATE" adds the eye-catching red badge so readers instantly spot recently updated regulations and newcomer laws.
+                  </p>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
@@ -12205,6 +12337,17 @@ Wrap up your guide with a warm closing thought for newcomers settling into Valen
                                   <span className="text-[10px] bg-sky-50 text-sky-600 border border-sky-100 px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">
                                     {cat.title}
                                   </span>
+                                  {(art.is_updated_2026 || art.tag === '2026 UPDATE' || (typeof art.title === 'string' && art.title.includes('2026 UPDATE'))) && (
+                                    <span className="text-[10px] bg-rose-500 text-white font-black px-2.5 py-1 rounded-md uppercase tracking-wider inline-flex items-center gap-1 shadow-xs">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                      2026 UPDATE
+                                    </span>
+                                  )}
+                                  {(highlightedArticleIds.includes(String(art.id)) || art.is_highlighted === true) && (
+                                    <span className="text-[10px] bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider inline-flex items-center gap-1">
+                                      ⭐ Tips of Week
+                                    </span>
+                                  )}
                                   {isOnline ? (
                                     <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-md font-bold uppercase tracking-wider inline-flex items-center gap-1.5">
                                       <span className="relative flex h-1.5 w-1.5">
@@ -12265,655 +12408,27 @@ Wrap up your guide with a warm closing thought for newcomers settling into Valen
           )}
         </div>
       ) : dashboardCategory === 'announcements' ? (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div>
-              <h4 className="text-lg font-bold font-display text-slate-800">
-                Announcements & IT Updates
-              </h4>
-              <p className="text-xs text-slate-400 font-medium">Publish one-line announcements for all users.</p>
-            </div>
-            {!showAnnForm && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowDirectPushModal(true);
-                    if (allUsersList.length === 0) fetchAllUsers();
-                  }}
-                  className="px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider rounded-xl transition-all border border-blue-200/80 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                >
-                  <Send className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Direct Push to Member</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setAnnFormTitle('');
-                    setAnnFormContent('');
-                    setAnnFormIsActive(true);
-                    setAnnFormCtaType('');
-                    setAnnPushTargetMode('all');
-                    setAnnPushSelectedUserId('');
-                    setEditingAnnId(null);
-                    setShowAnnForm(true);
-                    if (allUsersList.length === 0) fetchAllUsers();
-                  }}
-                  className="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 active:scale-95 text-slate-900 text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-md shadow-yellow-500/10 flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Publish announcement
-                </button>
-              </div>
-            )}
-          </div>
-
-          {showAnnForm ? (
-            <form onSubmit={handleSaveAnnouncement} className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm space-y-6 text-left">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                <div>
-                  <h4 className="text-sm font-bold uppercase tracking-wider text-slate-700">
-                    {editingAnnId ? "Edit Announcement" : "New Announcement"}
-                  </h4>
-                  <p className="text-xs text-slate-400 font-medium">Enter the announcement details below.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAnnForm(false);
-                    setEditingAnnId(null);
-                  }}
-                  className="px-3.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-500 text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
-                >
-                  Cancel
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
-                    Title / Notification Heading (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. New Community Update, Flash Event, Maintenance"
-                    value={annFormTitle}
-                    onChange={(e) => setAnnFormTitle(e.target.value)}
-                    className="w-full text-xs px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-150 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 text-slate-800 font-medium"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">Message (one line preferred)</label>
-                  <textarea
-                    required
-                    rows={3}
-                    placeholder="e.g. System maintenance completed. Everything is back online!"
-                    value={annFormContent}
-                    onChange={(e) => setAnnFormContent(e.target.value)}
-                    className="w-full text-xs px-4 py-3 rounded-xl bg-slate-50 border border-slate-150 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 text-slate-800 font-medium"
-                  />
-                </div>
-
-                {/* Icon Selection Grid */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Notification Icon Library
-                  </label>
-                  <p className="text-[11px] text-slate-500 font-medium">Select the icon to display in front of this notification:</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-slate-50 rounded-2xl border border-slate-150 max-h-64 overflow-y-auto">
-                    {NOTIFICATION_ICONS.map((item) => {
-                      const IconComponent = item.icon;
-                      const isSelected = annFormIcon === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setAnnFormIcon(item.id)}
-                          className={cn(
-                            "flex items-center gap-3 p-2.5 rounded-2xl border text-xs font-medium transition-all relative cursor-pointer text-left group",
-                            isSelected 
-                              ? "border-blue-600 bg-white shadow-md ring-2 ring-blue-500/20" 
-                              : "border-slate-200/70 bg-white/80 hover:bg-white hover:border-slate-300"
-                          )}
-                        >
-                          <div className={cn(
-                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105",
-                            item.bgColor,
-                            item.textColor,
-                            item.borderColor
-                          )}>
-                            <IconComponent className="w-5 h-5 stroke-[2.2]" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <span className="text-xs font-bold text-slate-800 block truncate leading-tight">{item.label}</span>
-                            <span className="text-[10px] text-slate-400 capitalize">{item.category}</span>
-                          </div>
-                          {isSelected && (
-                            <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] shadow-xs font-bold shrink-0">
-                              ✓
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-150">
-                  <input
-                    type="checkbox"
-                    id="annFormIsActive"
-                    checked={annFormIsActive}
-                    onChange={(e) => setAnnFormIsActive(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-yellow-600 focus:ring-yellow-500"
-                  />
-                  <div>
-                    <label htmlFor="annFormIsActive" className="text-xs font-bold text-slate-700 block cursor-pointer">Activate In-App Announcement</label>
-                    <p className="text-[10px] text-slate-400 font-medium">The announcement will instantly appear in the notification bell and top dropdown banner.</p>
-                  </div>
-                </div>
-
-                {/* Instant Mobile Push Option */}
-                <div className="bg-gradient-to-r from-blue-50/90 to-indigo-50/80 p-4 rounded-2xl border border-blue-200 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      id="annFormSendPush"
-                      checked={annFormSendPush}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setAnnFormSendPush(checked);
-                        if (checked && allUsersList.length === 0) fetchAllUsers();
-                      }}
-                      className="w-4 h-4 mt-0.5 rounded border-blue-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <div className="flex-1">
-                      <label htmlFor="annFormSendPush" className="text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer">
-                        <Bell className="w-3.5 h-3.5 text-blue-600" />
-                        Also send instant Mobile Push Notification to users' phones (OneSignal)
-                      </label>
-                      <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                        If enabled, an alert will be sent to the phone's lock screen via OneSignal.
-                      </p>
-                    </div>
-                  </div>
-
-                  {annFormSendPush && (
-                    <div className="pt-3 border-t border-blue-200/80 space-y-3">
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-700 block mb-1.5">
-                          Target Audience for this Mobile Push:
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setAnnPushTargetMode('all')}
-                            className={cn(
-                              "p-2.5 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 cursor-pointer",
-                              annPushTargetMode === 'all'
-                                ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                            )}
-                          >
-                            <span>📢</span>
-                            <div>
-                              <div className="leading-tight">All Users</div>
-                              <div className={cn("text-[9px] font-normal", annPushTargetMode === 'all' ? "text-blue-100" : "text-slate-400")}>
-                                Broadcast to all
-                              </div>
-                            </div>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAnnPushTargetMode('specific');
-                              if (allUsersList.length === 0) fetchAllUsers();
-                            }}
-                            className={cn(
-                              "p-2.5 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 cursor-pointer",
-                              annPushTargetMode === 'specific'
-                                ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                            )}
-                          >
-                            <span>🎯</span>
-                            <div>
-                              <div className="leading-tight">Specific User</div>
-                              <div className={cn("text-[9px] font-normal", annPushTargetMode === 'specific' ? "text-blue-100" : "text-slate-400")}>
-                                Single recipient
-                              </div>
-                            </div>
-                          </button>
-                        </div>
-                      </div>
-
-                      {annPushTargetMode === 'specific' && (
-                        <div className="space-y-1.5 bg-white p-3 rounded-xl border border-blue-200 shadow-2xs">
-                          <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
-                            <User className="w-3.5 h-3.5 text-blue-600" />
-                            Select Member to Receive Mobile Push:
-                          </label>
-                          {loadingUsersList ? (
-                            <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                              Loading registered members...
-                            </div>
-                          ) : (
-                            <select
-                              value={annPushSelectedUserId}
-                              onChange={(e) => setAnnPushSelectedUserId(e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                            >
-                              <option value="">-- Choose a user ({allUsersList.length} members found) --</option>
-                              {allUsersList.map(u => (
-                                <option key={u.id} value={u.id}>
-                                  {u.full_name || 'Member'} — {u.email || u.id}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                          {annPushSelectedUserId && (
-                            <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-1">
-                              <CheckCircle2 className="w-3 h-3 shrink-0" />
-                              Only this user will receive the lock-screen mobile push alert.
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-150">
-                  <input
-                    type="checkbox"
-                    id="annFormCtaType"
-                    checked={annFormCtaType === 'recommend_pro'}
-                    onChange={(e) => setAnnFormCtaType(e.target.checked ? 'recommend_pro' : '')}
-                    className="w-4 h-4 rounded border-slate-300 text-yellow-600 focus:ring-yellow-500"
-                  />
-                  <div>
-                    <label htmlFor="annFormCtaType" className="text-xs font-bold text-slate-700 block cursor-pointer">Option: "Recommend a pro" action</label>
-                    <p className="text-[10px] text-slate-400 font-medium">Adds a clickable "Recommend a pro" icon button next to the message, which opens the recommendation modal when clicked.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAnnForm(false);
-                    setEditingAnnId(null);
-                  }}
-                  className="px-5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingAnn}
-                  className="px-5 py-2.5 bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-250 text-slate-900 text-xs font-bold uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 shadow-md shadow-yellow-500/10"
-                >
-                  {savingAnn ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                      Publishing...
-                    </>
-                  ) : editingAnnId ? (
-                    "Update Announcement"
-                  ) : (
-                    "Publish Announcement"
-                  )}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="space-y-4">
-              {loadingAnnouncements ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-3">
-                  <div className="w-8 h-8 border-3 border-yellow-500 border-t-transparent rounded-full animate-spin" />
-                  <p className="text-slate-400 text-xs font-medium">Loading announcements...</p>
-                </div>
-              ) : adminAnnouncements.length === 0 ? (
-                <div className="bg-white p-12 rounded-[32px] border border-slate-100 shadow-sm text-center space-y-2">
-                  <Megaphone className="w-8 h-8 text-slate-350 mx-auto" />
-                  <h4 className="text-xs font-bold text-slate-750">No announcements published</h4>
-                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                    Publish your first message or IT alert. It will appear on a single line for all users.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4">
-                  {adminAnnouncements.map((ann) => {
-                    const isActive = ann.is_active !== false;
-                    const annData = getNotificationIconData(ann.icon, ann.type);
-                    const AnnIconComponent = annData.icon;
-                    return (
-                      <div
-                        key={ann.id}
-                        className={cn(
-                          "p-5 rounded-[24px] border transition-all flex flex-col md:flex-row gap-4 justify-between items-start md:items-center",
-                          isActive
-                            ? "bg-white border-yellow-100 hover:border-yellow-200 shadow-xs"
-                            : "bg-slate-50/55 border-dashed border-slate-200 opacity-65"
-                        )}
-                      >
-                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                          <div className={cn(
-                            "w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border shadow-xs",
-                            annData.bgColor,
-                            annData.textColor,
-                            annData.borderColor
-                          )}>
-                            <AnnIconComponent className="w-5.5 h-5.5 stroke-[2.2]" />
-                          </div>
-                          <div className="space-y-2 min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              {ann.title && ann.title !== 'Announcement' && (
-                                <span className="text-[10px] bg-yellow-50 text-yellow-700 border border-yellow-100 px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">
-                                  {ann.title}
-                                </span>
-                              )}
-                              {isActive ? (
-                                <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider inline-flex items-center gap-1">
-                                  <span className="w-1 h-1 rounded-full bg-emerald-500 animate-ping" />
-                                  Online
-                                </span>
-                              ) : (
-                                <span className="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider inline-flex items-center gap-1">
-                                  Offline
-                                </span>
-                              )}
-                            </div>
-
-                            <h5 className="font-semibold text-slate-900 text-xs sm:text-sm leading-relaxed text-left">
-                              {ann.content}
-                            </h5>
-
-                            <p className="text-[10px] text-slate-400 font-semibold text-left">
-                              Published on {new Date(ann.created_at).toLocaleDateString('en-US', {
-                                day: 'numeric',
-                                month: 'long',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 w-full md:w-auto justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-100 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleEditAnnouncementClick(ann)}
-                            className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-slate-200 transition-all flex items-center gap-1.5"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                            <span>Edit</span>
-                          </button>
-                          <button
-                            type="button"
-                            disabled={deletingAnnId === ann.id}
-                            onClick={() => handleDeleteAnnouncement(ann.id)}
-                            className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-rose-100/50 transition-all flex items-center gap-1.5"
-                          >
-                            {deletingAnnId === ann.id ? (
-                              "..."
-                            ) : (
-                              <>
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Delete</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Mobile Push Broadcast Confirmation Modal */}
-          <AnimatePresence>
-            {pushConfirmModal?.isOpen && (
-              <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-                <motion.div
-                  role="dialog"
-                  aria-modal="true"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 text-left modal-container [font-variant-numeric:lining-nums_proportional-nums]"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 shadow-xs">
-                      <Bell className="w-6 h-6 stroke-[2.2]" />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-base font-bold text-slate-900 font-display">
-                        {pushConfirmModal.targetUserName ? `Send Mobile Push to ${pushConfirmModal.targetUserName}?` : 'Confirm Mobile Push Broadcast?'}
-                      </h3>
-                      <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                        {pushConfirmModal.targetUserName ? (
-                          <>This action will immediately trigger a push notification alert on the mobile phone of <strong className="text-slate-800">{pushConfirmModal.targetUserName}</strong>.</>
-                        ) : (
-                          <>This action will immediately trigger a push notification alert on the mobile lock screens and browsers of all subscribed members.</>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2 text-left">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                        {pushConfirmModal.title || 'Unlocked Valencia'}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium">Notification Preview</span>
-                    </div>
-                    <p className="text-xs font-semibold text-slate-800 leading-relaxed">
-                      {pushConfirmModal.message}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2.5 pt-2">
-                    <button
-                      type="button"
-                      disabled={savingAnn || !!pushingAnnId}
-                      onClick={() => setPushConfirmModal(null)}
-                      className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={savingAnn || !!pushingAnnId}
-                      onClick={() => {
-                        if (pushConfirmModal.isFormSubmit) {
-                          executeSaveAnnouncement(true);
-                        } else {
-                          executeDirectPush(pushConfirmModal.title, pushConfirmModal.message, pushConfirmModal.annId);
-                        }
-                      }}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md shadow-blue-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      {(savingAnn || pushingAnnId) ? (
-                        <>
-                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Sending...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-3.5 h-3.5" />
-                          <span>{pushConfirmModal.targetUserName ? `Send to ${pushConfirmModal.targetUserName}` : 'Broadcast Now'}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
-
-          {/* Direct Push Notification to a Specific User Modal */}
-          <AnimatePresence>
-            {showDirectPushModal && (
-              <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-                <motion.div
-                  role="dialog"
-                  aria-modal="true"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 text-left modal-container [font-variant-numeric:lining-nums_proportional-nums]"
-                >
-                  <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
-                        <Send className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-bold font-display text-slate-900">
-                          Send Direct Push Notification
-                        </h3>
-                        <p className="text-xs text-slate-500 font-medium">
-                          Deliver an instant lock-screen alert directly to a specific user's phone.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowDirectPushModal(false)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleSendDirectPushToUser} className="space-y-4">
-                    {/* User Selection */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                        <span>Recipient Member *</span>
-                        {allUsersList.length > 0 && (
-                          <span className="text-[10px] text-slate-400 font-normal">
-                            {allUsersList.length} members available
-                          </span>
-                        )}
-                      </label>
-                      {loadingUsersList ? (
-                        <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                          Loading members list...
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="relative">
-                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
-                            <input
-                              type="text"
-                              value={directPushUserSearch}
-                              onChange={(e) => setDirectPushUserSearch(e.target.value)}
-                              placeholder="Search member by name or email..."
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                            />
-                          </div>
-                          <select
-                            value={directPushTargetUserId}
-                            onChange={(e) => setDirectPushTargetUserId(e.target.value)}
-                            size={4}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 overflow-y-auto"
-                          >
-                            <option value="" disabled>-- Select a member --</option>
-                            {allUsersList
-                              .filter(u => {
-                                if (!directPushUserSearch) return true;
-                                const q = directPushUserSearch.toLowerCase();
-                                return (u.full_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
-                              })
-                              .map(u => (
-                                <option key={u.id} value={u.id} className="py-1 px-1.5 rounded hover:bg-blue-50 cursor-pointer">
-                                  {u.full_name || 'Member'} — {u.email || u.id}
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Title */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">Notification Title</label>
-                      <input
-                        type="text"
-                        value={directPushTitle}
-                        onChange={(e) => setDirectPushTitle(e.target.value)}
-                        placeholder="e.g. Unlocked Valencia"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      />
-                    </div>
-
-                    {/* Message */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">Notification Message *</label>
-                      <textarea
-                        rows={3}
-                        required
-                        value={directPushMessage}
-                        onChange={(e) => setDirectPushMessage(e.target.value)}
-                        placeholder="Type the message that will pop up on their phone screen..."
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
-                      />
-                    </div>
-
-                    {/* Link */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">Deep Link URL (optional)</label>
-                      <input
-                        type="text"
-                        value={directPushUrl}
-                        onChange={(e) => setDirectPushUrl(e.target.value)}
-                        placeholder="/#messages or /#events"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      />
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex items-center justify-end gap-2.5 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowDirectPushModal(false)}
-                        className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={sendingDirectPush || !directPushTargetUserId || !directPushMessage.trim()}
-                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md shadow-blue-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                      >
-                        {sendingDirectPush ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Sending...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Send className="w-3.5 h-3.5" />
-                            <span>Send Push Alert</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </form>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
-        </div>
+        <AdminNotificationHub
+          events={events}
+          guides={guideCategories || []}
+          professionals={completedPros.length > 0 ? completedPros : (allPros || [])}
+          allUsersList={allUsersList}
+          adminAnnouncements={adminAnnouncements}
+          loadingAnnouncements={loadingAnnouncements}
+          onRefetchAnnouncements={fetchAdminAnnouncements}
+          onSaveAnnouncement={async (annData) => {
+            setAnnFormTitle(annData.title);
+            setAnnFormContent(annData.content);
+            setAnnFormIcon(annData.icon || 'megaphone');
+            setAnnFormIsActive(annData.is_active);
+            setAnnFormCtaType(annData.cta_type);
+            setEditingAnnId(annData.id || null);
+            await executeSaveAnnouncement(false);
+          }}
+          onDeleteAnnouncement={handleDeleteAnnouncement}
+          setMsg={setMsg}
+          notificationIcons={NOTIFICATION_ICONS}
+        />
       ) : dashboardCategory === 'analytics' ? (
         <AdminAnalytics />
       ) : null}
@@ -14603,20 +14118,22 @@ function HomeView({
 
                 <div className="relative z-10 flex-1 flex flex-col justify-between h-full">
                   {/* Distinctive Header: Tips of the Week */}
-                  <div className="flex items-center justify-between gap-3 mb-3 w-full">
-                    <div className="flex items-center gap-2.5">
+                  <div className="flex items-center justify-between gap-2 mb-3 w-full">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center text-white shadow-md shadow-teal-500/20 shrink-0">
                         <BookOpen className="w-4 h-4" />
                       </div>
-                      <div className="text-left">
-                        <h3 className="font-extrabold font-display text-sm sm:text-base text-slate-900 tracking-tight leading-none">
+                      <div className="text-left min-w-0">
+                        <h3 className="font-extrabold font-display text-sm sm:text-base text-slate-900 tracking-tight leading-none truncate">
                           Tips of the Week
                         </h3>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200/60 shrink-0">
-                      Guides 📖
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200/60">
+                        Guides 📖
+                      </span>
+                    </div>
                   </div>
 
                   <AnimatePresence mode="wait" initial={false}>
@@ -14637,6 +14154,14 @@ function HomeView({
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 brightness-100 contrast-[1.02]"
                             referrerPolicy="no-referrer"
                           />
+                          {(featuredArticle.is_updated_2026 || featuredArticle.tag === '2026 UPDATE' || (typeof featuredArticle.title === 'string' && featuredArticle.title.includes('2026 UPDATE'))) && (
+                            <div className="absolute top-2.5 left-2.5 z-10">
+                              <span className="text-[10px] bg-rose-500 text-white font-black px-2.5 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1.5 shadow-md shadow-rose-500/40">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                2026 UPDATE
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {/* ONLY the hooking excerpt displayed under the image (entire text shown, no truncation) */}
@@ -14863,10 +14388,16 @@ function ExpertGuideModal({ isOpen, onClose, article: rawArticle }: { isOpen: bo
             </div>
 
             <div className="absolute bottom-6 left-6 right-6 pointer-events-none md:bottom-8 md:left-8 md:right-8">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
                 {categoryName && (
                   <span className="px-2.5 py-0.5 bg-brand-yellow text-slate-955 text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-brand-yellow/20">
                     {categoryName}
+                  </span>
+                )}
+                {(article.is_updated_2026 || article.tag === '2026 UPDATE' || (typeof article.title === 'string' && article.title.includes('2026 UPDATE'))) && (
+                  <span className="px-2.5 py-0.5 bg-rose-500 text-white text-[9px] font-black uppercase tracking-wider rounded-full shadow-lg shadow-rose-500/30 flex items-center gap-1.5 animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                    2026 UPDATE
                   </span>
                 )}
               </div>
@@ -21021,13 +20552,18 @@ function GuideCardItem({
             </div>
           )}
           <div className="flex-1 min-w-0 pr-2 space-y-1.5">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {article.categoryTitle && (
                 <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
                   {article.categoryTitle}
                 </span>
               )}
-
+              {(article.is_updated_2026 || article.tag === '2026 UPDATE' || (typeof article.title === 'string' && article.title.includes('2026 UPDATE'))) && (
+                <span className="text-[10px] bg-rose-500 text-white font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider inline-flex items-center gap-1 shadow-xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  2026 UPDATE
+                </span>
+              )}
             </div>
             <h4 className="font-bold text-slate-950 text-base sm:text-lg line-clamp-2 leading-snug group-hover:text-brand-blue transition-colors">
               {article.title}
@@ -21103,13 +20639,18 @@ function GuideCardItem({
             </div>
 
             <div className="absolute bottom-8 left-6 right-6 md:bottom-10 md:left-10 md:right-10 text-left">
-              <div className="flex flex-wrap items-center gap-3 mb-3">
+              <div className="flex flex-wrap items-center gap-2.5 mb-3">
                 {categoryName && (
                   <span className="px-3 py-1 bg-brand-yellow text-slate-950 text-[10px] font-black uppercase tracking-wider rounded-full shadow-lg shadow-brand-yellow/25">
                     {categoryName}
                   </span>
                 )}
-
+                {(article.is_updated_2026 || article.tag === '2026 UPDATE' || (typeof article.title === 'string' && article.title.includes('2026 UPDATE'))) && (
+                  <span className="px-3 py-1 bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider rounded-full shadow-lg shadow-rose-500/30 flex items-center gap-1.5 animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                    2026 UPDATE
+                  </span>
+                )}
               </div>
               <h2 className="text-xl sm:text-3xl md:text-4xl font-black text-white font-display leading-tight drop-shadow-lg">
                 {article.title}
@@ -21132,9 +20673,16 @@ function GuideCardItem({
                     </p>
                   </div>
                 </div>
-                <span className="text-[11px] text-emerald-800 font-semibold bg-white px-3 py-1 rounded-full border border-emerald-200 shadow-2xs">
-                  Updated for 2026
-                </span>
+                {(article.is_updated_2026 || article.tag === '2026 UPDATE' || (typeof article.title === 'string' && article.title.includes('2026 UPDATE'))) ? (
+                  <span className="text-[11px] text-white font-black bg-rose-500 px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5 uppercase tracking-wider animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                    2026 UPDATE
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-emerald-800 font-semibold bg-white px-3 py-1 rounded-full border border-emerald-200 shadow-2xs">
+                    Updated for 2026
+                  </span>
+                )}
               </div>
 
               {article.excerpt && (

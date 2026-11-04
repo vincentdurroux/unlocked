@@ -1433,7 +1433,7 @@ Ensure each event contains:
   // Secure server-side push notification endpoint (OneSignal REST API key remains 100% secret on the server)
   app.post("/api/send-push-notification", async (req, res) => {
     try {
-      const { title, message, targetUserIds, targetSubscriptionIds, targetPlayerIds, url, appId: requestedAppId } = req.body || {};
+      const { title, message, targetUserIds, targetSubscriptionIds, targetPlayerIds, url, appId: requestedAppId, imageUrl } = req.body || {};
       const config = getActiveOneSignalConfig();
       const appId = requestedAppId || config.appId;
       const restApiKey = config.restApiKey;
@@ -1480,6 +1480,14 @@ Ensure each event contains:
         ios_badgeType: "Increase",
         ios_badgeCount: 1
       };
+
+      // Rich media image attachment for iOS, Android & Chrome Push Notifications
+      if (imageUrl && typeof imageUrl === 'string' && imageUrl.trim()) {
+        const cleanImg = imageUrl.trim();
+        payload.ios_attachments = { id1: cleanImg };
+        payload.big_picture = cleanImg;
+        payload.chrome_web_image = cleanImg;
+      }
 
       const subs = (targetSubscriptionIds && Array.isArray(targetSubscriptionIds) ? targetSubscriptionIds : [])
         .concat(targetPlayerIds && Array.isArray(targetPlayerIds) ? targetPlayerIds : [])

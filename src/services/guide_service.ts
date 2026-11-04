@@ -8,6 +8,9 @@ export interface GuideArticle {
   imageUrl?: string;
   businessName?: string;
   isOnline?: boolean;
+  is_updated_2026?: boolean;
+  is_highlighted?: boolean;
+  tag?: string;
   author?: {
     name: string;
     role?: string;
@@ -508,12 +511,23 @@ export const guideService = {
       if (savedDeleted) deletedIds = JSON.parse(savedDeleted);
     } catch (_) {}
 
-    if (deletedIds.length > 0) {
-      guides = guides.map(cat => ({
-        ...cat,
-        articles: (cat.articles || []).filter(a => !deletedIds.includes(a.id))
-      }));
-    }
+    let updated2026Ids: string[] = [];
+    try {
+      const saved2026 = localStorage.getItem('unlocked_updated_2026_ids');
+      if (saved2026) updated2026Ids = JSON.parse(saved2026);
+    } catch (_) {}
+
+    guides = guides.map(cat => ({
+      ...cat,
+      articles: (cat.articles || []).filter((a: any) => !deletedIds.includes(a.id)).map((a: any) => {
+        const isUp = updated2026Ids.includes(String(a.id)) || a.is_updated_2026 === true || a.tag === '2026 UPDATE' || (typeof a.title === 'string' && a.title.includes('2026 UPDATE'));
+        return {
+          ...a,
+          is_updated_2026: isUp,
+          tag: a.tag || (isUp ? '2026 UPDATE' : undefined)
+        };
+      })
+    }));
 
     return sortCategories(guides);
   },
@@ -569,6 +583,8 @@ export const guideService = {
         const idCol = usingTopics ? 'topic_id' : 'category_id';
         
         const attempts = [
+          `id, ${idCol}, title, excerpt, content, image_url, business_name, is_online, author, is_highlighted, is_updated_2026, tag`,
+          `id, ${idCol}, title, excerpt, content, image_url, business_name, is_online, author, is_highlighted, is_updated_2026`,
           `id, ${idCol}, title, excerpt, content, image_url, business_name, is_online, author, is_highlighted`,
           `id, ${idCol}, title, excerpt, content, image_url, business_name, is_online, author`,
           `id, ${idCol}, title, excerpt, content, image_url, business_name, author, is_highlighted`,
@@ -602,19 +618,34 @@ export const guideService = {
         return this.getLocalGuides();
       }
 
+      let updated2026Ids: string[] = [];
+      try {
+        const saved2026 = localStorage.getItem('unlocked_updated_2026_ids');
+        if (saved2026) updated2026Ids = JSON.parse(saved2026);
+      } catch (_) {}
+
       // Map snake_case columns back to the client-side camelCase format safely
-      const mappedArticles = dbArticles.map((art: any) => ({
-        id: art.id,
-        category_id: usingTopics ? art.topic_id : art.category_id,
-        title: art.title,
-        excerpt: art.excerpt,
-        content: art.content,
-        imageUrl: art.image_url,
-        businessName: art.business_name,
-        isOnline: 'is_online' in art ? art.is_online !== false : true,
-        author: art.author, // stored as jsonb
-        is_highlighted: 'is_highlighted' in art ? (art.is_highlighted === true || art.is_highlighted === 'true' || art.is_highlighted === 1) : false
-      }));
+      const mappedArticles = dbArticles.map((art: any) => {
+        const isUp2026 = updated2026Ids.includes(String(art.id)) ||
+          ('is_updated_2026' in art ? (art.is_updated_2026 === true || art.is_updated_2026 === 'true' || art.is_updated_2026 === 1) : false) ||
+          art.tag === '2026 UPDATE' ||
+          (typeof art.title === 'string' && art.title.includes('2026 UPDATE'));
+
+        return {
+          id: art.id,
+          category_id: usingTopics ? art.topic_id : art.category_id,
+          title: art.title,
+          excerpt: art.excerpt,
+          content: art.content,
+          imageUrl: art.image_url,
+          businessName: art.business_name,
+          isOnline: 'is_online' in art ? art.is_online !== false : true,
+          author: art.author, // stored as jsonb
+          tag: art.tag || (isUp2026 ? '2026 UPDATE' : null),
+          is_highlighted: 'is_highlighted' in art ? (art.is_highlighted === true || art.is_highlighted === 'true' || art.is_highlighted === 1) : false,
+          is_updated_2026: isUp2026
+        };
+      });
 
       // Combine database categories with matching database articles
       const enrichedCategories: GuideCategory[] = dbCategories.map((dbCat: any) => {
@@ -648,6 +679,20 @@ export const guideService = {
   },
 
   async createArticle(art: GuideArticle, categoryId: string): Promise<void> {
+    // 0. Update persistent local storage for 2026 UPDATE tag
+    try {
+      let updated2026Ids: string[] = [];
+      const saved2026 = localStorage.getItem('unlocked_updated_2026_ids');
+      if (saved2026) updated2026Ids = JSON.parse(saved2026);
+      const artIdStr = String(art.id);
+      if (art.is_updated_2026) {
+        if (!updated2026Ids.includes(artIdStr)) updated2026Ids.push(artIdStr);
+      } else {
+        updated2026Ids = updated2026Ids.filter(id => id !== artIdStr);
+      }
+      localStorage.setItem('unlocked_updated_2026_ids', JSON.stringify(updated2026Ids));
+    } catch (_) {}
+
     // 1. Update in local storage
     const guides = this.getLocalGuides();
     const targetCat = guides.find(c => c.id === categoryId);
@@ -673,7 +718,10 @@ export const guideService = {
         image_url: art.imageUrl || null,
         business_name: art.businessName || null,
         is_online: art.isOnline !== undefined ? art.isOnline : true,
-        author: art.author || null
+        author: art.author || null,
+        tag: art.tag || (art.is_updated_2026 ? '2026 UPDATE' : null),
+        is_updated_2026: art.is_updated_2026 ?? false,
+        is_highlighted: art.is_highlighted ?? false
       };
 
       if (useTopicId) {
@@ -682,17 +730,46 @@ export const guideService = {
         insertData.category_id = categoryId;
       }
 
-      const { error } = await supabase
-        .from('guide_articles')
-        .insert(insertData);
-      if (error) {
-        console.error('Failed to create article in Supabase:', error);
-        throw error;
+      let insertError: any = null;
+      try {
+        const res = await supabase.from('guide_articles').insert(insertData);
+        insertError = res.error;
+      } catch (e: any) {
+        insertError = e;
+      }
+
+      if (insertError) {
+        // Fallback without new columns if Supabase table hasn't migrated yet
+        delete insertData.is_updated_2026;
+        delete insertData.is_highlighted;
+        const fallbackRes = await supabase.from('guide_articles').insert(insertData);
+        if (fallbackRes.error) {
+          delete insertData.tag;
+          const retryRes = await supabase.from('guide_articles').insert(insertData);
+          if (retryRes.error) {
+            console.error('Failed to create article in Supabase:', retryRes.error);
+            throw retryRes.error;
+          }
+        }
       }
     }
   },
 
   async updateArticle(art: GuideArticle, categoryId: string): Promise<void> {
+    // 0. Update persistent local storage for 2026 UPDATE tag
+    try {
+      let updated2026Ids: string[] = [];
+      const saved2026 = localStorage.getItem('unlocked_updated_2026_ids');
+      if (saved2026) updated2026Ids = JSON.parse(saved2026);
+      const artIdStr = String(art.id);
+      if (art.is_updated_2026) {
+        if (!updated2026Ids.includes(artIdStr)) updated2026Ids.push(artIdStr);
+      } else {
+        updated2026Ids = updated2026Ids.filter(id => id !== artIdStr);
+      }
+      localStorage.setItem('unlocked_updated_2026_ids', JSON.stringify(updated2026Ids));
+    } catch (_) {}
+
     // 1. Update in local storage
     const guides = this.getLocalGuides();
     
@@ -729,8 +806,13 @@ export const guideService = {
         image_url: art.imageUrl || null,
         business_name: art.businessName || null,
         is_online: art.isOnline !== undefined ? art.isOnline : true,
-        author: art.author || null
+        author: art.author || null,
+        tag: art.tag || (art.is_updated_2026 ? '2026 UPDATE' : null),
+        is_updated_2026: art.is_updated_2026 ?? false
       };
+      if (art.is_highlighted !== undefined) {
+        updateData.is_highlighted = art.is_highlighted;
+      }
 
       if (useTopicId) {
         updateData.topic_id = categoryId;
@@ -738,13 +820,27 @@ export const guideService = {
         updateData.category_id = categoryId;
       }
 
-      const { error } = await supabase
-        .from('guide_articles')
-        .update(updateData)
-        .eq('id', art.id);
-      if (error) {
-        console.error('Failed to update article in Supabase:', error);
-        throw error;
+      let updateError: any = null;
+      try {
+        const res = await supabase.from('guide_articles').update(updateData).eq('id', art.id);
+        updateError = res.error;
+      } catch (e: any) {
+        updateError = e;
+      }
+
+      if (updateError) {
+        // Fallback without is_updated_2026 if column doesn't exist yet
+        delete updateData.is_updated_2026;
+        delete updateData.is_highlighted;
+        const fallbackRes = await supabase.from('guide_articles').update(updateData).eq('id', art.id);
+        if (fallbackRes.error) {
+          delete updateData.tag;
+          const retryRes = await supabase.from('guide_articles').update(updateData).eq('id', art.id);
+          if (retryRes.error) {
+            console.error('Failed to update article in Supabase:', retryRes.error);
+            throw retryRes.error;
+          }
+        }
       }
     }
   },
@@ -760,6 +856,16 @@ export const guideService = {
       deletedIds.push(artId);
       localStorage.setItem('unlocked_deleted_article_ids', JSON.stringify(deletedIds));
     }
+
+    // Also remove from updated 2026 ids
+    try {
+      const saved2026 = localStorage.getItem('unlocked_updated_2026_ids');
+      if (saved2026) {
+        const list: string[] = JSON.parse(saved2026);
+        const filtered = list.filter(id => id !== String(artId));
+        localStorage.setItem('unlocked_updated_2026_ids', JSON.stringify(filtered));
+      }
+    } catch (_) {}
 
     // 1. Delete from local storage
     const guides = this.getLocalGuides();

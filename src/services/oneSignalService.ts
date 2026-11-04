@@ -769,7 +769,8 @@ class OneSignalService {
     message: string,
     url: string = '/',
     targetUserIds?: string[],
-    targetSubscriptionIds?: string[]
+    targetSubscriptionIds?: string[],
+    imageUrl?: string
   ): Promise<any> {
     const appId = this.getAppId();
     const res = await fetch('/api/send-push-notification', {
@@ -781,7 +782,8 @@ class OneSignalService {
         url,
         appId,
         targetUserIds,
-        targetSubscriptionIds
+        targetSubscriptionIds,
+        imageUrl
       })
     });
     const data = await res.json();

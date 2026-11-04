@@ -254,12 +254,12 @@ export function formatNotificationTime(dateString?: string): string {
     const diffHours = Math.floor(diffMin / 60);
     const diffDays = Math.floor(diffHours / 24);
 
-    if (diffSec < 45) return "À l'instant";
-    if (diffMin < 60) return `Il y a ${diffMin} min`;
-    if (diffHours < 24) return `Il y a ${diffHours} h`;
-    if (diffDays === 1) return 'Hier';
-    if (diffDays < 7) return `Il y a ${diffDays} j`;
-    return date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
+    if (diffSec < 45) return "Just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   } catch {
     return '';
   }
@@ -368,7 +368,7 @@ export function InAppNotificationCenter({
             <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Notifications</h3>
             {!isUserNotSignedIn && unreadList.length > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-xs font-bold border border-rose-200">
-                {unreadList.length} nouvelle{unreadList.length > 1 ? 's' : ''}
+                {unreadList.length} new
               </span>
             )}
           </div>
