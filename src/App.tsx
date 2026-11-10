@@ -16597,13 +16597,12 @@ function computeProSearchScore(pro: any, searchStr: string): number {
           const containerRect = mainContainer.getBoundingClientRect();
           const targetRect = element.getBoundingClientRect();
           const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
-          const targetScrollTop = offset - (containerRect.height / 2) + (targetRect.height / 2);
           mainContainer.scrollTo({
-            top: Math.max(0, targetScrollTop),
+            top: Math.max(0, offset - 76),
             behavior: 'smooth'
           });
         } else {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         // Add a temporary highlight effect
@@ -19897,10 +19896,21 @@ function EventsView({
     if (selectedEventId) {
       const timer = setTimeout(() => {
         const el = document.getElementById(`event-card-${selectedEventId}`);
+        const mainContainer = document.querySelector('main');
         if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (mainContainer && mainContainer.scrollHeight > mainContainer.clientHeight) {
+            const containerRect = mainContainer.getBoundingClientRect();
+            const targetRect = el.getBoundingClientRect();
+            const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
+            mainContainer.scrollTo({
+              top: Math.max(0, offset - 76),
+              behavior: 'smooth'
+            });
+          } else {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
         }
-      }, 350);
+      }, 250);
       return () => clearTimeout(timer);
     }
   }, [selectedEventId]);
@@ -20868,8 +20878,19 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
         setSearchQuery('');
         setTimeout(() => {
           const el = document.getElementById(`guide-card-${foundArticle.id}`);
+          const mainContainer = document.querySelector('main');
           if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (mainContainer && mainContainer.scrollHeight > mainContainer.clientHeight) {
+              const containerRect = mainContainer.getBoundingClientRect();
+              const targetRect = el.getBoundingClientRect();
+              const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
+              mainContainer.scrollTo({
+                top: Math.max(0, offset - 76),
+                behavior: 'smooth'
+              });
+            } else {
+              el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
           } else {
             document.getElementById('all-guides-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
