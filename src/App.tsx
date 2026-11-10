@@ -19834,8 +19834,7 @@ function EventsView({
 }) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId || null);
   const [events, setEvents] = useState<Event[]>(() => {
-    const list = propEvents && propEvents.length > 0 ? propEvents : (isSupabaseConfigured ? [] : MOCK_EVENTS);
-    return list.filter(ev => !isEventExpired(ev));
+    return propEvents && propEvents.length > 0 ? propEvents : (isSupabaseConfigured ? [] : MOCK_EVENTS);
   });
   const [internalLoading, setInternalLoading] = useState(!propEvents || propEvents.length === 0);
   const loading = propLoading !== undefined ? propLoading : internalLoading;
@@ -19850,7 +19849,7 @@ function EventsView({
 
   useEffect(() => {
     if (propEvents && propEvents.length > 0) {
-      setEvents(propEvents.filter(ev => !isEventExpired(ev)));
+      setEvents(propEvents);
       setInternalLoading(false);
       return;
     }
@@ -19859,13 +19858,13 @@ function EventsView({
       try {
         const data = await eventService.getEvents();
         if (data && data.length > 0) {
-          setEvents(data.filter(ev => !isEventExpired(ev)));
+          setEvents(data);
         } else if (!isSupabaseConfigured) {
-          setEvents(MOCK_EVENTS.filter(ev => !isEventExpired(ev)));
+          setEvents(MOCK_EVENTS);
         }
       } catch (err) {
         console.error('Failed to load events:', err);
-        setEvents(MOCK_EVENTS.filter(ev => !isEventExpired(ev)));
+        setEvents(MOCK_EVENTS);
       } finally {
         setInternalLoading(false);
       }
@@ -19875,9 +19874,12 @@ function EventsView({
 
   useEffect(() => {
     if (initialEventId && events.length > 0) {
-      const cleanId = String(initialEventId).trim();
+      const rawId = String(initialEventId).trim();
+      const cleanId = extractCleanId(rawId) || rawId;
       const targetEvent = events.find(ev => 
+        String(ev.id).toLowerCase() === rawId.toLowerCase() ||
         String(ev.id).toLowerCase() === cleanId.toLowerCase() ||
+        (ev.title && ev.title.toLowerCase().includes(rawId.toLowerCase())) ||
         (ev.title && ev.title.toLowerCase().includes(cleanId.toLowerCase()))
       );
       if (targetEvent) {
@@ -19926,7 +19928,15 @@ function EventsView({
     const today = new Date();
 
     return events.filter(ev => {
-      // 0. Auto-exclude expired events
+      const isSelected = selectedEventId && (
+        String(ev.id).toLowerCase() === String(selectedEventId).toLowerCase() ||
+        (ev.title && ev.title.toLowerCase().includes(String(selectedEventId).toLowerCase()))
+      );
+
+      // Always include the targeted event so its expanded full magazine detail card is displayed!
+      if (isSelected) return true;
+
+      // 0. Auto-exclude expired events for general list browsing
       if (isEventExpired(ev)) return false;
 
       // 1. Category Filter
@@ -19936,7 +19946,7 @@ function EventsView({
         }
       }
 
-      // 2. Keyword Search Filter (searches inside title, description, category, location, and tags)
+      // 2. Keyword Search Filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
         const title = (ev.title || '').toLowerCase();
@@ -19945,13 +19955,12 @@ function EventsView({
         const loc = (ev.location || '').toLowerCase();
         const tags = ((ev as any).tags || '').toLowerCase();
         const combined = `${title} ${cat} ${desc} ${loc} ${tags}`;
-        // Verify match
         if (!combined.includes(query) && !query.split(/\s+/).every(word => combined.includes(word))) {
           return false;
         }
       }
 
-      // 3. Date Filter (today, tomorrow, weekend) - includes Year Round events (verified open on weekends/target day)
+      // 3. Date Filter
       if (!isEventMatchingDateFilter(ev, dateFilter, today)) {
         return false;
       }
@@ -19960,7 +19969,6 @@ function EventsView({
     }).sort((a, b) => {
       const isYRA = isYearRoundEvent(a);
       const isYRB = isYearRoundEvent(b);
-      // Place scheduled events first, then permanent/year-round events
       if (isYRA && !isYRB) return 1;
       if (!isYRA && isYRB) return -1;
       if (isYRA && isYRB) return (a.title || '').localeCompare(b.title || '');
@@ -19973,7 +19981,7 @@ function EventsView({
       const dateB = b.start_date || b.date || '';
       return dateA.localeCompare(dateB);
     });
-  }, [events, selectedCategory, searchQuery, dateFilter]);
+  }, [events, selectedCategory, searchQuery, dateFilter, selectedEventId]);
 
   // Compute category counts
   const categoryCounts = useMemo(() => {

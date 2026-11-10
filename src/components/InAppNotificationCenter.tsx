@@ -165,6 +165,20 @@ export function getInAppNotificationIconData(iconId?: string, type?: string) {
   return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'megaphone')!;
 }
 
+
+export function cleanIdHelper(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  const decoded = decodeURIComponent(String(raw)).trim();
+  const uuidMatch = decoded.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  if (uuidMatch) return uuidMatch[0];
+  const prefixedMatch = decoded.match(/^(?:evt|event|pro|guide|article|art|rec|ad|chat)-(.+)/i);
+  if (prefixedMatch && prefixedMatch[1]) return prefixedMatch[1].trim();
+  const numMatch = decoded.match(/^\d+/);
+  if (numMatch) return numMatch[0];
+  const token = decoded.split(/[\s\r\n]+/)[0];
+  return token || undefined;
+}
+
 export function isProNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
@@ -172,6 +186,7 @@ export function isProNotification(item?: InAppNotification | null): boolean {
   if (item.type === 'pro' || item.cta_type === 'pro') return true;
   if (item.icon === 'star' && (item.target_id || (item.cta_link && item.cta_link.includes('proId=')))) return true;
   if (item.cta_link && (item.cta_link.includes('proId=') || item.cta_link.includes('#directory') || item.cta_link.includes('#explore') || item.cta_link.includes('/pro/'))) return true;
+  if (item.target_id && String(item.target_id).toLowerCase().startsWith('pro-')) return true;
   
   const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
   if (
@@ -188,17 +203,17 @@ export function extractProIdFromNotification(item?: InAppNotification | null): s
   if (item.cta_link) {
     const match = item.cta_link.match(/[?&]proId=([^&#]+)/) || item.cta_link.match(/\/pro\/([^/?#]+)/);
     if (match && match[1]) {
-      return match[1];
+      return cleanIdHelper(match[1]) || match[1];
     }
   }
   if (item.target_id) {
     const str = String(item.target_id).trim();
-    if (str && !str.startsWith('push_log_') && !str.startsWith('rec-')) {
-      return str;
+    if (str && !str.startsWith('push_log_')) {
+      return cleanIdHelper(str) || str;
     }
   }
   if (item.pro_name && !item.pro_name.toLowerCase().includes('member') && !item.pro_name.toLowerCase().includes('community')) {
-    return item.pro_name;
+    return item.pro_name.trim();
   }
   return undefined;
 }
@@ -206,8 +221,12 @@ export function extractProIdFromNotification(item?: InAppNotification | null): s
 export function isEventNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
-  if (item.type === 'event' || item.icon === 'event' || item.cta_type === 'event' || item.cta_type === 'weekend') return true;
+  if (item.type === 'event' || item.type === 'weekend' || item.icon === 'event' || item.cta_type === 'event' || item.cta_type === 'weekend') return true;
   if (item.cta_link && (item.cta_link.includes('event') || item.cta_link.includes('eventId='))) return true;
+  if (item.target_id && (String(item.target_id).toLowerCase().startsWith('evt-') || String(item.target_id).toLowerCase().startsWith('event-'))) return true;
+
+  if (item.type === 'guide' || item.type === 'article' || item.type === 'pro' || item.cta_type === 'guide' || item.cta_type === 'article' || item.cta_type === 'pro') return false;
+
   const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
   if (text.includes('event') || text.includes('meetup') || text.includes('concert') || text.includes('festival') || text.includes('soirée') || text.includes('fête')) {
     return true;
@@ -220,17 +239,17 @@ export function extractEventIdFromNotification(item?: InAppNotification | null):
   if (item.cta_link) {
     const match = item.cta_link.match(/[?&]eventId=([^&#]+)/) || item.cta_link.match(/\/events\/([^/?#]+)/);
     if (match && match[1]) {
-      return match[1];
+      return cleanIdHelper(match[1]) || match[1];
     }
   }
   if (item.target_id) {
     const str = String(item.target_id).trim();
     if (str && !str.startsWith('push_log_')) {
-      return str;
+      return cleanIdHelper(str) || str;
     }
   }
   if (item.title && item.title.toLowerCase() !== 'announcement' && item.title.toLowerCase() !== 'notification') {
-    return item.title;
+    return item.title.trim();
   }
   return undefined;
 }
@@ -263,9 +282,11 @@ export function isRecommendProNotification(item?: InAppNotification | null): boo
 export function isGuideNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
-  if (item.type === 'guide' || item.type === 'article' || item.icon === 'guide') return true;
-  if (item.cta_type === 'guide' || item.cta_type === 'article') return true;
+  if (item.type === 'guide' || item.type === 'article' || item.icon === 'guide' || item.cta_type === 'guide' || item.cta_type === 'article') return true;
   if (item.cta_link && (item.cta_link.includes('guide') || item.cta_link.includes('guides') || item.cta_link.includes('guideId='))) return true;
+  if (item.target_id && (String(item.target_id).toLowerCase().startsWith('guide-') || String(item.target_id).toLowerCase().startsWith('art-') || String(item.target_id).toLowerCase().startsWith('article-'))) return true;
+
+  if (item.type === 'event' || item.type === 'weekend' || item.type === 'pro' || item.cta_type === 'event' || item.cta_type === 'pro') return false;
 
   const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
   if (
@@ -285,20 +306,17 @@ export function isGuideNotification(item?: InAppNotification | null): boolean {
 
 export function extractGuideIdFromNotification(item?: InAppNotification | null): string | undefined {
   if (!item) return undefined;
-  if (item.target_id && (item.type === 'guide' || item.type === 'article' || item.cta_type === 'guide' || item.cta_type === 'article' || item.icon === 'guide')) {
-    return String(item.target_id).trim();
-  }
-  
-  // Check cta_link for guideId=... or /guides/...
   if (item.cta_link) {
     const match = item.cta_link.match(/[?&]guideId=([^&#]+)/) || item.cta_link.match(/\/guides\/([^/?#]+)/);
     if (match && match[1]) {
-      return match[1];
+      return cleanIdHelper(match[1]) || match[1];
     }
   }
-
-  if (item.target_id && String(item.target_id).trim()) {
-    return String(item.target_id).trim();
+  if (item.target_id) {
+    const str = String(item.target_id).trim();
+    if (str && !str.startsWith('push_log_')) {
+      return cleanIdHelper(str) || str;
+    }
   }
 
   const textToScan = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
