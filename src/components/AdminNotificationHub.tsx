@@ -1398,12 +1398,13 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       {/* GLOBAL PUSH COMPOSE, LIVE PREVIEW & EDITING MODAL */}
       <AnimatePresence>
         {pushComposeModal?.isOpen && (
-          <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 sm:p-5 overflow-y-auto pb-24 sm:pb-5">
+          <div className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
-              className="bg-white rounded-t-[32px] sm:rounded-[28px] max-w-4xl w-full p-5 sm:p-7 shadow-2xl border border-slate-100 space-y-6 text-left my-auto modal-container max-h-[90vh] overflow-y-auto no-scrollbar"
+              style={{ marginTop: 'env(safe-area-inset-top, 20px)', marginBottom: 'env(safe-area-inset-bottom, 20px)' }}
+              className="bg-white rounded-[32px] max-w-4xl w-full p-5 sm:p-7 shadow-2xl border border-slate-100 space-y-6 text-left my-auto modal-container max-h-[85vh] overflow-y-auto no-scrollbar relative"
             >
               {/* Modal Header */}
               <div className="flex items-start justify-between border-b border-slate-100 pb-4">
