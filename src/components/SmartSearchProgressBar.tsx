@@ -28,30 +28,39 @@ export function SmartSearchProgressBar({
   const [isFinishing, setIsFinishing] = useState(false);
   const [internalTakingLonger, setInternalTakingLonger] = useState(false);
 
+  const wasLoadingRef = React.useRef(false);
+  const progressRef = React.useRef(0);
+  const onProgressUpdateRef = React.useRef(onProgressUpdate);
+
+  useEffect(() => {
+    onProgressUpdateRef.current = onProgressUpdate;
+  }, [onProgressUpdate]);
+
   useEffect(() => {
     if (isLoading) {
+      wasLoadingRef.current = true;
       setVisible(true);
       setIsFinishing(false);
-      setProgress(5);
       setInternalTakingLonger(false);
-      onProgressUpdate?.(5);
+      progressRef.current = 5;
+      setProgress(5);
+      onProgressUpdateRef.current?.(5);
 
       const delayTimer = setTimeout(() => {
         setInternalTakingLonger(true);
       }, 4500);
 
       const interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 95) {
-            const next = Math.min(prev + 0.5, 98);
-            onProgressUpdate?.(next);
-            return next;
-          }
-          const increment = prev < 30 ? 3 : prev < 70 ? 2 : 1;
-          const next = Math.min(prev + increment, 95);
-          onProgressUpdate?.(next);
-          return next;
-        });
+        let next: number;
+        if (progressRef.current >= 95) {
+          next = Math.min(progressRef.current + 0.5, 98);
+        } else {
+          const increment = progressRef.current < 30 ? 3 : progressRef.current < 70 ? 2 : 1;
+          next = Math.min(progressRef.current + increment, 95);
+        }
+        progressRef.current = next;
+        setProgress(next);
+        onProgressUpdateRef.current?.(next);
       }, 45);
 
       return () => {
@@ -60,14 +69,17 @@ export function SmartSearchProgressBar({
       };
     } else {
       setInternalTakingLonger(false);
-      if (visible) {
+      if (wasLoadingRef.current) {
+        wasLoadingRef.current = false;
         setIsFinishing(true);
+        progressRef.current = 100;
         setProgress(100);
-        onProgressUpdate?.(100);
+        onProgressUpdateRef.current?.(100);
 
         const timeout = setTimeout(() => {
           setVisible(false);
           setIsFinishing(false);
+          progressRef.current = 0;
           setProgress(0);
         }, 400);
 

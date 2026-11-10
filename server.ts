@@ -1467,14 +1467,14 @@ Ensure each event contains:
         },
         url: url || "/",
         priority: 10,
-        // Target ALL platforms: iOS native App Store app, iOS Web Push / PWA, Android, and Web
+        // Strictly target mobile devices only (iOS native App Store app & Android) - NO Web Push
         isIos: true,
         isAndroid: true,
-        isChromeWeb: true,
-        isSafariWeb: true,
-        isFirefox: true,
-        isEdge: true,
-        isAnyWeb: true,
+        isChromeWeb: false,
+        isSafariWeb: false,
+        isFirefox: false,
+        isEdge: false,
+        isAnyWeb: false,
         android_visibility: 1,
         android_accent_color: "2563EB",
         ios_badgeType: "Increase",
@@ -1503,34 +1503,36 @@ Ensure each event contains:
         payload.include_aliases = { external_id: targetUserIds };
         payload.target_channel = "push";
       } else {
-        // Broadcast to all subscribed devices
-        payload.included_segments = ["Total Subscriptions"];
+        // Broadcast to all subscribed devices via OneSignal standard segment
+        payload.included_segments = ["Subscribed Users"];
       }
 
-      const sendToOneSignal = async (bodyPayload: any, authPrefix: string = "Basic") => {
+      const initialAuth = restApiKey.startsWith("os_v2_") ? `Bearer ${restApiKey}` : `Basic ${restApiKey}`;
+      const sendToOneSignal = async (bodyPayload: any, auth: string = initialAuth) => {
         return fetch("https://onesignal.com/api/v1/notifications", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `${authPrefix} ${restApiKey}`
+            "Authorization": auth
           },
           body: JSON.stringify(bodyPayload)
         });
       };
 
-      let oneSignalRes = await sendToOneSignal(payload, "Basic");
+      let oneSignalRes = await sendToOneSignal(payload, initialAuth);
       let data = await oneSignalRes.json();
 
-      // If segment Total Subscriptions does not exist, retry with Subscribed Users
-      if (!oneSignalRes.ok && payload.included_segments && JSON.stringify(data).includes("Total Subscriptions")) {
-        payload.included_segments = ["Subscribed Users"];
-        oneSignalRes = await sendToOneSignal(payload, "Basic");
+      // If segment Subscribed Users failed or Total Subscriptions is required, retry with Total Subscriptions
+      if (!oneSignalRes.ok && payload.included_segments && JSON.stringify(data).includes("Subscribed Users")) {
+        payload.included_segments = ["Total Subscriptions"];
+        oneSignalRes = await sendToOneSignal(payload, initialAuth);
         data = await oneSignalRes.json();
       }
 
-      // If Authorization failed with Basic, try with Bearer (OneSignal v2 keys)
-      if (oneSignalRes.status === 401 && restApiKey.startsWith("os_v2_")) {
-        oneSignalRes = await sendToOneSignal(payload, "Bearer");
+      // If Authorization failed with Basic, retry with Bearer, or vice-versa
+      if (oneSignalRes.status === 401) {
+        const altAuth = initialAuth.startsWith("Bearer ") ? `Basic ${restApiKey}` : `Bearer ${restApiKey}`;
+        oneSignalRes = await sendToOneSignal(payload, altAuth);
         data = await oneSignalRes.json();
       }
 

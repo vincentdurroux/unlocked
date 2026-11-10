@@ -151,7 +151,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
   const [annIcon, setAnnIcon] = useState('megaphone');
   const [annIsActive, setAnnIsActive] = useState(true);
   const [annCtaType, setAnnCtaType] = useState('');
-  const [annSendPush, setAnnSendPush] = useState(false);
+  const [annSendPush, setAnnSendPush] = useState(true);
   const [annPushTarget, setAnnPushTarget] = useState<'all' | 'specific'>('all');
   const [annPushUserId, setAnnPushUserId] = useState('');
 
@@ -455,6 +455,22 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     });
   };
 
+  // Open Announcement Push Compose Modal (OneSignal)
+  const openAnnouncementPushModal = (ann: any) => {
+    setPushComposeModal({
+      isOpen: true,
+      type: 'custom',
+      title: ann.title && ann.title !== 'Announcement' ? ann.title : 'Unlocked Valencia 🌴',
+      body: ann.content || '',
+      targetMode: 'all',
+      targetId: String(ann.id),
+      url: '/',
+      imageUrl: '',
+      entityName: ann.title || 'Announcement',
+      previewDevice: 'ios'
+    });
+  };
+
   return (
     <div className="space-y-6 text-left">
       {/* Top Header & Navigation Bar */}
@@ -644,7 +660,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h4 className="text-base font-bold font-display text-slate-900">Sent Push Notifications Log</h4>
-                <p className="text-xs text-slate-400 font-medium">Audit real mobile and web notifications broadcasted by administrators.</p>
+                <p className="text-xs text-slate-400 font-medium">Audit real mobile push notifications broadcasted to iOS &amp; Android members.</p>
               </div>
 
               {pushLogs.length > 0 && (
@@ -790,7 +806,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                   setAnnContent('');
                   setAnnIsActive(true);
                   setAnnCtaType('');
-                  setAnnSendPush(false);
+                  setAnnSendPush(true);
                   setEditingAnnId(null);
                   setShowAnnForm(true);
                 }}
@@ -809,7 +825,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                   <h4 className="text-sm font-bold uppercase tracking-wider text-slate-700">
                     {editingAnnId ? "Edit Announcement" : "New In-App Announcement"}
                   </h4>
-                  <p className="text-xs text-slate-400 font-medium">Configure message and optional mobile push delivery.</p>
+                  <p className="text-xs text-slate-400 font-medium">Configure message and mobile push delivery via OneSignal.</p>
                 </div>
                 <button
                   type="button"
@@ -862,10 +878,10 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                     <div>
                       <label htmlFor="annSendPushCheck" className="text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer">
                         <Bell className="w-3.5 h-3.5 text-blue-600" />
-                        Also broadcast instant Mobile Push Notification (OneSignal)
+                        Envoyer le Push Mobile OneSignal (iOS App Store & Android)
                       </label>
                       <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                        Delivers a lock-screen alert to all subscribed mobile and web devices upon saving.
+                        Toutes les annonces sont envoyées via OneSignal Push directement sur smartphones (iPhone App Store &amp; Android).
                       </p>
                     </div>
                   </div>
@@ -927,7 +943,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                   type="submit"
                   className="px-5 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-slate-900 text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md shadow-yellow-500/10 cursor-pointer"
                 >
-                  Save & Publish
+                  Save &amp; Publish with OneSignal
                 </button>
               </div>
             </form>
@@ -944,46 +960,64 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-3.5">
-                  {adminAnnouncements.map((ann) => (
-                    <div
-                      key={ann.id}
-                      className="p-4 sm:p-5 rounded-[24px] bg-white border border-slate-100 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
-                    >
-                      <div className="space-y-1 text-left min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-yellow-50 text-yellow-800 border border-yellow-200">
-                            {ann.title || 'Announcement'}
-                          </span>
-                          <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full", ann.is_active !== false ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500")}>
-                            {ann.is_active !== false ? 'Online' : 'Offline'}
-                          </span>
+                  {adminAnnouncements.map((ann) => {
+                    const pushedAt = isTargetPushed(String(ann.id));
+                    return (
+                      <div
+                        key={ann.id}
+                        className="p-4 sm:p-5 rounded-[24px] bg-white border border-slate-100 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                      >
+                        <div className="space-y-1 text-left min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-yellow-50 text-yellow-800 border border-yellow-200">
+                              {ann.title || 'Announcement'}
+                            </span>
+                            <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full", ann.is_active !== false ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500")}>
+                              {ann.is_active !== false ? 'Online' : 'Offline'}
+                            </span>
+                            {pushedAt && (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> OneSignal Pushed
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs sm:text-sm font-semibold text-slate-900 leading-snug">{ann.content}</p>
                         </div>
-                        <p className="text-xs sm:text-sm font-semibold text-slate-900 leading-snug">{ann.content}</p>
-                      </div>
 
-                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingAnnId(ann.id);
-                            setAnnTitle(ann.title || '');
-                            setAnnContent(ann.content || '');
-                            setShowAnnForm(true);
-                          }}
-                          className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteAnnouncement(ann.id)}
-                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl border border-rose-100 cursor-pointer"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => openAnnouncementPushModal(ann)}
+                            className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 active:scale-95 text-slate-900 font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                            title="Diffuser cette annonce avec OneSignal (iOS & Android)"
+                          >
+                            <Send className="w-3.5 h-3.5 text-slate-900" />
+                            <span>Push OneSignal</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingAnnId(ann.id);
+                              setAnnTitle(ann.title || '');
+                              setAnnContent(ann.content || '');
+                              setAnnSendPush(true);
+                              setShowAnnForm(true);
+                            }}
+                            className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteAnnouncement(ann.id)}
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl border border-rose-100 cursor-pointer"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

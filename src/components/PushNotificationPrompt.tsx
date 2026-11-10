@@ -19,13 +19,18 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
   onSubscribed
 }) => {
   useEffect(() => {
-    // If the user is not signed up or signed in, do not request push permissions or trigger notification prompt
+    // If the user is not signed up or signed in, do not request push permissions
     if (!currentUserId) return;
 
-    // Exécuté uniquement côté client dans le navigateur
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (typeof window === 'undefined') return;
 
-    // Si la permission n'est pas "default" (déjà accordée ou déjà refusée), ne rien faire
+    // Do NOT request or prompt for Web Push in standard desktop/mobile web browsers
+    const dev = oneSignalService.getDeviceInfo();
+    if (!dev.isNativeWrapper) {
+      return;
+    }
+
+    if (!('Notification' in window)) return;
     if (Notification.permission !== 'default') return;
 
     // Vérifier si l'utilisateur a déjà vu la demande système récemment
@@ -35,7 +40,7 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
       if (diffHours < 24) return;
     }
 
-    // Déclencher directement la boîte de dialogue générique du système au premier geste utilisateur
+    // Déclencher directement la boîte de dialogue système sur l'app native
     const triggerSystemPrompt = async () => {
       window.removeEventListener('click', triggerSystemPrompt);
       window.removeEventListener('touchend', triggerSystemPrompt);
@@ -46,8 +51,6 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
         const appId = oneSignalService.getAppId();
         if (appId) {
           await oneSignalService.subscribe(currentUserId);
-        } else if (pushNotificationService.isSupported()) {
-          await pushNotificationService.subscribeUser(currentUserId || 'guest');
         }
 
         if (Notification.permission === 'granted') {

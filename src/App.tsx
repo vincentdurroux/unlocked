@@ -149,7 +149,7 @@ import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
 import { LandingEventHighlightsCard } from './components/LandingEventHighlightsCard';
 import { HeaderWeatherWidget } from './components/HeaderWeatherWidget';
 import { RotatingCylinderWord } from './components/RotatingCylinderWord';
-import { HalloweenMarketplaceSection } from './components/HalloweenMarketplaceSection';
+import { ChristmasMarketplaceSection } from './components/ChristmasMarketplaceSection';
 import { MarketplaceLocationPicker, VALENCIA_AREAS, VALENCIA_CENTER, VALENCIA_CITY_NEIGHBORHOODS, VALENCIA_SUBURBS } from './components/MarketplaceLocationPicker';
 import { SmartSearchProgressBar } from './components/SmartSearchProgressBar';
 import { RotatingPlaceholder } from './components/RotatingPlaceholder';
@@ -3313,10 +3313,10 @@ export default function App() {
   const [adPhoneCountryCode, setAdPhoneCountryCode] = useState('+34');
   const [adPickup, setAdPickup] = useState(true);
   const [adDeliveryAvailable, setAdDeliveryAvailable] = useState(false);
-  const [adIsHalloween, setAdIsHalloween] = useState(false);
-  const [adHalloweenMode, setAdHalloweenMode] = useState<'sale' | 'swap' | 'giveaway'>('sale');
-  const [adHalloweenTradeFor, setAdHalloweenTradeFor] = useState('');
-  const [adHalloweenCategory, setAdHalloweenCategory] = useState<'costumes' | 'decor' | 'accessories' | 'treats' | 'other'>('costumes');
+  const [adIsChristmas, setAdIsChristmas] = useState(false);
+  const [adChristmasMode, setAdChristmasMode] = useState<'sale' | 'swap' | 'giveaway'>('sale');
+  const [adChristmasTradeFor, setAdChristmasTradeFor] = useState('');
+  const [adChristmasCategory, setAdChristmasCategory] = useState<'gifts' | 'toys' | 'decor' | 'sweaters' | 'treats' | 'other'>('gifts');
   const [adError, setAdError] = useState<string | null>(null);
 
   const [isUploading, setIsUploading] = useState(false);
@@ -3484,15 +3484,15 @@ export default function App() {
     setAdSize(ad.size || 'M');
     setAdPhone(ad.seller_phone || '');
     setUploadedImageUrls(ad.images && ad.images.length > 0 ? ad.images : (ad.image_url ? [ad.image_url] : []));
-    setAdIsHalloween(Boolean(ad.is_halloween || ad.category === 'Halloween Special' || (ad.title && /halloween/i.test(ad.title))));
-    setAdHalloweenMode(ad.halloween_mode || (ad.price && (ad.price.toLowerCase().includes('swap') || ad.price.toLowerCase().includes('échange')) ? 'swap' : 'sale'));
-    setAdHalloweenTradeFor(ad.halloween_trade_for || '');
-    setAdHalloweenCategory(ad.halloween_category || 'costumes');
+    setAdIsChristmas(Boolean(ad.is_christmas || ad.category === 'Christmas Special' || ad.category === 'Spécial Noël' || (ad.title && /no[eë]l|christmas|sapin/i.test(ad.title))));
+    setAdChristmasMode(ad.christmas_mode || (ad.price && (ad.price.toLowerCase().includes('swap') || ad.price.toLowerCase().includes('échange')) ? 'swap' : 'sale'));
+    setAdChristmasTradeFor(ad.christmas_trade_for || '');
+    setAdChristmasCategory(ad.christmas_category || 'gifts');
     setActiveView('marketplace');
     setShowAddAd(true);
   };
 
-  const handleOpenAddHalloweenAd = () => {
+  const handleOpenAddChristmasAd = () => {
     if (!currentUser) {
       handleNavigate('login');
       return;
@@ -3501,7 +3501,7 @@ export default function App() {
     setEditingAd(null);
     setAdTitle('');
     setAdPrice('');
-    setAdCategory('Halloween Special');
+    setAdCategory('Christmas Special');
     setAdCondition('Like New');
     setAdLocation('');
     setAdLocationPrecision('approximate');
@@ -3518,10 +3518,10 @@ export default function App() {
     setAdPhoneCountryCode('+34');
     setAdPickup(true);
     setAdDeliveryAvailable(false);
-    setAdIsHalloween(true);
-    setAdHalloweenMode('swap');
-    setAdHalloweenTradeFor('');
-    setAdHalloweenCategory('costumes');
+    setAdIsChristmas(true);
+    setAdChristmasMode('sale');
+    setAdChristmasTradeFor('');
+    setAdChristmasCategory('gifts');
     setUploadedImageUrls([]);
     setAdError(null);
     setShowAddAd(true);
@@ -3838,10 +3838,10 @@ export default function App() {
           : 'Pick up';
 
       let finalPrice = adPrice.trim();
-      if (adIsHalloween || adCategory === 'Halloween Special') {
-        if (adHalloweenMode === 'swap') {
+      if (adIsChristmas || adCategory === 'Christmas Special') {
+        if (adChristmasMode === 'swap') {
           finalPrice = 'Swap';
-        } else if (adHalloweenMode === 'giveaway') {
+        } else if (adChristmasMode === 'giveaway') {
           finalPrice = 'Free';
         }
       }
@@ -3868,10 +3868,10 @@ export default function App() {
           image_url: uploadedImageUrls[0] || '',
           images: uploadedImageUrls,
           status: editingAd.status || 'available',
-          is_halloween: adIsHalloween,
-          halloween_mode: adIsHalloween ? adHalloweenMode : undefined,
-          halloween_trade_for: (adIsHalloween && adHalloweenMode === 'swap' && adHalloweenTradeFor.trim()) ? adHalloweenTradeFor.trim() : undefined,
-          halloween_category: adIsHalloween ? adHalloweenCategory : undefined
+          is_christmas: adIsChristmas,
+          christmas_mode: adIsChristmas ? adChristmasMode : undefined,
+          christmas_trade_for: (adIsChristmas && adChristmasMode === 'swap' && adChristmasTradeFor.trim()) ? adChristmasTradeFor.trim() : undefined,
+          christmas_category: adIsChristmas ? adChristmasCategory : undefined
         });
         setEditingAd(null);
       } else {
@@ -3899,10 +3899,10 @@ export default function App() {
           user_id: currentUser?.id || undefined,
           image_url: uploadedImageUrls[0] || '',
           images: uploadedImageUrls,
-          is_halloween: adIsHalloween,
-          halloween_mode: adIsHalloween ? adHalloweenMode : undefined,
-          halloween_trade_for: (adIsHalloween && adHalloweenMode === 'swap' && adHalloweenTradeFor.trim()) ? adHalloweenTradeFor.trim() : undefined,
-          halloween_category: adIsHalloween ? adHalloweenCategory : undefined
+          is_christmas: adIsChristmas,
+          christmas_mode: adIsChristmas ? adChristmasMode : undefined,
+          christmas_trade_for: (adIsChristmas && adChristmasMode === 'swap' && adChristmasTradeFor.trim()) ? adChristmasTradeFor.trim() : undefined,
+          christmas_category: adIsChristmas ? adChristmasCategory : undefined
         });
       }
       
@@ -3933,10 +3933,10 @@ export default function App() {
       setAdPhoneCountryCode('+34');
       setAdPickup(true);
       setAdDeliveryAvailable(false);
-      setAdIsHalloween(false);
-      setAdHalloweenMode('sale');
-      setAdHalloweenTradeFor('');
-      setAdHalloweenCategory('costumes');
+      setAdIsChristmas(false);
+      setAdChristmasMode('sale');
+      setAdChristmasTradeFor('');
+      setAdChristmasCategory('gifts');
       setAdError(null);
       setUploadedImageUrls([]);
       setShowAddAd(false);
@@ -4939,7 +4939,7 @@ export default function App() {
                     }
                     setShowAddAd(true);
                   }}
-                  onAddHalloweenAd={handleOpenAddHalloweenAd}
+                  onAddChristmasAd={handleOpenAddChristmasAd}
                   ads={ads} 
                   onSelectAd={setSelectedAd} 
                   scrollToTop={scrollToTop}
@@ -5430,10 +5430,10 @@ export default function App() {
                           onChange={(e) => {
                             const newCat = e.target.value;
                             setAdCategory(newCat);
-                            if (newCat === 'Halloween Special') {
-                              setAdIsHalloween(true);
+                            if (newCat === 'Christmas Special') {
+                              setAdIsChristmas(true);
                             } else {
-                              setAdIsHalloween(false);
+                              setAdIsChristmas(false);
                               if (adPrice === 'Swap') {
                                 setAdPrice('');
                               }
@@ -5443,7 +5443,7 @@ export default function App() {
                         >
                           <option value="" disabled>Select a category...</option>
                           {[
-                            { id: 'Halloween Special', label: 'Halloween Special (Swap & Sale)', emoji: '🎃' },
+                            { id: 'Christmas Special', label: 'Christmas Special (Gifts, Decor & Swap)', emoji: '🎄' },
                             { id: 'School & Uniforms', label: 'School & Uniforms', emoji: '🎒' },
                             { id: 'Women’s Clothing', label: 'Women’s Clothing', emoji: '👗' },
                             { id: 'Men’s Clothing', label: 'Men’s Clothing', emoji: '👔' },
@@ -5470,41 +5470,41 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Halloween Event Participation Card */}
+                    {/* Christmas Event Participation Card */}
                     <div className={cn(
                       "p-4 rounded-2xl border transition-all duration-200",
-                      adIsHalloween || adCategory === 'Halloween Special'
-                        ? "bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-slate-50 border-orange-400/50 shadow-xs"
+                      adIsChristmas || adCategory === 'Christmas Special'
+                        ? "bg-gradient-to-br from-red-500/10 via-amber-500/5 to-emerald-50/20 border-emerald-400/50 shadow-xs"
                         : "bg-slate-50/70 border-slate-200/80"
                     )}>
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="text-xl shrink-0">🎃</span>
+                          <span className="text-xl shrink-0">🎄</span>
                           <div>
                             <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
-                              <span>Join the Halloween Event</span>
-                              <span className="text-[10px] font-semibold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full border border-orange-200">
-                                Valencia Swap & Sale
+                              <span>Christmas Market & Holiday Gift Swap</span>
+                              <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                                Valencia Christmas Market
                               </span>
                             </h4>
                             <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                              Spotlight this listing in the Halloween section (costumes, decor, swap, or sale).
+                              Feature this listing in the Christmas section (gifts, decor, trees, toys, swap, or sale).
                             </p>
                           </div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer shrink-0">
                           <input 
                             type="checkbox" 
-                            checked={adIsHalloween || adCategory === 'Halloween Special'} 
+                            checked={adIsChristmas || adCategory === 'Christmas Special'} 
                             onChange={(e) => {
                               const checked = e.target.checked;
-                              setAdIsHalloween(checked);
+                              setAdIsChristmas(checked);
                               if (checked) {
-                                if (adCategory !== 'Halloween Special') {
-                                  setAdCategory('Halloween Special');
+                                if (adCategory !== 'Christmas Special') {
+                                  setAdCategory('Christmas Special');
                                 }
                               } else {
-                                if (adCategory === 'Halloween Special') {
+                                if (adCategory === 'Christmas Special') {
                                   setAdCategory('School & Uniforms');
                                 }
                                 if (adPrice === 'Swap') {
@@ -5514,26 +5514,26 @@ export default function App() {
                             }} 
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                         </label>
                       </div>
 
-                      {(adIsHalloween || adCategory === 'Halloween Special') && (
-                        <div className="mt-3.5 pt-3.5 border-t border-orange-200/80 space-y-3 animate-in fade-in duration-200">
+                      {(adIsChristmas || adCategory === 'Christmas Special') && (
+                        <div className="mt-3.5 pt-3.5 border-t border-emerald-200/80 space-y-3 animate-in fade-in duration-200">
                           <div>
                             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                              Listing Type
+                              Christmas Listing Type
                             </label>
                             <div className="grid grid-cols-3 gap-2">
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setAdHalloweenMode('swap');
+                                  setAdChristmasMode('swap');
                                   setAdPrice('Swap');
                                 }}
                                 className={cn(
                                   "px-2.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center",
-                                  adHalloweenMode === 'swap'
+                                  adChristmasMode === 'swap'
                                     ? "bg-amber-500 text-slate-950 border-amber-600 shadow-xs"
                                     : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                                 )}
@@ -5544,15 +5544,15 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setAdHalloweenMode('sale');
+                                  setAdChristmasMode('sale');
                                   if (adPrice === 'Swap' || adPrice === 'Free') {
                                     setAdPrice('');
                                   }
                                 }}
                                 className={cn(
                                   "px-2.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center",
-                                  adHalloweenMode === 'sale'
-                                    ? "bg-orange-600 text-white border-orange-700 shadow-xs"
+                                  adChristmasMode === 'sale'
+                                    ? "bg-red-600 text-white border-red-700 shadow-xs"
                                     : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                                 )}
                               >
@@ -5562,13 +5562,13 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setAdHalloweenMode('giveaway');
+                                  setAdChristmasMode('giveaway');
                                   setAdPrice('Free');
                                   setAdCondition('Free');
                                 }}
                                 className={cn(
                                   "px-2.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center",
-                                  adHalloweenMode === 'giveaway'
+                                  adChristmasMode === 'giveaway'
                                     ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
                                     : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                                 )}
@@ -5579,40 +5579,41 @@ export default function App() {
                             </div>
                           </div>
 
-                          {adHalloweenMode === 'swap' && (
+                          {adChristmasMode === 'swap' && (
                             <div>
                               <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                                 What are you looking to trade for? (Optional)
                               </label>
                               <input 
                                 type="text" 
-                                placeholder="e.g. Pirate or superhero costume (8-10 yrs), or autumn decor" 
-                                value={adHalloweenTradeFor}
-                                onChange={(e) => setAdHalloweenTradeFor(e.target.value)}
-                                className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 outline-none text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400" 
+                                placeholder="e.g. Wooden toys, fairy lights, holiday ornaments, or sweater size M" 
+                                value={adChristmasTradeFor}
+                                onChange={(e) => setAdChristmasTradeFor(e.target.value)}
+                                className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-slate-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400" 
                               />
                             </div>
                           )}
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                              Halloween Sub-category
+                              Christmas Sub-category
                             </label>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                               {[
-                                { id: 'costumes', label: '🧙 Costumes' },
-                                { id: 'decor', label: '🎃 Decor' },
-                                { id: 'accessories', label: '🦇 Accessories' },
-                                { id: 'treats', label: '🍬 Treats & Bags' },
+                                { id: 'gifts', label: '🎁 Gifts' },
+                                { id: 'toys', label: '🧸 Toys' },
+                                { id: 'decor', label: '🎄 Tree & Decor' },
+                                { id: 'sweaters', label: '❄️ Sweaters' },
+                                { id: 'treats', label: '🍪 Treats' },
                               ].map((item) => (
                                 <button
                                   key={item.id}
                                   type="button"
-                                  onClick={() => setAdHalloweenCategory(item.id as any)}
+                                  onClick={() => setAdChristmasCategory(item.id as any)}
                                   className={cn(
                                     "px-2 py-1.5 rounded-lg text-xs font-medium border text-center transition-colors cursor-pointer",
-                                    adHalloweenCategory === item.id
-                                      ? "bg-orange-100 text-orange-900 border-orange-300 font-bold"
+                                    adChristmasCategory === item.id
+                                      ? "bg-red-100 text-red-900 border-red-300 font-bold"
                                       : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                                   )}
                                 >
@@ -5626,7 +5627,7 @@ export default function App() {
                     </div>
 
                     {/* Price & Condition */}
-                    {(adIsHalloween || adCategory === 'Halloween Special') && (adHalloweenMode === 'swap' || adHalloweenMode === 'giveaway') ? (
+                    {(adIsChristmas || adCategory === 'Christmas Special') && (adChristmasMode === 'swap' || adChristmasMode === 'giveaway') ? (
                       <div>
                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                           Condition
@@ -6333,34 +6334,34 @@ function AdDetailModal({
                 </div>
               )}
 
-              {/* Halloween Event Highlight in Detail Modal */}
-              {Boolean(ad.is_halloween || ad.category === 'Halloween Special' || (ad.title && /halloween/i.test(ad.title))) && (
-                <div className="p-3.5 bg-gradient-to-r from-orange-50 via-amber-50/70 to-orange-50 border border-orange-300 rounded-2xl flex items-center justify-between gap-3 text-orange-950 text-xs">
+              {/* Christmas Event Highlight in Detail Modal */}
+              {Boolean(ad.is_christmas || ad.category === 'Christmas Special' || ad.category === 'Spécial Noël' || (ad.title && /no[eë]l|christmas|sapin/i.test(ad.title))) && (
+                <div className="p-3.5 bg-gradient-to-r from-red-50 via-amber-50/70 to-emerald-50 border border-emerald-300/80 rounded-2xl flex items-center justify-between gap-3 text-emerald-950 text-xs">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-2xl shrink-0">🎃</span>
+                    <span className="text-2xl shrink-0">🎄</span>
                     <div>
-                      <p className="font-bold text-orange-900 flex items-center gap-2">
-                        <span>Halloween Special Event · Valencia Swap & Sale</span>
+                      <p className="font-bold text-red-900 flex items-center gap-2">
+                        <span>Christmas Market · Valencia Holiday Market & Swap</span>
                       </p>
-                      <p className="text-[11px] text-orange-800/90 mt-0.5">
-                        {ad.halloween_mode === 'swap'
-                          ? `Offered for trade/swap. ${ad.halloween_trade_for ? `Looking for: ${ad.halloween_trade_for}` : 'Send a message to propose an exchange!'}`
-                          : ad.halloween_mode === 'giveaway'
-                            ? 'Offered as a free neighborhood gift!'
-                            : 'Pre-loved Halloween item for the local community.'}
+                      <p className="text-[11px] text-emerald-900/90 mt-0.5">
+                        {ad.christmas_mode === 'swap'
+                          ? `Offered for trade/swap.${ad.christmas_trade_for ? ` Looking for: ${ad.christmas_trade_for}` : ' Send a message to propose an exchange!'}`
+                          : ad.christmas_mode === 'giveaway'
+                            ? 'Generously offered as a neighborhood holiday gift!'
+                            : 'Pre-loved Christmas holiday item for the community.'}
                       </p>
                     </div>
                   </div>
-                  {ad.halloween_mode === 'swap' && (
+                  {ad.christmas_mode === 'swap' && (
                     <span className="px-2.5 py-1 bg-amber-500 text-slate-950 font-extrabold text-[10px] uppercase rounded-lg shrink-0 flex items-center gap-1 shadow-xs">
                       <ArrowLeftRight className="w-3 h-3 stroke-[2.5]" />
                       Swap / Trade
                     </span>
                   )}
-                  {ad.halloween_mode === 'giveaway' && (
+                  {ad.christmas_mode === 'giveaway' && (
                     <span className="px-2.5 py-1 bg-emerald-600 text-white font-extrabold text-[10px] uppercase rounded-lg shrink-0 flex items-center gap-1 shadow-xs">
                       <Gift className="w-3 h-3 stroke-[2.5]" />
-                      Free
+                      Holiday Gift
                     </span>
                   )}
                 </div>
@@ -7653,7 +7654,7 @@ function AdminView({
   const [annFormIsActive, setAnnFormIsActive] = useState(true);
   const [annFormCtaType, setAnnFormCtaType] = useState('');
   const [annFormIcon, setAnnFormIcon] = useState('megaphone');
-  const [annFormSendPush, setAnnFormSendPush] = useState(false);
+  const [annFormSendPush, setAnnFormSendPush] = useState(true);
   const [allUsersList, setAllUsersList] = useState<any[]>([]);
   const [loadingUsersList, setLoadingUsersList] = useState(false);
   const [annPushTargetMode, setAnnPushTargetMode] = useState<'all' | 'specific'>('all');
@@ -12423,7 +12424,7 @@ Wrap up your guide with a warm closing thought for newcomers settling into Valen
             setAnnFormIsActive(annData.is_active);
             setAnnFormCtaType(annData.cta_type);
             setEditingAnnId(annData.id || null);
-            await executeSaveAnnouncement(false);
+            await executeSaveAnnouncement(annData.send_push !== false);
           }}
           onDeleteAnnouncement={handleDeleteAnnouncement}
           setMsg={setMsg}
@@ -16982,7 +16983,7 @@ function computeProSearchScore(pro: any, searchStr: string): number {
                 setIsSearchTakingLonger(false);
                 setAiError(null);
               }}
-              onProgressUpdate={(p) => setSearchProgress(p)}
+              onProgressUpdate={setSearchProgress}
               onCancel={() => {
                 if (abortControllerRef.current) {
                   abortControllerRef.current.abort();
@@ -21160,7 +21161,7 @@ function MarketplaceView({
   onToggleFavoriteAd,
   onAdDeleted,
   loading = false,
-  onAddHalloweenAd
+  onAddChristmasAd
 }: { 
   onAddAd: () => void; 
   ads: Ad[]; 
@@ -21172,7 +21173,7 @@ function MarketplaceView({
   onToggleFavoriteAd?: (id: string | number) => void;
   onAdDeleted?: () => void;
   loading?: boolean;
-  onAddHalloweenAd?: () => void;
+  onAddChristmasAd?: () => void;
 }) {
   useEffect(() => {
     scrollToTop?.();
@@ -21226,7 +21227,7 @@ function MarketplaceView({
 
   const categories = [
     { id: 'All', label: 'All Items', icon: Sparkles, emoji: '✨' },
-    { id: 'Halloween Special', label: 'Halloween Special', icon: Ghost, emoji: '🎃' },
+    { id: 'Christmas Special', label: 'Christmas Special', icon: Sparkles, emoji: '🎄' },
     { id: 'School & Uniforms', label: 'School & Uniforms', icon: GraduationCap, emoji: '🎒' },
     { id: 'Women’s Clothing', label: 'Women’s Clothing', icon: Shirt, emoji: '👗' },
     { id: 'Men’s Clothing', label: 'Men’s Clothing', icon: Shirt, emoji: '👔' },
@@ -21262,7 +21263,7 @@ function MarketplaceView({
     const a = itemCategory.toLowerCase().replace(/['’]/g, "'").replace(/&amp;/g, '&').trim();
     const b = targetCategory.toLowerCase().replace(/['’]/g, "'").replace(/&amp;/g, '&').trim();
     if (a === b) return true;
-    if (b === "halloween special" && (a === "halloween special" || a.includes("halloween") || a.includes("spooky"))) return true;
+    if ((b === "christmas special" || b === "spécial noël") && (a === "christmas special" || a.includes("christmas") || a.includes("noël") || a.includes("noel") || a.includes("sapin"))) return true;
     if (b === "women's clothing" && (a === "clothing" || a.includes("women"))) return true;
     if (b === "men's clothing" && (a === "clothing" || a.includes("men"))) return true;
     if (b === "kids' clothing" && (a === "school & kids" || a.includes("kid"))) return true;
@@ -21292,12 +21293,12 @@ function MarketplaceView({
 
   // Category-specific price ranges without editorial comments
   const categoryPriceRangesMap: Record<string, { id: string; label: string; min?: number; max?: number }[]> = {
-    'Halloween Special': [
+    'Christmas Special': [
       { id: 'all', label: 'All Prices' },
-      { id: 'hw_free', label: 'Free / Giveaway', max: 0.1 },
-      { id: 'hw_under_10', label: '< €10', max: 10 },
-      { id: 'hw_10_25', label: '€10 - €25', min: 10, max: 25 },
-      { id: 'hw_25_plus', label: '€25+', min: 25 },
+      { id: 'xm_free', label: 'Free / Giveaway', max: 0.1 },
+      { id: 'xm_under_15', label: '< €15', max: 15 },
+      { id: 'xm_15_40', label: '€15 - €40', min: 15, max: 40 },
+      { id: 'xm_40_plus', label: '€40+', min: 40 },
     ],
     'School & Uniforms': [
       { id: 'all', label: 'All Prices' },
@@ -21601,17 +21602,17 @@ function MarketplaceView({
         </button>
       </div>
 
-      {/* Special Seasonal Event: Halloween Community Swap & Spooky Market */}
-      <HalloweenMarketplaceSection
+      {/* Special Seasonal Event: Christmas Community Market & Holiday Swap */}
+      <ChristmasMarketplaceSection
         ads={ads}
         onSelectAd={onSelectAd}
-        onOpenPostHalloweenAd={() => {
+        onOpenPostChristmasAd={() => {
           if (!currentUser) {
             onNavigate?.('login');
             return;
           }
-          if (onAddHalloweenAd) {
-            onAddHalloweenAd();
+          if (onAddChristmasAd) {
+            onAddChristmasAd();
           } else {
             onAddAd();
           }
@@ -22611,10 +22612,6 @@ function ProfileView({
         } else if (typeof window !== 'undefined' && 'Notification' in window) {
           setPushStatus(Notification.permission);
         }
-      } else if (pushNotificationService.isSupported()) {
-        setPushStatus(pushNotificationService.getPermission());
-        const sub = await pushNotificationService.getExistingSubscription();
-        setIsPushSubscribed(!!sub);
       }
     } catch (e) {
       console.warn('OneSignal refresh check failed:', e);
@@ -22718,22 +22715,16 @@ function ProfileView({
           }
         }
       } else {
-        if (isPushSubscribed) {
-          await pushNotificationService.unsubscribeUser(currentUser?.id || 'guest');
-          setIsPushSubscribed(false);
-          setPushFeedback({ type: 'success', text: 'Notifications push désactivées sur cet appareil.' });
-        } else {
-          await pushNotificationService.subscribeUser(currentUser?.id || 'guest');
-          setIsPushSubscribed(true);
-          setPushStatus('granted');
-          setPushFeedback({ type: 'success', text: 'Notifications push activées avec succès !' });
-        }
+        setPushFeedback({
+          type: 'info',
+          text: 'Veuillez configurer votre OneSignal App ID pour activer les notifications mobiles.'
+        });
       }
     } catch (err: any) {
       console.error('Push toggle error:', err);
       const errMsg = err?.message || 'Erreur lors de la configuration des notifications.';
       if (errMsg.includes('mycityunlocked.app') || errMsg.toLowerCase().includes('can only be used on')) {
-        setPushFeedback({ type: 'info', text: 'Notifications système autorisées. (OneSignal Web Push est configuré pour le domaine mycityunlocked.app).' });
+        setPushFeedback({ type: 'info', text: 'Notifications autorisées via OneSignal sur mobile.' });
       } else {
         setPushFeedback({ type: 'error', text: errMsg });
       }
@@ -24806,7 +24797,7 @@ function ProfileView({
                   <button
                     type="button"
                     onClick={handleTogglePush}
-                    disabled={pushLoading || (!oneSignalAppId && !pushNotificationService.isSupported())}
+                    disabled={pushLoading || !oneSignalAppId}
                     className={cn(
                       "w-12 h-6 rounded-full relative transition-colors cursor-pointer shrink-0 mt-2",
                       pushLoading && "opacity-60 cursor-wait",
@@ -25096,18 +25087,6 @@ function ProfileView({
                       >
                         <Send className="w-3.5 h-3.5 text-emerald-400" />
                         <span>Diffuser Push (Tous les abonnés)</span>
-                      </button>
-
-                      {/* Button 3: Local visual notification test on this screen */}
-                      <button
-                        type="button"
-                        onClick={handleSendLocalNotification}
-                        disabled={pushLoading}
-                        className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                        title="Affiche une notification locale directement sur cet écran"
-                      >
-                        <Bell className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Tester notification locale</span>
                       </button>
 
                       {/* Button 4: Guide */}

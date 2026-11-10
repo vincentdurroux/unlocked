@@ -31,6 +31,10 @@ export interface Ad {
   halloween_mode?: 'sale' | 'swap' | 'giveaway';
   halloween_trade_for?: string;
   halloween_category?: 'costumes' | 'decor' | 'accessories' | 'treats' | 'other';
+  is_christmas?: boolean;
+  christmas_mode?: 'sale' | 'swap' | 'giveaway';
+  christmas_trade_for?: string;
+  christmas_category?: 'gifts' | 'toys' | 'decor' | 'sweaters' | 'treats' | 'other';
 }
 
 export interface AdDraft {
@@ -61,6 +65,10 @@ export interface AdDraft {
   halloween_mode?: 'sale' | 'swap' | 'giveaway';
   halloween_trade_for?: string;
   halloween_category?: 'costumes' | 'decor' | 'accessories' | 'treats' | 'other';
+  is_christmas?: boolean;
+  christmas_mode?: 'sale' | 'swap' | 'giveaway';
+  christmas_trade_for?: string;
+  christmas_category?: 'gifts' | 'toys' | 'decor' | 'sweaters' | 'treats' | 'other';
 }
 
 export const marketplaceService = {
@@ -170,6 +178,20 @@ export const marketplaceService = {
         const halloween_mode = meta.halloween_mode || 
           (rawItem.price && (rawItem.price.toLowerCase().includes('swap') || rawItem.price.toLowerCase().includes('échange')) ? 'swap' : 'sale');
 
+        const is_christmas = Boolean(
+          rawItem.is_christmas || 
+          meta.is_christmas || 
+          meta.event === 'christmas' || 
+          meta.event === 'noel' ||
+          rawItem.category === 'Christmas Special' ||
+          rawItem.category === 'Spécial Noël' ||
+          (rawItem.title && /no[eë]l|christmas|sapin|xmas|cadeau/i.test(rawItem.title)) ||
+          (rawItem.description && /no[eë]l|christmas/i.test(rawItem.description))
+        );
+
+        const christmas_mode = meta.christmas_mode || 
+          (rawItem.price && (rawItem.price.toLowerCase().includes('swap') || rawItem.price.toLowerCase().includes('échange')) ? 'swap' : 'sale');
+
         return {
           ...rawItem,
           description: desc,
@@ -193,7 +215,11 @@ export const marketplaceService = {
           is_halloween,
           halloween_mode: rawItem.halloween_mode || halloween_mode,
           halloween_trade_for: rawItem.halloween_trade_for || meta.halloween_trade_for,
-          halloween_category: rawItem.halloween_category || meta.halloween_category
+          halloween_category: rawItem.halloween_category || meta.halloween_category,
+          is_christmas,
+          christmas_mode: rawItem.christmas_mode || christmas_mode,
+          christmas_trade_for: rawItem.christmas_trade_for || meta.christmas_trade_for,
+          christmas_category: rawItem.christmas_category || meta.christmas_category
         } as Ad;
       });
     } catch (error) {
@@ -262,6 +288,10 @@ export const marketplaceService = {
     if (ad.halloween_mode) meta.halloween_mode = ad.halloween_mode;
     if (ad.halloween_trade_for) meta.halloween_trade_for = ad.halloween_trade_for;
     if (ad.halloween_category) meta.halloween_category = ad.halloween_category;
+    if (ad.is_christmas) meta.is_christmas = true;
+    if (ad.christmas_mode) meta.christmas_mode = ad.christmas_mode;
+    if (ad.christmas_trade_for) meta.christmas_trade_for = ad.christmas_trade_for;
+    if (ad.christmas_category) meta.christmas_category = ad.christmas_category;
 
     if (Object.keys(meta).length > 0) {
       finalDescription = `${finalDescription}\n\n<!-- unlocked_meta:${JSON.stringify(meta)} -->`.trim();
