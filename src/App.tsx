@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Papa from 'papaparse';
 import { parseProfessionalCSV, rowToPro, detectColumnMappings, parseEventCSV, detectEventColumnMappings, rowToEvent } from './utils/csvParser';
 import { Logo } from './components/Logo';
-import { InAppNotificationCenter, InAppToastBanner, type InAppNotification, isRecommendProNotification, isGuideNotification, extractGuideIdFromNotification } from './components/InAppNotificationCenter';
+import { InAppNotificationCenter, InAppToastBanner, type InAppNotification, isRecommendProNotification, isGuideNotification, extractGuideIdFromNotification, isProNotification, extractProIdFromNotification, isEventNotification, extractEventIdFromNotification } from './components/InAppNotificationCenter';
 import { getCategoryWithEmoji, parseDescriptionSections, renderFormattedContent, cleanDuplicateEmojis } from './components/AdminAiEventSearch';
 import { ReferralSurveyModal, REFERRAL_OPTIONS } from './components/ReferralSurveyModal';
 
@@ -2392,6 +2392,53 @@ export default function App() {
     }
   }, []);
 
+  // Listen for live OneSignal push notification clicks
+  useEffect(() => {
+    const handlePushClick = (e: any) => {
+      try {
+        const detail = e?.detail;
+        const data = detail?.data || {};
+        const launchUrl = detail?.launchUrl || '';
+
+        let targetEventId = data.eventId || (data.target_id && (data.type === 'event' || detail.notification?.type === 'event') ? data.target_id : undefined);
+        let targetProId = data.proId || (data.target_id && (data.type === 'pro' || detail.notification?.type === 'pro') ? data.target_id : undefined);
+        let targetGuideId = data.guideId || (data.target_id && (data.type === 'guide' || data.type === 'article' || detail.notification?.type === 'guide') ? data.target_id : undefined);
+
+        if (!targetEventId && launchUrl) {
+          const match = launchUrl.match(/[?&]eventId=([^&#]+)/);
+          if (match) targetEventId = match[1];
+        }
+        if (!targetProId && launchUrl) {
+          const match = launchUrl.match(/[?&]proId=([^&#]+)/);
+          if (match) targetProId = match[1];
+        }
+        if (!targetGuideId && launchUrl) {
+          const match = launchUrl.match(/[?&]guideId=([^&#]+)/);
+          if (match) targetGuideId = match[1];
+        }
+
+        if (targetEventId) {
+          handleNavigate('events', { eventId: String(targetEventId) });
+        } else if (targetGuideId) {
+          handleNavigate('guides', { guideId: String(targetGuideId) });
+        } else if (targetProId) {
+          handleNavigate('explore', { proId: String(targetProId) });
+        } else if (launchUrl.includes('#events') || launchUrl.includes('events')) {
+          handleNavigate('events');
+        } else if (launchUrl.includes('#guides') || launchUrl.includes('guides')) {
+          handleNavigate('guides');
+        } else if (launchUrl.includes('#directory') || launchUrl.includes('explore')) {
+          handleNavigate('explore');
+        }
+      } catch (err) {
+        console.warn('Error handling onesignal notification click:', err);
+      }
+    };
+
+    window.addEventListener('onesignal:notification-clicked', handlePushClick);
+    return () => window.removeEventListener('onesignal:notification-clicked', handlePushClick);
+  }, []);
+
   const handleMarkChatAsRead = React.useCallback((chatId: string) => {
     setUnreadConversations(prev => {
       if (!prev.includes(chatId)) return prev;
@@ -4490,17 +4537,21 @@ export default function App() {
                 handleMarkAnnouncementAsRead(String(item.id));
                 setToastNotification(null);
                 
-                if (isRecommendProNotification(item)) {
+                if (isEventNotification(item)) {
+                  const targetEventId = extractEventIdFromNotification(item);
+                  handleNavigate('events', targetEventId ? { eventId: targetEventId } : undefined);
+                } else if (isGuideNotification(item)) {
+                  const targetGuideId = extractGuideIdFromNotification(item);
+                  handleNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
+                } else if (isProNotification(item)) {
+                  const targetProId = extractProIdFromNotification(item);
+                  handleNavigate('explore', targetProId ? { proId: targetProId } : undefined);
+                } else if (isRecommendProNotification(item)) {
                   if (!currentUser) {
                     handleNavigate('login');
                   } else {
                     setShowAddPro(true);
                   }
-                } else if (isGuideNotification(item)) {
-                  const targetGuideId = extractGuideIdFromNotification(item);
-                  handleNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
-                } else if (item.type === 'event') {
-                  handleNavigate('events', item.target_id ? { eventId: String(item.target_id) } : undefined);
                 } else if (item.type === 'chat' || item.type === 'message') {
                   handleNavigate('messages', item.target_id ? { chat: { id: String(item.target_id) } } : undefined);
                 } else if (item.type === 'marketplace' || item.type === 'ad') {
@@ -16565,7 +16616,7 @@ function computeProSearchScore(pro: any, searchStr: string): number {
     if (initialProId && allPros && allPros.length > 0) {
       const cleanId = extractCleanId(String(initialProId));
       if (!cleanId) return;
-      const pro = allPros.find(p => String(p.id) === cleanId);
+      const pro = allPros.find(p => String(p.id) === cleanId || (p.name && p.name.toLowerCase().includes(cleanId.toLowerCase())));
       if (pro) {
         // 1. Find pro's category and select it
         const proCats = [
@@ -16586,10 +16637,10 @@ function computeProSearchScore(pro: any, searchStr: string): number {
           setMapCenterTrigger(prev => prev + 1);
         }
 
-        // 3. Keep card non-opened and center view on it
-        setExpandedProId(null);
+        // 3. Open and expand targeted pro card
+        setExpandedProId(String(pro.id));
         setTimeout(() => {
-          scrollToPro(pro, false);
+          scrollToPro(pro, true);
         }, 250);
 
         // Clear initialProId from parent so subsequent navigations are clean
@@ -19821,7 +19872,19 @@ function EventsView({
 
   useEffect(() => {
     if (initialEventId && events.length > 0) {
-      setSelectedEventId(initialEventId);
+      const cleanId = String(initialEventId).trim();
+      const targetEvent = events.find(ev => 
+        String(ev.id).toLowerCase() === cleanId.toLowerCase() ||
+        (ev.title && ev.title.toLowerCase().includes(cleanId.toLowerCase()))
+      );
+      if (targetEvent) {
+        setSelectedEventId(String(targetEvent.id));
+        setSelectedCategory('all');
+        setDateFilter('all');
+        setSearchQuery('');
+      } else {
+        setSelectedEventId(cleanId);
+      }
     }
   }, [initialEventId, events]);
 
@@ -20786,6 +20849,7 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
         
       if (foundArticle) {
         setSelectedArticleId(foundArticle.id);
+        setShowArticleModal(true);
         if (selectedCategory && foundArticle.categoryId !== selectedCategory) {
           setSelectedCategory(null);
           setIsNavigatedMode(false);

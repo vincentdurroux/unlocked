@@ -14,6 +14,7 @@ import {
   ShieldCheck, 
   Star,
   ChevronDown,
+  User,
   UserPlus,
   ArrowRight,
   ExternalLink,
@@ -164,8 +165,72 @@ export function getInAppNotificationIconData(iconId?: string, type?: string) {
   return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'megaphone')!;
 }
 
+export function isProNotification(item?: InAppNotification | null): boolean {
+  if (!item) return false;
+  if (item.type === 'pro' || item.cta_type === 'pro') return true;
+  if (item.icon === 'star' && (item.target_id || (item.cta_link && item.cta_link.includes('proId=')))) return true;
+  if (item.cta_link && (item.cta_link.includes('proId=') || item.cta_link.includes('#directory') || item.cta_link.includes('#explore') || item.cta_link.includes('/pro/'))) return true;
+  if (item.pro_name) return true;
+  
+  const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
+  if (
+    (text.includes('pro:') || text.includes('top pro') || text.includes('nouveau pro') || text.includes('new pro')) && 
+    item.target_id && 
+    item.type !== 'recommendation_request'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function extractProIdFromNotification(item?: InAppNotification | null): string | undefined {
+  if (!item) return undefined;
+  if (item.target_id && (item.type === 'pro' || item.cta_type === 'pro' || item.icon === 'star' || item.pro_name)) {
+    return String(item.target_id).trim();
+  }
+  if (item.cta_link) {
+    const match = item.cta_link.match(/[?&]proId=([^&#]+)/) || item.cta_link.match(/\/pro\/([^/?#]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  if (item.type === 'pro' || item.cta_type === 'pro') {
+    if (item.target_id) return String(item.target_id).trim();
+  }
+  return undefined;
+}
+
+export function isEventNotification(item?: InAppNotification | null): boolean {
+  if (!item) return false;
+  if (item.type === 'event' || item.icon === 'event' || item.cta_type === 'event' || item.cta_type === 'weekend') return true;
+  if (item.cta_link && (item.cta_link.includes('event') || item.cta_link.includes('eventId='))) return true;
+  const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
+  if (text.includes('event') || text.includes('meetup') || text.includes('concert') || text.includes('festival') || text.includes('soirée') || text.includes('fête')) {
+    return true;
+  }
+  return false;
+}
+
+export function extractEventIdFromNotification(item?: InAppNotification | null): string | undefined {
+  if (!item) return undefined;
+  if (item.target_id && (item.type === 'event' || item.cta_type === 'event' || item.icon === 'event' || item.cta_type === 'weekend')) {
+    return String(item.target_id).trim();
+  }
+  if (item.cta_link) {
+    const match = item.cta_link.match(/[?&]eventId=([^&#]+)/) || item.cta_link.match(/\/events\/([^/?#]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  if (item.target_id && (item.type === 'event' || item.cta_type === 'event')) {
+    return String(item.target_id).trim();
+  }
+  return undefined;
+}
+
 export function isRecommendProNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
+  if (isProNotification(item)) return false;
   if (item.type === 'recommendation_request' || item.type === 'recommendation') return true;
   if (item.cta_type === 'recommend_pro') return true;
   if (item.icon === 'recommendation') return true;
@@ -189,9 +254,9 @@ export function isRecommendProNotification(item?: InAppNotification | null): boo
 
 export function isGuideNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
-  if (item.type === 'guide' || item.icon === 'guide') return true;
-  if (item.cta_type === 'guide') return true;
-  if (item.cta_link && (item.cta_link.includes('guide') || item.cta_link.includes('guides'))) return true;
+  if (item.type === 'guide' || item.type === 'article' || item.icon === 'guide') return true;
+  if (item.cta_type === 'guide' || item.cta_type === 'article') return true;
+  if (item.cta_link && (item.cta_link.includes('guide') || item.cta_link.includes('guides') || item.cta_link.includes('guideId='))) return true;
 
   const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
   if (
@@ -211,8 +276,8 @@ export function isGuideNotification(item?: InAppNotification | null): boolean {
 
 export function extractGuideIdFromNotification(item?: InAppNotification | null): string | undefined {
   if (!item) return undefined;
-  if (item.target_id && (item.type === 'guide' || item.icon === 'guide')) {
-    return String(item.target_id);
+  if (item.target_id && (item.type === 'guide' || item.type === 'article' || item.cta_type === 'guide' || item.cta_type === 'article' || item.icon === 'guide')) {
+    return String(item.target_id).trim();
   }
   
   // Check cta_link for guideId=... or /guides/...
@@ -514,37 +579,39 @@ export function InAppNotificationCenter({
                       key={String(item.id)}
                       onClick={() => {
                         onMarkAsRead(String(item.id));
-                        if (isRecommendProNotification(item)) {
-                          onClose();
+                        onClose();
+                        
+                        if (isEventNotification(item)) {
+                          const targetEventId = extractEventIdFromNotification(item);
+                          onNavigate?.('events', targetEventId ? { eventId: targetEventId } : undefined);
+                        } else if (isGuideNotification(item)) {
+                          const targetGuideId = extractGuideIdFromNotification(item);
+                          onNavigate?.('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
+                        } else if (isProNotification(item)) {
+                          const targetProId = extractProIdFromNotification(item);
+                          onNavigate?.('explore', targetProId ? { proId: targetProId } : undefined);
+                        } else if (isRecommendProNotification(item)) {
                           if (onAddPro) {
                             onAddPro();
                           } else if (onNavigate) {
                             onNavigate('explore');
                           }
-                        } else if (isGuideNotification(item)) {
-                          onClose();
-                          if (onNavigate) {
-                            const targetGuideId = extractGuideIdFromNotification(item);
-                            onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
-                          }
-                        } else if (item.type === 'event' && onNavigate) {
-                          onClose();
-                          onNavigate('events', item.target_id ? { eventId: String(item.target_id) } : undefined);
                         } else if ((item.type === 'chat' || item.type === 'message') && onNavigate) {
-                          onClose();
                           onNavigate('messages', item.target_id ? { chat: { id: String(item.target_id) } } : undefined);
                         } else if ((item.type === 'marketplace' || item.type === 'ad') && onNavigate) {
-                          onClose();
                           onNavigate('marketplace');
                         } else if (item.cta_link && onNavigate) {
-                          onClose();
                           if (item.cta_link.startsWith('http://') || item.cta_link.startsWith('https://')) {
                             window.open(item.cta_link, '_blank', 'noopener,noreferrer');
                           } else if (item.cta_link.includes('guide')) {
                             const targetGuideId = extractGuideIdFromNotification(item);
                             onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
                           } else if (item.cta_link.includes('event')) {
-                            onNavigate('events');
+                            const targetEventId = extractEventIdFromNotification(item);
+                            onNavigate('events', targetEventId ? { eventId: targetEventId } : undefined);
+                          } else if (item.cta_link.includes('proId=') || item.cta_link.includes('explore') || item.cta_link.includes('directory')) {
+                            const targetProId = extractProIdFromNotification(item);
+                            onNavigate('explore', targetProId ? { proId: targetProId } : undefined);
                           }
                         }
                       }}
@@ -592,8 +659,9 @@ export function InAppNotificationCenter({
 
                         {/* Interactive CTAs */}
                         <div className="flex items-center gap-2 mt-2">
-                          {(item.cta_type === 'recommend_pro' || isRecommendProNotification(item)) && onAddPro && (
+                          {(item.cta_type === 'recommend_pro' || (isRecommendProNotification(item) && !isProNotification(item))) && onAddPro && (
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onMarkAsRead(String(item.id));
@@ -607,13 +675,32 @@ export function InAppNotificationCenter({
                             </button>
                           )}
 
-                          {item.type === 'event' && onNavigate && (
+                          {isProNotification(item) && onNavigate && (
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onMarkAsRead(String(item.id));
                                 onClose();
-                                onNavigate('events', item.target_id ? { eventId: String(item.target_id) } : undefined);
+                                const targetProId = extractProIdFromNotification(item);
+                                onNavigate('explore', targetProId ? { proId: targetProId } : undefined);
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <User className="w-3 h-3" />
+                              <span>View pro</span>
+                            </button>
+                          )}
+
+                          {(item.type === 'event' || item.cta_type === 'event' || isEventNotification(item)) && onNavigate && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMarkAsRead(String(item.id));
+                                onClose();
+                                const targetEventId = extractEventIdFromNotification(item);
+                                onNavigate('events', targetEventId ? { eventId: targetEventId } : undefined);
                               }}
                               className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
                             >
@@ -622,8 +709,9 @@ export function InAppNotificationCenter({
                             </button>
                           )}
 
-                          {(item.type === 'guide' || isGuideNotification(item)) && onNavigate && (
+                          {(item.type === 'guide' || item.type === 'article' || item.cta_type === 'guide' || item.cta_type === 'article' || isGuideNotification(item)) && onNavigate && (
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onMarkAsRead(String(item.id));
@@ -640,6 +728,7 @@ export function InAppNotificationCenter({
 
                           {(item.type === 'chat' || item.type === 'message') && onNavigate && (
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onMarkAsRead(String(item.id));

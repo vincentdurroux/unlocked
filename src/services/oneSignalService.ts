@@ -14,6 +14,7 @@ class OneSignalService {
   private currentAppId = '';
   private subscriptionObservers = new Set<PushSubscriptionObserver>();
   private observerBound = false;
+  private clickListenerBound = false;
   private nativeSubscriptionId: string | null = null;
 
   constructor() {
@@ -286,6 +287,35 @@ class OneSignalService {
           });
         } catch (err) {
           console.warn('[OneSignal] Could not bind change event:', err);
+        }
+      }
+
+      if (!this.clickListenerBound) {
+        this.clickListenerBound = true;
+        try {
+          const windowOS = (window as any).OneSignal;
+          const notifHandler = (event: any) => {
+            try {
+              const notif = event?.notification;
+              const data = notif?.additionalData || {};
+              const launchUrl = notif?.launchUrl || data?.url;
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('onesignal:notification-clicked', {
+                  detail: { notification: notif, data, launchUrl }
+                }));
+              }
+            } catch (clickErr) {
+              console.warn('[OneSignal] Notification click handler error:', clickErr);
+            }
+          };
+
+          if (OneSignal.Notifications?.addEventListener) {
+            OneSignal.Notifications.addEventListener('click', notifHandler);
+          } else if (windowOS?.Notifications?.addEventListener) {
+            windowOS.Notifications.addEventListener('click', notifHandler);
+          }
+        } catch (err) {
+          console.warn('[OneSignal] Could not bind click event:', err);
         }
       }
 
@@ -770,7 +800,8 @@ class OneSignalService {
     url: string = '/',
     targetUserIds?: string[],
     targetSubscriptionIds?: string[],
-    imageUrl?: string
+    imageUrl?: string,
+    data?: Record<string, any>
   ): Promise<any> {
     const appId = this.getAppId();
     const res = await fetch('/api/send-push-notification', {
@@ -783,14 +814,15 @@ class OneSignalService {
         appId,
         targetUserIds,
         targetSubscriptionIds,
-        imageUrl
+        imageUrl,
+        data
       })
     });
-    const data = await res.json();
+    const jsonRes = await res.json();
     if (!res.ok) {
-      throw new Error(data.error || 'Erreur lors de l\'envoi de la notification push.');
+      throw new Error(jsonRes.error || 'Erreur lors de l\'envoi de la notification push.');
     }
-    return data;
+    return jsonRes;
   }
 }
 

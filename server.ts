@@ -1478,7 +1478,11 @@ Ensure each event contains:
         android_visibility: 1,
         android_accent_color: "2563EB",
         ios_badgeType: "Increase",
-        ios_badgeCount: 1
+        ios_badgeCount: 1,
+        data: {
+          url: url || "/",
+          ...(req.body?.data || {})
+        }
       };
 
       // Rich media image attachment for iOS, Android & Chrome Push Notifications

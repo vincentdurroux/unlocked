@@ -257,7 +257,12 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         url || '/',
         targetUserIds,
         undefined,
-        pushComposeModal.imageUrl
+        pushComposeModal.imageUrl,
+        {
+          type,
+          target_id: targetId,
+          url: url || '/'
+        }
       );
 
       const recipientCount = res?.recipients ?? res?.result?.recipients ?? (targetMode === 'specific' ? 1 : allUsersList.length || 1);
@@ -387,7 +392,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       body: bodyStr,
       targetMode: 'all',
       targetId: String(event.id),
-      url: '/#events',
+      url: `/?eventId=${event.id}#events`,
       imageUrl: '',
       entityName: event.title,
       previewDevice: 'ios'
@@ -404,7 +409,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       body: `${excerptStr} · Read the guide on Unlocked!`,
       targetMode: 'all',
       targetId: String(article.id),
-      url: '/#guides',
+      url: `/?guideId=${article.id}#guides`,
       imageUrl: '',
       entityName: article.title,
       previewDevice: 'ios'
@@ -422,7 +427,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       body: `${categoryStr}${locationStr} · Contact and reviews now available on Unlocked!`,
       targetMode: 'all',
       targetId: String(pro.id),
-      url: '/#directory',
+      url: `/?proId=${pro.id}#explore`,
       imageUrl: '',
       entityName: pro.full_name || pro.name,
       previewDevice: 'ios'
