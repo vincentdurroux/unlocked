@@ -1250,6 +1250,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {professionals
+                  .filter((p) => p.is_recommended !== false)
                   .filter((p) => {
                     if (!proSearch.trim()) return true;
                     const q = proSearch.toLowerCase();
