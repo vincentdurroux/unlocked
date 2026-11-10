@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Bell, 
   Send, 
@@ -1396,616 +1397,463 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       )}
 
       {/* GLOBAL PUSH COMPOSE, LIVE PREVIEW & EDITING MODAL */}
-      {pushComposeModal?.isOpen && (
-        <PushComposeModal
-          isOpen={pushComposeModal.isOpen}
-          initialData={pushComposeModal}
-          allUsersList={allUsersList}
-          isSendingPush={isSendingPush}
-          onClose={() => setPushComposeModal(null)}
-          onSend={async (formData) => {
-            setIsSendingPush(true);
-            try {
-              let targetUserIds: string[] | undefined = undefined;
-              let targetAudienceLabel = 'All Users';
-
-              if (formData.targetMode === 'specific' && formData.selectedUserId) {
-                targetUserIds = [formData.selectedUserId];
-                const userObj = allUsersList.find(u => u.id === formData.selectedUserId);
-                targetAudienceLabel = userObj ? (userObj.full_name || userObj.email || formData.selectedUserId) : formData.selectedUserId;
-              }
-
-              const res = await oneSignalService.sendServerNotification(
-                formData.title.trim(),
-                formData.body.trim(),
-                formData.url || '/',
-                targetUserIds,
-                undefined,
-                formData.imageUrl,
-                {
-                  type: formData.type,
-                  target_id: formData.targetId,
-                  url: formData.url || '/'
-                }
-              );
-
-              const recipientCount = res?.recipients ?? res?.result?.recipients ?? (formData.targetMode === 'specific' ? 1 : allUsersList.length || 1);
-
-              // Record in history log
-              savePushLogEntry({
-                title: formData.title.trim(),
-                body: formData.body.trim(),
-                type: formData.type,
-                target: targetAudienceLabel,
-                targetId: formData.targetId,
-                url: formData.url || '/',
-                recipientsCount: recipientCount,
-                status: 'sent'
-              });
-
-              // Save as in-app announcement so all users see it in header notification bell
-              try {
-                await onSaveAnnouncement({
-                  title: formData.title.trim(),
-                  content: formData.body.trim(),
-                  icon: formData.type === 'event' || formData.type === 'weekend' ? 'event' : formData.type === 'article' ? 'guide' : formData.type === 'pro' ? 'star' : 'megaphone',
-                  is_active: true,
-                  cta_type: formData.type,
-                  target_id: formData.targetId || null,
-                  cta_link: formData.url || '/'
-                });
-                if (onRefetchAnnouncements) {
-                  await onRefetchAnnouncements();
-                }
-              } catch (annErr) {
-                console.warn('Notice: announcement DB sync note:', annErr);
-              }
-
-              reloadPushLogs();
-              setMsg({ type: 'success', text: `🚀 Mobile Push Notification sent successfully! (${recipientCount} recipient${recipientCount > 1 ? 's' : ''})` });
-              setPushComposeModal(null);
-            } catch (err: any) {
-              console.error('Error sending push notification:', err);
-              savePushLogEntry({
-                title: formData.title.trim(),
-                body: formData.body.trim(),
-                type: formData.type,
-                target: formData.targetMode === 'specific' ? 'Specific User' : 'All Users',
-                targetId: formData.targetId,
-                url: formData.url || '/',
-                status: 'error',
-                errorMessage: err?.message || 'Push delivery failed'
-              });
-              reloadPushLogs();
-              setMsg({ type: 'error', text: err?.message || 'Error sending push notification.' });
-            } finally {
-              setIsSendingPush(false);
-            }
-          }}
-        />
-      )}
-    </div>
-  );
-};
-
-/* STANDALONE MEMOIZED PUSH COMPOSE MODAL (Prevents full AdminNotificationHub re-renders on keystroke and fixes mobile layout/freezing) */
-function PushComposeModal({
-  isOpen,
-  initialData,
-  allUsersList,
-  isSendingPush,
-  onClose,
-  onSend
-}: {
-  isOpen: boolean;
-  initialData: any;
-  allUsersList: any[];
-  isSendingPush: boolean;
-  onClose: () => void;
-  onSend: (data: any) => Promise<void>;
-}) {
-  const [title, setTitle] = useState(initialData?.title || '');
-  const [body, setBody] = useState(initialData?.body || '');
-  const [url, setUrl] = useState(initialData?.url || '/');
-  const [imageUrl, setImageUrl] = useState(initialData?.imageUrl || '');
-  const [targetMode, setTargetMode] = useState<'all' | 'specific'>(initialData?.targetMode || 'all');
-  const [selectedUserId, setSelectedUserId] = useState(initialData?.selectedUserId || '');
-  const [previewDevice, setPreviewDevice] = useState<'ios' | 'android' | 'in_app'>(initialData?.previewDevice || 'ios');
-  const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit');
-
-  if (!isOpen) return null;
-
-  return (
-    <AnimatePresence>
-      <div 
-        onClick={onClose}
-        className="fixed inset-0 z-[9999] bg-slate-950/85 sm:backdrop-blur-md flex flex-col justify-end sm:justify-center p-0 sm:p-4 overflow-hidden"
-      >
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 15 }}
-          transition={{ duration: 0.16, ease: "easeOut" }}
-          onClick={(e) => e.stopPropagation()}
-          className="bg-white rounded-t-[28px] sm:rounded-[32px] max-w-4xl w-full h-[92vh] sm:h-auto sm:max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 text-left relative overflow-hidden mx-auto"
-        >
-          {/* Fixed Header */}
-          <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white z-10">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
-                <Bell className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm sm:text-base font-bold text-slate-900 font-display flex items-center gap-1.5 truncate">
-                  Push Studio
-                  <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[9px] font-black uppercase border border-blue-200 shrink-0">
-                    Live
-                  </span>
-                </h3>
-                <p className="text-[11px] text-slate-500 font-medium truncate">
-                  {initialData?.entityName ? `Target: ${initialData.entityName}` : 'Custom Mobile Push'}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 sm:p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer shrink-0 ml-2"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Mobile Tab Selector (Visible only on small screens < lg) */}
-          <div className="flex lg:hidden border-b border-slate-100 bg-slate-50 p-1.5 gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={() => setMobileTab('edit')}
-              className={cn(
-                "flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-                mobileTab === 'edit'
-                  ? "bg-white text-blue-600 shadow-xs border border-blue-100"
-                  : "text-slate-500 hover:text-slate-800"
-              )}
-            >
-              <span>✍️ Edit Message</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileTab('preview')}
-              className={cn(
-                "flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer",
-                mobileTab === 'preview'
-                  ? "bg-white text-blue-600 shadow-xs border border-blue-100"
-                  : "text-slate-500 hover:text-slate-800"
-              )}
-            >
-              <span>📱 Live Preview</span>
-            </button>
-          </div>
-
-          {/* Scrollable Body Content */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              
-              {/* LEFT COLUMN: LIVE PREVIEW (Visible on lg, or on mobile when mobileTab === 'preview') */}
-              <div className={cn(
-                "lg:col-span-5 space-y-3.5 bg-slate-900/95 text-white p-4 sm:p-5 rounded-2xl border border-slate-800 shadow-xl",
-                mobileTab !== 'preview' && "hidden lg:block"
-              )}>
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-400" />
-                    <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-                      Live Preview
-                    </span>
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {pushComposeModal?.isOpen && (
+            <div className="fixed inset-0 z-[100000] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 pt-[calc(env(safe-area-inset-top,12px)+64px)] pb-[calc(env(safe-area-inset-bottom,12px)+76px)] sm:pt-6 sm:pb-6">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 10 }}
+                className="bg-white rounded-[28px] max-w-4xl w-full flex flex-col shadow-2xl border border-slate-100 text-left my-auto max-h-full overflow-hidden relative"
+              >
+                {/* Modal Header */}
+                <div className="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between shrink-0 bg-white rounded-t-[28px]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
+                      <Bell className="w-5 h-5 stroke-[2.2]" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 font-display flex items-center gap-2">
+                        Push Notification Studio
+                        <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black uppercase border border-blue-200">
+                          Live Visual Preview & Editor
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-500 font-medium">
+                        {pushComposeModal.entityName
+                          ? `Target: ${pushComposeModal.entityName}`
+                          : 'Custom mobile push broadcast'}
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Device Switcher */}
-                  <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-xl text-[10px] font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setPreviewDevice('ios')}
-                      className={cn(
-                        "px-2 py-1 rounded-lg transition-all cursor-pointer",
-                        previewDevice === 'ios' ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"
-                      )}
-                    >
-                      📱 iOS
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewDevice('android')}
-                      className={cn(
-                        "px-2 py-1 rounded-lg transition-all cursor-pointer",
-                        previewDevice === 'android' ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"
-                      )}
-                    >
-                      🤖 Android
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewDevice('in_app')}
-                      className={cn(
-                        "px-2 py-1 rounded-lg transition-all cursor-pointer",
-                        previewDevice === 'in_app' ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"
-                      )}
-                    >
-                      🔔 In-App
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPushComposeModal(null)}
+                    className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
-                {/* 1. iOS Lockscreen Preview */}
-                {previewDevice === 'ios' && (
-                  <div className="relative rounded-2xl bg-gradient-to-b from-purple-950 via-slate-950 to-purple-950 p-4 border border-purple-900/50 shadow-inner space-y-3 overflow-hidden select-none">
-                    <div className="flex items-center justify-between text-[10px] text-slate-300 font-medium px-1">
-                      <span>02:04</span>
-                      <div className="w-12 h-2.5 rounded-full bg-black/80 border border-slate-800 mx-auto" />
-                      <div className="flex items-center gap-1 text-[9px]">
-                        <span>5G</span>
-                        <span className="w-3.5 h-2 border border-slate-300 rounded-2xs inline-block bg-slate-200" />
-                      </div>
+                {/* Scrollable Modal Content */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 no-scrollbar">
+                  {/* Grid: Left Column (Live Visual Preview) & Right Column (Interactive Editor) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                {/* LEFT COLUMN: LIVE VISUAL PREVIEW ("Visuel") */}
+                <div className="lg:col-span-5 space-y-3.5 bg-slate-900/95 text-white p-4 sm:p-5 rounded-2xl border border-slate-800 shadow-xl">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                        Live Visual Preview
+                      </span>
                     </div>
 
-                    <div className="text-center py-1">
-                      <div className="text-[11px] font-medium text-slate-300 tracking-wide">Tue 3 Nov</div>
-                      <div className="text-3xl font-light tracking-tight text-purple-200">2:04</div>
-                    </div>
-
-                    <div className="bg-white/10 border border-white/20 p-3.5 rounded-2xl shadow-xl space-y-1.5 text-left relative overflow-hidden">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-md bg-white p-0.5 shadow-xs flex items-center justify-center shrink-0 border border-slate-200">
-                            <img src="/logo2.png" alt="" className="w-full h-full object-contain" />
-                          </div>
-                          <span className="font-bold text-white text-[11px] tracking-tight">
-                            {title || 'Notification Title'}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-300 font-medium">now</span>
-                      </div>
-
-                      <p className="text-xs text-slate-200 font-normal leading-relaxed break-words pl-7">
-                        {body || 'Message body text.'}
-                      </p>
-
-                      {imageUrl && (
-                        <div className="pt-1 pl-7">
-                          <img
-                            src={imageUrl}
-                            alt=""
-                            className="w-full h-24 rounded-xl object-cover border border-white/20 shadow-xs"
-                            onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                          />
-                        </div>
-                      )}
+                    {/* Preview Mode Switcher */}
+                    <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setPushComposeModal({ ...pushComposeModal, previewDevice: 'ios' })}
+                        className={cn(
+                          "px-2 py-1 rounded-lg transition-all cursor-pointer",
+                          (pushComposeModal.previewDevice || 'ios') === 'ios'
+                            ? "bg-blue-600 text-white shadow-xs"
+                            : "text-slate-400 hover:text-white"
+                        )}
+                      >
+                        📱 iOS
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPushComposeModal({ ...pushComposeModal, previewDevice: 'android' })}
+                        className={cn(
+                          "px-2 py-1 rounded-lg transition-all cursor-pointer",
+                          pushComposeModal.previewDevice === 'android'
+                            ? "bg-blue-600 text-white shadow-xs"
+                            : "text-slate-400 hover:text-white"
+                        )}
+                      >
+                        🤖 Android
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPushComposeModal({ ...pushComposeModal, previewDevice: 'in_app' })}
+                        className={cn(
+                          "px-2 py-1 rounded-lg transition-all cursor-pointer",
+                          pushComposeModal.previewDevice === 'in_app'
+                            ? "bg-blue-600 text-white shadow-xs"
+                            : "text-slate-400 hover:text-white"
+                        )}
+                      >
+                        🔔 In-App
+                      </button>
                     </div>
                   </div>
-                )}
 
-                {/* 2. Android Banner Preview */}
-                {previewDevice === 'android' && (
-                  <div className="relative rounded-2xl bg-slate-950 p-4 border border-slate-800 shadow-inner space-y-2 select-none">
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 pb-1">
-                      <span>Android Dropdown Banner</span>
-                      <span className="text-emerald-400 font-bold">● Live Preview</span>
-                    </div>
-
-                    <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl shadow-lg space-y-2 text-left">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] font-bold">
-                            U
-                          </div>
-                          <span className="font-semibold text-slate-300 text-[11px]">
-                            Unlocked Valencia
-                          </span>
-                          <span className="text-[10px] text-slate-500">• 1m</span>
+                  {/* 1. iOS LOCK SCREEN PREVIEW */}
+                  {(pushComposeModal.previewDevice || 'ios') === 'ios' && (
+                    <div className="relative rounded-2xl bg-gradient-to-b from-purple-950 via-slate-950 to-purple-950 p-4 border border-purple-900/50 shadow-inner space-y-3 overflow-hidden select-none">
+                      {/* Phone status bar */}
+                      <div className="flex items-center justify-between text-[10px] text-slate-300 font-medium px-1">
+                        <span>02:04</span>
+                        <div className="w-12 h-2.5 rounded-full bg-black/80 border border-slate-800 mx-auto" />
+                        <div className="flex items-center gap-1.5 text-[9px]">
+                          <span>5G</span>
+                          <span className="w-3.5 h-2 border border-slate-300 rounded-2xs inline-block relative bg-slate-200" />
                         </div>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-500 rotate-90" />
                       </div>
 
-                      <div className="flex items-start gap-2.5">
-                        <div className="min-w-0 flex-1 space-y-0.5">
-                          <h5 className="font-bold text-xs text-white break-words">
-                            {title || 'Notification Title'}
-                          </h5>
-                          <p className="text-xs text-slate-300 font-normal leading-normal break-words">
-                            {body || 'Message body text...'}
-                          </p>
+                      {/* Phone Clock widget (Matching user screenshot) */}
+                      <div className="text-center py-1">
+                        <div className="text-[11px] font-medium text-slate-300 tracking-wide">Tue 3 Nov</div>
+                        <div className="text-3xl font-light tracking-tight text-purple-200">2:04</div>
+                      </div>
+
+                      {/* Lockscreen Notification Glass Card (Sleek discreet native iOS style) */}
+                      <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-3.5 rounded-2xl shadow-xl space-y-1.5 text-left relative overflow-hidden">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-md bg-white p-0.5 shadow-xs flex items-center justify-center shrink-0 border border-slate-200">
+                              <img src="/logo2.png" alt="" className="w-full h-full object-contain" />
+                            </div>
+                            <span className="font-bold text-white text-[11px] tracking-tight">
+                              {pushComposeModal.title || 'Notification Title'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-300 font-medium">now</span>
                         </div>
-                        {imageUrl && (
-                          <img
-                            src={imageUrl}
-                            alt=""
-                            className="w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-800"
-                            onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                          />
+
+                        <p className="text-xs text-slate-200 font-normal leading-relaxed break-words pl-7">
+                          {pushComposeModal.body || 'Message body text.'}
+                        </p>
+
+                        {pushComposeModal.imageUrl && (
+                          <div className="pt-1 pl-7">
+                            <img
+                              src={pushComposeModal.imageUrl}
+                              alt=""
+                              className="w-full h-24 rounded-xl object-cover border border-white/20 shadow-xs"
+                              onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                            />
+                          </div>
                         )}
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* 3. In-App Bell Preview */}
-                {previewDevice === 'in_app' && (
-                  <div className="relative rounded-2xl bg-slate-100 p-3.5 border border-slate-300 text-slate-900 shadow-inner space-y-2 select-none">
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold px-1">
-                      <span>Header Bell Dropdown Preview</span>
-                      <span className="text-blue-600">Unread Badge</span>
+                  {/* 2. ANDROID BANNER PREVIEW */}
+                  {pushComposeModal.previewDevice === 'android' && (
+                    <div className="relative rounded-2xl bg-slate-950 p-4 border border-slate-800 shadow-inner space-y-2 select-none">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 pb-1">
+                        <span>Android Dropdown Banner</span>
+                        <span className="text-emerald-400 font-bold">● Live Preview</span>
+                      </div>
+
+                      <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl shadow-lg space-y-2 text-left">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] font-bold">
+                              U
+                            </div>
+                            <span className="font-semibold text-slate-300 text-[11px]">
+                              Unlocked Valencia
+                            </span>
+                            <span className="text-[10px] text-slate-500">• 1m</span>
+                          </div>
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-500 rotate-90" />
+                        </div>
+
+                        <div className="flex items-start gap-2.5">
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <h5 className="font-bold text-xs text-white break-words">
+                              {pushComposeModal.title || 'Notification Title'}
+                            </h5>
+                            <p className="text-xs text-slate-300 font-normal leading-normal break-words">
+                              {pushComposeModal.body || 'Message body text...'}
+                            </p>
+                          </div>
+                          {pushComposeModal.imageUrl && (
+                            <img
+                              src={pushComposeModal.imageUrl}
+                              alt=""
+                              className="w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-800"
+                              onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                            />
+                          )}
+                        </div>
+                      </div>
                     </div>
+                  )}
 
-                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-md space-y-2 text-left">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                          <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-extrabold uppercase border border-blue-100">
-                            {initialData?.type?.toUpperCase() || 'PUSH'}
+                  {/* 3. IN-APP BELL CENTER PREVIEW */}
+                  {pushComposeModal.previewDevice === 'in_app' && (
+                    <div className="relative rounded-2xl bg-slate-100 p-3.5 border border-slate-300 text-slate-900 shadow-inner space-y-2 select-none">
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold px-1">
+                        <span>Header Bell Dropdown Preview</span>
+                        <span className="text-blue-600">Unread Badge</span>
+                      </div>
+
+                      <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-md space-y-2 text-left">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-extrabold uppercase border border-blue-100">
+                              {pushComposeModal.type.toUpperCase()}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-medium">Just now</span>
+                        </div>
+
+                        <h5 className="font-bold text-xs text-slate-900 leading-snug break-words">
+                          {pushComposeModal.title || 'Notification Title'}
+                        </h5>
+                        <p className="text-xs text-slate-600 leading-relaxed break-words">
+                          {pushComposeModal.body || 'Message body text.'}
+                        </p>
+
+                        <div className="pt-1 flex justify-end">
+                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 flex items-center gap-1">
+                            Explore {pushComposeModal.url || '/'} →
                           </span>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-medium">Just now</span>
-                      </div>
-
-                      <h5 className="font-bold text-xs text-slate-900 leading-snug break-words">
-                        {title || 'Notification Title'}
-                      </h5>
-                      <p className="text-xs text-slate-600 leading-relaxed break-words">
-                        {body || 'Message body text.'}
-                      </p>
-
-                      <div className="pt-1 flex justify-end">
-                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 flex items-center gap-1">
-                          Explore {url || '/'} →
-                        </span>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-                  <span>Delivery Reach:</span>
-                  <span className="font-bold text-amber-400">
-                    {targetMode === 'specific' ? '🎯 Single Specific Member' : '📢 All Registered Members'}
-                  </span>
-                </div>
-              </div>
-
-              {/* RIGHT COLUMN: INTERACTIVE FORM EDITOR (Visible on lg, or on mobile when mobileTab === 'edit') */}
-              <div className={cn(
-                "lg:col-span-7 space-y-4",
-                mobileTab !== 'edit' && "hidden lg:block"
-              )}>
-                {/* Title Input */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                      Push Title <span className="text-rose-500">*</span>
-                    </label>
-                    <span className={cn(
-                      "text-[10px] font-mono font-bold px-2 py-0.5 rounded-md",
-                      title.length > 60 ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500"
-                    )}>
-                      {title.length} / 65 chars
+                  <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+                    <span>Delivery Reach:</span>
+                    <span className="font-bold text-amber-400">
+                      {pushComposeModal.targetMode === 'specific' ? '🎯 Single Specific Member' : '📢 All Registered Members'}
                     </span>
                   </div>
-
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. 🎉 Upcoming Event: Beach Sunset Session"
-                    className="w-full text-base sm:text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                  />
-
-                  {/* Title Presets */}
-                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Presets:</span>
-                    {['🎉 Event:', '📖 New Guide:', '✨ Pro Spotlight:', '⚡ Announcement:'].map((prefix) => (
-                      <button
-                        key={prefix}
-                        type="button"
-                        onClick={() => {
-                          const clean = title.replace(/^([🎉📖✨⚡]\s*[\w\s]+:\s*)?/, '');
-                          setTitle(`${prefix} ${clean}`.trim());
-                        }}
-                        className="px-2 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 text-[10px] font-bold rounded-lg border border-slate-200 transition-colors cursor-pointer"
-                      >
-                        {prefix}
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
-                {/* Message Body Input */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                      Message Body <span className="text-rose-500">*</span>
-                    </label>
-                    <span className={cn(
-                      "text-[10px] font-mono font-bold px-2 py-0.5 rounded-md",
-                      body.length > 140 ? "bg-amber-50 text-amber-600" : "bg-slate-100 text-slate-500"
-                    )}>
-                      {body.length} / 180 chars
-                    </span>
-                  </div>
+                {/* RIGHT COLUMN: INTERACTIVE EDITOR ("Edition") */}
+                <div className="lg:col-span-7 space-y-4">
+                  
+                  {/* Push Title Input & Presets */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                        Push Title <span className="text-rose-500">*</span>
+                      </label>
+                      <span className={cn(
+                        "text-[10px] font-mono font-bold px-2 py-0.5 rounded-md",
+                        pushComposeModal.title.length > 60 ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500"
+                      )}>
+                        {pushComposeModal.title.length} / 65 chars
+                      </span>
+                    </div>
 
-                  <textarea
-                    rows={3}
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    placeholder="Write your push notification message body here..."
-                    className="w-full text-base sm:text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all leading-relaxed"
-                  />
-                </div>
-
-                {/* Destination Link */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Target Destination Link / Route
-                  </label>
-                  <input
-                    type="text"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="e.g. /#events or /#directory or https://..."
-                    className="w-full text-base sm:text-xs px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-
-                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Quick Link Presets:</span>
-                    {[
-                      { label: '📅 Events', val: '/#events' },
-                      { label: '📖 Guides', val: '/#guides' },
-                      { label: '💼 Directory', val: '/#directory' },
-                      { label: '🛍️ Marketplace', val: '/#marketplace' }
-                    ].map((preset) => (
-                      <button
-                        key={preset.val}
-                        type="button"
-                        onClick={() => setUrl(preset.val)}
-                        className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-md transition-colors cursor-pointer"
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Image URL */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Thumbnail Image URL (Optional)
-                  </label>
-                  <div className="flex items-center gap-2">
                     <input
                       type="text"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://images.unsplash.com/photo-..."
-                      className="flex-1 text-base sm:text-xs px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      value={pushComposeModal.title}
+                      onChange={(e) => setPushComposeModal({ ...pushComposeModal, title: e.target.value })}
+                      placeholder="e.g. 🎉 Upcoming Event: Beach Sunset Session"
+                      className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
-                    {imageUrl && (
+
+                    {/* Quick Title Prefix Presets */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Presets:</span>
+                      {['🎉 Event:', '📖 New Guide:', '✨ Pro Spotlight:', '⚡ Announcement:'].map((prefix) => (
+                        <button
+                          key={prefix}
+                          type="button"
+                          onClick={() => {
+                            const clean = pushComposeModal.title.replace(/^([🎉📖✨⚡]\s*[\w\s]+:\s*)?/, '');
+                            setPushComposeModal({ ...pushComposeModal, title: `${prefix} ${clean}`.trim() });
+                          }}
+                          className="px-2 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 text-[10px] font-bold rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                        >
+                          {prefix}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Message Body Input */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                        Message Body <span className="text-rose-500">*</span>
+                      </label>
+                      <span className={cn(
+                        "text-[10px] font-mono font-bold px-2 py-0.5 rounded-md",
+                        pushComposeModal.body.length > 140 ? "bg-amber-50 text-amber-600" : "bg-slate-100 text-slate-500"
+                      )}>
+                        {pushComposeModal.body.length} / 180 chars
+                      </span>
+                    </div>
+
+                    <textarea
+                      rows={3}
+                      value={pushComposeModal.body}
+                      onChange={(e) => setPushComposeModal({ ...pushComposeModal, body: e.target.value })}
+                      placeholder="Write your push notification message body here..."
+                      className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Destination Link / URL */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      Target Destination Link / Route
+                    </label>
+                    <input
+                      type="text"
+                      value={pushComposeModal.url || ''}
+                      onChange={(e) => setPushComposeModal({ ...pushComposeModal, url: e.target.value })}
+                      placeholder="e.g. /#events or /#directory or https://..."
+                      className="w-full text-xs px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+
+                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Quick Link Presets:</span>
+                      {[
+                        { label: '📅 Events', val: '/#events' },
+                        { label: '📖 Guides', val: '/#guides' },
+                        { label: '💼 Directory', val: '/#directory' },
+                        { label: '🛍️ Marketplace', val: '/#marketplace' }
+                      ].map((preset) => (
+                        <button
+                          key={preset.val}
+                          type="button"
+                          onClick={() => setPushComposeModal({ ...pushComposeModal, url: preset.val })}
+                          className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-md transition-colors cursor-pointer"
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Thumbnail Image URL */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      Thumbnail Image URL (Optional)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={pushComposeModal.imageUrl || ''}
+                        onChange={(e) => setPushComposeModal({ ...pushComposeModal, imageUrl: e.target.value })}
+                        placeholder="https://images.unsplash.com/photo-..."
+                        className="flex-1 text-xs px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                      {pushComposeModal.imageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setPushComposeModal({ ...pushComposeModal, imageUrl: '' })}
+                          className="px-2.5 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                          title="Remove Image"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Target Audience */}
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      Target Audience
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => setImageUrl('')}
-                        className="px-2.5 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-bold cursor-pointer transition-colors"
-                        title="Remove Image"
+                        onClick={() => setPushComposeModal({ ...pushComposeModal, targetMode: 'all' })}
+                        className={cn(
+                          "p-2.5 rounded-xl text-xs font-bold border text-left cursor-pointer transition-all flex items-center justify-between",
+                          pushComposeModal.targetMode === 'all'
+                            ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20"
+                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                        )}
                       >
-                        Clear
+                        <span>📢 All App Subscribers</span>
+                        {pushComposeModal.targetMode === 'all' && <Check className="w-4 h-4" />}
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPushComposeModal({ ...pushComposeModal, targetMode: 'specific' })}
+                        className={cn(
+                          "p-2.5 rounded-xl text-xs font-bold border text-left cursor-pointer transition-all flex items-center justify-between",
+                          pushComposeModal.targetMode === 'specific'
+                            ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20"
+                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                        )}
+                      >
+                        <span>🎯 Specific Member Only</span>
+                        {pushComposeModal.targetMode === 'specific' && <Check className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {pushComposeModal.targetMode === 'specific' && (
+                      <select
+                        value={pushComposeModal.selectedUserId || ''}
+                        onChange={(e) => setPushComposeModal({ ...pushComposeModal, selectedUserId: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="">-- Select target member ({allUsersList.length} members) --</option>
+                        {allUsersList.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.full_name || 'Member'} — {u.email || u.id}
+                          </option>
+                        ))}
+                      </select>
                     )}
                   </div>
                 </div>
+              </div>
+            </div>
 
-                {/* Target Audience */}
-                <div className="space-y-1.5 pt-1">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Target Audience
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setTargetMode('all')}
-                      className={cn(
-                        "p-2.5 rounded-xl text-xs font-bold border text-left cursor-pointer transition-all flex items-center justify-between",
-                        targetMode === 'all'
-                          ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20"
-                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                      )}
-                    >
-                      <span>📢 All App Subscribers</span>
-                      {targetMode === 'all' && <Check className="w-4 h-4" />}
-                    </button>
+            {/* Fixed Modal Footer */}
+              <div className="p-4 sm:p-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 bg-slate-50/80 rounded-b-[28px]">
+                <div className="text-xs text-slate-500 font-medium flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>Dispatched via OneSignal Push & recorded in Header Bell notifications.</span>
+                </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setTargetMode('specific')}
-                      className={cn(
-                        "p-2.5 rounded-xl text-xs font-bold border text-left cursor-pointer transition-all flex items-center justify-between",
-                        targetMode === 'specific'
-                          ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20"
-                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                      )}
-                    >
-                      <span>🎯 Specific Member Only</span>
-                      {targetMode === 'specific' && <Check className="w-4 h-4" />}
-                    </button>
-                  </div>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <button
+                    type="button"
+                    disabled={isSendingPush}
+                    onClick={() => setPushComposeModal(null)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
 
-                  {targetMode === 'specific' && (
-                    <select
-                      value={selectedUserId}
-                      onChange={(e) => setSelectedUserId(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base sm:text-xs font-semibold text-slate-800 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option value="">-- Select target member ({allUsersList.length} members) --</option>
-                      {allUsersList.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.full_name || 'Member'} — {u.email || u.id}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                  <button
+                    type="button"
+                    disabled={isSendingPush || !pushComposeModal.title.trim() || !pushComposeModal.body.trim()}
+                    onClick={handleExecuteSendPush}
+                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-95 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-600/25 flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-all"
+                  >
+                    {isSendingPush ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Sending Push...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        <span>Dispatch Push Now</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
-
-            </div>
+            </motion.div>
           </div>
-
-          {/* Sticky Bottom Actions Bar */}
-          <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 bg-white flex items-center justify-between gap-3 shrink-0 z-10 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
-            <div className="hidden sm:flex text-[11px] text-slate-500 font-medium items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-              <span>Dispatched via OneSignal Push & recorded in Bell notifications.</span>
-            </div>
-
-            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-              <button
-                type="button"
-                disabled={isSendingPush}
-                onClick={onClose}
-                className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl cursor-pointer transition-colors text-center"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                disabled={isSendingPush || !title.trim() || !body.trim()}
-                onClick={() => {
-                  onSend({
-                    title,
-                    body,
-                    url,
-                    imageUrl,
-                    targetMode,
-                    selectedUserId,
-                    type: initialData?.type || 'custom',
-                    targetId: initialData?.targetId
-                  });
-                }}
-                className="flex-1 sm:flex-none px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-95 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md shadow-blue-600/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-all text-center"
-              >
-                {isSendingPush ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Sending...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>Dispatch Push Now</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    </AnimatePresence>
-  );
-}
+        )}
+      </AnimatePresence>,
+      document.body
+    )}
+  </div>
+);
+};
