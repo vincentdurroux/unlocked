@@ -1398,25 +1398,29 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       {/* GLOBAL PUSH COMPOSE, LIVE PREVIEW & EDITING MODAL */}
       <AnimatePresence>
         {pushComposeModal?.isOpen && (
-          <div className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div 
+            onClick={() => setPushComposeModal(null)}
+            className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+          >
             <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 10 }}
-              style={{ marginTop: 'env(safe-area-inset-top, 20px)', marginBottom: 'env(safe-area-inset-bottom, 20px)' }}
-              className="bg-white rounded-[32px] max-w-4xl w-full p-5 sm:p-7 shadow-2xl border border-slate-100 space-y-6 text-left my-auto modal-container max-h-[85vh] overflow-y-auto no-scrollbar relative"
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-[28px] sm:rounded-[32px] max-w-4xl w-full h-[90vh] sm:max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 text-left my-auto relative overflow-hidden"
             >
-              {/* Modal Header */}
-              <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              {/* Modal Header (Fixed) */}
+              <div className="px-5 sm:px-7 pt-5 sm:pt-6 pb-4 border-b border-slate-100 flex items-start justify-between shrink-0 bg-white z-10">
                 <div className="flex items-center gap-3">
                   <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
                     <Bell className="w-5 h-5 stroke-[2.2]" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900 font-display flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 font-display flex items-center gap-2 flex-wrap">
                       Push Notification Studio
-                      <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black uppercase border border-blue-200">
-                        Live Visual Preview & Editor
+                      <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black uppercase border border-blue-200">
+                        Live Preview
                       </span>
                     </h3>
                     <p className="text-xs text-slate-500 font-medium">
@@ -1430,14 +1434,16 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                 <button
                   type="button"
                   onClick={() => setPushComposeModal(null)}
-                  className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                  className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer shrink-0"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Grid: Left Column (Live Visual Preview) & Right Column (Interactive Editor) */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Scrollable Body */}
+              <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-6">
+                {/* Grid: Left Column (Live Visual Preview) & Right Column (Interactive Editor) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 
                 {/* LEFT COLUMN: LIVE VISUAL PREVIEW ("Visuel") */}
                 <div className="lg:col-span-5 space-y-3.5 bg-slate-900/95 text-white p-4 sm:p-5 rounded-2xl border border-slate-800 shadow-xl">
@@ -1806,10 +1812,11 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Bottom Actions Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
-                <div className="text-xs text-slate-500 font-medium flex items-center gap-2">
+              {/* Bottom Actions Bar (Fixed Footer) */}
+              <div className="px-5 sm:px-7 py-4 border-t border-slate-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 z-10">
+                <div className="text-[11px] text-slate-500 font-medium flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                   <span>Dispatched via OneSignal Push & recorded in Header Bell notifications.</span>
                 </div>
