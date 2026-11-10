@@ -375,10 +375,13 @@ export function extractCleanId(raw: string | null | undefined): string | null {
   // 1. Check if contains a UUID
   const uuidMatch = decoded.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
   if (uuidMatch) return uuidMatch[0];
-  // 2. Check if starts with numeric ID
+  // 2. Strip standard prefixes like evt-123, pro-123, guide-123, rec-123
+  const prefixedMatch = decoded.match(/^(?:evt|pro|guide|rec|ad|chat)-(.+)/i);
+  if (prefixedMatch && prefixedMatch[1]) return prefixedMatch[1].trim();
+  // 3. Check if starts with numeric ID
   const numMatch = decoded.match(/^\d+/);
   if (numMatch) return numMatch[0];
-  // 3. Fallback: take the first token before whitespace or newline
+  // 4. Fallback: take the first token before whitespace or newline
   const token = decoded.split(/[\s\r\n]+/)[0];
   return token || null;
 }

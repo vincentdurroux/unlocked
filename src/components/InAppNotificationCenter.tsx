@@ -167,16 +167,16 @@ export function getInAppNotificationIconData(iconId?: string, type?: string) {
 
 export function isProNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
+  if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
+  if (item.type === 'recommendation_request' || item.type === 'recommendation') return false;
   if (item.type === 'pro' || item.cta_type === 'pro') return true;
   if (item.icon === 'star' && (item.target_id || (item.cta_link && item.cta_link.includes('proId=')))) return true;
   if (item.cta_link && (item.cta_link.includes('proId=') || item.cta_link.includes('#directory') || item.cta_link.includes('#explore') || item.cta_link.includes('/pro/'))) return true;
-  if (item.pro_name) return true;
   
   const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
   if (
     (text.includes('pro:') || text.includes('top pro') || text.includes('nouveau pro') || text.includes('new pro')) && 
-    item.target_id && 
-    item.type !== 'recommendation_request'
+    item.target_id
   ) {
     return true;
   }
@@ -185,23 +185,27 @@ export function isProNotification(item?: InAppNotification | null): boolean {
 
 export function extractProIdFromNotification(item?: InAppNotification | null): string | undefined {
   if (!item) return undefined;
-  if (item.target_id && (item.type === 'pro' || item.cta_type === 'pro' || item.icon === 'star' || item.pro_name)) {
-    return String(item.target_id).trim();
-  }
   if (item.cta_link) {
     const match = item.cta_link.match(/[?&]proId=([^&#]+)/) || item.cta_link.match(/\/pro\/([^/?#]+)/);
     if (match && match[1]) {
       return match[1];
     }
   }
-  if (item.type === 'pro' || item.cta_type === 'pro') {
-    if (item.target_id) return String(item.target_id).trim();
+  if (item.target_id) {
+    const str = String(item.target_id).trim();
+    if (str && !str.startsWith('push_log_') && !str.startsWith('rec-')) {
+      return str;
+    }
+  }
+  if (item.pro_name && !item.pro_name.toLowerCase().includes('member') && !item.pro_name.toLowerCase().includes('community')) {
+    return item.pro_name;
   }
   return undefined;
 }
 
 export function isEventNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
+  if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
   if (item.type === 'event' || item.icon === 'event' || item.cta_type === 'event' || item.cta_type === 'weekend') return true;
   if (item.cta_link && (item.cta_link.includes('event') || item.cta_link.includes('eventId='))) return true;
   const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
@@ -213,23 +217,27 @@ export function isEventNotification(item?: InAppNotification | null): boolean {
 
 export function extractEventIdFromNotification(item?: InAppNotification | null): string | undefined {
   if (!item) return undefined;
-  if (item.target_id && (item.type === 'event' || item.cta_type === 'event' || item.icon === 'event' || item.cta_type === 'weekend')) {
-    return String(item.target_id).trim();
-  }
   if (item.cta_link) {
     const match = item.cta_link.match(/[?&]eventId=([^&#]+)/) || item.cta_link.match(/\/events\/([^/?#]+)/);
     if (match && match[1]) {
       return match[1];
     }
   }
-  if (item.target_id && (item.type === 'event' || item.cta_type === 'event')) {
-    return String(item.target_id).trim();
+  if (item.target_id) {
+    const str = String(item.target_id).trim();
+    if (str && !str.startsWith('push_log_')) {
+      return str;
+    }
+  }
+  if (item.title && item.title.toLowerCase() !== 'announcement' && item.title.toLowerCase() !== 'notification') {
+    return item.title;
   }
   return undefined;
 }
 
 export function isRecommendProNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
+  if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
   if (isProNotification(item)) return false;
   if (item.type === 'recommendation_request' || item.type === 'recommendation') return true;
   if (item.cta_type === 'recommend_pro') return true;
@@ -254,6 +262,7 @@ export function isRecommendProNotification(item?: InAppNotification | null): boo
 
 export function isGuideNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
+  if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
   if (item.type === 'guide' || item.type === 'article' || item.icon === 'guide') return true;
   if (item.cta_type === 'guide' || item.cta_type === 'article') return true;
   if (item.cta_link && (item.cta_link.includes('guide') || item.cta_link.includes('guides') || item.cta_link.includes('guideId='))) return true;
