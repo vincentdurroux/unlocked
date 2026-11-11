@@ -405,13 +405,18 @@ export function InAppNotificationCenter({
   // Filter out dismissed notifications, strictly empty for guests, and exclude pre-registration items
   const activeNotifications = useMemo(() => {
     if (isUserNotSignedIn) return [];
+    
+    // Admins see everything
+    const isAdmin = currentUser?.user_metadata?.is_admin || (currentUser as any)?.is_admin || false;
+
     return (announcements || []).filter(item => {
       if (!item || dismissedIds.includes(String(item.id))) return false;
       // Chat messages are addressed directly to this member
       if (item.type === 'chat' || String(item.id).startsWith('chat-')) return true;
 
       // Filter out notifications sent prior to user account registration
-      if (userRegistrationTimestamp > 0 && userRegistrationTimestamp !== Infinity) {
+      // Exception: Administrators see all history
+      if (!isAdmin && userRegistrationTimestamp > 0 && userRegistrationTimestamp !== Infinity) {
         const itemTimeStr = item.created_at || (item as any).updated_at || (item as any).timestamp;
         if (itemTimeStr) {
           const itemTime = new Date(itemTimeStr).getTime();
@@ -422,7 +427,7 @@ export function InAppNotificationCenter({
       }
       return true;
     });
-  }, [announcements, dismissedIds, isUserNotSignedIn, userRegistrationTimestamp]);
+  }, [announcements, dismissedIds, isUserNotSignedIn, userRegistrationTimestamp, currentUser]);
 
   // Determine unread status per item
   const isItemUnread = (item: InAppNotification) => {

@@ -81,13 +81,36 @@ export async function savePushLogEntry(entry: Omit<PushLogEntry, 'id' | 'timesta
       const iconTag = `[icon:${entry.type === 'event' || entry.type === 'weekend' ? 'event' : entry.type === 'article' ? 'guide' : entry.type === 'pro' ? 'star' : 'megaphone'}]`;
       const titleTag = entry.title ? `[${entry.title}] ` : '';
       const content = `${iconTag}${titleTag}${entry.body}`;
-      await supabase.from('announcements').insert([{
+      
+      let payload: any = {
         content,
         is_active: true,
         cta_type: entry.type,
+        cta_link: entry.url || null,
+        target_id: entry.targetId || null,
         created_at: newEntry.timestamp,
         updated_at: newEntry.timestamp
-      }]);
+      };
+
+      // Resilient insert: retry without specific columns if they don't exist in Supabase yet
+      const maxRetries = 3;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const { error } = await supabase.from('announcements').insert([payload]);
+          if (error) throw error;
+          break; // Success
+        } catch (err: any) {
+          const errMsg = err?.message || JSON.stringify(err);
+          const match = errMsg.match(/Could not find the '([^']+)' column/i);
+          if (match && match[1] && match[1] in payload) {
+            console.warn(`[Sync] Removing missing column '${match[1]}' from announcements sync payload`);
+            delete payload[match[1]];
+            continue;
+          }
+          console.warn('[Sync] Non-fatal announcements sync error:', err);
+          break;
+        }
+      }
     } catch (err) {
       console.warn('Could not sync push log to Supabase announcements:', err);
     }

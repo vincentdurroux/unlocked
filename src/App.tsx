@@ -1892,6 +1892,7 @@ function FeedbackReferralSection({ currentUser, userProfile, onProfileUpdate }: 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
+  const isAdmin = proService.isAdmin(currentUser?.email || "") || userProfile?.is_admin;
 
   useEffect(() => {
     const lockOrientation = async () => {
@@ -2930,37 +2931,12 @@ export default function App() {
         }
       }
 
-      // 4. Merge sent push notifications from Admin Announce hub
-      try {
-        const pushLogs = getPushLogs();
-        const existingKeys = new Set(list.map(item => `${(item.title || '').trim()}|${(item.content || '').trim()}`));
-        
-        for (const log of pushLogs) {
-          if (log.status !== 'sent') continue;
-          const key = `${(log.title || '').trim()}|${(log.body || '').trim()}`;
-          if (!existingKeys.has(key)) {
-            existingKeys.add(key);
-            list.push({
-              id: log.id,
-              title: log.title,
-              content: log.body,
-              created_at: log.timestamp || new Date().toISOString(),
-              type: log.type === 'article' ? 'guide' : log.type,
-              icon: log.type === 'event' || log.type === 'weekend' ? 'event' : log.type === 'article' ? 'guide' : log.type === 'pro' ? 'star' : 'megaphone',
-              target_id: log.targetId,
-              cta_type: log.type,
-              cta_link: log.url,
-              is_active: true
-            });
-          }
-        }
-      } catch (pushLogErr) {
-        console.warn('Error reading push logs in notification center:', pushLogErr);
-      }
+
 
       // 5. REQUIREMENT: Filter notifications to ONLY include those sent AFTER or AT the moment the user registered
+      // Exception: Administrators see all history for debugging and verification purposes
       const userRegistrationDateStr = currentUser.created_at || userProfile?.created_at || (currentUser.user_metadata as any)?.created_at;
-      if (userRegistrationDateStr) {
+      if (userRegistrationDateStr && !isAdmin) {
         const userRegistrationTimestamp = new Date(userRegistrationDateStr).getTime();
         if (!isNaN(userRegistrationTimestamp) && userRegistrationTimestamp > 0) {
           list = list.filter(item => {
@@ -2970,9 +2946,9 @@ export default function App() {
               return true;
             }
             const itemDateStr = item.created_at || item.updated_at || item.timestamp;
-            if (!itemDateStr) return false;
+            if (!itemDateStr) return true; // Keep if no date available
             const itemTimestamp = new Date(itemDateStr).getTime();
-            if (isNaN(itemTimestamp)) return false;
+            if (isNaN(itemTimestamp)) return true; // Keep if date is unparseable
             // Only keep notifications created/sent on or after user registration
             return itemTimestamp >= userRegistrationTimestamp;
           });
@@ -3045,6 +3021,16 @@ export default function App() {
     const pollInterval = setInterval(() => {
       console.log('Realtime: polling...');
       fetchAnnouncementsFromDb();
+      
+      // Refresh user metadata periodically to sync read/dismissed status across devices
+      if (currentUser?.id) {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (user) {
+            console.log('Realtime: refreshed user metadata');
+            setCurrentUser(user);
+          }
+        }).catch(() => {});
+      }
     }, 30000);
 
     return () => {
@@ -4130,7 +4116,7 @@ export default function App() {
     }
   };
 
-  const isAdmin = proService.isAdmin(currentUser?.email || "") || userProfile?.is_admin;
+
 
   const handleContactAdmin = async () => {
     if (!currentUser) {
