@@ -140,6 +140,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     imageUrl?: string;
     entityName?: string;
     previewDevice?: 'ios' | 'android' | 'in_app';
+    channels?: ('ios' | 'android' | 'web')[];
   } | null>(null);
 
   const [isSendingPush, setIsSendingPush] = useState(false);
@@ -244,12 +245,16 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     setIsSendingPush(true);
     try {
       let targetUserIds: string[] | undefined = undefined;
+      let targetSubscriptionIds: string[] | undefined = undefined;
       let targetAudienceLabel = 'All Users';
 
       if (targetMode === 'specific' && selectedUserId) {
         targetUserIds = [selectedUserId];
         const userObj = allUsersList.find(u => u.id === selectedUserId);
         targetAudienceLabel = userObj ? (userObj.full_name || userObj.email || selectedUserId) : selectedUserId;
+        if (userObj?.onesignal_player_id) {
+          targetSubscriptionIds = [userObj.onesignal_player_id];
+        }
       }
 
       const res = await oneSignalService.sendServerNotification(
@@ -257,13 +262,14 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         body.trim(),
         url || '/',
         targetUserIds,
-        undefined,
+        targetSubscriptionIds,
         pushComposeModal.imageUrl,
         {
           type,
           target_id: targetId,
           url: url || '/'
-        }
+        },
+        pushComposeModal.channels || ['ios', 'android']
       );
 
       const recipientCount = res?.recipients ?? res?.result?.recipients ?? (targetMode === 'specific' ? 1 : allUsersList.length || 1);
@@ -338,12 +344,16 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
 
       if (annSendPush) {
         let targetUserIds: string[] | undefined = undefined;
+        let targetSubscriptionIds: string[] | undefined = undefined;
         let targetLabel = 'All Users';
 
         if (annPushTarget === 'specific' && annPushUserId) {
           targetUserIds = [annPushUserId];
           const u = allUsersList.find(x => x.id === annPushUserId);
           targetLabel = u ? (u.full_name || u.email || annPushUserId) : annPushUserId;
+          if (u?.onesignal_player_id) {
+            targetSubscriptionIds = [u.onesignal_player_id];
+          }
         }
 
         try {
@@ -351,7 +361,11 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             annTitle.trim() || 'Unlocked Valencia 🌴',
             annContent.trim(),
             '/',
-            targetUserIds
+            targetUserIds,
+            targetSubscriptionIds,
+            undefined,
+            undefined,
+            ['ios', 'android']
           );
 
           savePushLogEntry({
@@ -1801,11 +1815,59 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                         <option value="">-- Select target member ({allUsersList.length} members) --</option>
                         {allUsersList.map((u) => (
                           <option key={u.id} value={u.id}>
-                            {u.full_name || 'Member'} — {u.email || u.id}
+                            {u.full_name || 'Member'} — {u.email || u.id} {u.onesignal_player_id ? '📱 (Mobile Token Linked)' : ''}
                           </option>
                         ))}
                       </select>
                     )}
+                  </div>
+
+                  {/* Delivery Channels */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                        Delivery Channels
+                      </label>
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                        📱 iOS APNs Priority
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'ios' as const, label: ' iPhone / iPad', desc: 'Apple APNs native' },
+                        { id: 'android' as const, label: '🤖 Android App', desc: 'Google Play native' },
+                        { id: 'web' as const, label: '🌐 Web Push', desc: 'Desktop Browsers' }
+                      ].map((chan) => {
+                        const active = (pushComposeModal.channels || ['ios', 'android']).includes(chan.id);
+                        return (
+                          <button
+                            key={chan.id}
+                            type="button"
+                            onClick={() => {
+                              const current = pushComposeModal.channels || ['ios', 'android'];
+                              const next = active
+                                ? current.filter(c => c !== chan.id)
+                                : [...current, chan.id];
+                              if (next.length > 0) {
+                                setPushComposeModal({ ...pushComposeModal, channels: next });
+                              }
+                            }}
+                            className={cn(
+                              "p-2 rounded-xl text-left border transition-all cursor-pointer flex flex-col",
+                              active 
+                                ? "bg-blue-50/80 border-blue-500 text-blue-900 shadow-sm" 
+                                : "bg-slate-50 border-slate-200 text-slate-500 opacity-60 hover:opacity-100"
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold">{chan.label}</span>
+                              {active && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                            </div>
+                            <span className="text-[10px] text-slate-500">{chan.desc}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>

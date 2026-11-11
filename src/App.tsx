@@ -7931,12 +7931,19 @@ function AdminView({
           const targetUserIds = (annPushTargetMode === 'specific' && annPushSelectedUserId)
             ? [annPushSelectedUserId]
             : undefined;
+          const targetUser = (annPushTargetMode === 'specific' && annPushSelectedUserId)
+            ? allUsersList.find(u => u.id === annPushSelectedUserId)
+            : null;
+          const targetSubscriptionIds = targetUser?.onesignal_player_id
+            ? [targetUser.onesignal_player_id]
+            : undefined;
 
           await oneSignalService.sendServerNotification(
             annFormTitle.trim() || 'Unlocked Valencia',
             annFormContent.trim(),
             '/',
-            targetUserIds
+            targetUserIds,
+            targetSubscriptionIds
           );
           pushSuccess = true;
         } catch (pushErr: any) {
@@ -8001,7 +8008,7 @@ function AdminView({
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email, avatar_url')
+        .select('id, full_name, email, avatar_url, onesignal_player_id')
         .order('full_name', { ascending: true });
       if (!error && data) {
         setAllUsersList(data);
@@ -8028,12 +8035,16 @@ function AdminView({
     try {
       const recipient = allUsersList.find(u => u.id === directPushTargetUserId);
       const recipientName = recipient?.full_name || recipient?.email || 'Member';
+      const targetSubscriptionIds = recipient?.onesignal_player_id
+        ? [recipient.onesignal_player_id]
+        : undefined;
 
       await oneSignalService.sendServerNotification(
         directPushTitle.trim() || 'Unlocked Valencia',
         directPushMessage.trim(),
         directPushUrl.trim() || '/',
-        [directPushTargetUserId]
+        [directPushTargetUserId],
+        targetSubscriptionIds
       );
 
       setMsg({

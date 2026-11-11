@@ -17,32 +17,77 @@ class OneSignalService {
   private clickListenerBound = false;
   private nativeSubscriptionId: string | null = null;
 
+  private currentUserId: string | null = null;
+
   constructor() {
     if (typeof window !== 'undefined') {
       const windowAny = window as any;
       windowAny.setNativeOneSignalSubscriptionId = (id: string) => {
         if (id && typeof id === 'string') {
-          this.nativeSubscriptionId = id;
-          this.notifyObservers(id);
-          console.log('[OneSignal] Native iOS subscription ID registered:', id);
+          this.handleNativeSubscriptionReceived(id.trim());
         }
       };
 
       window.addEventListener('OneSignalSubscriptionReady', (e: any) => {
         const id = e.detail?.id || e.detail?.subscriptionId || e.detail?.playerId;
         if (id) {
-          this.nativeSubscriptionId = id;
-          this.notifyObservers(id);
+          this.handleNativeSubscriptionReceived(String(id).trim());
         }
       });
 
       window.addEventListener('native-onesignal-subscription', (e: any) => {
         const id = e.detail?.id || e.detail?.subscriptionId || e.detail?.playerId;
         if (id) {
-          this.nativeSubscriptionId = id;
-          this.notifyObservers(id);
+          this.handleNativeSubscriptionReceived(String(id).trim());
         }
       });
+    }
+  }
+
+  /**
+   * Handle incoming native device push token / subscription ID from iOS / Android wrappers
+   */
+  async handleNativeSubscriptionReceived(id: string): Promise<void> {
+    if (!id) return;
+    this.nativeSubscriptionId = id;
+    console.log('[OneSignal] Native push subscription ID registered:', id);
+    this.notifyObservers(id);
+
+    const dev = this.getDeviceInfo();
+    const nativeTags: Record<string, string> = {
+      platform: dev.isIOS ? 'ios' : dev.isAndroid ? 'android' : 'mobile',
+      is_mobile: 'true',
+      app_channel: dev.isIOS ? 'pushApp_ios' : 'pushApp_android',
+      is_standalone: 'true'
+    };
+
+    // Apply tags directly to OneSignal
+    try {
+      const windowAny = typeof window !== 'undefined' ? (window as any) : null;
+      if (OneSignal?.User?.addTags) {
+        await OneSignal.User.addTags(nativeTags);
+      } else if (windowAny?.OneSignal?.sendTags) {
+        await windowAny.OneSignal.sendTags(nativeTags);
+      }
+      if (windowAny?.webkit?.messageHandlers?.oneSignal) {
+        windowAny.webkit.messageHandlers.oneSignal.postMessage({ action: 'setTags', tags: nativeTags });
+      }
+    } catch (e) {
+      console.warn('[OneSignal] Tagging native subscription warning:', e);
+    }
+
+    // If an authenticated user is known, link external ID & persist to Supabase
+    try {
+      let uid = this.currentUserId;
+      if (!uid && isSupabaseConfigured) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        uid = sessionData?.session?.user?.id || null;
+      }
+      if (uid) {
+        await this.loginUser(uid, nativeTags);
+      }
+    } catch (err) {
+      console.warn('[OneSignal] Linking native sub to Supabase profile warning:', err);
     }
   }
 
@@ -668,6 +713,7 @@ class OneSignalService {
   async loginUser(userId: string, tags?: Record<string, string>): Promise<void> {
     if (!userId || typeof userId !== 'string' || !userId.trim()) return;
     const cleanUserId = userId.trim();
+    this.currentUserId = cleanUserId;
 
     const dev = this.getDeviceInfo();
     const combinedTags: Record<string, string> = {
@@ -760,6 +806,7 @@ class OneSignalService {
    * Log out user from OneSignal
    */
   async logoutUser(): Promise<void> {
+    this.currentUserId = null;
     const windowAny = typeof window !== 'undefined' ? (window as any) : null;
     if (windowAny) {
       try {
@@ -801,7 +848,8 @@ class OneSignalService {
     targetUserIds?: string[],
     targetSubscriptionIds?: string[],
     imageUrl?: string,
-    data?: Record<string, any>
+    data?: Record<string, any>,
+    targetChannels?: ('ios' | 'android' | 'web')[]
   ): Promise<any> {
     const appId = this.getAppId();
     const res = await fetch('/api/send-push-notification', {
@@ -815,7 +863,8 @@ class OneSignalService {
         targetUserIds,
         targetSubscriptionIds,
         imageUrl,
-        data
+        data,
+        targetChannels: targetChannels || ['ios', 'android']
       })
     });
     const jsonRes = await res.json();

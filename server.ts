@@ -1433,7 +1433,18 @@ Ensure each event contains:
   // Secure server-side push notification endpoint (OneSignal REST API key remains 100% secret on the server)
   app.post("/api/send-push-notification", async (req, res) => {
     try {
-      const { title, message, targetUserIds, targetSubscriptionIds, targetPlayerIds, url, appId: requestedAppId, imageUrl } = req.body || {};
+      const { 
+        title, 
+        message, 
+        targetUserIds, 
+        targetSubscriptionIds, 
+        targetPlayerIds, 
+        url, 
+        appId: requestedAppId, 
+        imageUrl, 
+        channels, 
+        targetChannels 
+      } = req.body || {};
       const config = getActiveOneSignalConfig();
       const appId = requestedAppId || config.appId;
       const restApiKey = config.restApiKey;
@@ -1453,6 +1464,15 @@ Ensure each event contains:
       const titleStr = title || "Unlocked Valencia 🌴";
       const messageStr = message || "Nouvelle notification Unlocked";
 
+      // By default prioritize Mobile (iOS native App Store app & Android)
+      const selectedChannels: string[] = Array.isArray(targetChannels) && targetChannels.length > 0 
+        ? targetChannels 
+        : (Array.isArray(channels) && channels.length > 0 ? channels : ['ios', 'android']);
+
+      const enableIos = selectedChannels.includes('ios') || selectedChannels.includes('mobile');
+      const enableAndroid = selectedChannels.includes('android') || selectedChannels.includes('mobile');
+      const enableWeb = selectedChannels.includes('web');
+
       const payload: any = {
         app_id: appId,
         headings: {
@@ -1467,18 +1487,26 @@ Ensure each event contains:
         },
         url: url || "/",
         priority: 10,
-        // Strictly target mobile devices only (iOS native App Store app & Android) - NO Web Push
-        isIos: true,
-        isAndroid: true,
-        isChromeWeb: false,
-        isSafariWeb: false,
-        isFirefox: false,
-        isEdge: false,
-        isAnyWeb: false,
-        android_visibility: 1,
-        android_accent_color: "2563EB",
+        // Official OneSignal v1 channel flags:
+        isIos: enableIos,
+        isAndroid: enableAndroid,
+        isChrome: enableWeb,
+        isSafari: enableWeb,
+        isFirefox: enableWeb,
+        isEdge: enableWeb,
+        isWP_WNS: false,
+        isAdm: false,
+        // Native iOS APNs requirements (audible sound, lockscreen banner, background wakeup, rich media):
+        ios_sound: "default",
+        content_available: true,
+        mutable_content: true,
+        apns_push_type_override: "alert",
         ios_badgeType: "Increase",
         ios_badgeCount: 1,
+        // Native Android settings:
+        android_visibility: 1,
+        android_accent_color: "2563EB",
+        android_sound: "default",
         data: {
           url: url || "/",
           ...(req.body?.data || {})
@@ -1501,6 +1529,9 @@ Ensure each event contains:
         // Direct target to specific devices by OneSignal player ID / subscription ID
         payload.include_player_ids = subs;
         payload.include_subscription_ids = subs;
+        if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
+          payload.include_aliases = { external_id: targetUserIds };
+        }
       } else if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
         // Target by user external_id (Supabase User ID)
         payload.include_external_user_ids = targetUserIds;
