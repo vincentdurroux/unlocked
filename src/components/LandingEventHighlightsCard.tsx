@@ -108,6 +108,15 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     };
   }, [selectedEventForModal]);
 
+  useEffect(() => {
+    if (selectedEventForModal) {
+      const modalBody = document.getElementById('event-modal-scrollable-body');
+      if (modalBody) {
+        modalBody.scrollTop = 0;
+      }
+    }
+  }, [selectedEventForModal]);
+
   // Automatically refresh date periodically so weekend shifts seamlessly as time progresses
   useEffect(() => {
     const timer = setInterval(() => {
@@ -631,7 +640,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                 </div>
 
                 {/* Modal Scrollable Body */}
-                <div className="p-5 sm:p-7 overflow-y-auto space-y-5 text-left">
+                <div id="event-modal-scrollable-body" className="p-5 sm:p-7 overflow-y-auto space-y-5 text-left">
                   {/* Date, Time, Location Info Chips */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-2xl bg-amber-50/50 border border-amber-200/60">
                     <div className="flex items-center gap-2.5 text-xs text-slate-700">

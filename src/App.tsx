@@ -3016,7 +3016,7 @@ export default function App() {
     if (!isSupabaseConfigured) return;
 
     const channel = supabase
-      .channel(`public:announcements_user_${currentUser.id}`)
+      .channel('public:announcements')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
         fetchAnnouncementsFromDb();
       })
