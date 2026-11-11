@@ -15,25 +15,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const customStorage = {
   getItem: (key: string) => {
     if (typeof window === 'undefined') return null;
-    const localVal = window.localStorage.getItem(key);
-    if (localVal) return localVal;
-    return window.sessionStorage.getItem(key);
+    return window.localStorage.getItem(key);
   },
   setItem: (key: string, value: string) => {
     if (typeof window === 'undefined') return;
-    const keepSignedIn = window.localStorage.getItem('keep_me_signed_in') !== 'false';
-    if (keepSignedIn) {
-      window.localStorage.setItem(key, value);
-      window.sessionStorage.removeItem(key);
-    } else {
-      window.sessionStorage.setItem(key, value);
-      window.localStorage.removeItem(key);
-    }
+    window.localStorage.setItem(key, value);
   },
   removeItem: (key: string) => {
     if (typeof window === 'undefined') return;
     window.localStorage.removeItem(key);
-    window.sessionStorage.removeItem(key);
   }
 };
 

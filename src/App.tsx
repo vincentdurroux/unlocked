@@ -1929,6 +1929,8 @@ export default function App() {
   const { professionals: allPros, loading: prosLoading, refetch: refetchPros } = useProfessionals([]);
   const initialViewRef = useRef<View | null>(null);
   const isProgrammaticNavigationRef = useRef(false);
+  const fetchAnnouncementsFromDbRef = useRef<() => Promise<void> | null>(null);
+  
   const [activeView, setActiveView] = useState<View>(() => {
     const isColdStart = typeof window !== 'undefined' && !sessionStorage.getItem('unlocked_app_session');
     if (typeof window !== 'undefined') {
@@ -2823,7 +2825,7 @@ export default function App() {
 
   const isFetchingAnnouncementsRef = useRef(false);
 
-  const fetchAnnouncementsFromDb = async () => {
+  async function fetchAnnouncementsFromDb() {
     // Guest protection: Guests must not query, store, or receive community notifications
     if (!currentUser) {
       setAnnouncementsList([]);
@@ -2840,6 +2842,12 @@ export default function App() {
         .select('*')
         .order('updated_at', { ascending: false });
 
+      if (annError) {
+        console.error('Error fetching announcements from Supabase:', annError);
+      }
+
+      console.log('fetchAnnouncementsFromDb data:', annData);
+      
       if (!annError && annData && annData.length > 0) {
         list = annData
           .filter(ann => ann.is_active !== false)
@@ -3017,19 +3025,25 @@ export default function App() {
 
     const channel = supabase
       .channel('public:announcements')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, (payload) => {
+        console.log('Realtime: announcements change', payload);
         fetchAnnouncementsFromDb();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pro_recommendations' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pro_recommendations' }, (payload) => {
+        console.log('Realtime: pro_recommendations change', payload);
         fetchAnnouncementsFromDb();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+        console.log('Realtime: messages change', payload);
         fetchAnnouncementsFromDb();
         fetchAndCheckUnread();
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Realtime: subscription status', status);
+      });
 
     const pollInterval = setInterval(() => {
+      console.log('Realtime: polling...');
       fetchAnnouncementsFromDb();
     }, 30000);
 
@@ -4398,6 +4412,7 @@ export default function App() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         checkInactivity();
+        fetchAnnouncementsFromDbRef.current?.();
       }
     };
     window.addEventListener('visibilitychange', handleVisibilityChange);
