@@ -877,6 +877,9 @@ const parseAnnouncement = (ann: any) => {
     icon,
     title,
     content,
+    target_id: ann.target_id,
+    cta_link: ann.cta_link,
+    cta_type: ann.cta_type,
     created_at: ann.created_at || ann.updated_at || new Date().toISOString()
   };
 };

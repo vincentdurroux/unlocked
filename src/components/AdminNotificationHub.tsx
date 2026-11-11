@@ -61,7 +61,7 @@ export function getPushLogs(): PushLogEntry[] {
   }
 }
 
-export function savePushLogEntry(entry: Omit<PushLogEntry, 'id' | 'timestamp'>): PushLogEntry {
+export async function savePushLogEntry(entry: Omit<PushLogEntry, 'id' | 'timestamp'>): Promise<PushLogEntry> {
   const logs = getPushLogs();
   const newEntry: PushLogEntry = {
     ...entry,
@@ -74,6 +74,25 @@ export function savePushLogEntry(entry: Omit<PushLogEntry, 'id' | 'timestamp'>):
   } catch (e) {
     console.error('Failed to save push log entry:', e);
   }
+
+  // Auto-sync sent push notifications to Supabase announcements table for multi-device notification center sync
+  if (entry.status === 'sent' && isSupabaseConfigured) {
+    try {
+      const iconTag = `[icon:${entry.type === 'event' || entry.type === 'weekend' ? 'event' : entry.type === 'article' ? 'guide' : entry.type === 'pro' ? 'star' : 'megaphone'}]`;
+      const titleTag = entry.title ? `[${entry.title}] ` : '';
+      const content = `${iconTag}${titleTag}${entry.body}`;
+      await supabase.from('announcements').insert([{
+        content,
+        is_active: true,
+        cta_type: entry.type,
+        created_at: newEntry.timestamp,
+        updated_at: newEntry.timestamp
+      }]);
+    } catch (err) {
+      console.warn('Could not sync push log to Supabase announcements:', err);
+    }
+  }
+
   return newEntry;
 }
 
@@ -312,7 +331,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       const recipientCount = res?.recipients ?? res?.result?.recipients ?? (targetMode === 'specific' ? 1 : activeUsersList.length || 1);
 
       // Record in history log
-      savePushLogEntry({
+      await savePushLogEntry({
         title: title.trim(),
         body: body.trim(),
         type,

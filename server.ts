@@ -1464,6 +1464,10 @@ Ensure each event contains:
       const titleStr = title || "Unlocked Valencia 🌴";
       const messageStr = message || "Nouvelle notification Unlocked";
 
+      const baseUrl = "https://mycityunlocked.app";
+      const rawUrl = url || "/";
+      const absoluteUrl = rawUrl.startsWith("http") ? rawUrl : `${baseUrl}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
+
       // By default prioritize Mobile (iOS native App Store app & Android)
       const selectedChannels: string[] = Array.isArray(targetChannels) && targetChannels.length > 0 
         ? targetChannels 
@@ -1485,7 +1489,8 @@ Ensure each event contains:
           fr: messageStr,
           es: messageStr
         },
-        url: url || "/",
+        url: absoluteUrl,
+        web_url: absoluteUrl,
         priority: 10,
         // Official OneSignal v1 channel flags:
         isIos: enableIos,
@@ -1509,7 +1514,8 @@ Ensure each event contains:
         android_accent_color: "2563EB",
         android_sound: "default",
         data: {
-          url: url || "/",
+          url: absoluteUrl,
+          launchUrl: absoluteUrl,
           ...(req.body?.data || {})
         }
       };

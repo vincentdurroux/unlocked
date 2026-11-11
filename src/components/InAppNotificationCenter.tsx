@@ -306,16 +306,16 @@ export function isGuideNotification(item?: InAppNotification | null): boolean {
 
 export function extractGuideIdFromNotification(item?: InAppNotification | null): string | undefined {
   if (!item) return undefined;
-  if (item.cta_link) {
-    const match = item.cta_link.match(/[?&]guideId=([^&#]+)/) || item.cta_link.match(/\/guides\/([^/?#]+)/);
-    if (match && match[1]) {
-      return cleanIdHelper(match[1]) || match[1];
-    }
-  }
   if (item.target_id) {
     const str = String(item.target_id).trim();
     if (str && !str.startsWith('push_log_')) {
       return cleanIdHelper(str) || str;
+    }
+  }
+  if (item.cta_link) {
+    const match = item.cta_link.match(/[?&]guideId=([^&#]+)/) || item.cta_link.match(/\/guides\/([^/?#]+)/);
+    if (match && match[1]) {
+      return cleanIdHelper(match[1]) || match[1];
     }
   }
 
