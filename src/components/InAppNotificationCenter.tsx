@@ -391,10 +391,38 @@ export function InAppNotificationCenter({
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [showOlder, setShowOlder] = useState(false);
 
-  // Filter out dismissed notifications
+  const isUserNotSignedIn = !currentUser || isGuest;
+
+  // Extract user registration timestamp
+  const userRegistrationTimestamp = useMemo(() => {
+    if (isUserNotSignedIn || !currentUser) return Infinity;
+    const dateStr = currentUser.created_at || (currentUser as any).user_metadata?.created_at;
+    if (!dateStr) return 0;
+    const time = new Date(dateStr).getTime();
+    return isNaN(time) ? 0 : time;
+  }, [currentUser, isUserNotSignedIn]);
+
+  // Filter out dismissed notifications, strictly empty for guests, and exclude pre-registration items
   const activeNotifications = useMemo(() => {
-    return (announcements || []).filter(item => item && !dismissedIds.includes(String(item.id)));
-  }, [announcements, dismissedIds]);
+    if (isUserNotSignedIn) return [];
+    return (announcements || []).filter(item => {
+      if (!item || dismissedIds.includes(String(item.id))) return false;
+      // Chat messages are addressed directly to this member
+      if (item.type === 'chat' || String(item.id).startsWith('chat-')) return true;
+
+      // Filter out notifications sent prior to user account registration
+      if (userRegistrationTimestamp > 0 && userRegistrationTimestamp !== Infinity) {
+        const itemTimeStr = item.created_at || (item as any).updated_at || (item as any).timestamp;
+        if (itemTimeStr) {
+          const itemTime = new Date(itemTimeStr).getTime();
+          if (!isNaN(itemTime) && itemTime < userRegistrationTimestamp) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+  }, [announcements, dismissedIds, isUserNotSignedIn, userRegistrationTimestamp]);
 
   // Determine unread status per item
   const isItemUnread = (item: InAppNotification) => {
@@ -423,8 +451,6 @@ export function InAppNotificationCenter({
     window.matchMedia('(display-mode: standalone)').matches ||
     (window.navigator as any).standalone === true
   );
-
-  const isUserNotSignedIn = !currentUser || isGuest;
 
   if (!isOpen) return null;
 

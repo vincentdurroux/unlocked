@@ -877,7 +877,7 @@ const parseAnnouncement = (ann: any) => {
     icon,
     title,
     content,
-    created_at: ann.updated_at || ann.created_at || new Date().toISOString()
+    created_at: ann.created_at || ann.updated_at || new Date().toISOString()
   };
 };
 
@@ -2821,6 +2821,13 @@ export default function App() {
   const isFetchingAnnouncementsRef = useRef(false);
 
   const fetchAnnouncementsFromDb = async () => {
+    // Guest protection: Guests must not query, store, or receive community notifications
+    if (!currentUser) {
+      setAnnouncementsList([]);
+      setToastNotification(null);
+      return;
+    }
+
     if (!isSupabaseConfigured || isFetchingAnnouncementsRef.current) return;
     isFetchingAnnouncementsRef.current = true;
     try {
@@ -2836,24 +2843,27 @@ export default function App() {
           .map(ann => parseAnnouncement(ann));
       }
 
-      const { data: recData, error: recError } = await supabase
-        .from('pro_recommendations')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Pro recommendation notifications are for administrators only
+      if (isAdmin) {
+        const { data: recData, error: recError } = await supabase
+          .from('pro_recommendations')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      if (!recError && recData && recData.length > 0) {
-        const mappedRecs = recData.map(r => ({
-          id: `rec-${r.id}`,
-          title: `Recommendation Request: ${r.pro_category || 'Professional'}`,
-          content: r.notes || `New recommendation submitted for ${r.company_name || r.pro_name || r.pro_category}.`,
-          created_at: r.created_at || new Date().toISOString(),
-          type: 'recommendation_request',
-          is_read: r.status === 'processed' || r.status === 'refused' || false,
-          user_email: r.user_email,
-          pro_category: r.pro_category,
-          pro_name: r.pro_name || r.company_name
-        }));
-        list = [...list, ...mappedRecs];
+        if (!recError && recData && recData.length > 0) {
+          const mappedRecs = recData.map(r => ({
+            id: `rec-${r.id}`,
+            title: `Recommendation Request: ${r.pro_category || 'Professional'}`,
+            content: r.notes || `New recommendation submitted for ${r.company_name || r.pro_name || r.pro_category}.`,
+            created_at: r.created_at || new Date().toISOString(),
+            type: 'recommendation_request',
+            is_read: r.status === 'processed' || r.status === 'refused' || false,
+            user_email: r.user_email,
+            pro_category: r.pro_category,
+            pro_name: r.pro_name || r.company_name
+          }));
+          list = [...list, ...mappedRecs];
+        }
       }
 
       // 3. Fetch recent incoming chat conversations/messages for the logged-in member
@@ -2908,6 +2918,7 @@ export default function App() {
           console.warn('Error fetching chat notifications for notification center:', chatNotifErr);
         }
       }
+
       // 4. Merge sent push notifications from Admin Announce hub
       try {
         const pushLogs = getPushLogs();
@@ -2936,17 +2947,38 @@ export default function App() {
         console.warn('Error reading push logs in notification center:', pushLogErr);
       }
 
+      // 5. REQUIREMENT: Filter notifications to ONLY include those sent AFTER or AT the moment the user registered
+      const userRegistrationDateStr = currentUser.created_at || userProfile?.created_at || (currentUser.user_metadata as any)?.created_at;
+      if (userRegistrationDateStr) {
+        const userRegistrationTimestamp = new Date(userRegistrationDateStr).getTime();
+        if (!isNaN(userRegistrationTimestamp) && userRegistrationTimestamp > 0) {
+          list = list.filter(item => {
+            if (!item) return false;
+            // Direct chat notifications sent to this member are strictly for this member
+            if (item.type === 'chat' || String(item.id).startsWith('chat-')) {
+              return true;
+            }
+            const itemDateStr = item.created_at || item.updated_at || item.timestamp;
+            if (!itemDateStr) return false;
+            const itemTimestamp = new Date(itemDateStr).getTime();
+            if (isNaN(itemTimestamp)) return false;
+            // Only keep notifications created/sent on or after user registration
+            return itemTimestamp >= userRegistrationTimestamp;
+          });
+        }
+      }
+
       list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setAnnouncementsList(list);
 
-      // Check if there is a fresh unread notification (announcement or chat message) to show an in-app toast preview
-      if (list.length > 0) {
+      // Check if there is a fresh unread notification to show an in-app toast preview (LOGGED-IN ONLY)
+      if (currentUser && list.length > 0) {
         const latest = list[0];
         const isLocallyRead = readAnnouncementIds.includes(String(latest.id));
         const isDismissed = dismissedNotificationIds.includes(String(latest.id));
         const isChat = latest.type === 'chat' || String(latest.id).startsWith('chat-');
         const isUnread = isChat ? (latest.is_read === false) : (!isLocallyRead && !isDismissed);
-        const seenToastKey = `unlocked_seen_toast_${latest.id}`;
+        const seenToastKey = `unlocked_seen_toast_${currentUser.id}_${latest.id}`;
         const hasSeenToast = typeof localStorage !== 'undefined' ? Boolean(localStorage.getItem(seenToastKey)) : false;
         
         // Don't show intrusive popup toast if user is already reading/chatting in messages view
@@ -2971,11 +3003,17 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!currentUser) {
+      setAnnouncementsList([]);
+      setToastNotification(null);
+      return;
+    }
+
     fetchAnnouncementsFromDb();
     if (!isSupabaseConfigured) return;
 
     const channel = supabase
-      .channel('public:announcements_recs_and_messages')
+      .channel(`public:announcements_user_${currentUser.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
         fetchAnnouncementsFromDb();
       })
@@ -2996,9 +3034,12 @@ export default function App() {
       clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
-  }, [isSupabaseConfigured, currentUser?.id]);
+  }, [isSupabaseConfigured, currentUser?.id, userProfile?.created_at]);
 
   const unreadCount = useMemo(() => {
+    // REQUIREMENT: Guest users must NEVER have unread notifications or ringing badge
+    if (!currentUser) return 0;
+
     // 1. Unread items from general announcements and recommendations
     const unreadAnnouncements = (announcementsList || []).filter(item => {
       if (!item) return false;
@@ -3015,11 +3056,12 @@ export default function App() {
     const unreadChats = (unreadConversations || []).length;
 
     return unreadAnnouncements + unreadChats;
-  }, [announcementsList, readAnnouncementIds, dismissedNotificationIds, unreadConversations]);
+  }, [currentUser, announcementsList, readAnnouncementIds, dismissedNotificationIds, unreadConversations]);
 
   const hasUnreadAnnouncements = useMemo(() => {
+    if (!currentUser) return false;
     return unreadCount > 0;
-  }, [unreadCount]);
+  }, [currentUser, unreadCount]);
 
   // Synchronize App Icon Badge on iOS (PWA standalone on home screen, native WebKit wrappers, Capacitor, desktop)
   useEffect(() => {
@@ -4671,14 +4713,14 @@ export default function App() {
                 {/* Custom-designed golden bell with hardware-accelerated ringing animation */}
                 <div className={cn(
                   "relative flex items-center justify-center transition-all duration-300 origin-top",
-                  unreadCount > 0 ? "animate-bell-ring" : "group-hover:rotate-12 group-hover:scale-105"
+                  (currentUser && unreadCount > 0) ? "animate-bell-ring" : "group-hover:rotate-12 group-hover:scale-105"
                 )}>
                   <svg 
                     xmlns="http://www.w3.org/2000/svg" 
                     viewBox="0 0 24 24" 
                     className={cn(
                       "w-9 h-9 relative z-0",
-                      unreadCount > 0 
+                      (currentUser && unreadCount > 0) 
                         ? "filter drop-shadow-[0_2px_6px_rgba(245,158,11,0.45)]" 
                         : "filter drop-shadow-[0_2px_4px_rgba(217,119,6,0.25)]"
                     )}
@@ -4707,8 +4749,8 @@ export default function App() {
                   </svg>
                 </div>
                 
-                {/* Solid red badge (pastille rouge) without blinking or white ring */}
-                {unreadCount > 0 && (
+                {/* Solid red badge (pastille rouge) - only shown for logged-in members with unread items */}
+                {currentUser && unreadCount > 0 && (
                   <span className="absolute top-1 right-1 z-20 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-rose-600 text-white text-[8.5px] sm:text-[9px] font-extrabold shadow-sm shadow-rose-600/30 pointer-events-none">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
@@ -7874,6 +7916,7 @@ function AdminView({
               content: formattedContent,
               is_active: annFormIsActive,
               cta_type: annFormCtaType || null,
+              created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             }
           ]);
