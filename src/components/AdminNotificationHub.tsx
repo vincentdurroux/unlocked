@@ -160,8 +160,9 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     type: 'custom' | 'event' | 'article' | 'pro' | 'weekend' | 'direct_member';
     title: string;
     body: string;
-    targetMode: 'all' | 'specific';
+    targetMode: 'all' | 'specific' | 'device';
     selectedUserId?: string;
+    targetDeviceId?: string;
     targetId?: string;
     url?: string;
     imageUrl?: string;
@@ -269,6 +270,11 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       return;
     }
 
+    if (targetMode === 'device' && !pushComposeModal.targetDeviceId?.trim()) {
+      setMsg({ type: 'error', text: 'Please enter a valid OneSignal Subscription ID.' });
+      return;
+    }
+
     setIsSendingPush(true);
     try {
       let targetUserIds: string[] | undefined = undefined;
@@ -282,6 +288,10 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         if (userObj?.onesignal_player_id) {
           targetSubscriptionIds = [userObj.onesignal_player_id];
         }
+      } else if (targetMode === 'device' && pushComposeModal.targetDeviceId?.trim()) {
+        const cleanSubId = pushComposeModal.targetDeviceId.trim();
+        targetSubscriptionIds = [cleanSubId];
+        targetAudienceLabel = `Device Token: ${cleanSubId.slice(0, 8)}...`;
       }
 
       const res = await oneSignalService.sendServerNotification(
@@ -1803,7 +1813,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
                       Target Audience
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
                         onClick={() => setPushComposeModal({ ...pushComposeModal, targetMode: 'all' })}
@@ -1814,8 +1824,8 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                             : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                         )}
                       >
-                        <span>📢 All App Subscribers</span>
-                        {pushComposeModal.targetMode === 'all' && <Check className="w-4 h-4" />}
+                        <span className="truncate">📢 All Users</span>
+                        {pushComposeModal.targetMode === 'all' && <Check className="w-3.5 h-3.5 shrink-0" />}
                       </button>
 
                       <button
@@ -1828,8 +1838,22 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                             : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                         )}
                       >
-                        <span>🎯 Specific Member Only</span>
-                        {pushComposeModal.targetMode === 'specific' && <Check className="w-4 h-4" />}
+                        <span className="truncate">🎯 Member</span>
+                        {pushComposeModal.targetMode === 'specific' && <Check className="w-3.5 h-3.5 shrink-0" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPushComposeModal({ ...pushComposeModal, targetMode: 'device' })}
+                        className={cn(
+                          "p-2.5 rounded-xl text-xs font-bold border text-left cursor-pointer transition-all flex items-center justify-between",
+                          pushComposeModal.targetMode === 'device'
+                            ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20"
+                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                        )}
+                      >
+                        <span className="truncate">🧪 Device ID</span>
+                        {pushComposeModal.targetMode === 'device' && <Check className="w-3.5 h-3.5 shrink-0" />}
                       </button>
                     </div>
 
@@ -1846,6 +1870,36 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                           </option>
                         ))}
                       </select>
+                    )}
+
+                    {pushComposeModal.targetMode === 'device' && (
+                      <div className="space-y-1.5 mt-2 bg-blue-50/60 p-3 rounded-xl border border-blue-100">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-blue-900 block">
+                            Direct Device Subscription ID (from OneSignal Dashboard):
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cur = oneSignalService.getCurrentSubscriptionId();
+                              if (cur) setPushComposeModal({ ...pushComposeModal, targetDeviceId: cur });
+                            }}
+                            className="text-[10px] text-blue-700 font-bold hover:underline cursor-pointer"
+                          >
+                            Use this device ID
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={pushComposeModal.targetDeviceId || ''}
+                          onChange={(e) => setPushComposeModal({ ...pushComposeModal, targetDeviceId: e.target.value })}
+                          placeholder="e.g. c8b60fa2-1663-4b62-..."
+                          className="w-full bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        />
+                        <p className="text-[10px] text-blue-700 leading-tight">
+                          💡 Collez ici l'ID de votre iPhone (visible dans la colonne ID de OneSignal) pour forcer l'envoi direct sur votre téléphone sans passer par l'alias.
+                        </p>
+                      </div>
                     )}
                   </div>
 

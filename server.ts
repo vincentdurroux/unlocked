@@ -1490,6 +1490,7 @@ Ensure each event contains:
         // Official OneSignal v1 channel flags:
         isIos: enableIos,
         isAndroid: enableAndroid,
+        isAnyWeb: enableWeb,
         isChrome: enableWeb,
         isSafari: enableWeb,
         isFirefox: enableWeb,
@@ -1529,12 +1530,8 @@ Ensure each event contains:
         // Direct target to specific devices by OneSignal player ID / subscription ID
         payload.include_player_ids = subs;
         payload.include_subscription_ids = subs;
-        if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
-          payload.include_aliases = { external_id: targetUserIds };
-        }
       } else if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
         // Target by user external_id (Supabase User ID)
-        payload.include_external_user_ids = targetUserIds;
         payload.include_aliases = { external_id: targetUserIds };
         payload.target_channel = "push";
       } else {

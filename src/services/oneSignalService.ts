@@ -41,6 +41,25 @@ class OneSignalService {
           this.handleNativeSubscriptionReceived(String(id).trim());
         }
       });
+
+      // Median.co (GoNative) info callback
+      const pollMedian = () => {
+        if (windowAny.median?.onesignal?.info) {
+          windowAny.median.onesignal.info((data: any) => {
+            const id = data?.oneSignalUserId || data?.userId || data?.playerId;
+            if (id) this.handleNativeSubscriptionReceived(String(id).trim());
+          });
+        }
+        if (windowAny.gonative?.onesignal?.info) {
+          windowAny.gonative.onesignal.info((data: any) => {
+            const id = data?.oneSignalUserId || data?.userId || data?.playerId;
+            if (id) this.handleNativeSubscriptionReceived(String(id).trim());
+          });
+        }
+      };
+      pollMedian();
+      setTimeout(pollMedian, 1000);
+      setTimeout(pollMedian, 3000);
     }
   }
 
@@ -730,7 +749,9 @@ class OneSignalService {
       try {
         const handlers = windowAny.webkit?.messageHandlers;
         if (handlers) {
-          if (handlers.oneSignalLogin) handlers.oneSignalLogin.postMessage({ userId: cleanUserId, tags: combinedTags });
+          // Send both primitive string and dictionary formats to accommodate various Swift implementations
+          if (handlers.oneSignalLogin) handlers.oneSignalLogin.postMessage(cleanUserId);
+          if (handlers.onesignalLogin) handlers.onesignalLogin.postMessage(cleanUserId);
           if (handlers.setExternalUserId) handlers.setExternalUserId.postMessage(cleanUserId);
           if (handlers.setExternalId) handlers.setExternalId.postMessage(cleanUserId);
           if (handlers.login) handlers.login.postMessage(cleanUserId);
@@ -741,7 +762,29 @@ class OneSignalService {
         console.warn('[OneSignal] Native iOS WKWebView message failed:', e);
       }
 
-      // 2. Capacitor / Cordova native plugins
+      // 2. Median.co (GoNative) native bridge for iOS & Android
+      try {
+        if (windowAny.median?.onesignal?.login) {
+          windowAny.median.onesignal.login(cleanUserId);
+        } else if (windowAny.median?.onesignal?.externalUserId?.set) {
+          windowAny.median.onesignal.externalUserId.set({ externalId: cleanUserId });
+        }
+        if (windowAny.median?.onesignal?.tags?.set) {
+          windowAny.median.onesignal.tags.set({ tags: combinedTags });
+        }
+        if (windowAny.gonative?.onesignal?.login) {
+          windowAny.gonative.onesignal.login(cleanUserId);
+        } else if (windowAny.gonative?.onesignal?.externalUserId?.set) {
+          windowAny.gonative.onesignal.externalUserId.set({ externalId: cleanUserId });
+        }
+        if (windowAny.gonative?.onesignal?.tags?.set) {
+          windowAny.gonative.onesignal.tags.set({ tags: combinedTags });
+        }
+      } catch (medErr) {
+        console.warn('[OneSignal] Median/GoNative bridge login warning:', medErr);
+      }
+
+      // 3. Capacitor / Cordova native plugins
       try {
         if (windowAny.OneSignalPlugin?.login) {
           await windowAny.OneSignalPlugin.login(cleanUserId);
