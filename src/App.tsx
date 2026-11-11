@@ -8006,12 +8006,37 @@ function AdminView({
   const fetchAllUsers = async () => {
     setLoadingUsersList(true);
     try {
+      // 1. Guaranteed standard columns fetch (never fails even if custom columns are missing)
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email, avatar_url, onesignal_player_id')
+        .select('id, full_name, email, avatar_url')
         .order('full_name', { ascending: true });
+
       if (!error && data) {
         setAllUsersList(data);
+
+        // 2. Opportunistically check for onesignal_player_id without breaking if the column does not exist
+        try {
+          const { data: tokenData, error: tokenErr } = await supabase
+            .from('profiles')
+            .select('id, onesignal_player_id')
+            .not('onesignal_player_id', 'is', null);
+
+          if (!tokenErr && tokenData && tokenData.length > 0) {
+            const tokenMap: Record<string, string> = {};
+            tokenData.forEach((t: any) => {
+              if (t.id && t.onesignal_player_id) tokenMap[t.id] = t.onesignal_player_id;
+            });
+            setAllUsersList(prev => prev.map(u => ({
+              ...u,
+              onesignal_player_id: tokenMap[u.id] || (u as any).onesignal_player_id
+            })));
+          }
+        } catch (_) {
+          // Column not yet present in Supabase schema, safe fallback
+        }
+      } else if (error) {
+        console.warn('Error fetching profiles:', error);
       }
     } catch (err) {
       console.warn('Error loading users for push targeting:', err);

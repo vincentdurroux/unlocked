@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { oneSignalService } from '../services/oneSignalService';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { cn } from '../lib/utils';
 import { getCurrentWeekendInterval } from './LandingEventHighlightsCard';
 
@@ -112,6 +113,32 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
   notificationIcons = []
 }) => {
   const [activeTab, setActiveTab] = useState<'history' | 'custom' | 'events' | 'articles' | 'pros' | 'weekend'>('history');
+
+  // Self-healing user list fallback: ensures members are always loaded even if parent query was delayed
+  const [internalUsers, setInternalUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (allUsersList && allUsersList.length > 0) {
+      setInternalUsers(allUsersList);
+    } else if (isSupabaseConfigured) {
+      const loadProfiles = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, avatar_url')
+            .order('full_name', { ascending: true });
+          if (!error && data && data.length > 0) {
+            setInternalUsers(data);
+          }
+        } catch (_) {}
+      };
+      loadProfiles();
+    }
+  }, [allUsersList]);
+
+  const activeUsersList = useMemo(() => {
+    return (allUsersList && allUsersList.length > 0) ? allUsersList : internalUsers;
+  }, [allUsersList, internalUsers]);
 
   // Push history log state
   const [pushLogs, setPushLogs] = useState<PushLogEntry[]>(() => getPushLogs());
@@ -250,7 +277,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
 
       if (targetMode === 'specific' && selectedUserId) {
         targetUserIds = [selectedUserId];
-        const userObj = allUsersList.find(u => u.id === selectedUserId);
+        const userObj = activeUsersList.find(u => u.id === selectedUserId);
         targetAudienceLabel = userObj ? (userObj.full_name || userObj.email || selectedUserId) : selectedUserId;
         if (userObj?.onesignal_player_id) {
           targetSubscriptionIds = [userObj.onesignal_player_id];
@@ -272,7 +299,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         pushComposeModal.channels || ['ios', 'android']
       );
 
-      const recipientCount = res?.recipients ?? res?.result?.recipients ?? (targetMode === 'specific' ? 1 : allUsersList.length || 1);
+      const recipientCount = res?.recipients ?? res?.result?.recipients ?? (targetMode === 'specific' ? 1 : activeUsersList.length || 1);
 
       // Record in history log
       savePushLogEntry({
@@ -349,7 +376,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
 
         if (annPushTarget === 'specific' && annPushUserId) {
           targetUserIds = [annPushUserId];
-          const u = allUsersList.find(x => x.id === annPushUserId);
+          const u = activeUsersList.find(x => x.id === annPushUserId);
           targetLabel = u ? (u.full_name || u.email || annPushUserId) : annPushUserId;
           if (u?.onesignal_player_id) {
             targetSubscriptionIds = [u.onesignal_player_id];
@@ -938,8 +965,8 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                           onChange={(e) => setAnnPushUserId(e.target.value)}
                           className="w-full bg-white border border-blue-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
                         >
-                          <option value="">-- Choose member ({allUsersList.length} registered) --</option>
-                          {allUsersList.map(u => (
+                          <option value="">-- Choose member ({activeUsersList.length} registered) --</option>
+                          {activeUsersList.map(u => (
                             <option key={u.id} value={u.id}>
                               {u.full_name || 'Member'} — {u.email || u.id}
                             </option>
@@ -1812,8 +1839,8 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                         onChange={(e) => setPushComposeModal({ ...pushComposeModal, selectedUserId: e.target.value })}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                       >
-                        <option value="">-- Select target member ({allUsersList.length} members) --</option>
-                        {allUsersList.map((u) => (
+                        <option value="">-- Select target member ({activeUsersList.length} members) --</option>
+                        {activeUsersList.map((u) => (
                           <option key={u.id} value={u.id}>
                             {u.full_name || 'Member'} — {u.email || u.id} {u.onesignal_player_id ? '📱 (Mobile Token Linked)' : ''}
                           </option>
