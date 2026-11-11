@@ -2835,6 +2835,11 @@ export default function App() {
     }
 
     if (!isSupabaseConfigured || isFetchingAnnouncementsRef.current) return;
+
+    // Avoid network requests if offline to prevent 'Failed to fetch' noise
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (!isOnline) return;
+
     isFetchingAnnouncementsRef.current = true;
     try {
       let list: any[] = [];
@@ -3019,19 +3024,28 @@ export default function App() {
       });
 
     const pollInterval = setInterval(() => {
+      // Skip background polling if tab is hidden or device is offline to prevent unnecessary 'Failed to fetch' errors
+      const isVisible = typeof document !== 'undefined' && document.visibilityState === 'visible';
+      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      
+      if (!isVisible || !isOnline) return;
+
       console.log('Realtime: polling...');
       fetchAnnouncementsFromDb();
       
-      // Refresh user metadata periodically to sync read/dismissed status across devices
+      // Refresh user metadata periodically (every 60s) to sync read/dismissed status across devices
       if (currentUser?.id) {
-        supabase.auth.getUser().then(({ data: { user } }) => {
-          if (user) {
+        supabase.auth.getUser().then(({ data: { user }, error }) => {
+          if (user && !error) {
             console.log('Realtime: refreshed user metadata');
             setCurrentUser(user);
           }
-        }).catch(() => {});
+        }).catch((err) => {
+          // Silent catch for network errors during polling
+          console.debug('[Realtime] Poll refresh user metadata suppressed error:', err?.message);
+        });
       }
-    }, 30000);
+    }, 60000);
 
     return () => {
       clearInterval(pollInterval);

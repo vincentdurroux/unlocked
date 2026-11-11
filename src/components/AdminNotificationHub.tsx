@@ -164,6 +164,10 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       setInternalUsers(allUsersList);
     } else if (isSupabaseConfigured) {
       const loadProfiles = async () => {
+        // Prevent background fetch errors if offline
+        const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+        if (!isOnline) return;
+
         try {
           const { data, error } = await supabase
             .from('profiles')
