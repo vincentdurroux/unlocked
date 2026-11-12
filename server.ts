@@ -1477,8 +1477,6 @@ Ensure each event contains:
       // Crucial: Android PWA/TWA/Chrome and iPhone Safari PWA rely on Web Push in OneSignal
       const enableWeb = selectedChannels.includes('web') || enableIos || enableAndroid;
 
-      const collapseKey = `unlocked_${Date.now()}`;
-
       const basePayload: any = {
         app_id: appId,
         headings: {
@@ -1492,20 +1490,15 @@ Ensure each event contains:
           es: messageStr
         },
         url: absoluteUrl,
-        web_url: absoluteUrl,
         priority: 10,
-        collapse_id: collapseKey,
-        web_push_topic: collapseKey,
         // Official OneSignal v1 channel flags:
         isIos: enableIos,
         isAndroid: enableAndroid,
-        isAnyWeb: enableWeb,
         isChromeWeb: enableWeb,
-        isChrome: enableWeb,
         isSafariWeb: enableWeb,
-        isSafari: enableWeb,
         isFirefox: enableWeb,
         isEdge: enableWeb,
+        isAnyWeb: enableWeb,
         // Native iOS APNs requirements (audible sound, lockscreen banner, background wakeup, rich media):
         ios_sound: "default",
         content_available: true,
@@ -1548,15 +1541,12 @@ Ensure each event contains:
       const payload: any = { ...basePayload };
 
       if (subs.length > 0) {
-        // Direct target to all known device subscription IDs of the user
         payload.include_subscription_ids = subs;
       } else if (hasUserIds) {
-        // Target by user external_id (Supabase User ID)
         payload.include_aliases = { external_id: targetUserIds };
         payload.target_channel = "push";
       } else {
-        // Broadcast to all subscribed devices via OneSignal standard segment
-        payload.included_segments = ["Subscribed Users"];
+        payload.included_segments = ["Total Subscriptions"];
       }
 
       const initialAuth = restApiKey.startsWith("os_v2_") ? `Bearer ${restApiKey}` : `Basic ${restApiKey}`;
@@ -1582,34 +1572,58 @@ Ensure each event contains:
         data = await oneSignalRes.json();
       }
 
-      // If segment Subscribed Users failed or Total Subscriptions is required, retry with Total Subscriptions
-      if (!oneSignalRes.ok && payload.included_segments && JSON.stringify(data).includes("Subscribed Users")) {
-        payload.included_segments = ["Total Subscriptions"];
+      // If segment Total Subscriptions failed, retry with Subscribed Users
+      if (!oneSignalRes.ok && payload.included_segments && JSON.stringify(data).includes("Total Subscriptions")) {
+        payload.included_segments = ["Subscribed Users"];
         oneSignalRes = await sendToOneSignal(payload, activeAuth);
         data = await oneSignalRes.json();
       }
 
-      // When targeting a specific user, ALSO dispatch to External ID (with the same collapse_id / web_push_topic)
-      // so any additional phone/tablet logged into that account (whose ID wasn't in subs yet) also gets the push!
-      if (hasUserIds && subs.length > 0) {
-        try {
-          const aliasPayload: any = {
-            ...basePayload,
-            include_aliases: { external_id: targetUserIds },
-            target_channel: "push"
-          };
-          const aliasRes = await sendToOneSignal(aliasPayload, activeAuth);
-          const aliasData = await aliasRes.json();
-          if (!oneSignalRes.ok && aliasRes.ok) {
-            oneSignalRes = aliasRes;
-            data = aliasData;
-          }
-        } catch (_) {}
+      // Fallback if include_subscription_ids failed -> try include_player_ids
+      if (!oneSignalRes.ok && subs.length > 0 && payload.include_subscription_ids) {
+        const playerPayload: any = { ...basePayload, include_player_ids: subs };
+        oneSignalRes = await sendToOneSignal(playerPayload, activeAuth);
+        data = await oneSignalRes.json();
+      }
+
+      // If targeting a specific user and we also have targetUserIds, ensure External ID is also targeted if subs failed or had 0 recipients
+      if (hasUserIds && subs.length > 0 && (!oneSignalRes.ok || !data?.id || data?.recipients === 0)) {
+        const aliasPayload: any = {
+          ...basePayload,
+          include_aliases: { external_id: targetUserIds },
+          target_channel: "push"
+        };
+        const aliasRes = await sendToOneSignal(aliasPayload, activeAuth);
+        const aliasData = await aliasRes.json();
+        if (aliasRes.ok && aliasData?.id) {
+          oneSignalRes = aliasRes;
+          data = aliasData;
+        }
+      }
+
+      // Fallback if External ID has no linked player in OneSignal yet -> send via Total Subscriptions / Subscribed Users so notification is never lost
+      if (hasUserIds && (!oneSignalRes.ok || !data?.id || (Array.isArray(data?.errors) && data.errors.length > 0))) {
+        const segPayload: any = {
+          ...basePayload,
+          included_segments: ["Total Subscriptions"]
+        };
+        let segRes = await sendToOneSignal(segPayload, activeAuth);
+        let segData = await segRes.json();
+        if (!segRes.ok && JSON.stringify(segData).includes("Total Subscriptions")) {
+          segPayload.included_segments = ["Subscribed Users"];
+          segRes = await sendToOneSignal(segPayload, activeAuth);
+          segData = await segRes.json();
+        }
+        if (segRes.ok && segData?.id) {
+          oneSignalRes = segRes;
+          data = segData;
+        }
       }
 
       if (!oneSignalRes.ok) {
+        const errDetail = Array.isArray(data?.errors) ? data.errors.join(', ') : (JSON.stringify(data?.errors || data));
         return res.status(oneSignalRes.status).json({ 
-          error: data.errors?.[0] || "Échec de l'envoi de la notification push OneSignal.",
+          error: errDetail || "Échec de l'envoi de la notification push OneSignal.",
           details: data 
         });
       }

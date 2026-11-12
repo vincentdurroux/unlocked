@@ -415,8 +415,8 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       reloadPushLogs();
       setPushComposeModal(null);
       setMsg({
-        type: 'success',
-        text: `🔔 Notification enregistrée dans le centre de notifications (cloche) ! (Note Push OneSignal : ${err?.message || 'Vérifiez la configuration OneSignal'})`
+        type: 'error',
+        text: `🔔 Enregistré dans la cloche, mais échec Push OneSignal : ${err?.message || 'Vérifiez la configuration OneSignal'}`
       });
     } finally {
       setIsSendingPush(false);

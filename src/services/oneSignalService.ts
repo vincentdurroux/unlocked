@@ -868,8 +868,28 @@ class OneSignalService {
       await this.init(cleanUserId);
     }
 
-    // 4. Web SDK login & tagging
+    // 4. Web SDK login & tagging (both via OneSignalDeferred queue and direct SDK call)
     try {
+      if (windowAny) {
+        windowAny.OneSignalDeferred = windowAny.OneSignalDeferred || [];
+        windowAny.OneSignalDeferred.push(async (OS: any) => {
+          try {
+            if (OS?.login) {
+              await OS.login(cleanUserId);
+            } else if (OS?.setExternalUserId) {
+              await OS.setExternalUserId(cleanUserId);
+            }
+            if (OS?.User?.addTags) {
+              await OS.User.addTags(combinedTags);
+            } else if (OS?.sendTags) {
+              await OS.sendTags(combinedTags);
+            }
+          } catch (defErr) {
+            console.warn('[OneSignal] Deferred login/tags warning:', defErr);
+          }
+        });
+      }
+
       if (OneSignal?.login) {
         await OneSignal.login(cleanUserId);
       } else if (windowAny?.OneSignal?.login) {
