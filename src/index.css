@@ -218,72 +218,13 @@ input, textarea, [contenteditable="true"] {
   mask-image: linear-gradient(to right, black 85%, transparent 100%);
 }
 
-/* Global numeric font & kerning normalization for Android & iOS cross-platform parity */
-*,
-*::before,
-*::after {
-  font-variant-numeric: tabular-nums lining-nums !important;
-  font-feature-settings: "tnum" 1, "lnum" 1, "kern" 0 !important;
-  letter-spacing: -0.01em !important;
-}
-
-html,
-body,
-#root,
-p,
-span,
-div,
-h1, h2, h3, h4, h5, h6,
-button,
-input,
-textarea,
-select,
-a,
-label,
-time,
-li,
-strong,
-b,
-em,
-article,
-section,
-form,
-main,
-header,
-footer,
-[role="dialog"],
-.modal-container,
-.modal-card,
-.modal-body,
-.tabular-nums,
-.markdown-body {
-  font-variant-numeric: tabular-nums lining-nums !important;
-  font-feature-settings: "tnum" 1, "lnum" 1, "kern" 0 !important;
-  letter-spacing: -0.01em !important;
-  word-spacing: normal !important;
-  font-kerning: none !important;
-}
-
-.markdown-body {
-  text-align: left;
-  font-family: var(--font-sans);
-  font-variant-emoji: emoji;
-  font-variant-numeric: tabular-nums lining-nums !important;
-  font-feature-settings: "tnum" 1, "lnum" 1, "kern" 0 !important;
-  letter-spacing: -0.01em !important;
-  word-spacing: normal !important;
-  font-kerning: none !important;
-}
-.markdown-body p,
-.markdown-body span,
-.markdown-body div,
-.markdown-body li,
-.markdown-body time {
-  font-variant-numeric: tabular-nums lining-nums !important;
-  font-feature-settings: "tnum" 1, "lnum" 1, "kern" 0 !important;
-  letter-spacing: -0.01em !important;
-  word-spacing: normal !important;
-  font-kerning: none !important;
+/* Numeric font & kerning formatting:
+   By default, use natural proportional figures with kerning enabled so numbers (phone numbers, prices, dates, body text)
+   have standard natural spacing on Android and iOS.
+   The .tabular-nums class is reserved for counters, timers, and data tables where fixed-width digits are desired. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
 }
 .markdown-body h1 {
   font-size: 1.75rem;

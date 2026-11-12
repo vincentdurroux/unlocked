@@ -122,7 +122,6 @@ export default async function handler(req: any, res: any) {
       ios_sound: "default",
       content_available: true,
       mutable_content: true,
-      apns_push_type_override: "alert",
       android_visibility: 1,
       android_accent_color: "2563EB",
       android_sound: "default",
@@ -155,15 +154,18 @@ export default async function handler(req: any, res: any) {
     );
 
     const hasUserIds = Boolean(targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0);
+    const isSpecificMember = subs.length > 0 || hasUserIds;
     const payload: any = { ...basePayload };
 
     if (subs.length > 0) {
+      payload.include_player_ids = subs;
       payload.include_subscription_ids = subs;
     } else if (hasUserIds) {
       payload.include_aliases = { external_id: targetUserIds };
+      payload.include_external_user_ids = targetUserIds;
       payload.target_channel = "push";
     } else {
-      payload.included_segments = ["Total Subscriptions"];
+      payload.included_segments = ["Total Subscriptions", "Active Subscriptions"];
     }
 
     const initialAuth = restApiKey.startsWith("os_v2_") ? `Bearer ${restApiKey}` : `Basic ${restApiKey}`;
@@ -188,66 +190,28 @@ export default async function handler(req: any, res: any) {
       data = await oneSignalRes.json();
     }
 
-    // Fallback if Total Subscriptions segment name differs
-    if (!oneSignalRes.ok && payload.included_segments && JSON.stringify(data).includes("Total Subscriptions")) {
+    // Fallback if Total Subscriptions segment name differs (only when broadcasting to All Users)
+    if (!isSpecificMember && !oneSignalRes.ok && payload.included_segments && JSON.stringify(data).includes("Total Subscriptions")) {
       payload.included_segments = ["Subscribed Users"];
       oneSignalRes = await sendToOneSignal(payload, activeAuth);
       data = await oneSignalRes.json();
     }
 
-    // Fallback if include_subscription_ids failed -> try include_player_ids
-    if (!oneSignalRes.ok && subs.length > 0 && payload.include_subscription_ids) {
-      const playerPayload: any = { ...basePayload, include_player_ids: subs };
-      oneSignalRes = await sendToOneSignal(playerPayload, activeAuth);
-      data = await oneSignalRes.json();
-    }
-
-    // If targeting a specific user and we also have targetUserIds, ensure External ID is also targeted if subs failed or had 0 recipients
-    if (hasUserIds && subs.length > 0 && (!oneSignalRes.ok || !data?.id || data?.recipients === 0)) {
-      const aliasPayload: any = {
-        ...basePayload,
-        include_aliases: { external_id: targetUserIds },
-        target_channel: "push"
-      };
-      const aliasRes = await sendToOneSignal(aliasPayload, activeAuth);
-      const aliasData = await aliasRes.json();
-      if (aliasRes.ok && aliasData?.id) {
-        oneSignalRes = aliasRes;
-        data = aliasData;
-      }
-    }
-
-    // Fallback: If include_aliases yielded 0 recipients, retry with classic include_external_user_ids (supported across Web & Mobile SDKs)
-    if (hasUserIds && (!oneSignalRes.ok || !data?.id || data?.recipients === 0)) {
-      const extPayload: any = {
-        ...basePayload,
-        include_external_user_ids: targetUserIds,
-        target_channel: "push"
-      };
-      const extRes = await sendToOneSignal(extPayload, activeAuth);
-      const extData = await extRes.json();
-      if (extRes.ok && extData?.id && (extData?.recipients || 0) > 0) {
-        oneSignalRes = extRes;
-        data = extData;
-      }
-    }
-
-    // Fallback if External ID has no linked player in OneSignal yet -> broadcast to Subscribed Users / Total Subscriptions so notification is never lost
-    if (hasUserIds && (!oneSignalRes.ok || !data?.id || (Array.isArray(data?.errors) && data.errors.length > 0))) {
-      const segPayload: any = {
-        ...basePayload,
-        included_segments: ["Total Subscriptions"]
-      };
-      let segRes = await sendToOneSignal(segPayload, activeAuth);
-      let segData = await segRes.json();
-      if (!segRes.ok && JSON.stringify(segData).includes("Total Subscriptions")) {
-        segPayload.included_segments = ["Subscribed Users"];
-        segRes = await sendToOneSignal(segPayload, activeAuth);
-        segData = await segRes.json();
-      }
-      if (segRes.ok && segData?.id) {
-        oneSignalRes = segRes;
-        data = segData;
+    // If targeting a specific user and both subs & external ID were available, retry fallback if needed
+    if (isSpecificMember && subs.length > 0 && (!oneSignalRes.ok || !data?.id || data?.recipients === 0)) {
+      if (hasUserIds) {
+        const aliasPayload: any = {
+          ...basePayload,
+          include_aliases: { external_id: targetUserIds },
+          include_external_user_ids: targetUserIds,
+          target_channel: "push"
+        };
+        const aliasRes = await sendToOneSignal(aliasPayload, activeAuth);
+        const aliasData = await aliasRes.json();
+        if (aliasRes.ok && aliasData?.id && (aliasData?.recipients || 0) > 0) {
+          oneSignalRes = aliasRes;
+          data = aliasData;
+        }
       }
     }
 

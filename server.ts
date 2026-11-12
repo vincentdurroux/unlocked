@@ -1430,6 +1430,91 @@ Ensure each event contains:
     }
   });
 
+  // Endpoint to retrieve active OneSignal devices for test member device pairing
+  app.get("/api/onesignal-active-devices", async (req, res) => {
+    try {
+      const config = getActiveOneSignalConfig();
+      if (!config.restApiKey || !config.appId) {
+        return res.status(400).json({ error: "OneSignal is not configured yet." });
+      }
+
+      const auth = config.restApiKey.startsWith("os_v2_") ? `Bearer ${config.restApiKey}` : `Basic ${config.restApiKey}`;
+      const response = await fetch(`https://onesignal.com/api/v1/players?app_id=${config.appId}&limit=50`, {
+        headers: { "Authorization": auth }
+      });
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Could not fetch devices from OneSignal." });
+      }
+
+      const data = await response.json();
+      const rawPlayers = Array.isArray(data?.players) ? data.players : [];
+      // Filter for messageable active devices (valid push token & not unregistered)
+      const activeDevices = rawPlayers
+        .filter((p: any) => !p.invalid_identifier && (p.identifier || p.device_type === 0))
+        .map((p: any) => {
+          let platform = 'web';
+          if (p.device_type === 0 || (p.device_model && p.device_model.toLowerCase().includes('iphone'))) {
+            platform = 'ios';
+          } else if (p.device_type === 5 && p.tags?.platform === 'android') {
+            platform = 'android';
+          } else if (p.device_model && p.device_model.toLowerCase().includes('linux')) {
+            platform = 'android';
+          }
+          return {
+            id: p.id,
+            model: p.device_model || (platform === 'ios' ? 'iPhone / iOS' : platform === 'android' ? 'Android' : 'Web Browser'),
+            platform,
+            os: p.device_os || '',
+            sessionCount: p.session_count || 0,
+            lastActive: p.last_active || 0,
+            externalUserId: p.external_user_id || null
+          };
+        });
+
+      return res.json({ devices: activeDevices });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || "Error fetching devices." });
+    }
+  });
+
+  // Endpoint to link a member to a OneSignal player
+  app.post("/api/onesignal-link-device", async (req, res) => {
+    try {
+      const { userId, playerId } = req.body || {};
+      if (!userId || !playerId) {
+        return res.status(400).json({ error: "userId and playerId are required." });
+      }
+
+      const config = getActiveOneSignalConfig();
+      if (!config.restApiKey || !config.appId) {
+        return res.status(400).json({ error: "OneSignal is not configured yet." });
+      }
+
+      const auth = config.restApiKey.startsWith("os_v2_") ? `Bearer ${config.restApiKey}` : `Basic ${config.restApiKey}`;
+      const response = await fetch(`https://onesignal.com/api/v1/players/${encodeURIComponent(playerId)}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": auth
+        },
+        body: JSON.stringify({
+          app_id: config.appId,
+          external_user_id: userId
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return res.status(response.status).json({ error: data?.errors || "Could not link device in OneSignal." });
+      }
+
+      return res.json({ success: true, playerId, userId });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || "Error linking device." });
+    }
+  });
+
   // Secure server-side push notification endpoint (OneSignal REST API key remains 100% secret on the server)
   app.post("/api/send-push-notification", async (req, res) => {
     try {
@@ -1503,7 +1588,6 @@ Ensure each event contains:
         ios_sound: "default",
         content_available: true,
         mutable_content: true,
-        apns_push_type_override: "alert",
         ios_badgeType: "Increase",
         ios_badgeCount: 1,
         // Native Android settings:
@@ -1538,15 +1622,20 @@ Ensure each event contains:
       );
 
       const hasUserIds = Boolean(targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0);
+      const isSpecificMember = subs.length > 0 || hasUserIds;
       const payload: any = { ...basePayload };
 
       if (subs.length > 0) {
+        // OneSignal v1 expects include_player_ids for direct devices, include_subscription_ids for newer targets
+        payload.include_player_ids = subs;
         payload.include_subscription_ids = subs;
       } else if (hasUserIds) {
         payload.include_aliases = { external_id: targetUserIds };
+        payload.include_external_user_ids = targetUserIds;
         payload.target_channel = "push";
       } else {
-        payload.included_segments = ["Total Subscriptions"];
+        // Universal broadcast strictly when targeting All Users
+        payload.included_segments = ["Total Subscriptions", "Active Subscriptions"];
       }
 
       const initialAuth = restApiKey.startsWith("os_v2_") ? `Bearer ${restApiKey}` : `Basic ${restApiKey}`;
@@ -1572,67 +1661,29 @@ Ensure each event contains:
         data = await oneSignalRes.json();
       }
 
-      // If segment Total Subscriptions failed, retry with Subscribed Users
-      if (!oneSignalRes.ok && payload.included_segments && JSON.stringify(data).includes("Total Subscriptions")) {
+      // If targeting a specific user and both subs & external ID were available, retry fallback if needed
+      if (isSpecificMember && subs.length > 0 && (!oneSignalRes.ok || !data?.id || data?.recipients === 0)) {
+        if (hasUserIds) {
+          const aliasPayload: any = {
+            ...basePayload,
+            include_aliases: { external_id: targetUserIds },
+            include_external_user_ids: targetUserIds,
+            target_channel: "push"
+          };
+          const aliasRes = await sendToOneSignal(aliasPayload, activeAuth);
+          const aliasData = await aliasRes.json();
+          if (aliasRes.ok && aliasData?.id && (aliasData?.recipients || 0) > 0) {
+            oneSignalRes = aliasRes;
+            data = aliasData;
+          }
+        }
+      }
+
+      // If targeting All Users and segment Total Subscriptions wasn't recognized, retry with Subscribed Users
+      if (!isSpecificMember && !oneSignalRes.ok && payload.included_segments && JSON.stringify(data).includes("Total Subscriptions")) {
         payload.included_segments = ["Subscribed Users"];
         oneSignalRes = await sendToOneSignal(payload, activeAuth);
         data = await oneSignalRes.json();
-      }
-
-      // Fallback if include_subscription_ids failed -> try include_player_ids
-      if (!oneSignalRes.ok && subs.length > 0 && payload.include_subscription_ids) {
-        const playerPayload: any = { ...basePayload, include_player_ids: subs };
-        oneSignalRes = await sendToOneSignal(playerPayload, activeAuth);
-        data = await oneSignalRes.json();
-      }
-
-      // If targeting a specific user and we also have targetUserIds, ensure External ID is also targeted if subs failed or had 0 recipients
-      if (hasUserIds && subs.length > 0 && (!oneSignalRes.ok || !data?.id || data?.recipients === 0)) {
-        const aliasPayload: any = {
-          ...basePayload,
-          include_aliases: { external_id: targetUserIds },
-          target_channel: "push"
-        };
-        const aliasRes = await sendToOneSignal(aliasPayload, activeAuth);
-        const aliasData = await aliasRes.json();
-        if (aliasRes.ok && aliasData?.id) {
-          oneSignalRes = aliasRes;
-          data = aliasData;
-        }
-      }
-
-      // Fallback: If include_aliases yielded 0 recipients, retry with classic include_external_user_ids (supported across Web & Mobile SDKs)
-      if (hasUserIds && (!oneSignalRes.ok || !data?.id || data?.recipients === 0)) {
-        const extPayload: any = {
-          ...basePayload,
-          include_external_user_ids: targetUserIds,
-          target_channel: "push"
-        };
-        const extRes = await sendToOneSignal(extPayload, activeAuth);
-        const extData = await extRes.json();
-        if (extRes.ok && extData?.id && (extData?.recipients || 0) > 0) {
-          oneSignalRes = extRes;
-          data = extData;
-        }
-      }
-
-      // Fallback if External ID has no linked player in OneSignal yet -> send via Total Subscriptions / Subscribed Users so notification is never lost
-      if (hasUserIds && (!oneSignalRes.ok || !data?.id || (Array.isArray(data?.errors) && data.errors.length > 0))) {
-        const segPayload: any = {
-          ...basePayload,
-          included_segments: ["Total Subscriptions"]
-        };
-        let segRes = await sendToOneSignal(segPayload, activeAuth);
-        let segData = await segRes.json();
-        if (!segRes.ok && JSON.stringify(segData).includes("Total Subscriptions")) {
-          segPayload.included_segments = ["Subscribed Users"];
-          segRes = await sendToOneSignal(segPayload, activeAuth);
-          segData = await segRes.json();
-        }
-        if (segRes.ok && segData?.id) {
-          oneSignalRes = segRes;
-          data = segData;
-        }
       }
 
       if (!oneSignalRes.ok) {
@@ -1643,18 +1694,11 @@ Ensure each event contains:
         });
       }
 
-      const recipientCount = data.recipients ?? (data.id ? 1 : 0);
-      let warning: string | undefined = undefined;
-      if (recipientCount === 0) {
-        warning = "La notification a été acceptée par OneSignal mais aucun appareil actif n'était ciblé (0 destinataire). Vérifiez que votre téléphone est bien abonné à cet App ID.";
-      }
-
       return res.json({
         success: true,
-        result: data,
-        recipients: recipientCount,
-        id: data.id,
-        warning
+        id: data?.id,
+        recipients: data?.recipients ?? (isSpecificMember ? (subs.length || 1) : 0),
+        details: data
       });
     } catch (err: any) {
       console.error("[api] OneSignal push send error:", err);

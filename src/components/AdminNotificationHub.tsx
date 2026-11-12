@@ -26,7 +26,9 @@ import {
   Check, 
   AlertCircle,
   Award,
-  Zap
+  Zap,
+  Smartphone,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { oneSignalService } from '../services/oneSignalService';
@@ -264,9 +266,8 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     type: 'custom' | 'event' | 'article' | 'pro' | 'weekend' | 'direct_member';
     title: string;
     body: string;
-    targetMode: 'all' | 'specific' | 'device';
+    targetMode: 'all' | 'specific';
     selectedUserId?: string;
-    targetDeviceId?: string;
     targetId?: string;
     url?: string;
     imageUrl?: string;
@@ -288,6 +289,98 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
   const [annSendPush, setAnnSendPush] = useState(true);
   const [annPushTarget, setAnnPushTarget] = useState<'all' | 'specific'>('all');
   const [annPushUserId, setAnnPushUserId] = useState('');
+
+  // Device pairing modal state for test members
+  const [deviceLinkModal, setDeviceLinkModal] = useState<{
+    isOpen: boolean;
+    userId: string;
+    userName: string;
+  } | null>(null);
+  const [activeDevicesList, setActiveDevicesList] = useState<any[]>([]);
+  const [loadingActiveDevices, setLoadingActiveDevices] = useState(false);
+  const [isLinkingDevice, setIsLinkingDevice] = useState(false);
+
+  const openDeviceLinkModal = async (userId: string, userName: string) => {
+    setDeviceLinkModal({ isOpen: true, userId, userName });
+    setLoadingActiveDevices(true);
+    try {
+      const res = await fetch('/api/onesignal-active-devices');
+      if (res.ok) {
+        const data = await res.json();
+        setActiveDevicesList(Array.isArray(data?.devices) ? data.devices : []);
+      }
+    } catch (e) {
+      console.warn('Could not load OneSignal devices:', e);
+    } finally {
+      setLoadingActiveDevices(false);
+    }
+  };
+
+  const handleLinkDeviceToUser = async (userId: string, playerId: string) => {
+    setIsLinkingDevice(true);
+    try {
+      // 1. Link in OneSignal backend
+      const res = await fetch('/api/onesignal-link-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, playerId })
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to update device in OneSignal');
+      }
+
+      // 2. Link in Supabase profiles
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ onesignal_player_id: playerId })
+            .eq('id', userId);
+        } catch (dbErr) {
+          console.warn('Supabase profile token update note:', dbErr);
+        }
+      }
+
+      // 3. Update local state
+      setInternalUsers(prev => prev.map(u => u.id === userId ? { ...u, onesignal_player_id: playerId } : u));
+
+      setMsg({
+        type: 'success',
+        text: `📱 Device paired successfully! Mobile Push notifications for this member will now be delivered to this device.`
+      });
+      setDeviceLinkModal(null);
+    } catch (err: any) {
+      setMsg({ type: 'error', text: `Error pairing device: ${err.message || 'Unknown error'}` });
+    } finally {
+      setIsLinkingDevice(false);
+    }
+  };
+
+  const handleLinkCurrentDevice = async (userId: string) => {
+    setIsLinkingDevice(true);
+    try {
+      let curId = await oneSignalService.getSubscriptionId();
+      if (!curId || curId.startsWith('local-')) {
+        await oneSignalService.subscribe(userId);
+        curId = await oneSignalService.getSubscriptionId();
+      }
+
+      if (!curId || curId.startsWith('local-')) {
+        setMsg({
+          type: 'error',
+          text: 'No active OneSignal subscription found on this browser. Please allow notifications on this device first.'
+        });
+        setIsLinkingDevice(false);
+        return;
+      }
+
+      await handleLinkDeviceToUser(userId, curId);
+    } catch (err: any) {
+      setMsg({ type: 'error', text: `Could not link current device: ${err.message || 'Unknown error'}` });
+      setIsLinkingDevice(false);
+    }
+  };
 
   // Refresh push log history
   const reloadPushLogs = () => {
@@ -412,11 +505,6 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       return;
     }
 
-    if (targetMode === 'device' && !pushComposeModal.targetDeviceId?.trim()) {
-      setMsg({ type: 'error', text: 'Please enter a valid OneSignal Subscription ID.' });
-      return;
-    }
-
     setIsSendingPush(true);
     try {
       let targetUserIds: string[] | undefined = undefined;
@@ -430,10 +518,6 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         if (userObj?.onesignal_player_id) {
           targetSubscriptionIds = [userObj.onesignal_player_id];
         }
-      } else if (targetMode === 'device' && pushComposeModal.targetDeviceId?.trim()) {
-        const cleanSubId = pushComposeModal.targetDeviceId.trim();
-        targetSubscriptionIds = [cleanSubId];
-        targetAudienceLabel = `Device Token: ${cleanSubId.slice(0, 8)}...`;
       }
 
       // 1. Always save as in-app announcement FIRST so targeted user(s) see it in the Header Bell
@@ -2376,7 +2460,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
                       Target Audience
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => setPushComposeModal({ ...pushComposeModal, targetMode: 'all' })}
@@ -2404,20 +2488,6 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                         <span className="truncate">🎯 Member</span>
                         {pushComposeModal.targetMode === 'specific' && <Check className="w-3.5 h-3.5 shrink-0" />}
                       </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPushComposeModal({ ...pushComposeModal, targetMode: 'device' })}
-                        className={cn(
-                          "p-2.5 rounded-xl text-xs font-bold border text-left cursor-pointer transition-all flex items-center justify-between",
-                          pushComposeModal.targetMode === 'device'
-                            ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20"
-                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                        )}
-                      >
-                        <span className="truncate">🧪 Device ID</span>
-                        {pushComposeModal.targetMode === 'device' && <Check className="w-3.5 h-3.5 shrink-0" />}
-                      </button>
                     </div>
 
                     {pushComposeModal.targetMode === 'specific' && (
@@ -2443,53 +2513,44 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                           const hasPush = Boolean(selectedUser?.onesignal_player_id);
                           return (
                             <div className={cn(
-                              "p-2.5 rounded-xl border text-[11px] font-medium leading-relaxed",
-                              hasPush ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-200 text-amber-800"
+                              "p-3 rounded-xl border text-[11px] font-medium leading-relaxed",
+                              hasPush ? "bg-emerald-50/90 border-emerald-200 text-emerald-800" : "bg-amber-50/90 border-amber-200 text-amber-900"
                             )}>
                               {hasPush ? (
-                                <div className="flex items-center gap-2">
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                                  <span><strong>Push Token Linked:</strong> This member has enabled notifications on their device and will receive an instant mobile push banner.</span>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    <span className="truncate"><strong>Push Device Linked:</strong> Mobile lockscreen push is active for this member.</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => openDeviceLinkModal(selectedUser!.id, selectedUser!.full_name || selectedUser!.email || 'Member')}
+                                    className="shrink-0 text-[10px] font-extrabold text-emerald-700 hover:text-emerald-900 bg-emerald-100/80 hover:bg-emerald-100 px-2 py-1 rounded-md transition-colors cursor-pointer"
+                                  >
+                                    🔄 Change Phone
+                                  </button>
                                 </div>
                               ) : (
-                                <div className="flex items-start gap-2">
-                                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                  <span><strong>In-App Bell Only:</strong> This user has not yet accepted push notifications on their phone/browser. The message will be published to their in-app Bell, but mobile lockscreen push will report <em>0 recipients</em> in OneSignal until they enable notifications on their device.</span>
+                                <div className="space-y-2">
+                                  <div className="flex items-start gap-2">
+                                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                    <span><strong>In-App Bell Only:</strong> No push device is currently linked to this member. To test receiving real mobile push notifications on your phone, pair a device below:</span>
+                                  </div>
+                                  <div className="pt-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => openDeviceLinkModal(selectedUser!.id, selectedUser!.full_name || selectedUser!.email || 'Member')}
+                                      className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold text-[11px] shadow-sm flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                                    >
+                                      <Smartphone className="w-3.5 h-3.5" />
+                                      <span>📲 Pair Admin / Member Device (1-Click)</span>
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </div>
                           );
                         })()}
-                      </div>
-                    )}
-
-                    {pushComposeModal.targetMode === 'device' && (
-                      <div className="space-y-1.5 mt-2 bg-blue-50/60 p-3 rounded-xl border border-blue-100">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[11px] font-bold text-blue-900 block">
-                            Direct Device Subscription ID (from OneSignal Dashboard):
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const cur = oneSignalService.getCurrentSubscriptionId();
-                              if (cur) setPushComposeModal({ ...pushComposeModal, targetDeviceId: cur });
-                            }}
-                            className="text-[10px] text-blue-700 font-bold hover:underline cursor-pointer"
-                          >
-                            Use this device ID
-                          </button>
-                        </div>
-                        <input
-                          type="text"
-                          value={pushComposeModal.targetDeviceId || ''}
-                          onChange={(e) => setPushComposeModal({ ...pushComposeModal, targetDeviceId: e.target.value })}
-                          placeholder="e.g. c8b60fa2-1663-4b62-..."
-                          className="w-full bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                        />
-                        <p className="text-[10px] text-blue-700 leading-tight">
-                          💡 Paste your device token or OneSignal subscription ID here to test direct delivery to a specific device.
-                        </p>
                       </div>
                     )}
                   </div>
@@ -2581,6 +2642,184 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                     )}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>,
+      document.body
+    )}
+
+    {typeof document !== 'undefined' && createPortal(
+      <AnimatePresence>
+        {deviceLinkModal?.isOpen && (
+          <div className="fixed inset-0 z-[100010] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isLinkingDevice && setDeviceLinkModal(null)}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 z-10 flex flex-col max-h-[85vh]"
+            >
+              {/* Header */}
+              <div className="px-5 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                    <Smartphone className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold tracking-tight">Pair Test Device</h3>
+                    <p className="text-[11px] text-blue-100 font-medium truncate max-w-[280px]">
+                      Target recipient: <span className="underline font-bold">{deviceLinkModal.userName}</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isLinkingDevice}
+                  onClick={() => setDeviceLinkModal(null)}
+                  className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors cursor-pointer text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-5 overflow-y-auto space-y-4 text-xs">
+                {/* Option 1: Pair Current Device */}
+                <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <span className="font-extrabold text-blue-900 text-xs block">Option A: Pair This Device</span>
+                      <p className="text-[11px] text-blue-700 leading-tight">
+                        Instantly link your current browser or phone to this member account.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isLinkingDevice}
+                      onClick={() => handleLinkCurrentDevice(deviceLinkModal.userId)}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shrink-0"
+                    >
+                      {isLinkingDevice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      <span>Pair This Device</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Option 2: Select from Active OneSignal Devices */}
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-extrabold text-slate-800 text-xs block">Option B: Select Active Device</span>
+                      <p className="text-[11px] text-slate-500">
+                        Choose from registered active devices in your OneSignal app.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openDeviceLinkModal(deviceLinkModal.userId, deviceLinkModal.userName)}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                      title="Reload devices list"
+                    >
+                      <RefreshCw className={cn("w-3 h-3", loadingActiveDevices && "animate-spin")} />
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+
+                  {loadingActiveDevices ? (
+                    <div className="py-8 flex flex-col items-center justify-center gap-2 text-slate-400">
+                      <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                      <span className="text-[11px]">Loading active devices from OneSignal...</span>
+                    </div>
+                  ) : activeDevicesList.length === 0 ? (
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-500 text-[11px]">
+                      No messageable devices found in OneSignal. Make sure you opened the app and allowed notifications.
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                      {activeDevicesList.map((dev: any) => {
+                        const targetUser = activeUsersList.find(u => u.id === deviceLinkModal.userId);
+                        const isCurrent = targetUser?.onesignal_player_id?.includes(dev.id);
+
+                        return (
+                          <div
+                            key={dev.id}
+                            className={cn(
+                              "p-3 rounded-xl border flex items-center justify-between gap-3 transition-all",
+                              isCurrent 
+                                ? "bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-500/20" 
+                                : "bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50/70"
+                            )}
+                          >
+                            <div className="min-w-0 space-y-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-slate-800 text-xs truncate">
+                                  {dev.platform === 'ios' ? ' ' : dev.platform === 'android' ? '🤖 ' : '🌐 '}
+                                  {dev.model}
+                                </span>
+                                <span className={cn(
+                                  "px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider",
+                                  dev.platform === 'ios' ? "bg-slate-100 text-slate-700" :
+                                  dev.platform === 'android' ? "bg-emerald-100 text-emerald-800" :
+                                  "bg-blue-100 text-blue-800"
+                                )}>
+                                  {dev.platform}
+                                </span>
+                                {isCurrent && (
+                                  <span className="px-1.5 py-0.2 bg-emerald-600 text-white rounded text-[9px] font-bold">
+                                    Current
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-slate-500 font-mono truncate">
+                                ID: {dev.id} • {dev.sessionCount} sessions {dev.os ? `• OS ${dev.os}` : ''}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={isLinkingDevice}
+                              onClick={() => handleLinkDeviceToUser(deviceLinkModal.userId, dev.id)}
+                              className={cn(
+                                "px-3 py-1.5 rounded-lg font-bold text-[11px] shrink-0 transition-all cursor-pointer",
+                                isCurrent
+                                  ? "bg-emerald-600 text-white cursor-default"
+                                  : "bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700"
+                              )}
+                            >
+                              {isCurrent ? 'Paired ✓' : 'Pair to Member'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1">
+                  <p className="font-bold text-slate-700">💡 How Specific Member Delivery Works:</p>
+                  <p>When you dispatch a notification to <strong>{deviceLinkModal.userName}</strong>, it will appear strictly in their in-app Bell, and trigger a direct lockscreen mobile push notification exclusively to their paired device.</p>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+                <button
+                  type="button"
+                  disabled={isLinkingDevice}
+                  onClick={() => setDeviceLinkModal(null)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl cursor-pointer transition-colors"
+                >
+                  Close
+                </button>
               </div>
             </motion.div>
           </div>
