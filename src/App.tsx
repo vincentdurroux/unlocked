@@ -872,6 +872,7 @@ const parseAnnouncement = (ann: any) => {
   let title = ann.title || '';
   let content = rawContent;
   let target_id = ann.target_id;
+  let target_user_id = ann.target_user_id || null;
   let cta_link = ann.cta_link;
   let cta_type = ann.cta_type;
 
@@ -883,7 +884,7 @@ const parseAnnouncement = (ann: any) => {
     if (!cta_link && parts[2]) cta_link = parts[2];
   }
 
-  // Parse leading metadata tags such as [icon:...], [target:...], [link:...], [type:...]
+  // Parse leading metadata tags such as [icon:...], [target:...], [link:...], [type:...], [user:...]
   let tagMatched = true;
   while (tagMatched) {
     tagMatched = false;
@@ -899,6 +900,14 @@ const parseAnnouncement = (ann: any) => {
       const endIdx = rawContent.indexOf(']');
       if (endIdx !== -1) {
         target_id = rawContent.slice(8, endIdx).trim() || target_id;
+        rawContent = rawContent.slice(endIdx + 1).trim();
+        content = rawContent;
+        tagMatched = true;
+      }
+    } else if (rawContent.startsWith('[user:')) {
+      const endIdx = rawContent.indexOf(']');
+      if (endIdx !== -1) {
+        target_user_id = rawContent.slice(6, endIdx).trim() || target_user_id;
         rawContent = rawContent.slice(endIdx + 1).trim();
         content = rawContent;
         tagMatched = true;
@@ -937,6 +946,7 @@ const parseAnnouncement = (ann: any) => {
     title,
     content,
     target_id,
+    target_user_id,
     cta_link,
     cta_type,
     created_at: normalizedCreatedAt,
@@ -2928,7 +2938,8 @@ export default function App() {
       if (!annError && annData && annData.length > 0) {
         const parsedAnns = annData
           .filter(ann => ann.is_active !== false)
-          .map(ann => parseAnnouncement(ann));
+          .map(ann => parseAnnouncement(ann))
+          .filter(ann => !ann.target_user_id || String(ann.target_user_id) === String(currentUser.id));
 
         // Deduplicate announcements created within 15 seconds with identical title & content
         const dedupedAnns: any[] = [];
@@ -8006,6 +8017,9 @@ function AdminView({
     const isActiveToSave = directAnnData !== undefined ? (directAnnData.is_active !== false) : annFormIsActive;
     const rawCtaType = directAnnData !== undefined ? (directAnnData.cta_type || '') : annFormCtaType;
     const targetIdToSave = directAnnData?.target_id ? String(directAnnData.target_id).trim() : '';
+    const targetUserIdToSave = directAnnData !== undefined
+      ? (directAnnData.target_user_id ? String(directAnnData.target_user_id).trim() : '')
+      : (annPushTargetMode === 'specific' && annPushSelectedUserId ? String(annPushSelectedUserId).trim() : '');
     const ctaLinkToSave = directAnnData?.cta_link ? String(directAnnData.cta_link).trim() : '';
     const idToEdit = directAnnData !== undefined ? (directAnnData.id || null) : editingAnnId;
 
@@ -8018,9 +8032,10 @@ function AdminView({
       const iconTag = `[icon:${iconToSave}]`;
       const typeTag = rawCtaType ? `[type:${rawCtaType}]` : '';
       const targetTag = targetIdToSave ? `[target:${targetIdToSave}]` : '';
+      const userTag = targetUserIdToSave ? `[user:${targetUserIdToSave}]` : '';
       const linkTag = ctaLinkToSave ? `[link:${ctaLinkToSave}]` : '';
       const titleTag = titleToSave.trim() ? `[${titleToSave.trim()}] ` : '';
-      const formattedContent = `${iconTag}${typeTag}${targetTag}${linkTag}${titleTag}${contentToSave.trim()}`;
+      const formattedContent = `${iconTag}${typeTag}${targetTag}${userTag}${linkTag}${titleTag}${contentToSave.trim()}`;
       const nowIso = new Date().toISOString();
 
       if (idToEdit) {

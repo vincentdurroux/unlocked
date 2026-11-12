@@ -47,6 +47,7 @@ export interface InAppNotification {
   pro_category?: string;
   pro_name?: string;
   target_id?: string;
+  target_user_id?: string | null;
 }
 
 export const NOTIFICATION_ICONS_CONFIG = [
@@ -393,15 +394,18 @@ export function InAppNotificationCenter({
 
   const isUserNotSignedIn = !currentUser || isGuest;
 
-  // Filter out dismissed notifications and strictly empty for guests
+  // Filter out dismissed notifications, strictly empty for guests, and respect member-targeted notifications
   const activeNotifications = useMemo(() => {
     if (isUserNotSignedIn) return [];
 
     return (announcements || []).filter(item => {
       if (!item || dismissedIds.includes(String(item.id))) return false;
+      if (item.target_user_id && String(item.target_user_id) !== String(currentUser?.id)) {
+        return false;
+      }
       return true;
     });
-  }, [announcements, dismissedIds, isUserNotSignedIn]);
+  }, [announcements, dismissedIds, isUserNotSignedIn, currentUser?.id]);
 
   // Determine unread status per item
   const isItemUnread = (item: InAppNotification) => {

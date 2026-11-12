@@ -42,6 +42,7 @@ export interface PushLogEntry {
   type: 'custom' | 'event' | 'article' | 'pro' | 'weekend' | 'direct_member';
   target: string; // 'All Users' or username/email
   targetId?: string; // ID of event, article, pro, or user
+  targetUserId?: string; // Specific recipient user ID when targeted to a single member
   url?: string;
   recipientsCount?: number;
   status: 'sent' | 'error';
@@ -91,9 +92,10 @@ export async function savePushLogEntry(
       const iconTag = `[icon:${iconName}]`;
       const typeTag = entry.type ? `[type:${entry.type}]` : '';
       const targetTag = entry.targetId ? `[target:${entry.targetId}]` : '';
+      const userTag = entry.targetUserId ? `[user:${entry.targetUserId}]` : '';
       const linkTag = entry.url ? `[link:${entry.url}]` : '';
       const titleTag = entry.title ? `[${entry.title.trim()}] ` : '';
-      const content = `${iconTag}${typeTag}${targetTag}${linkTag}${titleTag}${(entry.body || '').trim()}`;
+      const content = `${iconTag}${typeTag}${targetTag}${userTag}${linkTag}${titleTag}${(entry.body || '').trim()}`;
 
       const { error } = await supabase.from('announcements').insert([
         {
@@ -340,8 +342,8 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         targetAudienceLabel = `Device Token: ${cleanSubId.slice(0, 8)}...`;
       }
 
-      // 1. Always save as in-app announcement FIRST so all users & devices see it in the Header Bell
-      // even if OneSignal push encounters a configuration or subscription warning
+      // 1. Always save as in-app announcement FIRST so targeted user(s) see it in the Header Bell
+      // When targetMode === 'specific', target_user_id restricts visibility strictly to that member
       let savedInBell = false;
       try {
         await onSaveAnnouncement({
@@ -351,6 +353,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
           is_active: true,
           cta_type: type,
           target_id: targetId || null,
+          target_user_id: (targetMode === 'specific' && selectedUserId) ? selectedUserId : null,
           cta_link: url || '/',
           send_push: false
         });
@@ -387,6 +390,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         type,
         target: targetAudienceLabel,
         targetId,
+        targetUserId: (targetMode === 'specific' && selectedUserId) ? selectedUserId : undefined,
         url: url || '/',
         recipientsCount: recipientCount,
         status: 'sent'
@@ -431,7 +435,8 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         content: annContent.trim(),
         icon: annIcon,
         is_active: annIsActive,
-        cta_type: annCtaType || null
+        cta_type: annCtaType || null,
+        target_user_id: (annSendPush && annPushTarget === 'specific' && annPushUserId) ? annPushUserId : null
       });
 
       if (annSendPush) {
