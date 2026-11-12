@@ -933,6 +933,7 @@ const parseAnnouncement = (ann: any) => {
   return {
     ...ann,
     icon,
+    type: cta_type || ann.type,
     title,
     content,
     target_id,
@@ -8015,11 +8016,11 @@ function AdminView({
     setSavingAnn(true);
     try {
       const iconTag = `[icon:${iconToSave}]`;
+      const typeTag = rawCtaType ? `[type:${rawCtaType}]` : '';
+      const targetTag = targetIdToSave ? `[target:${targetIdToSave}]` : '';
+      const linkTag = ctaLinkToSave ? `[link:${ctaLinkToSave}]` : '';
       const titleTag = titleToSave.trim() ? `[${titleToSave.trim()}] ` : '';
-      const formattedContent = `${iconTag}${titleTag}${contentToSave.trim()}`;
-      const encodedCtaType = (targetIdToSave || ctaLinkToSave)
-        ? `${rawCtaType || 'custom'}|${targetIdToSave}|${ctaLinkToSave}`
-        : (rawCtaType || null);
+      const formattedContent = `${iconTag}${typeTag}${targetTag}${linkTag}${titleTag}${contentToSave.trim()}`;
       const nowIso = new Date().toISOString();
 
       if (idToEdit) {
@@ -8028,12 +8029,10 @@ function AdminView({
           .update({
             content: formattedContent,
             is_active: isActiveToSave,
-            cta_type: encodedCtaType,
             updated_at: nowIso
           })
           .eq('id', idToEdit);
         if (error) {
-          // Fallback without optional columns if schema differs
           const { error: fallbackErr } = await supabase
             .from('announcements')
             .update({
@@ -8050,13 +8049,10 @@ function AdminView({
             {
               content: formattedContent,
               is_active: isActiveToSave,
-              cta_type: encodedCtaType,
-              created_at: nowIso,
               updated_at: nowIso
             }
           ]);
         if (error) {
-          // Fallback without optional columns if schema differs
           const { error: fallbackErr } = await supabase
             .from('announcements')
             .insert([

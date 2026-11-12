@@ -89,18 +89,16 @@ export async function savePushLogEntry(
         ? 'star'
         : 'megaphone';
       const iconTag = `[icon:${iconName}]`;
+      const typeTag = entry.type ? `[type:${entry.type}]` : '';
+      const targetTag = entry.targetId ? `[target:${entry.targetId}]` : '';
+      const linkTag = entry.url ? `[link:${entry.url}]` : '';
       const titleTag = entry.title ? `[${entry.title.trim()}] ` : '';
-      const content = `${iconTag}${titleTag}${(entry.body || '').trim()}`;
-      const encodedCtaType = (entry.targetId || entry.url)
-        ? `${entry.type || 'custom'}|${entry.targetId || ''}|${entry.url || '/'}`
-        : (entry.type || null);
+      const content = `${iconTag}${typeTag}${targetTag}${linkTag}${titleTag}${(entry.body || '').trim()}`;
 
       const { error } = await supabase.from('announcements').insert([
         {
           content,
           is_active: true,
-          cta_type: encodedCtaType,
-          created_at: newEntry.timestamp,
           updated_at: newEntry.timestamp
         }
       ]);
@@ -342,6 +340,29 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         targetAudienceLabel = `Device Token: ${cleanSubId.slice(0, 8)}...`;
       }
 
+      // 1. Always save as in-app announcement FIRST so all users & devices see it in the Header Bell
+      // even if OneSignal push encounters a configuration or subscription warning
+      let savedInBell = false;
+      try {
+        await onSaveAnnouncement({
+          title: title.trim(),
+          content: body.trim(),
+          icon: type === 'event' || type === 'weekend' ? 'event' : type === 'article' ? 'guide' : type === 'pro' ? 'star' : 'megaphone',
+          is_active: true,
+          cta_type: type,
+          target_id: targetId || null,
+          cta_link: url || '/',
+          send_push: false
+        });
+        savedInBell = true;
+        if (onRefetchAnnouncements) {
+          await onRefetchAnnouncements();
+        }
+      } catch (annErr) {
+        console.warn('Notice: announcement DB sync note:', annErr);
+      }
+
+      // 2. Dispatch mobile push notification via OneSignal
       const res = await oneSignalService.sendServerNotification(
         title.trim(),
         body.trim(),
@@ -359,7 +380,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
 
       const recipientCount = res?.recipients ?? res?.result?.recipients ?? (targetMode === 'specific' ? 1 : activeUsersList.length || 1);
 
-      // Record in history log (skip duplicate DB insert because onSaveAnnouncement saves to Supabase below)
+      // Record in history log (skip duplicate DB insert if onSaveAnnouncement already saved to Supabase)
       await savePushLogEntry({
         title: title.trim(),
         body: body.trim(),
@@ -369,33 +390,14 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         url: url || '/',
         recipientsCount: recipientCount,
         status: 'sent'
-      }, true);
-
-      // Save as in-app announcement so all users & devices see it in header notification bell
-      try {
-        await onSaveAnnouncement({
-          title: title.trim(),
-          content: body.trim(),
-          icon: type === 'event' || type === 'weekend' ? 'event' : type === 'article' ? 'guide' : type === 'pro' ? 'star' : 'megaphone',
-          is_active: true,
-          cta_type: type,
-          target_id: targetId || null,
-          cta_link: url || '/',
-          send_push: false
-        });
-        if (onRefetchAnnouncements) {
-          await onRefetchAnnouncements();
-        }
-      } catch (annErr) {
-        console.warn('Notice: announcement DB sync note:', annErr);
-      }
+      }, savedInBell);
 
       reloadPushLogs();
-      setMsg({ type: 'success', text: `🚀 Mobile Push Notification sent successfully! (${recipientCount} recipient${recipientCount > 1 ? 's' : ''})` });
+      setMsg({ type: 'success', text: `🚀 Notification publiée dans la cloche & Push Mobile envoyé avec succès ! (${recipientCount} destinataire${recipientCount > 1 ? 's' : ''})` });
       setPushComposeModal(null);
     } catch (err: any) {
       console.error('Error sending push notification:', err);
-      // Record failure entry in log
+      // Record failure entry in log (note: in-app bell notification is already saved above!)
       savePushLogEntry({
         title: title.trim(),
         body: body.trim(),
@@ -405,9 +407,13 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         url: url || '/',
         status: 'error',
         errorMessage: err?.message || 'Failed to dispatch notification'
-      });
+      }, true);
       reloadPushLogs();
-      setMsg({ type: 'error', text: 'Error sending push: ' + (err?.message || 'Check OneSignal configuration.') });
+      setPushComposeModal(null);
+      setMsg({
+        type: 'success',
+        text: `🔔 Notification enregistrée dans le centre de notifications (cloche) ! (Note Push OneSignal : ${err?.message || 'Vérifiez la configuration OneSignal'})`
+      });
     } finally {
       setIsSendingPush(false);
     }
