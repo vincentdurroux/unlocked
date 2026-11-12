@@ -378,7 +378,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
           target_id: targetId,
           url: url || '/'
         },
-        pushComposeModal.channels || ['ios', 'android']
+        pushComposeModal.channels || ['ios', 'android', 'web']
       );
 
       const recipientCount = res?.recipients ?? res?.result?.recipients ?? (targetMode === 'specific' ? 1 : activeUsersList.length || 1);
@@ -462,7 +462,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             targetSubscriptionIds,
             undefined,
             undefined,
-            ['ios', 'android']
+            ['ios', 'android', 'web']
           );
 
           await savePushLogEntry({
@@ -1975,17 +1975,17 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { id: 'ios' as const, label: ' iPhone / iPad', desc: 'Apple APNs native' },
-                        { id: 'android' as const, label: '🤖 Android App', desc: 'Google Play native' },
-                        { id: 'web' as const, label: '🌐 Web Push', desc: 'Desktop Browsers' }
+                        { id: 'ios' as const, label: ' iPhone / iPad', desc: 'iOS App & Safari PWA' },
+                        { id: 'android' as const, label: '🤖 Android', desc: 'Android App & PWA' },
+                        { id: 'web' as const, label: '🌐 Web Push', desc: 'Mobile & Desktop Web' }
                       ].map((chan) => {
-                        const active = (pushComposeModal.channels || ['ios', 'android']).includes(chan.id);
+                        const active = (pushComposeModal.channels || ['ios', 'android', 'web']).includes(chan.id);
                         return (
                           <button
                             key={chan.id}
                             type="button"
                             onClick={() => {
-                              const current = pushComposeModal.channels || ['ios', 'android'];
+                              const current = pushComposeModal.channels || ['ios', 'android', 'web'];
                               const next = active
                                 ? current.filter(c => c !== chan.id)
                                 : [...current, chan.id];

@@ -691,20 +691,45 @@ class OneSignalService {
       await this.loginUser(userId);
     }
 
-    // Sync player ID to Supabase only if on a mobile device or native wrapper (never overwrite mobile token with desktop Chrome Web Push ID)
-    const mobileSubId = this.nativeSubscriptionId || (dev.isMobile ? subId : null);
-    if (mobileSubId && userId && isSupabaseConfigured) {
-      try {
-        await supabase.from('profiles').update({
-          onesignal_player_id: mobileSubId,
-          updated_at: new Date().toISOString()
-        } as any).eq('id', userId);
-      } catch (_) {
-        // Column might not exist yet, safe fallback
-      }
+    // Sync subscription ID to Supabase (merging with existing device IDs so multiple devices per user are preserved)
+    if (subId && userId && isSupabaseConfigured) {
+      await this.persistUserSubscriptionId(userId, subId);
     }
 
     return true;
+  }
+
+  /**
+   * Append/merge a device Subscription ID into profiles.onesignal_player_id without overwriting other devices
+   */
+  private async persistUserSubscriptionId(userId: string, newSubId: string): Promise<void> {
+    if (!userId || !newSubId || !this.isRealServerAssignedId(newSubId) || !isSupabaseConfigured) return;
+    try {
+      const cleanNew = newSubId.trim();
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('onesignal_player_id')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const existingRaw = (existingProfile as any)?.onesignal_player_id || '';
+      const existingList = String(existingRaw)
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter((s: string) => s.length > 0 && !s.startsWith('local-'));
+
+      // Put the newest active device ID first, keeping up to 6 unique devices per user
+      const merged = [cleanNew, ...existingList.filter((id: string) => id !== cleanNew)].slice(0, 6).join(',');
+
+      if (merged !== existingRaw) {
+        await supabase.from('profiles').update({
+          onesignal_player_id: merged,
+          updated_at: new Date().toISOString()
+        } as any).eq('id', userId);
+      }
+    } catch (_) {
+      // Column might not exist yet, safe fallback
+    }
   }
 
   /**
@@ -865,16 +890,10 @@ class OneSignalService {
       console.warn('[OneSignal] Error setting External ID in OneSignal Web SDK:', err);
     }
 
-    // 5. Sync player / subscription ID to Supabase profiles ONLY for mobile / native subscriptions
-    // (Prevents opening the web app on a desktop Chrome browser from overwriting the user's mobile Subscription ID)
-    const mobileSubId = this.nativeSubscriptionId || (dev.isMobile ? (this.getCurrentSubscriptionId() || windowAny?.OneSignal?.User?.PushSubscription?.id) : null);
-    if (mobileSubId && cleanUserId && isSupabaseConfigured) {
-      try {
-        await supabase.from('profiles').update({
-          onesignal_player_id: mobileSubId,
-          updated_at: new Date().toISOString()
-        } as any).eq('id', cleanUserId);
-      } catch (_) {}
+    // 5. Sync subscription ID to Supabase profiles (preserving all devices of the user)
+    const subId = this.nativeSubscriptionId || this.getCurrentSubscriptionId() || windowAny?.OneSignal?.User?.PushSubscription?.id;
+    if (subId && cleanUserId && isSupabaseConfigured) {
+      await this.persistUserSubscriptionId(cleanUserId, subId);
     }
   }
 
@@ -940,7 +959,7 @@ class OneSignalService {
         targetSubscriptionIds,
         imageUrl,
         data,
-        targetChannels: targetChannels || ['ios', 'android']
+        targetChannels: targetChannels || ['ios', 'android', 'web']
       })
     });
     const jsonRes = await res.json();

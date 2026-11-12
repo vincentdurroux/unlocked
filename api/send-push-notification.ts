@@ -88,14 +88,16 @@ export default async function handler(req: any, res: any) {
       ? rawUrl
       : `${baseUrl}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
 
-    // Default to mobile native channels ['ios', 'android'] unless 'web' is explicitly requested
     const selectedChannels: string[] = Array.isArray(targetChannels) && targetChannels.length > 0
       ? targetChannels
-      : (Array.isArray(channels) && channels.length > 0 ? channels : ['ios', 'android']);
+      : (Array.isArray(channels) && channels.length > 0 ? channels : ['ios', 'android', 'web']);
 
     const enableIos = selectedChannels.includes('ios') || selectedChannels.includes('mobile');
     const enableAndroid = selectedChannels.includes('android') || selectedChannels.includes('mobile');
-    const enableWeb = selectedChannels.includes('web');
+    // Crucial: Android PWA/TWA/Chrome and iPhone Safari PWA rely on Web Push in OneSignal
+    const enableWeb = selectedChannels.includes('web') || enableIos || enableAndroid;
+
+    const collapseKey = `unlocked_${Date.now()}`;
 
     const basePayload: any = {
       app_id: appId,
@@ -112,7 +114,9 @@ export default async function handler(req: any, res: any) {
       url: absoluteUrl,
       web_url: absoluteUrl,
       priority: 10,
-      // Target platforms strictly according to requested channels:
+      collapse_id: collapseKey,
+      web_push_topic: collapseKey,
+      // Target platforms: iOS native APNs, iOS Safari PWA Web Push, Android FCM, Android Chrome PWA/TWA, and Web
       isIos: enableIos,
       isAndroid: enableAndroid,
       isChromeWeb: enableWeb,
@@ -122,8 +126,6 @@ export default async function handler(req: any, res: any) {
       isFirefox: enableWeb,
       isEdge: enableWeb,
       isAnyWeb: enableWeb,
-      isWP_WNS: false,
-      isAdm: false,
       ios_sound: "default",
       content_available: true,
       mutable_content: true,
@@ -147,20 +149,28 @@ export default async function handler(req: any, res: any) {
       basePayload.chrome_web_image = cleanImg;
     }
 
-    const subs = (targetSubscriptionIds && Array.isArray(targetSubscriptionIds) ? targetSubscriptionIds : [])
-      .concat(targetPlayerIds && Array.isArray(targetPlayerIds) ? targetPlayerIds : [])
-      .filter(Boolean);
+    // Support comma-separated list of multiple device subscription IDs per user
+    const rawSubs = (targetSubscriptionIds && Array.isArray(targetSubscriptionIds) ? targetSubscriptionIds : [])
+      .concat(targetPlayerIds && Array.isArray(targetPlayerIds) ? targetPlayerIds : []);
+    const subs = Array.from(
+      new Set(
+        rawSubs
+          .flatMap((item: any) => String(item || '').split(','))
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 0 && !s.startsWith('local-'))
+      )
+    );
 
     const hasUserIds = Boolean(targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0);
     const payload: any = { ...basePayload };
 
-    if (hasUserIds) {
-      // Prioritize External ID (Supabase User ID) so ALL native mobile subscriptions of the user are targeted
+    if (subs.length > 0) {
+      // Directly target all known device Subscription IDs for the user(s)
+      payload.include_subscription_ids = subs;
+    } else if (hasUserIds) {
+      // Target by External ID (Supabase User ID)
       payload.include_aliases = { external_id: targetUserIds };
       payload.target_channel = "push";
-    } else if (subs.length > 0) {
-      // Explicit device token targeting (or fallback when no user ID is provided)
-      payload.include_subscription_ids = subs;
     } else {
       payload.included_segments = ["Total Subscriptions"];
     }
@@ -193,20 +203,22 @@ export default async function handler(req: any, res: any) {
       data = await oneSignalRes.json();
     }
 
-    // Fallback: if External ID targeting yielded 0 recipients (e.g. device not yet linked via OneSignal.login)
-    // and we also have a stored Subscription ID, retry with include_subscription_ids
-    const initialRecipients = data?.recipients ?? (data?.id ? 1 : 0);
-    if (hasUserIds && subs.length > 0 && (!oneSignalRes.ok || initialRecipients === 0 || !data?.id)) {
-      const fallbackPayload: any = {
-        ...basePayload,
-        include_subscription_ids: subs
-      };
-      const fbRes = await sendToOneSignal(fallbackPayload, activeAuth);
-      const fbData = await fbRes.json();
-      if (fbRes.ok && (fbData?.id || (fbData?.recipients ?? 0) > 0)) {
-        oneSignalRes = fbRes;
-        data = fbData;
-      }
+    // When targeting a specific user, ALSO dispatch to External ID (with the same collapse_id / web_push_topic)
+    // so any additional phone/tablet logged into that account (whose ID wasn't in subs yet) also gets the push!
+    if (hasUserIds && subs.length > 0) {
+      try {
+        const aliasPayload: any = {
+          ...basePayload,
+          include_aliases: { external_id: targetUserIds },
+          target_channel: "push"
+        };
+        const aliasRes = await sendToOneSignal(aliasPayload, activeAuth);
+        const aliasData = await aliasRes.json();
+        if (!oneSignalRes.ok && aliasRes.ok) {
+          oneSignalRes = aliasRes;
+          data = aliasData;
+        }
+      } catch (_) {}
     }
 
     if (!oneSignalRes.ok) {
@@ -219,7 +231,7 @@ export default async function handler(req: any, res: any) {
     const recipientCount = data.recipients ?? (data.id ? 1 : 0);
     let warning: string | undefined = undefined;
     if (recipientCount === 0) {
-      warning = "La notification a été acceptée par OneSignal mais aucun appareil Mobile (iOS/Android) actif n'était ciblé (0 destinataire). Vérifiez que l'application mobile iOS/Android est bien abonnée à OneSignal.";
+      warning = "La notification a été acceptée par OneSignal mais aucun appareil actif n'était ciblé (0 destinataire). Vérifiez que votre téléphone est bien abonné aux notifications.";
     }
 
     return res.status(200).json({
