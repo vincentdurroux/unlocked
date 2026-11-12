@@ -192,6 +192,30 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
   const [pushLogs, setPushLogs] = useState<PushLogEntry[]>(() => getPushLogs());
   const [logFilterType, setLogFilterType] = useState<string>('all');
   const [logSearchQuery, setLogSearchQuery] = useState<string>('');
+  const [confirmClearHistory, setConfirmClearHistory] = useState(false);
+  const [confirmClearCustom, setConfirmClearCustom] = useState(false);
+
+  const handleClearAllHistory = () => {
+    clearPushHistoryLog();
+    setPushLogs([]);
+    setConfirmClearHistory(false);
+    setMsg({ type: 'success', text: 'All push notification history cleared successfully.' });
+  };
+
+  const handleClearCustomHistory = () => {
+    const remaining = pushLogs.filter((log) => {
+      const t = (log.type || '').toLowerCase();
+      return ['event', 'article', 'pro', 'weekend'].includes(t);
+    });
+    try {
+      localStorage.setItem(PUSH_LOG_STORAGE_KEY, JSON.stringify(remaining));
+    } catch (e) {
+      console.error('Failed to update push logs:', e);
+    }
+    setPushLogs(remaining);
+    setConfirmClearCustom(false);
+    setMsg({ type: 'success', text: 'Custom messages push log cleared successfully.' });
+  };
 
   // Search & Filter states for entity tabs
   const [eventSearch, setEventSearch] = useState('');
@@ -296,6 +320,22 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     });
   }, [pushLogs, logFilterType, logSearchQuery]);
 
+  // Only custom announcements (strictly exclude events, articles, guides, pros, weekend)
+  const customAnnouncements = useMemo(() => {
+    return adminAnnouncements.filter((ann) => {
+      const cta = (ann.cta_type || '').toLowerCase();
+      return !['event', 'article', 'guide', 'pro', 'weekend'].includes(cta);
+    });
+  }, [adminAnnouncements]);
+
+  // Only custom push logs (strictly exclude events, articles, pros, weekend)
+  const customPushLogs = useMemo(() => {
+    return pushLogs.filter((log) => {
+      const t = (log.type || '').toLowerCase();
+      return !['event', 'article', 'pro', 'weekend'].includes(t);
+    });
+  }, [pushLogs]);
+
   // Check if target was already pushed
   const isTargetPushed = (targetId?: string) => {
     if (!targetId) return null;
@@ -397,7 +437,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       }, savedInBell);
 
       reloadPushLogs();
-      setMsg({ type: 'success', text: `🚀 Notification publiée dans la cloche & Push Mobile envoyé avec succès ! (${recipientCount} destinataire${recipientCount > 1 ? 's' : ''})` });
+      setMsg({ type: 'success', text: `🚀 Notification published to bell & Mobile Push sent successfully! (${recipientCount} recipient${recipientCount > 1 ? 's' : ''})` });
       setPushComposeModal(null);
     } catch (err: any) {
       console.error('Error sending push notification:', err);
@@ -416,7 +456,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       setPushComposeModal(null);
       setMsg({
         type: 'error',
-        text: `🔔 Enregistré dans la cloche, mais échec Push OneSignal : ${err?.message || 'Vérifiez la configuration OneSignal'}`
+        text: `🔔 Saved to Bell notifications, but OneSignal Push dispatch failed: ${err?.message || 'Check OneSignal setup'}`
       });
     } finally {
       setIsSendingPush(false);
@@ -606,26 +646,6 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
               </p>
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setPushComposeModal({
-                isOpen: true,
-                type: 'custom',
-                title: 'Unlocked Valencia 🌴',
-                body: '',
-                targetMode: 'all',
-                url: '/',
-                imageUrl: '',
-                previewDevice: 'ios'
-              });
-            }}
-            className="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 active:scale-95 text-slate-900 font-bold text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-yellow-500/15 flex items-center justify-center gap-2 cursor-pointer shrink-0"
-          >
-            <Send className="w-4 h-4" />
-            <span>Send Custom Push</span>
-          </button>
         </div>
 
         {/* Navigation Sub-Tabs */}
@@ -658,9 +678,9 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             )}
           >
             <Bell className="w-4 h-4 text-yellow-400" />
-            <span>In-App & Custom Push</span>
+            <span>Custom Notifications</span>
             <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-white/20 font-extrabold">
-              {adminAnnouncements.length}
+              {customAnnouncements.length}
             </span>
           </button>
 
@@ -781,19 +801,35 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
               </div>
 
               {pushLogs.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm('Clear all push history logs from this browser?')) {
-                      clearPushHistoryLog();
-                      reloadPushLogs();
-                    }
-                  }}
-                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl border border-rose-100 transition-colors flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Clear History</span>
-                </button>
+                confirmClearHistory ? (
+                  <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={handleClearAllHistory}
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Confirm Clear All</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmClearHistory(false)}
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl cursor-pointer"
+                      title="Cancel"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearHistory(true)}
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl border border-rose-100 transition-colors flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Clear History</span>
+                  </button>
+                )
               )}
             </div>
 
@@ -816,7 +852,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                 className="w-full sm:w-48 bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer"
               >
                 <option value="all">All Notification Types</option>
-                <option value="custom">Custom Broadcasts</option>
+                <option value="custom">Custom Notifications</option>
                 <option value="event">Events</option>
                 <option value="article">Articles & Guides</option>
                 <option value="pro">Pro Spotlights</option>
@@ -906,31 +942,37 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         </div>
       )}
 
-      {/* SUB-TAB 2: Custom Broadcasts & In-App Announcements */}
+      {/* SUB-TAB 2: Custom Notifications (Unified Push & In-App) */}
       {activeTab === 'custom' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>
               <h4 className="text-base font-bold font-display text-slate-800">
-                In-App Announcements & Custom Messages
+                Custom Notifications
               </h4>
-              <p className="text-xs text-slate-400 font-medium">Publish announcements that show in the app bell dropdown or push to lock screens.</p>
+              <p className="text-xs text-slate-400 font-medium">
+                Create and broadcast custom notifications (dispatched to iOS &amp; Android smartphones via OneSignal and saved to the in-app Bell center).
+              </p>
             </div>
             {!showAnnForm && (
               <button
+                type="button"
                 onClick={() => {
-                  setAnnTitle('');
-                  setAnnContent('');
-                  setAnnIsActive(true);
-                  setAnnCtaType('');
-                  setAnnSendPush(true);
-                  setEditingAnnId(null);
-                  setShowAnnForm(true);
+                  setPushComposeModal({
+                    isOpen: true,
+                    type: 'custom',
+                    title: 'Unlocked Valencia 🌴',
+                    body: '',
+                    targetMode: 'all',
+                    url: '/',
+                    imageUrl: '',
+                    previewDevice: 'ios'
+                  });
                 }}
-                className="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 active:scale-95 text-slate-900 text-xs font-bold uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-yellow-500/10 flex items-center gap-2 cursor-pointer"
+                className="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 active:scale-95 text-slate-900 text-xs font-bold uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-yellow-500/10 flex items-center gap-2 cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
-                New Announcement
+                New Custom Notification
               </button>
             )}
           </div>
@@ -940,9 +982,9 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div>
                   <h4 className="text-sm font-bold uppercase tracking-wider text-slate-700">
-                    {editingAnnId ? "Edit Announcement" : "New In-App Announcement"}
+                    {editingAnnId ? "Edit Notification" : "New Custom Notification"}
                   </h4>
-                  <p className="text-xs text-slate-400 font-medium">Configure message and mobile push delivery via OneSignal.</p>
+                  <p className="text-xs text-slate-400 font-medium">Configure message and delivery via OneSignal Push &amp; In-App Bell.</p>
                 </div>
                 <button
                   type="button"
@@ -995,10 +1037,10 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                     <div>
                       <label htmlFor="annSendPushCheck" className="text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer">
                         <Bell className="w-3.5 h-3.5 text-blue-600" />
-                        Envoyer le Push Mobile OneSignal (iOS App Store & Android)
+                        Send OneSignal Mobile Push (iOS App Store &amp; Android)
                       </label>
                       <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                        Toutes les annonces sont envoyées via OneSignal Push directement sur smartphones (iPhone App Store &amp; Android).
+                        Dispatches real-time push notifications directly to smartphone lock screens (iOS App Store &amp; Android).
                       </p>
                     </div>
                   </div>
@@ -1065,78 +1107,206 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
               </div>
             </form>
           ) : (
-            <div className="space-y-4">
-              {loadingAnnouncements ? (
-                <div className="py-12 text-center">
-                  <Loader2 className="w-8 h-8 text-yellow-500 animate-spin mx-auto" />
+            <div className="space-y-6">
+              {/* Custom Notifications List */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Active Custom Announcements ({customAnnouncements.length})
+                  </h5>
                 </div>
-              ) : adminAnnouncements.length === 0 ? (
-                <div className="bg-white p-10 rounded-[28px] border border-slate-100 text-center space-y-2">
-                  <Megaphone className="w-8 h-8 text-slate-300 mx-auto" />
-                  <p className="text-xs font-bold text-slate-700">No announcements published yet</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3.5">
-                  {adminAnnouncements.map((ann) => {
-                    const pushedAt = isTargetPushed(String(ann.id));
-                    return (
-                      <div
-                        key={ann.id}
-                        className="p-4 sm:p-5 rounded-[24px] bg-white border border-slate-100 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
-                      >
-                        <div className="space-y-1 text-left min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-yellow-50 text-yellow-800 border border-yellow-200">
-                              {ann.title || 'Announcement'}
-                            </span>
-                            <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full", ann.is_active !== false ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500")}>
-                              {ann.is_active !== false ? 'Online' : 'Offline'}
-                            </span>
-                            {pushedAt && (
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 inline-flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> OneSignal Pushed
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs sm:text-sm font-semibold text-slate-900 leading-snug">{ann.content}</p>
-                        </div>
 
-                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                {loadingAnnouncements ? (
+                  <div className="py-12 text-center">
+                    <Loader2 className="w-8 h-8 text-yellow-500 animate-spin mx-auto" />
+                  </div>
+                ) : customAnnouncements.length === 0 ? (
+                  <div className="bg-white p-8 rounded-[24px] border border-slate-100 text-center space-y-2">
+                    <Megaphone className="w-7 h-7 text-slate-300 mx-auto" />
+                    <p className="text-xs font-bold text-slate-700">No custom notifications published yet</p>
+                    <p className="text-xs text-slate-400">Click "New Custom Notification" above to broadcast your first custom message.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3">
+                    {customAnnouncements.map((ann) => {
+                      const pushedAt = isTargetPushed(String(ann.id));
+                      return (
+                        <div
+                          key={ann.id}
+                          className="p-4 sm:p-5 rounded-[24px] bg-white border border-slate-100 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                        >
+                          <div className="space-y-1 text-left min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-yellow-50 text-yellow-800 border border-yellow-200">
+                                {ann.title || 'Notification'}
+                              </span>
+                              <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full", ann.is_active !== false ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500")}>
+                                {ann.is_active !== false ? 'Online' : 'Offline'}
+                              </span>
+                              {pushedAt && (
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 inline-flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> OneSignal Push Sent
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs sm:text-sm font-semibold text-slate-900 leading-snug">{ann.content}</p>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={() => openAnnouncementPushModal(ann)}
+                              className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 active:scale-95 text-slate-900 font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                              title="Broadcast this notification with OneSignal (iOS & Android)"
+                            >
+                              <Send className="w-3.5 h-3.5 text-slate-900" />
+                              <span>Push OneSignal</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingAnnId(ann.id);
+                                setAnnTitle(ann.title || '');
+                                setAnnContent(ann.content || '');
+                                setAnnSendPush(true);
+                                setShowAnnForm(true);
+                              }}
+                              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onDeleteAnnouncement(ann.id)}
+                              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl border border-rose-100 cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Dedicated Custom Push Log Table */}
+              <div className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div>
+                    <h5 className="text-sm font-bold font-display text-slate-900 flex items-center gap-2">
+                      <History className="w-4 h-4 text-yellow-500" />
+                      Sent Custom Messages Log
+                    </h5>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      Audit history of custom push messages delivered to users (excluding events, guides, pros, and weekend spotlights).
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                    <span className="px-2.5 py-1 bg-yellow-50 text-yellow-800 text-[10px] font-bold rounded-full border border-yellow-200">
+                      {customPushLogs.length} custom alert{customPushLogs.length !== 1 ? 's' : ''} logged
+                    </span>
+
+                    {customPushLogs.length > 0 && (
+                      confirmClearCustom ? (
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => openAnnouncementPushModal(ann)}
-                            className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 active:scale-95 text-slate-900 font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                            title="Diffuser cette annonce avec OneSignal (iOS & Android)"
+                            onClick={handleClearCustomHistory}
+                            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-[10px] uppercase rounded-full shadow-xs transition-all flex items-center gap-1 cursor-pointer"
                           >
-                            <Send className="w-3.5 h-3.5 text-slate-900" />
-                            <span>Push OneSignal</span>
+                            <Check className="w-3 h-3" />
+                            <span>Confirm</span>
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditingAnnId(ann.id);
-                              setAnnTitle(ann.title || '');
-                              setAnnContent(ann.content || '');
-                              setAnnSendPush(true);
-                              setShowAnnForm(true);
-                            }}
-                            className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer"
+                            onClick={() => setConfirmClearCustom(false)}
+                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-[10px] rounded-full cursor-pointer"
+                            title="Cancel"
                           >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDeleteAnnouncement(ann.id)}
-                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl border border-rose-100 cursor-pointer"
-                          >
-                            Delete
+                            <X className="w-3 h-3" />
                           </button>
                         </div>
-                      </div>
-                    );
-                  })}
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmClearCustom(true)}
+                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[10px] rounded-full border border-rose-100 transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Clear custom messages log"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Clear Log</span>
+                        </button>
+                      )
+                    )}
+                  </div>
                 </div>
-              )}
+
+                {customPushLogs.length === 0 ? (
+                  <div className="py-8 text-center space-y-1">
+                    <History className="w-6 h-6 text-slate-300 mx-auto" />
+                    <p className="text-xs font-bold text-slate-600">No custom messages sent yet</p>
+                    <p className="text-[11px] text-slate-400">All broadcasted custom push notifications will appear in this log.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-700">
+                      <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px] border-y border-slate-100">
+                        <tr>
+                          <th className="p-3">Date & Time</th>
+                          <th className="p-3">Title & Message</th>
+                          <th className="p-3">Audience</th>
+                          <th className="p-3 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {customPushLogs.map((log) => {
+                          const dateFormatted = new Date(log.timestamp).toLocaleString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          });
+
+                          return (
+                            <tr key={log.id} className="hover:bg-slate-50/60 transition-colors">
+                              <td className="p-3 whitespace-nowrap text-slate-500 font-medium text-[11px]">
+                                {dateFormatted}
+                              </td>
+                              <td className="p-3 min-w-[220px]">
+                                <p className="font-bold text-slate-900 leading-snug">{log.title}</p>
+                                <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{log.body}</p>
+                              </td>
+                              <td className="p-3 whitespace-nowrap">
+                                <span className="font-semibold text-slate-800">{log.target}</span>
+                                {log.recipientsCount !== undefined && (
+                                  <span className="text-[10px] text-slate-400 font-medium block">
+                                    ~{log.recipientsCount} recipient{log.recipientsCount > 1 ? 's' : ''}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-3 whitespace-nowrap text-center">
+                                {log.status === 'sent' ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    Sent
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-200">
+                                    <AlertCircle className="w-3 h-3 text-rose-600" />
+                                    Failed
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1957,7 +2127,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                           className="w-full bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                         />
                         <p className="text-[10px] text-blue-700 leading-tight">
-                          💡 Collez ici l'ID de votre iPhone (visible dans la colonne ID de OneSignal) pour forcer l'envoi direct sur votre téléphone sans passer par l'alias.
+                          💡 Paste your device token or OneSignal subscription ID here to test direct delivery to a specific device.
                         </p>
                       </div>
                     )}
