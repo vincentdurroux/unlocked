@@ -172,18 +172,24 @@ export function cleanIdHelper(raw?: string | null): string | undefined {
   const decoded = decodeURIComponent(String(raw)).trim();
   const uuidMatch = decoded.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
   if (uuidMatch) return uuidMatch[0];
-  const prefixedMatch = decoded.match(/^(?:evt|event|pro|guide|article|art|rec|ad|chat)-(.+)/i);
-  if (prefixedMatch && prefixedMatch[1]) return prefixedMatch[1].trim();
-  const numMatch = decoded.match(/^\d+/);
-  if (numMatch) return numMatch[0];
-  const token = decoded.split(/[\s\r\n]+/)[0];
+  // Preserve full article/event/pro IDs such as "art-1741234567890", "h-1", "p-2", "hc-1", etc.
+  // Only strip trailing query/hash/whitespace noise from share links
+  const token = decoded.split(/[\s\r\n&#?]+/)[0];
   return token || undefined;
+}
+
+export function stripLeadingEmojisAndSymbols(text?: string | null): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/^[\s\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}🎉🔥📅🚨✨🌴📖🌟📲🔔💬🛍️💼]+/gu, '')
+    .trim();
 }
 
 export function isProNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
   if (item.type === 'recommendation_request' || item.type === 'recommendation') return false;
+  if (item.type === 'event' || item.type === 'weekend' || item.type === 'guide' || item.type === 'article' || item.cta_type === 'event' || item.cta_type === 'weekend' || item.cta_type === 'guide' || item.cta_type === 'article' || item.icon === 'event' || item.icon === 'guide') return false;
   if (item.type === 'pro' || item.cta_type === 'pro') return true;
   if (item.icon === 'star' && (item.target_id || (item.cta_link && item.cta_link.includes('proId=')))) return true;
   if (item.cta_link && (item.cta_link.includes('proId=') || item.cta_link.includes('#directory') || item.cta_link.includes('#explore') || item.cta_link.includes('/pro/'))) return true;
@@ -201,20 +207,26 @@ export function isProNotification(item?: InAppNotification | null): boolean {
 
 export function extractProIdFromNotification(item?: InAppNotification | null): string | undefined {
   if (!item) return undefined;
-  if (item.cta_link) {
-    const match = item.cta_link.match(/[?&]proId=([^&#]+)/) || item.cta_link.match(/\/pro\/([^/?#]+)/);
-    if (match && match[1]) {
-      return cleanIdHelper(match[1]) || match[1];
-    }
-  }
   if (item.target_id) {
     const str = String(item.target_id).trim();
     if (str && !str.startsWith('push_log_')) {
       return cleanIdHelper(str) || str;
     }
   }
+  if (item.cta_link) {
+    const match = item.cta_link.match(/[?&]proId=([^&#]+)/) || item.cta_link.match(/\/pro\/([^/?#]+)/);
+    if (match && match[1]) {
+      return cleanIdHelper(match[1]) || match[1];
+    }
+  }
   if (item.pro_name && !item.pro_name.toLowerCase().includes('member') && !item.pro_name.toLowerCase().includes('community')) {
     return item.pro_name.trim();
+  }
+  if (item.title) {
+    const cleanTitle = stripLeadingEmojisAndSymbols(item.title);
+    if (cleanTitle && cleanTitle.toLowerCase() !== 'announcement' && cleanTitle.toLowerCase() !== 'notification') {
+      return cleanTitle;
+    }
   }
   return undefined;
 }
@@ -222,11 +234,11 @@ export function extractProIdFromNotification(item?: InAppNotification | null): s
 export function isEventNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
+  if (item.type === 'guide' || item.type === 'article' || item.type === 'pro' || item.cta_type === 'guide' || item.cta_type === 'article' || item.cta_type === 'pro' || item.icon === 'guide' || item.icon === 'star') return false;
+  if (item.cta_link && (item.cta_link.includes('guideId=') || item.cta_link.includes('#guides') || item.cta_link.includes('proId='))) return false;
   if (item.type === 'event' || item.type === 'weekend' || item.icon === 'event' || item.cta_type === 'event' || item.cta_type === 'weekend') return true;
   if (item.cta_link && (item.cta_link.includes('event') || item.cta_link.includes('eventId='))) return true;
   if (item.target_id && (String(item.target_id).toLowerCase().startsWith('evt-') || String(item.target_id).toLowerCase().startsWith('event-'))) return true;
-
-  if (item.type === 'guide' || item.type === 'article' || item.type === 'pro' || item.cta_type === 'guide' || item.cta_type === 'article' || item.cta_type === 'pro') return false;
 
   const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
   if (text.includes('event') || text.includes('meetup') || text.includes('concert') || text.includes('festival') || text.includes('soirée') || text.includes('fête')) {
@@ -237,20 +249,23 @@ export function isEventNotification(item?: InAppNotification | null): boolean {
 
 export function extractEventIdFromNotification(item?: InAppNotification | null): string | undefined {
   if (!item) return undefined;
-  if (item.cta_link) {
-    const match = item.cta_link.match(/[?&]eventId=([^&#]+)/) || item.cta_link.match(/\/events\/([^/?#]+)/);
-    if (match && match[1]) {
-      return cleanIdHelper(match[1]) || match[1];
-    }
-  }
   if (item.target_id) {
     const str = String(item.target_id).trim();
     if (str && !str.startsWith('push_log_')) {
       return cleanIdHelper(str) || str;
     }
   }
+  if (item.cta_link) {
+    const match = item.cta_link.match(/[?&]eventId=([^&#]+)/) || item.cta_link.match(/\/events\/([^/?#]+)/);
+    if (match && match[1]) {
+      return cleanIdHelper(match[1]) || match[1];
+    }
+  }
   if (item.title && item.title.toLowerCase() !== 'announcement' && item.title.toLowerCase() !== 'notification') {
-    return item.title.trim();
+    const cleanTitle = stripLeadingEmojisAndSymbols(item.title);
+    if (cleanTitle && !cleanTitle.toLowerCase().startsWith('valencia weekend')) {
+      return cleanTitle;
+    }
   }
   return undefined;
 }
@@ -258,7 +273,7 @@ export function extractEventIdFromNotification(item?: InAppNotification | null):
 export function isRecommendProNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
-  if (isProNotification(item)) return false;
+  if (isProNotification(item) || isEventNotification(item) || isGuideNotification(item)) return false;
   if (item.type === 'recommendation_request' || item.type === 'recommendation') return true;
   if (item.cta_type === 'recommend_pro') return true;
   if (item.icon === 'recommendation') return true;
@@ -283,11 +298,11 @@ export function isRecommendProNotification(item?: InAppNotification | null): boo
 export function isGuideNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
+  if (item.type === 'event' || item.type === 'weekend' || item.type === 'pro' || item.cta_type === 'event' || item.cta_type === 'weekend' || item.cta_type === 'pro' || item.icon === 'event' || item.icon === 'star') return false;
+  if (item.cta_link && (item.cta_link.includes('eventId=') || item.cta_link.includes('#events') || item.cta_link.includes('proId='))) return false;
   if (item.type === 'guide' || item.type === 'article' || item.icon === 'guide' || item.cta_type === 'guide' || item.cta_type === 'article') return true;
   if (item.cta_link && (item.cta_link.includes('guide') || item.cta_link.includes('guides') || item.cta_link.includes('guideId='))) return true;
   if (item.target_id && (String(item.target_id).toLowerCase().startsWith('guide-') || String(item.target_id).toLowerCase().startsWith('art-') || String(item.target_id).toLowerCase().startsWith('article-'))) return true;
-
-  if (item.type === 'event' || item.type === 'weekend' || item.type === 'pro' || item.cta_type === 'event' || item.cta_type === 'pro') return false;
 
   const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
   if (
@@ -320,17 +335,36 @@ export function extractGuideIdFromNotification(item?: InAppNotification | null):
     }
   }
 
+  // Fallback to cleaned notification title so GuidesView can match the exact article title
+  if (item.title && item.title.toLowerCase() !== 'announcement' && item.title.toLowerCase() !== 'notification') {
+    const cleanTitle = stripLeadingEmojisAndSymbols(item.title);
+    if (cleanTitle) {
+      return cleanTitle;
+    }
+  }
+
   const textToScan = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
   
-  if (textToScan.includes('nie') || textToScan.includes('foreigner identity') || textToScan.includes('tie')) return 'nie-1';
-  if (textToScan.includes('empadronamiento') || textToScan.includes('padrón') || textToScan.includes('padron')) return 'emp-1';
-  if (textToScan.includes('house') || textToScan.includes('housing') || textToScan.includes('home') || textToScan.includes('rent') || textToScan.includes('apartment') || textToScan.includes('logement') || textToScan.includes('ruzafa') || textToScan.includes('cabanyal')) return 'h-1';
-  if (textToScan.includes('bank') || textToScan.includes('banking') || textToScan.includes('account') || textToScan.includes('banque')) return 'b-1';
-  if (textToScan.includes('school') || textToScan.includes('education') || textToScan.includes('école') || textToScan.includes('kindergarten') || textToScan.includes('colegio')) return 'edu-1';
-  if (textToScan.includes('tax') || textToScan.includes('beckham') || textToScan.includes('impôt') || textToScan.includes('autonomo') || textToScan.includes('autónomo')) return 'tax-1';
-  if (textToScan.includes('health') || textToScan.includes('sip') || textToScan.includes('doctor') || textToScan.includes('santé') || textToScan.includes('médical') || textToScan.includes('hospital')) return 'health-1';
-  if (textToScan.includes('transport') || textToScan.includes('metro') || textToScan.includes('valenbisi') || textToScan.includes('driving') || textToScan.includes('emt')) return 'trans-1';
-  if (textToScan.includes('pet') || textToScan.includes('dog') || textToScan.includes('cat') || textToScan.includes('veterinarian') || textToScan.includes('animaux')) return 'pet-1';
+  if (textToScan.includes('empadronamiento') || textToScan.includes('padrón') || textToScan.includes('padron')) return 'p-1';
+  if (textToScan.includes('nie') || textToScan.includes('foreigner identity') || textToScan.includes('tie')) return 'p-2';
+  if (textToScan.includes('where should you live') || textToScan.includes('ruzafa') || textToScan.includes('cabanyal')) return 'h-1';
+  if (textToScan.includes('renting in valencia') || textToScan.includes('fianza')) return 'h-2';
+  if (textToScan.includes('setting up your new home') || textToScan.includes('fiber') || textToScan.includes('utilities')) return 'h-3';
+  if (textToScan.includes('opening a spanish bank')) return 'b-1';
+  if (textToScan.includes('bizum') || textToScan.includes('understanding spanish banking')) return 'b-2';
+  if (textToScan.includes('managing your money') || textToScan.includes('beckham')) return 'b-3';
+  if (textToScan.includes('choosing a school')) return 's-1';
+  if (textToScan.includes('public, private or international')) return 's-2';
+  if (textToScan.includes('school admissions')) return 's-3';
+  if (textToScan.includes('healthcare in spain')) return 'hc-1';
+  if (textToScan.includes('public vs private healthcare')) return 'hc-2';
+  if (textToScan.includes('finding a doctor') || textToScan.includes('sip card')) return 'hc-3';
+  if (textToScan.includes('getting around valencia')) return 't-1';
+  if (textToScan.includes('valenbisi')) return 't-2';
+  if (textToScan.includes('driving in spain')) return 't-3';
+  if (textToScan.includes('moving to spain with a pet')) return 'pt-1';
+  if (textToScan.includes('dog-friendly valencia')) return 'pt-2';
+  if (textToScan.includes('finding a vet')) return 'pt-3';
 
   return undefined;
 }

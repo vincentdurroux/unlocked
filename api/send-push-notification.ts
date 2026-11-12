@@ -50,7 +50,19 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    const { title, message, targetUserIds, targetSubscriptionIds, targetPlayerIds, url, appId: requestedAppId } = body || {};
+    const {
+      title,
+      message,
+      targetUserIds,
+      targetSubscriptionIds,
+      targetPlayerIds,
+      url,
+      appId: requestedAppId,
+      imageUrl,
+      data: customData,
+      channels,
+      targetChannels
+    } = body || {};
     const config = getActiveOneSignalConfig();
     const appId = requestedAppId || config.appId;
     const restApiKey = config.restApiKey;
@@ -70,7 +82,22 @@ export default async function handler(req: any, res: any) {
     const titleStr = title || "Unlocked Valencia 🌴";
     const messageStr = message || "Nouvelle notification Unlocked";
 
-    const payload: any = {
+    const baseUrl = "https://mycityunlocked.app";
+    const rawUrl = url || customData?.url || "/";
+    const absoluteUrl = rawUrl.startsWith("http")
+      ? rawUrl
+      : `${baseUrl}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
+
+    // Default to mobile native channels ['ios', 'android'] unless 'web' is explicitly requested
+    const selectedChannels: string[] = Array.isArray(targetChannels) && targetChannels.length > 0
+      ? targetChannels
+      : (Array.isArray(channels) && channels.length > 0 ? channels : ['ios', 'android']);
+
+    const enableIos = selectedChannels.includes('ios') || selectedChannels.includes('mobile');
+    const enableAndroid = selectedChannels.includes('android') || selectedChannels.includes('mobile');
+    const enableWeb = selectedChannels.includes('web');
+
+    const basePayload: any = {
       app_id: appId,
       headings: {
         en: titleStr,
@@ -82,60 +109,104 @@ export default async function handler(req: any, res: any) {
         fr: messageStr,
         es: messageStr
       },
-      url: url || "/",
+      url: absoluteUrl,
+      web_url: absoluteUrl,
       priority: 10,
-      // Target ALL platforms: iOS native app, iOS Web Push / PWA, Android, and Web
-      isIos: true,
-      isAndroid: true,
-      isChromeWeb: true,
-      isSafariWeb: true,
-      isFirefox: true,
-      isEdge: true,
-      isAnyWeb: true,
+      // Target platforms strictly according to requested channels:
+      isIos: enableIos,
+      isAndroid: enableAndroid,
+      isChromeWeb: enableWeb,
+      isChrome: enableWeb,
+      isSafariWeb: enableWeb,
+      isSafari: enableWeb,
+      isFirefox: enableWeb,
+      isEdge: enableWeb,
+      isAnyWeb: enableWeb,
+      isWP_WNS: false,
+      isAdm: false,
+      ios_sound: "default",
+      content_available: true,
+      mutable_content: true,
+      apns_push_type_override: "alert",
       android_visibility: 1,
       android_accent_color: "2563EB",
+      android_sound: "default",
       ios_badgeType: "Increase",
-      ios_badgeCount: 1
+      ios_badgeCount: 1,
+      data: {
+        url: absoluteUrl,
+        launchUrl: absoluteUrl,
+        ...(customData || {})
+      }
     };
+
+    if (imageUrl && typeof imageUrl === 'string' && imageUrl.trim()) {
+      const cleanImg = imageUrl.trim();
+      basePayload.ios_attachments = { id1: cleanImg };
+      basePayload.big_picture = cleanImg;
+      basePayload.chrome_web_image = cleanImg;
+    }
 
     const subs = (targetSubscriptionIds && Array.isArray(targetSubscriptionIds) ? targetSubscriptionIds : [])
       .concat(targetPlayerIds && Array.isArray(targetPlayerIds) ? targetPlayerIds : [])
       .filter(Boolean);
 
-    if (subs.length > 0) {
-      payload.include_player_ids = subs;
-      payload.include_subscription_ids = subs;
-    } else if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
-      payload.include_external_user_ids = targetUserIds;
+    const hasUserIds = Boolean(targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0);
+    const payload: any = { ...basePayload };
+
+    if (hasUserIds) {
+      // Prioritize External ID (Supabase User ID) so ALL native mobile subscriptions of the user are targeted
       payload.include_aliases = { external_id: targetUserIds };
       payload.target_channel = "push";
+    } else if (subs.length > 0) {
+      // Explicit device token targeting (or fallback when no user ID is provided)
+      payload.include_subscription_ids = subs;
     } else {
       payload.included_segments = ["Total Subscriptions"];
     }
 
-    const sendToOneSignal = async (bodyPayload: any, authPrefix: string = "Basic") => {
+    const initialAuth = restApiKey.startsWith("os_v2_") ? `Bearer ${restApiKey}` : `Basic ${restApiKey}`;
+    const sendToOneSignal = async (bodyPayload: any, auth: string = initialAuth) => {
       return fetch("https://onesignal.com/api/v1/notifications", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `${authPrefix} ${restApiKey}`
+          "Authorization": auth
         },
         body: JSON.stringify(bodyPayload)
       });
     };
 
-    let oneSignalRes = await sendToOneSignal(payload, "Basic");
+    let activeAuth = initialAuth;
+    let oneSignalRes = await sendToOneSignal(payload, activeAuth);
     let data = await oneSignalRes.json();
 
-    if (!oneSignalRes.ok && payload.included_segments && JSON.stringify(data).includes("Total Subscriptions")) {
-      payload.included_segments = ["Subscribed Users"];
-      oneSignalRes = await sendToOneSignal(payload, "Basic");
+    if (oneSignalRes.status === 401) {
+      activeAuth = initialAuth.startsWith("Bearer ") ? `Basic ${restApiKey}` : `Bearer ${restApiKey}`;
+      oneSignalRes = await sendToOneSignal(payload, activeAuth);
       data = await oneSignalRes.json();
     }
 
-    if (oneSignalRes.status === 401 && restApiKey.startsWith("os_v2_")) {
-      oneSignalRes = await sendToOneSignal(payload, "Bearer");
+    if (!oneSignalRes.ok && payload.included_segments && JSON.stringify(data).includes("Total Subscriptions")) {
+      payload.included_segments = ["Subscribed Users"];
+      oneSignalRes = await sendToOneSignal(payload, activeAuth);
       data = await oneSignalRes.json();
+    }
+
+    // Fallback: if External ID targeting yielded 0 recipients (e.g. device not yet linked via OneSignal.login)
+    // and we also have a stored Subscription ID, retry with include_subscription_ids
+    const initialRecipients = data?.recipients ?? (data?.id ? 1 : 0);
+    if (hasUserIds && subs.length > 0 && (!oneSignalRes.ok || initialRecipients === 0 || !data?.id)) {
+      const fallbackPayload: any = {
+        ...basePayload,
+        include_subscription_ids: subs
+      };
+      const fbRes = await sendToOneSignal(fallbackPayload, activeAuth);
+      const fbData = await fbRes.json();
+      if (fbRes.ok && (fbData?.id || (fbData?.recipients ?? 0) > 0)) {
+        oneSignalRes = fbRes;
+        data = fbData;
+      }
     }
 
     if (!oneSignalRes.ok) {
@@ -148,7 +219,7 @@ export default async function handler(req: any, res: any) {
     const recipientCount = data.recipients ?? (data.id ? 1 : 0);
     let warning: string | undefined = undefined;
     if (recipientCount === 0) {
-      warning = "La notification a été acceptée par OneSignal mais aucun appareil actif n'était ciblé (0 destinataire). Vérifiez que votre iPhone est bien abonné à cet App ID ou effectuez un test avec 'Tous les abonnés'.";
+      warning = "La notification a été acceptée par OneSignal mais aucun appareil Mobile (iOS/Android) actif n'était ciblé (0 destinataire). Vérifiez que l'application mobile iOS/Android est bien abonnée à OneSignal.";
     }
 
     return res.status(200).json({

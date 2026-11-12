@@ -59,8 +59,66 @@ class OneSignalService {
       };
       pollMedian();
       setTimeout(pollMedian, 1000);
-      setTimeout(pollMedian, 3000);
+      // Native & Bridge Push Opened callbacks (Median/GoNative, Capacitor, Cordova, WKWebView)
+      const handleNativePushOpened = (payload: any) => {
+        try {
+          const data = payload?.additionalData || payload?.data || payload?.custom?.a || payload || {};
+          const launchUrl = payload?.launchUrl || payload?.url || payload?.custom?.u || data?.url || data?.launchUrl || '';
+          window.dispatchEvent(new CustomEvent('onesignal:notification-clicked', {
+            detail: { notification: payload, data, launchUrl }
+          }));
+        } catch (err) {
+          console.warn('[OneSignal] Native push click dispatch error:', err);
+        }
+      };
+
+      windowAny.gonative_onesignal_push_opened = handleNativePushOpened;
+      windowAny.median_onesignal_push_opened = handleNativePushOpened;
+      windowAny.handleOneSignalNotificationOpened = handleNativePushOpened;
+      window.addEventListener('onesignal-notification-opened', (e: any) => handleNativePushOpened(e.detail || e));
+      window.addEventListener('push-notification-clicked', (e: any) => handleNativePushOpened(e.detail || e));
     }
+  }
+
+  private bindClickListeners(): void {
+    if (this.clickListenerBound || typeof window === 'undefined') return;
+    const windowAny = window as any;
+    const windowOS = windowAny.OneSignal;
+
+    const notifHandler = (event: any) => {
+      try {
+        const notif = event?.notification || event?.result?.notification || event;
+        const data = notif?.additionalData || notif?.data || event?.data || {};
+        const launchUrl = notif?.launchUrl || event?.result?.action?.launchUrl || data?.url || data?.launchUrl || '';
+        window.dispatchEvent(new CustomEvent('onesignal:notification-clicked', {
+          detail: { notification: notif, data, launchUrl }
+        }));
+      } catch (clickErr) {
+        console.warn('[OneSignal] Notification click handler error:', clickErr);
+      }
+    };
+
+    try {
+      if (OneSignal?.Notifications?.addEventListener) {
+        OneSignal.Notifications.addEventListener('click', notifHandler);
+        this.clickListenerBound = true;
+      } else if (windowOS?.Notifications?.addEventListener) {
+        windowOS.Notifications.addEventListener('click', notifHandler);
+        this.clickListenerBound = true;
+      }
+    } catch (err) {
+      console.warn('[OneSignal] Could not bind Web SDK click event:', err);
+    }
+
+    try {
+      if (windowAny.OneSignalPlugin?.Notifications?.addEventListener) {
+        windowAny.OneSignalPlugin.Notifications.addEventListener('click', notifHandler);
+      } else if (windowAny.plugins?.OneSignal?.Notifications?.addEventListener) {
+        windowAny.plugins.OneSignal.Notifications.addEventListener('click', notifHandler);
+      } else if (windowAny.plugins?.OneSignal?.setNotificationOpenedHandler) {
+        windowAny.plugins.OneSignal.setNotificationOpenedHandler(notifHandler);
+      }
+    } catch (_) {}
   }
 
   /**
@@ -304,6 +362,7 @@ class OneSignalService {
 
     if (isAlreadyInitialized) {
       this.isInitialized = true;
+      this.bindClickListeners();
       if (!this.observerBound && windowOneSignal?.User?.PushSubscription) {
         this.observerBound = true;
         try {
@@ -354,34 +413,7 @@ class OneSignalService {
         }
       }
 
-      if (!this.clickListenerBound) {
-        this.clickListenerBound = true;
-        try {
-          const windowOS = (window as any).OneSignal;
-          const notifHandler = (event: any) => {
-            try {
-              const notif = event?.notification;
-              const data = notif?.additionalData || {};
-              const launchUrl = notif?.launchUrl || data?.url;
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('onesignal:notification-clicked', {
-                  detail: { notification: notif, data, launchUrl }
-                }));
-              }
-            } catch (clickErr) {
-              console.warn('[OneSignal] Notification click handler error:', clickErr);
-            }
-          };
-
-          if (OneSignal.Notifications?.addEventListener) {
-            OneSignal.Notifications.addEventListener('click', notifHandler);
-          } else if (windowOS?.Notifications?.addEventListener) {
-            windowOS.Notifications.addEventListener('click', notifHandler);
-          }
-        } catch (err) {
-          console.warn('[OneSignal] Could not bind click event:', err);
-        }
-      }
+      this.bindClickListeners();
 
       // Requirement 4: Evaluate current subscription ID immediately at init
       const currentSubId = OneSignal.User?.PushSubscription?.id;
@@ -402,6 +434,7 @@ class OneSignalService {
       const isAlreadyInitError = errMsg.toLowerCase().includes('already initialized');
       if (isAlreadyInitError || (typeof window !== 'undefined' && (window as any).OneSignal?.User)) {
         this.isInitialized = true;
+        this.bindClickListeners();
         if (!this.observerBound) {
           this.observerBound = true;
           try {
@@ -458,10 +491,10 @@ class OneSignalService {
       const windowAny = window as any;
       const windowOS = windowAny.OneSignal;
 
-      const webSubId = OneSignal.User?.PushSubscription?.id || windowOS?.User?.PushSubscription?.id;
-      if (webSubId) {
-        this.nativeSubscriptionId = webSubId;
-        return webSubId;
+      const medianId = windowAny.median?.onesignal?.playerId || windowAny.gonative?.onesignal?.playerId;
+      if (medianId && typeof medianId === 'string') {
+        this.nativeSubscriptionId = medianId;
+        return medianId;
       }
 
       const globalId = windowAny.OneSignalUserId || windowAny.OneSignalPlayerId || windowAny.OneSignalSubscriptionId;
@@ -470,10 +503,9 @@ class OneSignalService {
         return globalId;
       }
 
-      const medianId = windowAny.median?.onesignal?.playerId || windowAny.gonative?.onesignal?.playerId;
-      if (medianId && typeof medianId === 'string') {
-        this.nativeSubscriptionId = medianId;
-        return medianId;
+      const webSubId = OneSignal.User?.PushSubscription?.id || windowOS?.User?.PushSubscription?.id;
+      if (webSubId) {
+        return webSubId;
       }
 
       const stored = localStorage.getItem('onesignal_subscription_id') || localStorage.getItem('onesignal_player_id');
@@ -485,7 +517,6 @@ class OneSignalService {
         await this.init();
         const postInitId = OneSignal.User?.PushSubscription?.id || (window as any).OneSignal?.User?.PushSubscription?.id;
         if (postInitId) {
-          this.nativeSubscriptionId = postInitId;
           return postInitId;
         }
       }
@@ -660,11 +691,12 @@ class OneSignalService {
       await this.loginUser(userId);
     }
 
-    // Sync player ID to Supabase if configured
-    if (subId && userId && isSupabaseConfigured) {
+    // Sync player ID to Supabase only if on a mobile device or native wrapper (never overwrite mobile token with desktop Chrome Web Push ID)
+    const mobileSubId = this.nativeSubscriptionId || (dev.isMobile ? subId : null);
+    if (mobileSubId && userId && isSupabaseConfigured) {
       try {
         await supabase.from('profiles').update({
-          onesignal_player_id: subId,
+          onesignal_player_id: mobileSubId,
           updated_at: new Date().toISOString()
         } as any).eq('id', userId);
       } catch (_) {
@@ -833,12 +865,13 @@ class OneSignalService {
       console.warn('[OneSignal] Error setting External ID in OneSignal Web SDK:', err);
     }
 
-    // 5. Sync player / subscription ID to Supabase profiles
-    const subId = this.getCurrentSubscriptionId() || windowAny?.OneSignal?.User?.PushSubscription?.id || this.nativeSubscriptionId;
-    if (subId && cleanUserId && isSupabaseConfigured) {
+    // 5. Sync player / subscription ID to Supabase profiles ONLY for mobile / native subscriptions
+    // (Prevents opening the web app on a desktop Chrome browser from overwriting the user's mobile Subscription ID)
+    const mobileSubId = this.nativeSubscriptionId || (dev.isMobile ? (this.getCurrentSubscriptionId() || windowAny?.OneSignal?.User?.PushSubscription?.id) : null);
+    if (mobileSubId && cleanUserId && isSupabaseConfigured) {
       try {
         await supabase.from('profiles').update({
-          onesignal_player_id: subId,
+          onesignal_player_id: mobileSubId,
           updated_at: new Date().toISOString()
         } as any).eq('id', cleanUserId);
       } catch (_) {}

@@ -34,6 +34,19 @@
       window.OneSignalDeferred = window.OneSignalDeferred || [];
       OneSignalDeferred.push(async function(OneSignal) {
         try {
+          var ua = navigator.userAgent || '';
+          var isNativeAppWrapper = !!(
+            (window.webkit && window.webkit.messageHandlers) ||
+            window.Capacitor ||
+            window.median ||
+            window.gonative ||
+            /gonative|median|Capacitor/i.test(ua)
+          );
+          if (isNativeAppWrapper) {
+            console.info('[OneSignal] Native mobile wrapper detected — using native iOS/Android SDK instead of Web Push SDK.');
+            return;
+          }
+
           var configuredAppId = "%NEXT_PUBLIC_ONESIGNAL_APP_ID%";
           if (!configuredAppId || configuredAppId.indexOf("%") !== -1) {
             configuredAppId = "10a14311-a42a-4681-9682-ce965d80ae75";

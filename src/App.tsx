@@ -371,19 +371,21 @@ export function formatDisplayPrice(price?: string | number): string {
  */
 export function extractCleanId(raw: string | null | undefined): string | null {
   if (!raw) return null;
-  const decoded = decodeURIComponent(raw).trim();
-  // 1. Check if contains a UUID
+  const decoded = decodeURIComponent(String(raw)).trim();
+  // 1. Check if contains a standard 36-char UUID
   const uuidMatch = decoded.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
   if (uuidMatch) return uuidMatch[0];
-  // 2. Strip standard prefixes like evt-123, pro-123, guide-123, rec-123
-  const prefixedMatch = decoded.match(/^(?:evt|pro|guide|rec|ad|chat)-(.+)/i);
-  if (prefixedMatch && prefixedMatch[1]) return prefixedMatch[1].trim();
-  // 3. Check if starts with numeric ID
-  const numMatch = decoded.match(/^\d+/);
-  if (numMatch) return numMatch[0];
-  // 4. Fallback: take the first token before whitespace or newline
-  const token = decoded.split(/[\s\r\n]+/)[0];
+  // 2. Preserve full IDs like "art-1741234567890", "h-1", "p-2", "hc-1", "evt-123"
+  // Only strip trailing query/hash/whitespace noise from share sheets
+  const token = decoded.split(/[\s\r\n&#?]+/)[0];
   return token || null;
+}
+
+function stripLeadingEmojis(str?: string | null): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/^[\s\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}🎉🔥📅🚨✨🌴📖🌟📲🔔💬🛍️💼]+/gu, '')
+    .trim();
 }
 
 const NOTIFICATION_ICONS = [
@@ -2441,11 +2443,12 @@ export default function App() {
     }
   }, [initialChat]);
 
-  // Extract sharing parameters (?eventId, ?proId, ?guideId) on initial mount for deep-linking
-  useEffect(() => {
+  const [deepLinkTrigger, setDeepLinkTrigger] = useState(0);
+
+  // Extract sharing & push notification parameters (?eventId, ?proId, ?guideId) on mount and URL changes
+  const checkAndApplyUrlDeepLinks = React.useCallback(() => {
     const params = new URLSearchParams(window.location.search);
-    
-    // Support query parameters appended inside/after the hash segment
+
     let hashSearch = '';
     if (window.location.hash.includes('?')) {
       hashSearch = window.location.hash.substring(window.location.hash.indexOf('?'));
@@ -2460,16 +2463,41 @@ export default function App() {
     const cleanGuideId = extractCleanId(rawGuideId);
 
     if (cleanEventId) {
+      initialViewRef.current = null;
+      isProgrammaticNavigationRef.current = true;
+      setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
       setInitialEventId(cleanEventId);
+      setDeepLinkTrigger(c => c + 1);
       setActiveView('events');
+      return true;
     } else if (cleanProId) {
+      initialViewRef.current = null;
+      isProgrammaticNavigationRef.current = true;
+      setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
       setInitialProId(cleanProId);
+      setDeepLinkTrigger(c => c + 1);
       setActiveView('explore');
+      return true;
     } else if (cleanGuideId) {
+      initialViewRef.current = null;
+      isProgrammaticNavigationRef.current = true;
+      setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
       setInitialGuideId(cleanGuideId);
+      setDeepLinkTrigger(c => c + 1);
       setActiveView('guides');
+      return true;
     }
+    return false;
   }, []);
+
+  useEffect(() => {
+    checkAndApplyUrlDeepLinks();
+    const onHashOrUrlChange = () => {
+      checkAndApplyUrlDeepLinks();
+    };
+    window.addEventListener('hashchange', onHashOrUrlChange);
+    return () => window.removeEventListener('hashchange', onHashOrUrlChange);
+  }, [checkAndApplyUrlDeepLinks]);
 
   // Listen for live OneSignal push notification clicks
   useEffect(() => {
@@ -2477,23 +2505,24 @@ export default function App() {
       try {
         const detail = e?.detail;
         const data = detail?.data || {};
-        const launchUrl = detail?.launchUrl || '';
+        const launchUrl = String(detail?.launchUrl || data?.url || data?.launchUrl || '');
+        const notifType = String(data.type || detail?.notification?.type || '').toLowerCase();
 
-        let targetEventId = data.eventId || (data.target_id && (data.type === 'event' || detail.notification?.type === 'event') ? data.target_id : undefined);
-        let targetProId = data.proId || (data.target_id && (data.type === 'pro' || detail.notification?.type === 'pro') ? data.target_id : undefined);
-        let targetGuideId = data.guideId || (data.target_id && (data.type === 'guide' || data.type === 'article' || detail.notification?.type === 'guide') ? data.target_id : undefined);
+        let targetEventId = data.eventId || (data.target_id && (notifType === 'event' || notifType === 'weekend' || launchUrl.includes('event')) ? data.target_id : undefined);
+        let targetProId = data.proId || (data.target_id && (notifType === 'pro' || launchUrl.includes('proId=') || launchUrl.includes('explore')) ? data.target_id : undefined);
+        let targetGuideId = data.guideId || (data.target_id && (notifType === 'guide' || notifType === 'article' || launchUrl.includes('guide')) ? data.target_id : undefined);
 
         if (!targetEventId && launchUrl) {
-          const match = launchUrl.match(/[?&]eventId=([^&#]+)/);
-          if (match) targetEventId = match[1];
+          const match = launchUrl.match(/[?&]eventId=([^&#]+)/) || launchUrl.match(/\/events\/([^/?#]+)/);
+          if (match && match[1]) targetEventId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
         }
         if (!targetProId && launchUrl) {
-          const match = launchUrl.match(/[?&]proId=([^&#]+)/);
-          if (match) targetProId = match[1];
+          const match = launchUrl.match(/[?&]proId=([^&#]+)/) || launchUrl.match(/\/pro\/([^/?#]+)/);
+          if (match && match[1]) targetProId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
         }
         if (!targetGuideId && launchUrl) {
-          const match = launchUrl.match(/[?&]guideId=([^&#]+)/);
-          if (match) targetGuideId = match[1];
+          const match = launchUrl.match(/[?&]guideId=([^&#]+)/) || launchUrl.match(/\/guides\/([^/?#]+)/);
+          if (match && match[1]) targetGuideId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
         }
 
         if (targetEventId) {
@@ -2737,6 +2766,14 @@ export default function App() {
       if (isProgrammaticNavigationRef.current) {
         return;
       }
+      // First check if the URL change is a deep-link push notification open (?eventId, ?guideId, ?proId)
+      const searchStr = window.location.search + (window.location.hash.includes('?') ? window.location.hash.substring(window.location.hash.indexOf('?')) : '');
+      if (searchStr.includes('eventId=') || searchStr.includes('guideId=') || searchStr.includes('proId=')) {
+        if (checkAndApplyUrlDeepLinks()) {
+          return;
+        }
+      }
+
       // Check if we are in a sub-view (detail page)
       const hasSubView = initialProId || initialEventId || initialGuideId || selectedPost || selectedAd || showMessagesModal;
 
@@ -4290,16 +4327,19 @@ export default function App() {
 
     if (params?.eventId) {
       setInitialEventId(params.eventId);
+      setDeepLinkTrigger(c => c + 1);
     } else {
       setInitialEventId(null);
     }
     if (params?.proId) {
       setInitialProId(params.proId);
+      setDeepLinkTrigger(c => c + 1);
     } else {
       setInitialProId(null);
     }
     if (params?.guideId) {
       setInitialGuideId(params.guideId);
+      setDeepLinkTrigger(c => c + 1);
     } else {
       setInitialGuideId(null);
     }
@@ -4355,10 +4395,11 @@ export default function App() {
   };
 
   const navigateTo = (view: View) => {
+    initialViewRef.current = null;
     isProgrammaticNavigationRef.current = true;
     setTimeout(() => {
       isProgrammaticNavigationRef.current = false;
-    }, 150);
+    }, 250);
 
     if (view === 'messages') {
       setShowMessagesModal(true);
@@ -4988,6 +5029,7 @@ export default function App() {
               {activeView === 'events' && (
                 <EventsView 
                   initialEventId={initialEventId}
+                  deepLinkTrigger={deepLinkTrigger}
                   onModalClose={() => setInitialEventId(null)}
                   scrollToTop={scrollToTop}
                   events={events}
@@ -4999,8 +5041,11 @@ export default function App() {
               {activeView === 'guides' && (
                 <GuidesView 
                   initialGuideId={initialGuideId}
+                  deepLinkTrigger={deepLinkTrigger}
                   onModalClose={() => setInitialGuideId(null)}
                   scrollToTop={scrollToTop}
+                  allArticles={allArticles}
+                  initialCategories={guideCategories}
                 />
               )}
               {activeView === 'profile' && (
@@ -20057,6 +20102,7 @@ DROP FUNCTION IF EXISTS public.update_pro_rating() CASCADE;`);
 
 function EventsView({ 
   initialEventId, 
+  deepLinkTrigger,
   onModalClose, 
   scrollToTop, 
   events: propEvents,
@@ -20065,6 +20111,7 @@ function EventsView({
   loading: propLoading
 }: { 
   initialEventId?: string | null, 
+  deepLinkTrigger?: number,
   onModalClose?: () => void, 
   scrollToTop?: () => void, 
   events?: Event[],
@@ -20117,11 +20164,17 @@ function EventsView({
     let el = document.getElementById(`event-card-${targetId}`);
     if (!el && events.length > 0) {
       const cleanId = extractCleanId(targetId) || targetId;
-      const matched = events.find(ev =>
-        String(ev.id).toLowerCase() === targetId.toLowerCase() ||
-        String(ev.id).toLowerCase() === cleanId.toLowerCase() ||
-        (ev.title && ev.title.toLowerCase().includes(cleanId.toLowerCase()))
-      );
+      const cleanTitleQuery = stripLeadingEmojis(targetId).toLowerCase();
+      const matched = events.find(ev => {
+        const evId = String(ev.id).toLowerCase();
+        const evTitle = stripLeadingEmojis(ev.title).toLowerCase();
+        return (
+          evId === targetId.toLowerCase() ||
+          evId === cleanId.toLowerCase() ||
+          evId.replace(/^evt-|^event-/i, '') === cleanId.replace(/^evt-|^event-/i, '').toLowerCase() ||
+          (cleanTitleQuery.length > 2 && evTitle && (evTitle.includes(cleanTitleQuery) || cleanTitleQuery.includes(evTitle)))
+        );
+      });
       if (matched) {
         el = document.getElementById(`event-card-${matched.id}`);
       }
@@ -20146,27 +20199,32 @@ function EventsView({
     if (initialEventId) {
       const rawId = String(initialEventId).trim();
       const cleanId = extractCleanId(rawId) || rawId;
+      const cleanTitleQuery = stripLeadingEmojis(rawId).toLowerCase();
       setSelectedCategory('all');
       setDateFilter('all');
       setSearchQuery('');
 
       if (events.length > 0) {
-        const targetEvent = events.find(ev => 
-          String(ev.id).toLowerCase() === rawId.toLowerCase() ||
-          String(ev.id).toLowerCase() === cleanId.toLowerCase() ||
-          (ev.title && ev.title.toLowerCase().includes(rawId.toLowerCase())) ||
-          (ev.title && ev.title.toLowerCase().includes(cleanId.toLowerCase()))
-        );
+        const targetEvent = events.find(ev => {
+          const evId = String(ev.id).toLowerCase();
+          const evTitle = stripLeadingEmojis(ev.title).toLowerCase();
+          return (
+            evId === rawId.toLowerCase() ||
+            evId === cleanId.toLowerCase() ||
+            evId.replace(/^evt-|^event-/i, '') === cleanId.replace(/^evt-|^event-/i, '').toLowerCase() ||
+            (cleanTitleQuery.length > 2 && evTitle && (evTitle.includes(cleanTitleQuery) || cleanTitleQuery.includes(evTitle)))
+          );
+        });
         if (targetEvent) {
           setSelectedEventId(String(targetEvent.id));
         } else {
-          setSelectedEventId(cleanId);
+          setSelectedEventId(rawId);
         }
       } else {
-        setSelectedEventId(cleanId);
+        setSelectedEventId(rawId);
       }
     }
-  }, [initialEventId, events]);
+  }, [initialEventId, events, deepLinkTrigger]);
 
   useEffect(() => {
     if (!selectedEventId || events.length === 0) return;
@@ -20197,7 +20255,7 @@ function EventsView({
       window.removeEventListener('touchmove', stopOnUserTouch);
       window.removeEventListener('wheel', stopOnUserTouch);
     };
-  }, [selectedEventId, initialEventId, events.length, loading, scrollToEventCard]);
+  }, [selectedEventId, initialEventId, events.length, loading, scrollToEventCard, deepLinkTrigger]);
 
   const hasActiveFilters = selectedCategory !== 'all' || searchQuery.trim() !== '' || dateFilter !== 'all';
 
@@ -21100,10 +21158,26 @@ function GuideCardItem({
   );
 }
 
-function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuideId?: string | null, onModalClose?: () => void, scrollToTop?: () => void }) {
-  const [articles, setArticles] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+function GuidesView({
+  initialGuideId,
+  deepLinkTrigger,
+  onModalClose,
+  scrollToTop,
+  allArticles: propAllArticles,
+  initialCategories: propCategories
+}: {
+  initialGuideId?: string | null,
+  deepLinkTrigger?: number,
+  onModalClose?: () => void,
+  scrollToTop?: () => void,
+  allArticles?: any[],
+  initialCategories?: any[]
+}) {
+  const [articles, setArticles] = useState<any[]>(() => {
+    return propAllArticles && propAllArticles.length > 0 ? propAllArticles.filter((a: any) => a.isOnline !== false) : [];
+  });
+  const [categories, setCategories] = useState<any[]>(() => propCategories || []);
+  const [loading, setLoading] = useState(() => !(propAllArticles && propAllArticles.length > 0));
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -21116,75 +21190,125 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
     const loadArticles = async () => {
       try {
         const raw = await guideService.getGuideCategories();
-        console.log('DEBUG: categories returned by guideService:', raw);
-        const flattened = raw.flatMap(cat => 
-          cat.articles
+        const map = new globalThis.Map<string, any>();
+        if (propAllArticles && propAllArticles.length > 0) {
+          propAllArticles.forEach((article: any) => {
+            if (article.isOnline !== false) {
+              map.set(String(article.id), article);
+            }
+          });
+        }
+        raw.forEach(cat => {
+          (cat.articles || [])
             .filter((article: any) => article.isOnline !== false)
-            .map((article: any) => ({
-              ...article,
-              categoryId: cat.id,
-              category_id: cat.id,
-              categoryTitle: cat.title,
-              categoryColor: cat.color,
-            }))
-        );
+            .forEach((article: any) => {
+              map.set(String(article.id), {
+                ...article,
+                categoryId: cat.id,
+                category_id: cat.id,
+                categoryTitle: cat.title,
+                categoryColor: cat.color,
+              });
+            });
+        });
         if (active) {
-          setArticles(flattened);
+          setArticles(Array.from(map.values()));
           setCategories(raw);
           setLoading(false);
         }
       } catch (err) {
         console.error('Failed to load articles:', err);
         if (active) {
-          setError('Could not load guides, please try again later.');
+          if (articles.length === 0) {
+            setError('Could not load guides, please try again later.');
+          }
           setLoading(false);
         }
       }
     };
     loadArticles();
     return () => { active = false; };
+  }, [propAllArticles]);
+
+  const scrollToGuideCard = React.useCallback((targetId: string, behavior: ScrollBehavior = 'smooth') => {
+    if (!targetId) return;
+    const el = document.getElementById(`guide-card-${targetId}`);
+    if (!el) return;
+
+    const mainContainer = document.querySelector('main');
+    if (mainContainer && mainContainer.scrollHeight > mainContainer.clientHeight) {
+      const containerRect = mainContainer.getBoundingClientRect();
+      const targetRect = el.getBoundingClientRect();
+      const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
+      mainContainer.scrollTo({
+        top: Math.max(0, offset - 16),
+        behavior
+      });
+    } else {
+      el.scrollIntoView({ behavior, block: 'start' });
+    }
   }, []);
 
   useEffect(() => {
     if (initialGuideId && articles.length > 0) {
-      const foundArticle = articles.find(art => 
-        String(art.id).toLowerCase() === String(initialGuideId).toLowerCase() ||
-        (art.title && art.title.toLowerCase().includes(String(initialGuideId).toLowerCase()))
-      );
+      const rawId = String(initialGuideId).trim();
+      const cleanId = extractCleanId(rawId) || rawId;
+      const cleanTitleQuery = stripLeadingEmojis(rawId).toLowerCase();
+
+      const foundArticle = articles.find(art => {
+        const artId = String(art.id).toLowerCase();
+        const artTitle = stripLeadingEmojis(art.title).toLowerCase();
+        return (
+          artId === rawId.toLowerCase() ||
+          artId === cleanId.toLowerCase() ||
+          artId.replace(/^art-|^guide-|^article-/i, '') === cleanId.replace(/^art-|^guide-|^article-/i, '').toLowerCase() ||
+          (cleanTitleQuery.length > 2 && artTitle && (artTitle.includes(cleanTitleQuery) || cleanTitleQuery.includes(artTitle)))
+        );
+      });
         
       if (foundArticle) {
         setSelectedArticleId(foundArticle.id);
         setShowArticleModal(true);
-        if (selectedCategory && foundArticle.categoryId !== selectedCategory) {
-          setSelectedCategory(null);
-          setIsNavigatedMode(false);
-        }
+        setSelectedCategory(null);
+        setIsNavigatedMode(false);
         setSearchQuery('');
-        setTimeout(() => {
-          const el = document.getElementById(`guide-card-${foundArticle.id}`);
-          const mainContainer = document.querySelector('main');
-          if (el) {
-            if (mainContainer && mainContainer.scrollHeight > mainContainer.clientHeight) {
-              const containerRect = mainContainer.getBoundingClientRect();
-              const targetRect = el.getBoundingClientRect();
-              const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
-              mainContainer.scrollTo({
-                top: Math.max(0, offset - 76),
-                behavior: 'smooth'
-              });
-            } else {
-              el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-          } else {
-            document.getElementById('all-guides-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        }, 150);
       }
     }
-  }, [initialGuideId, articles]);
+  }, [initialGuideId, articles, deepLinkTrigger]);
 
   useEffect(() => {
-    scrollToTop?.();
+    if (!initialGuideId || !selectedArticleId || loading || articles.length === 0) return;
+
+    let userInteracted = false;
+    const stopOnUserTouch = () => {
+      userInteracted = true;
+    };
+    window.addEventListener('touchmove', stopOnUserTouch, { passive: true });
+    window.addEventListener('wheel', stopOnUserTouch, { passive: true });
+
+    const t1 = setTimeout(() => {
+      if (!userInteracted) scrollToGuideCard(selectedArticleId, 'smooth');
+    }, 120);
+    const t2 = setTimeout(() => {
+      if (!userInteracted) scrollToGuideCard(selectedArticleId, 'smooth');
+    }, 350);
+    const t3 = setTimeout(() => {
+      if (!userInteracted) scrollToGuideCard(selectedArticleId, 'smooth');
+    }, 650);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      window.removeEventListener('touchmove', stopOnUserTouch);
+      window.removeEventListener('wheel', stopOnUserTouch);
+    };
+  }, [initialGuideId, selectedArticleId, loading, articles.length, scrollToGuideCard, deepLinkTrigger]);
+
+  useEffect(() => {
+    if (!initialGuideId) {
+      scrollToTop?.();
+    }
   }, []);
 
   const handleCloseModal = () => {
@@ -21281,7 +21405,9 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
                            article={article}
                            isExpanded={String(selectedArticleId) === String(article.id)}
                            onToggleExpand={() => {
-                             setSelectedArticleId(prev => String(prev) === String(article.id) ? null : article.id);
+                             const isStopping = String(selectedArticleId) === String(article.id);
+                             setSelectedArticleId(isStopping ? null : article.id);
+                             if (isStopping) onModalClose?.();
                            }}
                          />
                        ))}
@@ -21461,7 +21587,9 @@ function GuidesView({ initialGuideId, onModalClose, scrollToTop }: { initialGuid
                     article={article}
                     isExpanded={String(selectedArticleId) === String(article.id)}
                     onToggleExpand={() => {
-                      setSelectedArticleId(prev => String(prev) === String(article.id) ? null : article.id);
+                      const isStopping = String(selectedArticleId) === String(article.id);
+                      setSelectedArticleId(isStopping ? null : article.id);
+                      if (isStopping) onModalClose?.();
                     }}
                   />
                 ))}
