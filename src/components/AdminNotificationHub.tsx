@@ -61,7 +61,10 @@ export function getPushLogs(): PushLogEntry[] {
   }
 }
 
-export async function savePushLogEntry(entry: Omit<PushLogEntry, 'id' | 'timestamp'>): Promise<PushLogEntry> {
+export async function savePushLogEntry(
+  entry: Omit<PushLogEntry, 'id' | 'timestamp'>,
+  skipAnnouncementSync = false
+): Promise<PushLogEntry> {
   const logs = getPushLogs();
   const newEntry: PushLogEntry = {
     ...entry,
@@ -75,41 +78,40 @@ export async function savePushLogEntry(entry: Omit<PushLogEntry, 'id' | 'timesta
     console.error('Failed to save push log entry:', e);
   }
 
-  // Auto-sync sent push notifications to Supabase announcements table for multi-device notification center sync
-  if (entry.status === 'sent' && isSupabaseConfigured) {
+  // Auto-sync sent push notifications to Supabase announcements table when not already handled by onSaveAnnouncement
+  if (entry.status === 'sent' && !skipAnnouncementSync && isSupabaseConfigured) {
     try {
-      const iconTag = `[icon:${entry.type === 'event' || entry.type === 'weekend' ? 'event' : entry.type === 'article' ? 'guide' : entry.type === 'pro' ? 'star' : 'megaphone'}]`;
-      const titleTag = entry.title ? `[${entry.title}] ` : '';
-      const content = `${iconTag}${titleTag}${entry.body}`;
-      
-      let payload: any = {
-        content,
-        is_active: true,
-        cta_type: entry.type,
-        cta_link: entry.url || null,
-        target_id: entry.targetId || null,
-        created_at: newEntry.timestamp,
-        updated_at: newEntry.timestamp
-      };
+      const iconName = entry.type === 'event' || entry.type === 'weekend'
+        ? 'event'
+        : entry.type === 'article'
+        ? 'guide'
+        : entry.type === 'pro'
+        ? 'star'
+        : 'megaphone';
+      const iconTag = `[icon:${iconName}]`;
+      const titleTag = entry.title ? `[${entry.title.trim()}] ` : '';
+      const content = `${iconTag}${titleTag}${(entry.body || '').trim()}`;
+      const encodedCtaType = (entry.targetId || entry.url)
+        ? `${entry.type || 'custom'}|${entry.targetId || ''}|${entry.url || '/'}`
+        : (entry.type || null);
 
-      // Resilient insert: retry without specific columns if they don't exist in Supabase yet
-      const maxRetries = 3;
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-          const { error } = await supabase.from('announcements').insert([payload]);
-          if (error) throw error;
-          break; // Success
-        } catch (err: any) {
-          const errMsg = err?.message || JSON.stringify(err);
-          const match = errMsg.match(/Could not find the '([^']+)' column/i);
-          if (match && match[1] && match[1] in payload) {
-            console.warn(`[Sync] Removing missing column '${match[1]}' from announcements sync payload`);
-            delete payload[match[1]];
-            continue;
-          }
-          console.warn('[Sync] Non-fatal announcements sync error:', err);
-          break;
+      const { error } = await supabase.from('announcements').insert([
+        {
+          content,
+          is_active: true,
+          cta_type: encodedCtaType,
+          created_at: newEntry.timestamp,
+          updated_at: newEntry.timestamp
         }
+      ]);
+
+      if (error) {
+        await supabase.from('announcements').insert([
+          {
+            content,
+            is_active: true
+          }
+        ]);
       }
     } catch (err) {
       console.warn('Could not sync push log to Supabase announcements:', err);
@@ -357,7 +359,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
 
       const recipientCount = res?.recipients ?? res?.result?.recipients ?? (targetMode === 'specific' ? 1 : activeUsersList.length || 1);
 
-      // Record in history log
+      // Record in history log (skip duplicate DB insert because onSaveAnnouncement saves to Supabase below)
       await savePushLogEntry({
         title: title.trim(),
         body: body.trim(),
@@ -367,9 +369,9 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         url: url || '/',
         recipientsCount: recipientCount,
         status: 'sent'
-      });
+      }, true);
 
-      // Save as in-app announcement so all users see it in header notification bell
+      // Save as in-app announcement so all users & devices see it in header notification bell
       try {
         await onSaveAnnouncement({
           title: title.trim(),
@@ -378,7 +380,8 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
           is_active: true,
           cta_type: type,
           target_id: targetId || null,
-          cta_link: url || '/'
+          cta_link: url || '/',
+          send_push: false
         });
         if (onRefetchAnnouncements) {
           await onRefetchAnnouncements();
@@ -451,7 +454,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             ['ios', 'android']
           );
 
-          savePushLogEntry({
+          await savePushLogEntry({
             title: annTitle.trim() || 'Unlocked Valencia 🌴',
             body: annContent.trim(),
             type: 'custom',
@@ -460,7 +463,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             url: '/',
             recipientsCount: res?.recipients ?? 1,
             status: 'sent'
-          });
+          }, true);
           reloadPushLogs();
         } catch (pushErr: any) {
           console.warn('Push error on announcement creation:', pushErr);

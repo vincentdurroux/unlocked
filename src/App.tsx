@@ -850,19 +850,75 @@ import { emailService } from './services/emailService';
 
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
+const normalizeTimestamp = (ts?: string | null): string => {
+  if (!ts || typeof ts !== 'string') return new Date().toISOString();
+  let normalized = ts.trim();
+  // Convert SQL space separator ("2026-03-28 14:30:00+00") to ISO "T" for iOS WebKit / Safari compatibility
+  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(normalized)) {
+    normalized = normalized.replace(/\s+/, 'T');
+  }
+  // Ensure timezone offset like +00 is valid ISO (+00:00) on strict WebKit parsers
+  if (/[+-]\d{2}$/.test(normalized)) {
+    normalized = `${normalized}:00`;
+  }
+  const parsed = new Date(normalized);
+  return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+};
+
 const parseAnnouncement = (ann: any) => {
   if (!ann) return ann;
   let rawContent = ann.content || '';
   let icon = ann.icon || 'megaphone';
-  let title = '';
+  let title = ann.title || '';
   let content = rawContent;
+  let target_id = ann.target_id;
+  let cta_link = ann.cta_link;
+  let cta_type = ann.cta_type;
 
-  if (rawContent.startsWith('[icon:')) {
-    const endIconIndex = rawContent.indexOf(']');
-    if (endIconIndex !== -1) {
-      icon = rawContent.slice(6, endIconIndex).trim();
-      rawContent = rawContent.slice(endIconIndex + 1).trim();
-      content = rawContent;
+  // Unpack pipe-encoded metadata in cta_type if present: "type|targetId|ctaLink"
+  if (typeof cta_type === 'string' && cta_type.includes('|')) {
+    const parts = cta_type.split('|');
+    cta_type = parts[0] || undefined;
+    if (!target_id && parts[1]) target_id = parts[1];
+    if (!cta_link && parts[2]) cta_link = parts[2];
+  }
+
+  // Parse leading metadata tags such as [icon:...], [target:...], [link:...], [type:...]
+  let tagMatched = true;
+  while (tagMatched) {
+    tagMatched = false;
+    if (rawContent.startsWith('[icon:')) {
+      const endIdx = rawContent.indexOf(']');
+      if (endIdx !== -1) {
+        icon = rawContent.slice(6, endIdx).trim();
+        rawContent = rawContent.slice(endIdx + 1).trim();
+        content = rawContent;
+        tagMatched = true;
+      }
+    } else if (rawContent.startsWith('[target:')) {
+      const endIdx = rawContent.indexOf(']');
+      if (endIdx !== -1) {
+        target_id = rawContent.slice(8, endIdx).trim() || target_id;
+        rawContent = rawContent.slice(endIdx + 1).trim();
+        content = rawContent;
+        tagMatched = true;
+      }
+    } else if (rawContent.startsWith('[link:')) {
+      const endIdx = rawContent.indexOf(']');
+      if (endIdx !== -1) {
+        cta_link = rawContent.slice(6, endIdx).trim() || cta_link;
+        rawContent = rawContent.slice(endIdx + 1).trim();
+        content = rawContent;
+        tagMatched = true;
+      }
+    } else if (rawContent.startsWith('[type:')) {
+      const endIdx = rawContent.indexOf(']');
+      if (endIdx !== -1) {
+        cta_type = rawContent.slice(6, endIdx).trim() || cta_type;
+        rawContent = rawContent.slice(endIdx + 1).trim();
+        content = rawContent;
+        tagMatched = true;
+      }
     }
   }
 
@@ -872,15 +928,18 @@ const parseAnnouncement = (ann: any) => {
     content = rawContent.slice(closingBracketIndex + 1).trim();
   }
 
+  const normalizedCreatedAt = normalizeTimestamp(ann.updated_at || ann.created_at);
+
   return {
     ...ann,
     icon,
     title,
     content,
-    target_id: ann.target_id,
-    cta_link: ann.cta_link,
-    cta_type: ann.cta_type,
-    created_at: ann.created_at || ann.updated_at || new Date().toISOString()
+    target_id,
+    cta_link,
+    cta_type,
+    created_at: normalizedCreatedAt,
+    updated_at: normalizeTimestamp(ann.updated_at || ann.created_at)
   };
 };
 
@@ -2782,11 +2841,9 @@ export default function App() {
     } catch (_) {}
 
     const mergedDismissed = Array.from(new Set([
-      ...dismissedNotificationIds,
       ...cloudMetaDismissed.map(String),
       ...cloudProfileDismissed.map(String),
-      ...localUserDismissed.map(String),
-      ...legacyDismissed.map(String)
+      ...localUserDismissed.map(String)
     ]));
 
     // Update state if newly synced IDs are found
@@ -2822,9 +2879,10 @@ export default function App() {
         dismissed_announcement_ids: mergedDismissed
       } as any).catch(() => {});
     }
-  }, [currentUser?.id, userProfile]);
+  }, [currentUser?.id, currentUser?.user_metadata, userProfile]);
 
   const isFetchingAnnouncementsRef = useRef(false);
+  const pendingAnnouncementsRefetchRef = useRef(false);
 
   async function fetchAnnouncementsFromDb() {
     // Guest protection: Guests must not query, store, or receive community notifications
@@ -2834,7 +2892,12 @@ export default function App() {
       return;
     }
 
-    if (!isSupabaseConfigured || isFetchingAnnouncementsRef.current) return;
+    if (!isSupabaseConfigured) return;
+
+    if (isFetchingAnnouncementsRef.current) {
+      pendingAnnouncementsRefetchRef.current = true;
+      return;
+    }
 
     // Avoid network requests if offline to prevent 'Failed to fetch' noise
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -2843,21 +2906,45 @@ export default function App() {
     isFetchingAnnouncementsRef.current = true;
     try {
       let list: any[] = [];
-      const { data: annData, error: annError } = await supabase
+      let { data: annData, error: annError } = await supabase
         .from('announcements')
         .select('*')
         .order('updated_at', { ascending: false });
 
       if (annError) {
+        // Fallback if updated_at column ordering fails
+        const fallbackRes = await supabase
+          .from('announcements')
+          .select('*');
+        annData = fallbackRes.data;
+        annError = fallbackRes.error;
+      }
+
+      if (annError) {
         console.error('Error fetching announcements from Supabase:', annError);
       }
 
-      console.log('fetchAnnouncementsFromDb data:', annData);
-      
       if (!annError && annData && annData.length > 0) {
-        list = annData
+        const parsedAnns = annData
           .filter(ann => ann.is_active !== false)
           .map(ann => parseAnnouncement(ann));
+
+        // Deduplicate announcements created within 15 seconds with identical title & content
+        const dedupedAnns: any[] = [];
+        for (const item of parsedAnns) {
+          const isDuplicate = dedupedAnns.some(existing => {
+            if ((existing.title || '') !== (item.title || '') || (existing.content || '') !== (item.content || '')) {
+              return false;
+            }
+            const t1 = new Date(existing.created_at).getTime();
+            const t2 = new Date(item.created_at).getTime();
+            return !isNaN(t1) && !isNaN(t2) && Math.abs(t1 - t2) < 15000;
+          });
+          if (!isDuplicate) {
+            dedupedAnns.push(item);
+          }
+        }
+        list = dedupedAnns;
       }
 
       // Pro recommendation notifications are for administrators only
@@ -2938,28 +3025,6 @@ export default function App() {
 
 
 
-      // 5. REQUIREMENT: Filter notifications to ONLY include those sent AFTER or AT the moment the user registered
-      // Exception: Administrators see all history for debugging and verification purposes
-      const userRegistrationDateStr = currentUser.created_at || userProfile?.created_at || (currentUser.user_metadata as any)?.created_at;
-      if (userRegistrationDateStr && !isAdmin) {
-        const userRegistrationTimestamp = new Date(userRegistrationDateStr).getTime();
-        if (!isNaN(userRegistrationTimestamp) && userRegistrationTimestamp > 0) {
-          list = list.filter(item => {
-            if (!item) return false;
-            // Direct chat notifications sent to this member are strictly for this member
-            if (item.type === 'chat' || String(item.id).startsWith('chat-')) {
-              return true;
-            }
-            const itemDateStr = item.created_at || item.updated_at || item.timestamp;
-            if (!itemDateStr) return true; // Keep if no date available
-            const itemTimestamp = new Date(itemDateStr).getTime();
-            if (isNaN(itemTimestamp)) return true; // Keep if date is unparseable
-            // Only keep notifications created/sent on or after user registration
-            return itemTimestamp >= userRegistrationTimestamp;
-          });
-        }
-      }
-
       list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setAnnouncementsList(list);
 
@@ -2991,8 +3056,14 @@ export default function App() {
       console.warn('Error fetching announcements from Supabase:', err);
     } finally {
       isFetchingAnnouncementsRef.current = false;
+      if (pendingAnnouncementsRefetchRef.current) {
+        pendingAnnouncementsRefetchRef.current = false;
+        fetchAnnouncementsFromDbRef.current();
+      }
     }
-  };
+  }
+
+  fetchAnnouncementsFromDbRef.current = fetchAnnouncementsFromDb;
 
   useEffect(() => {
     if (!currentUser) {
@@ -3001,27 +3072,54 @@ export default function App() {
       return;
     }
 
-    fetchAnnouncementsFromDb();
+    fetchAnnouncementsFromDbRef.current();
     if (!isSupabaseConfigured) return;
 
     const channel = supabase
-      .channel('public:announcements')
+      .channel(`public:announcements:${currentUser.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, (payload) => {
         console.log('Realtime: announcements change', payload);
-        fetchAnnouncementsFromDb();
+        fetchAnnouncementsFromDbRef.current();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pro_recommendations' }, (payload) => {
         console.log('Realtime: pro_recommendations change', payload);
-        fetchAnnouncementsFromDb();
+        fetchAnnouncementsFromDbRef.current();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         console.log('Realtime: messages change', payload);
-        fetchAnnouncementsFromDb();
+        fetchAnnouncementsFromDbRef.current();
         fetchAndCheckUnread();
       })
       .subscribe((status) => {
         console.log('Realtime: subscription status', status);
       });
+
+    const syncUserAndNotifications = () => {
+      const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      if (!isOnline) return;
+      fetchAnnouncementsFromDbRef.current();
+      if (currentUser?.id) {
+        supabase.auth.getUser().then(({ data: { user }, error }) => {
+          if (user && !error) {
+            setCurrentUser(user);
+          }
+        }).catch(() => {});
+      }
+    };
+
+    const handleVisibilityOrFocus = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        syncUserAndNotifications();
+      }
+    };
+
+    const handlePushReceived = () => {
+      syncUserAndNotifications();
+    };
+
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('onesignal:notification-received', handlePushReceived);
 
     const pollInterval = setInterval(() => {
       // Skip background polling if tab is hidden or device is offline to prevent unnecessary 'Failed to fetch' errors
@@ -3030,28 +3128,17 @@ export default function App() {
       
       if (!isVisible || !isOnline) return;
 
-      console.log('Realtime: polling...');
-      fetchAnnouncementsFromDb();
-      
-      // Refresh user metadata periodically (every 60s) to sync read/dismissed status across devices
-      if (currentUser?.id) {
-        supabase.auth.getUser().then(({ data: { user }, error }) => {
-          if (user && !error) {
-            console.log('Realtime: refreshed user metadata');
-            setCurrentUser(user);
-          }
-        }).catch((err) => {
-          // Silent catch for network errors during polling
-          console.debug('[Realtime] Poll refresh user metadata suppressed error:', err?.message);
-        });
-      }
-    }, 60000);
+      syncUserAndNotifications();
+    }, 30000);
 
     return () => {
       clearInterval(pollInterval);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('onesignal:notification-received', handlePushReceived);
       supabase.removeChannel(channel);
     };
-  }, [isSupabaseConfigured, currentUser?.id, userProfile?.created_at]);
+  }, [isSupabaseConfigured, currentUser?.id, isAdmin]);
 
   const unreadCount = useMemo(() => {
     // REQUIREMENT: Guest users must NEVER have unread notifications or ringing badge
@@ -4723,7 +4810,14 @@ export default function App() {
                     handleNavigate('login');
                     return;
                   }
-                  setShowNotificationsModal(!showNotificationsModal);
+                  const nextOpen = !showNotificationsModal;
+                  setShowNotificationsModal(nextOpen);
+                  if (nextOpen) {
+                    fetchAnnouncementsFromDbRef.current();
+                    supabase.auth.getUser().then(({ data: { user }, error }) => {
+                      if (user && !error) setCurrentUser(user);
+                    }).catch(() => {});
+                  }
                 }}
                 aria-label="Notifications"
                 className="relative w-12 h-12 bg-transparent active:scale-95 transition-all flex items-center justify-center shrink-0 ml-2 group cursor-pointer border-0 p-0 outline-none overflow-visible"
@@ -7904,47 +7998,81 @@ function AdminView({
     }
   };
 
-  const executeSaveAnnouncement = async (sendPush: boolean) => {
-    if (!annFormContent.trim()) {
+  const executeSaveAnnouncement = async (sendPush: boolean, directAnnData?: any) => {
+    const contentToSave = directAnnData !== undefined ? (directAnnData.content || '') : annFormContent;
+    const titleToSave = directAnnData !== undefined ? (directAnnData.title || '') : annFormTitle;
+    const iconToSave = directAnnData !== undefined ? (directAnnData.icon || 'megaphone') : (annFormIcon || 'megaphone');
+    const isActiveToSave = directAnnData !== undefined ? (directAnnData.is_active !== false) : annFormIsActive;
+    const rawCtaType = directAnnData !== undefined ? (directAnnData.cta_type || '') : annFormCtaType;
+    const targetIdToSave = directAnnData?.target_id ? String(directAnnData.target_id).trim() : '';
+    const ctaLinkToSave = directAnnData?.cta_link ? String(directAnnData.cta_link).trim() : '';
+    const idToEdit = directAnnData !== undefined ? (directAnnData.id || null) : editingAnnId;
+
+    if (!contentToSave.trim()) {
       setMsg({ type: 'error', text: 'Please fill in the message.' });
       return;
     }
     setSavingAnn(true);
     try {
-      const iconTag = `[icon:${annFormIcon || 'megaphone'}]`;
-      const titleTag = annFormTitle.trim() ? `[${annFormTitle.trim()}] ` : '';
-      const formattedContent = `${iconTag}${titleTag}${annFormContent.trim()}`;
+      const iconTag = `[icon:${iconToSave}]`;
+      const titleTag = titleToSave.trim() ? `[${titleToSave.trim()}] ` : '';
+      const formattedContent = `${iconTag}${titleTag}${contentToSave.trim()}`;
+      const encodedCtaType = (targetIdToSave || ctaLinkToSave)
+        ? `${rawCtaType || 'custom'}|${targetIdToSave}|${ctaLinkToSave}`
+        : (rawCtaType || null);
+      const nowIso = new Date().toISOString();
 
-      if (editingAnnId) {
+      if (idToEdit) {
         const { error } = await supabase
           .from('announcements')
           .update({
             content: formattedContent,
-            is_active: annFormIsActive,
-            cta_type: annFormCtaType || null,
-            updated_at: new Date().toISOString()
+            is_active: isActiveToSave,
+            cta_type: encodedCtaType,
+            updated_at: nowIso
           })
-          .eq('id', editingAnnId);
-        if (error) throw error;
+          .eq('id', idToEdit);
+        if (error) {
+          // Fallback without optional columns if schema differs
+          const { error: fallbackErr } = await supabase
+            .from('announcements')
+            .update({
+              content: formattedContent,
+              is_active: isActiveToSave
+            })
+            .eq('id', idToEdit);
+          if (fallbackErr) throw fallbackErr;
+        }
       } else {
         const { error } = await supabase
           .from('announcements')
           .insert([
             {
               content: formattedContent,
-              is_active: annFormIsActive,
-              cta_type: annFormCtaType || null,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
+              is_active: isActiveToSave,
+              cta_type: encodedCtaType,
+              created_at: nowIso,
+              updated_at: nowIso
             }
           ]);
-        if (error) throw error;
+        if (error) {
+          // Fallback without optional columns if schema differs
+          const { error: fallbackErr } = await supabase
+            .from('announcements')
+            .insert([
+              {
+                content: formattedContent,
+                is_active: isActiveToSave
+              }
+            ]);
+          if (fallbackErr) throw fallbackErr;
+        }
       }
 
       let pushSuccess = false;
       let pushNotice = '';
 
-      if (sendPush && annFormIsActive) {
+      if (sendPush && isActiveToSave) {
         try {
           const targetUserIds = (annPushTargetMode === 'specific' && annPushSelectedUserId)
             ? [annPushSelectedUserId]
@@ -7957,9 +8085,9 @@ function AdminView({
             : undefined;
 
           await oneSignalService.sendServerNotification(
-            annFormTitle.trim() || 'Unlocked Valencia',
-            annFormContent.trim(),
-            '/',
+            titleToSave.trim() || 'Unlocked Valencia',
+            contentToSave.trim(),
+            ctaLinkToSave || '/',
             targetUserIds,
             targetSubscriptionIds
           );
@@ -7979,7 +8107,7 @@ function AdminView({
           type: 'success',
           text: targetUserName
             ? `Announcement saved & Push notification sent to ${targetUserName}! 📱`
-            : editingAnnId
+            : idToEdit
               ? 'Announcement updated & Push notification broadcasted to all subscribed devices! 📱'
               : 'Announcement published & Push notification broadcasted to all subscribed devices! 📱'
         });
@@ -7991,7 +8119,7 @@ function AdminView({
       } else {
         setMsg({
           type: 'success',
-          text: editingAnnId ? 'Announcement updated successfully in-app.' : 'Announcement published successfully in-app!'
+          text: idToEdit ? 'Announcement updated successfully in-app.' : 'Announcement published successfully in-app!'
         });
       }
       
@@ -8008,10 +8136,10 @@ function AdminView({
       setShowAnnForm(false);
       setPushConfirmModal(null);
       
-      // Refresh
-      fetchAdminAnnouncements();
+      // Refresh both admin list and global notification center list
+      await fetchAdminAnnouncements();
       if (onRefetchAnnouncements) {
-        onRefetchAnnouncements();
+        await onRefetchAnnouncements();
       }
     } catch (err: any) {
       console.error('Error saving announcement:', err);
@@ -12567,7 +12695,12 @@ Wrap up your guide with a warm closing thought for newcomers settling into Valen
           allUsersList={allUsersList}
           adminAnnouncements={adminAnnouncements}
           loadingAnnouncements={loadingAnnouncements}
-          onRefetchAnnouncements={fetchAdminAnnouncements}
+          onRefetchAnnouncements={async () => {
+            await fetchAdminAnnouncements();
+            if (onRefetchAnnouncements) {
+              await onRefetchAnnouncements();
+            }
+          }}
           onSaveAnnouncement={async (annData) => {
             setAnnFormTitle(annData.title);
             setAnnFormContent(annData.content);
@@ -12575,7 +12708,7 @@ Wrap up your guide with a warm closing thought for newcomers settling into Valen
             setAnnFormIsActive(annData.is_active);
             setAnnFormCtaType(annData.cta_type);
             setEditingAnnId(annData.id || null);
-            await executeSaveAnnouncement(annData.send_push !== false);
+            await executeSaveAnnouncement(annData.send_push === true, annData);
           }}
           onDeleteAnnouncement={handleDeleteAnnouncement}
           setMsg={setMsg}

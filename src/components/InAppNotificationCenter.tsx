@@ -393,41 +393,15 @@ export function InAppNotificationCenter({
 
   const isUserNotSignedIn = !currentUser || isGuest;
 
-  // Extract user registration timestamp
-  const userRegistrationTimestamp = useMemo(() => {
-    if (isUserNotSignedIn || !currentUser) return Infinity;
-    const dateStr = currentUser.created_at || (currentUser as any).user_metadata?.created_at;
-    if (!dateStr) return 0;
-    const time = new Date(dateStr).getTime();
-    return isNaN(time) ? 0 : time;
-  }, [currentUser, isUserNotSignedIn]);
-
-  // Filter out dismissed notifications, strictly empty for guests, and exclude pre-registration items
+  // Filter out dismissed notifications and strictly empty for guests
   const activeNotifications = useMemo(() => {
     if (isUserNotSignedIn) return [];
-    
-    // Admins see everything
-    const isAdmin = currentUser?.user_metadata?.is_admin || (currentUser as any)?.is_admin || false;
 
     return (announcements || []).filter(item => {
       if (!item || dismissedIds.includes(String(item.id))) return false;
-      // Chat messages are addressed directly to this member
-      if (item.type === 'chat' || String(item.id).startsWith('chat-')) return true;
-
-      // Filter out notifications sent prior to user account registration
-      // Exception: Administrators see all history
-      if (!isAdmin && userRegistrationTimestamp > 0 && userRegistrationTimestamp !== Infinity) {
-        const itemTimeStr = item.created_at || (item as any).updated_at || (item as any).timestamp;
-        if (itemTimeStr) {
-          const itemTime = new Date(itemTimeStr).getTime();
-          if (!isNaN(itemTime) && itemTime < userRegistrationTimestamp) {
-            return false;
-          }
-        }
-      }
       return true;
     });
-  }, [announcements, dismissedIds, isUserNotSignedIn, userRegistrationTimestamp, currentUser]);
+  }, [announcements, dismissedIds, isUserNotSignedIn]);
 
   // Determine unread status per item
   const isItemUnread = (item: InAppNotification) => {
@@ -446,7 +420,7 @@ export function InAppNotificationCenter({
   }, [activeNotifications, readIds]);
 
   const filteredList = filter === 'unread' ? unreadList : activeNotifications;
-  const displayedList = showOlder ? filteredList : filteredList.slice(0, 7);
+  const displayedList = showOlder ? filteredList : filteredList.slice(0, 20);
 
   const isIOS = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
   const isNativeApp = typeof window !== 'undefined' && (
