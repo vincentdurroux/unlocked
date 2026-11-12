@@ -19968,21 +19968,56 @@ function EventsView({
     loadEvents();
   }, [propEvents]);
 
-  useEffect(() => {
-    if (initialEventId && events.length > 0) {
-      const rawId = String(initialEventId).trim();
-      const cleanId = extractCleanId(rawId) || rawId;
-      const targetEvent = events.find(ev => 
-        String(ev.id).toLowerCase() === rawId.toLowerCase() ||
+  const scrollToEventCard = React.useCallback((targetId: string, behavior: ScrollBehavior = 'smooth') => {
+    if (!targetId) return;
+    let el = document.getElementById(`event-card-${targetId}`);
+    if (!el && events.length > 0) {
+      const cleanId = extractCleanId(targetId) || targetId;
+      const matched = events.find(ev =>
+        String(ev.id).toLowerCase() === targetId.toLowerCase() ||
         String(ev.id).toLowerCase() === cleanId.toLowerCase() ||
-        (ev.title && ev.title.toLowerCase().includes(rawId.toLowerCase())) ||
         (ev.title && ev.title.toLowerCase().includes(cleanId.toLowerCase()))
       );
-      if (targetEvent) {
-        setSelectedEventId(String(targetEvent.id));
-        setSelectedCategory('all');
-        setDateFilter('all');
-        setSearchQuery('');
+      if (matched) {
+        el = document.getElementById(`event-card-${matched.id}`);
+      }
+    }
+    if (!el) return;
+
+    const mainContainer = document.querySelector('main');
+    if (mainContainer && mainContainer.scrollHeight > mainContainer.clientHeight) {
+      const containerRect = mainContainer.getBoundingClientRect();
+      const targetRect = el.getBoundingClientRect();
+      const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
+      mainContainer.scrollTo({
+        top: Math.max(0, offset - 16),
+        behavior
+      });
+    } else {
+      el.scrollIntoView({ behavior, block: 'start' });
+    }
+  }, [events]);
+
+  useEffect(() => {
+    if (initialEventId) {
+      const rawId = String(initialEventId).trim();
+      const cleanId = extractCleanId(rawId) || rawId;
+      setSelectedCategory('all');
+      setDateFilter('all');
+      setSearchQuery('');
+
+      if (events.length > 0) {
+        const targetEvent = events.find(ev => 
+          String(ev.id).toLowerCase() === rawId.toLowerCase() ||
+          String(ev.id).toLowerCase() === cleanId.toLowerCase() ||
+          (ev.title && ev.title.toLowerCase().includes(rawId.toLowerCase())) ||
+          (ev.title && ev.title.toLowerCase().includes(cleanId.toLowerCase()))
+        );
+        if (targetEvent) {
+          setSelectedEventId(String(targetEvent.id));
+        } else {
+          setSelectedEventId(cleanId);
+        }
       } else {
         setSelectedEventId(cleanId);
       }
@@ -19990,27 +20025,35 @@ function EventsView({
   }, [initialEventId, events]);
 
   useEffect(() => {
-    if (selectedEventId) {
-      const timer = setTimeout(() => {
-        const el = document.getElementById(`event-card-${selectedEventId}`);
-        const mainContainer = document.querySelector('main');
-        if (el) {
-          if (mainContainer && mainContainer.scrollHeight > mainContainer.clientHeight) {
-            const containerRect = mainContainer.getBoundingClientRect();
-            const targetRect = el.getBoundingClientRect();
-            const offset = targetRect.top - containerRect.top + mainContainer.scrollTop;
-            mainContainer.scrollTo({
-              top: Math.max(0, offset - 76),
-              behavior: 'smooth'
-            });
-          } else {
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        }
-      }, 250);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedEventId]);
+    if (!selectedEventId || events.length === 0) return;
+
+    let userInteracted = false;
+    const stopOnUserTouch = () => {
+      userInteracted = true;
+    };
+    window.addEventListener('touchmove', stopOnUserTouch, { passive: true });
+    window.addEventListener('wheel', stopOnUserTouch, { passive: true });
+
+    // Perform staged scroll passes so the view scrolls to the card once events load from Supabase
+    // and re-aligns accurately after Framer Motion's layout expansion animation settles on mobile.
+    const t1 = setTimeout(() => {
+      if (!userInteracted) scrollToEventCard(selectedEventId, 'smooth');
+    }, 120);
+    const t2 = setTimeout(() => {
+      if (!userInteracted) scrollToEventCard(selectedEventId, 'smooth');
+    }, 350);
+    const t3 = setTimeout(() => {
+      if (!userInteracted) scrollToEventCard(selectedEventId, 'smooth');
+    }, 650);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      window.removeEventListener('touchmove', stopOnUserTouch);
+      window.removeEventListener('wheel', stopOnUserTouch);
+    };
+  }, [selectedEventId, initialEventId, events.length, loading, scrollToEventCard]);
 
   const hasActiveFilters = selectedCategory !== 'all' || searchQuery.trim() !== '' || dateFilter !== 'all';
 
