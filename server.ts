@@ -1601,6 +1601,21 @@ Ensure each event contains:
         }
       }
 
+      // Fallback: If include_aliases yielded 0 recipients, retry with classic include_external_user_ids (supported across Web & Mobile SDKs)
+      if (hasUserIds && (!oneSignalRes.ok || !data?.id || data?.recipients === 0)) {
+        const extPayload: any = {
+          ...basePayload,
+          include_external_user_ids: targetUserIds,
+          target_channel: "push"
+        };
+        const extRes = await sendToOneSignal(extPayload, activeAuth);
+        const extData = await extRes.json();
+        if (extRes.ok && extData?.id && (extData?.recipients || 0) > 0) {
+          oneSignalRes = extRes;
+          data = extData;
+        }
+      }
+
       // Fallback if External ID has no linked player in OneSignal yet -> send via Total Subscriptions / Subscribed Users so notification is never lost
       if (hasUserIds && (!oneSignalRes.ok || !data?.id || (Array.isArray(data?.errors) && data.errors.length > 0))) {
         const segPayload: any = {

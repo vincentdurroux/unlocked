@@ -173,10 +173,18 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         try {
           const { data, error } = await supabase
             .from('profiles')
-            .select('id, full_name, email, avatar_url')
+            .select('id, full_name, email, avatar_url, onesignal_player_id')
             .order('full_name', { ascending: true });
           if (!error && data && data.length > 0) {
             setInternalUsers(data);
+          } else {
+            const { data: fallbackData } = await supabase
+              .from('profiles')
+              .select('id, full_name, email, avatar_url')
+              .order('full_name', { ascending: true });
+            if (fallbackData && fallbackData.length > 0) {
+              setInternalUsers(fallbackData);
+            }
           }
         } catch (_) {}
       };
@@ -215,6 +223,30 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     setPushLogs(remaining);
     setConfirmClearCustom(false);
     setMsg({ type: 'success', text: 'Custom messages push log cleared successfully.' });
+  };
+
+  // User Bell Notification Center Dashboard State
+  const [dashboardSubTab, setDashboardSubTab] = useState<'bell' | 'push'>('bell');
+  const [bellSearchQuery, setBellSearchQuery] = useState('');
+  const [bellTypeFilter, setBellTypeFilter] = useState('all');
+  const [deletingBellAnnId, setDeletingBellAnnId] = useState<string | number | null>(null);
+  const [confirmDeleteAnnId, setConfirmDeleteAnnId] = useState<string | number | null>(null);
+
+  const handleDeleteFromBell = async (id: string | number) => {
+    try {
+      setDeletingBellAnnId(id);
+      await onDeleteAnnouncement(id);
+      setConfirmDeleteAnnId(null);
+      if (onRefetchAnnouncements) {
+        await onRefetchAnnouncements();
+      }
+      setMsg({ type: 'success', text: 'Notification removed from users\' Bell notification center.' });
+    } catch (err: any) {
+      console.error('Error deleting announcement:', err);
+      setMsg({ type: 'error', text: 'Failed to delete notification: ' + (err?.message || 'Please try again.') });
+    } finally {
+      setDeletingBellAnnId(null);
+    }
   };
 
   // Search & Filter states for entity tabs
@@ -336,6 +368,28 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     });
   }, [pushLogs]);
 
+  // Filtered live announcements present in users' in-app Bell center
+  const filteredBellAnnouncements = useMemo(() => {
+    return adminAnnouncements.filter((ann) => {
+      const cta = (ann.cta_type || '').toLowerCase();
+      if (bellTypeFilter !== 'all') {
+        if (bellTypeFilter === 'custom' && ['event', 'article', 'guide', 'pro', 'weekend'].includes(cta)) return false;
+        if (bellTypeFilter === 'event' && cta !== 'event') return false;
+        if (bellTypeFilter === 'article' && cta !== 'article' && cta !== 'guide') return false;
+        if (bellTypeFilter === 'pro' && cta !== 'pro') return false;
+        if (bellTypeFilter === 'weekend' && cta !== 'weekend') return false;
+      }
+      if (bellSearchQuery.trim()) {
+        const q = bellSearchQuery.toLowerCase();
+        const titleMatch = (ann.title || '').toLowerCase().includes(q);
+        const contentMatch = (ann.content || '').toLowerCase().includes(q);
+        const userMatch = ann.target_user_id ? String(ann.target_user_id).toLowerCase().includes(q) : false;
+        return titleMatch || contentMatch || userMatch;
+      }
+      return true;
+    });
+  }, [adminAnnouncements, bellTypeFilter, bellSearchQuery]);
+
   // Check if target was already pushed
   const isTargetPushed = (targetId?: string) => {
     if (!targetId) return null;
@@ -421,7 +475,8 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         pushComposeModal.channels || ['ios', 'android', 'web']
       );
 
-      const recipientCount = res?.recipients ?? res?.result?.recipients ?? (targetMode === 'specific' ? 1 : activeUsersList.length || 1);
+      const rawRecipients = res?.recipients ?? res?.result?.recipients;
+      const recipientCount = typeof rawRecipients === 'number' ? rawRecipients : (targetMode === 'specific' ? 0 : 1);
 
       // Record in history log (skip duplicate DB insert if onSaveAnnouncement already saved to Supabase)
       await savePushLogEntry({
@@ -437,7 +492,22 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       }, savedInBell);
 
       reloadPushLogs();
-      setMsg({ type: 'success', text: `🚀 Notification published to bell & Mobile Push sent successfully! (${recipientCount} recipient${recipientCount > 1 ? 's' : ''})` });
+      if (recipientCount > 0) {
+        setMsg({ 
+          type: 'success', 
+          text: `🚀 Notification published to Bell & Mobile Push sent successfully to ${recipientCount} device${recipientCount > 1 ? 's' : ''}!` 
+        });
+      } else if (targetMode === 'specific') {
+        setMsg({ 
+          type: 'success', 
+          text: `🔔 Notification published to the member's in-app Bell! (Note: 0 mobile devices are currently registered in OneSignal for this user — they will see the notification inside the Bell upon opening the app).` 
+        });
+      } else {
+        setMsg({ 
+          type: 'success', 
+          text: `🚀 Notification published to Bell & sent to active subscribers!` 
+        });
+      }
       setPushComposeModal(null);
     } catch (err: any) {
       console.error('Error sending push notification:', err);
@@ -760,11 +830,35 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       {activeTab === 'history' && (
         <div className="space-y-6">
           {/* Summary Stats Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-            <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-xs space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Push Alerts</span>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div 
+              onClick={() => setDashboardSubTab('bell')}
+              className={cn(
+                "p-4 rounded-2xl border shadow-xs space-y-1 cursor-pointer transition-all",
+                dashboardSubTab === 'bell' ? "bg-yellow-50/80 border-yellow-300 ring-2 ring-yellow-400/30" : "bg-white border-slate-100 hover:border-slate-200"
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-yellow-700 uppercase tracking-wider block">Live in User Bell</span>
+                <Bell className="w-4 h-4 text-yellow-600" />
+              </div>
+              <p className="text-2xl font-black font-display text-slate-900">{adminAnnouncements.length}</p>
+              <p className="text-[10px] text-slate-500 font-medium">In notification center</p>
+            </div>
+
+            <div 
+              onClick={() => setDashboardSubTab('push')}
+              className={cn(
+                "p-4 rounded-2xl border shadow-xs space-y-1 cursor-pointer transition-all",
+                dashboardSubTab === 'push' ? "bg-blue-50/80 border-blue-300 ring-2 ring-blue-400/30" : "bg-white border-slate-100 hover:border-slate-200"
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Push Alerts</span>
+                <Send className="w-4 h-4 text-blue-500" />
+              </div>
               <p className="text-2xl font-black font-display text-slate-900">{pushLogs.length}</p>
-              <p className="text-[10px] text-slate-500 font-medium">Logged in storage</p>
+              <p className="text-[10px] text-slate-500 font-medium">Mobile logs logged</p>
             </div>
 
             <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-xs space-y-1">
@@ -783,162 +877,401 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
               <p className="text-[10px] text-slate-500 font-medium">Expat guides</p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-xs space-y-1">
+            <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-xs space-y-1 col-span-2 sm:col-span-1">
               <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider block">Pros Spotlighted</span>
               <p className="text-2xl font-black font-display text-blue-600">
                 {pushLogs.filter(l => l.type === 'pro').length}
               </p>
-              <p className="text-[10px] text-slate-500 font-medium">Service professionals</p>
+              <p className="text-[10px] text-slate-500 font-medium">Service pros</p>
             </div>
           </div>
 
-          {/* History Log Controls */}
-          <div className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h4 className="text-base font-bold font-display text-slate-900">Sent Push Notifications Log</h4>
-                <p className="text-xs text-slate-400 font-medium">Audit real mobile push notifications broadcasted to iOS &amp; Android members.</p>
+          {/* View Switcher Sub-Tabs */}
+          <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
+            <button
+              type="button"
+              onClick={() => setDashboardSubTab('bell')}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer",
+                dashboardSubTab === 'bell'
+                  ? "bg-slate-900 text-white shadow-xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+              )}
+            >
+              <Bell className="w-3.5 h-3.5 text-yellow-400" />
+              <span>User Bell Center Notifications</span>
+              <span className={cn(
+                "px-1.5 py-0.5 rounded-full text-[10px] font-extrabold",
+                dashboardSubTab === 'bell' ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
+              )}>
+                {adminAnnouncements.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDashboardSubTab('push')}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer",
+                dashboardSubTab === 'push'
+                  ? "bg-slate-900 text-white shadow-xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+              )}
+            >
+              <Send className="w-3.5 h-3.5 text-blue-400" />
+              <span>Sent Mobile Push Log</span>
+              <span className={cn(
+                "px-1.5 py-0.5 rounded-full text-[10px] font-extrabold",
+                dashboardSubTab === 'push' ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
+              )}>
+                {pushLogs.length}
+              </span>
+            </button>
+          </div>
+
+          {/* VIEW 1: Active In-App Bell Center Notifications (with Delete Actions) */}
+          {dashboardSubTab === 'bell' && (
+            <div className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-base font-bold font-display text-slate-900 flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-yellow-500" />
+                    Active In-App Notifications (User Bell Center)
+                  </h4>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Live notifications currently visible to users in their in-app notification bell. Delete any notification here to remove it from users' view immediately.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (onRefetchAnnouncements) await onRefetchAnnouncements();
+                  }}
+                  className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
+                  title="Refresh notifications from database"
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>Refresh Feed</span>
+                </button>
               </div>
 
-              {pushLogs.length > 0 && (
-                confirmClearHistory ? (
-                  <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto">
-                    <button
-                      type="button"
-                      onClick={handleClearAllHistory}
-                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Confirm Clear All</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmClearHistory(false)}
-                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl cursor-pointer"
-                      title="Cancel"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmClearHistory(true)}
-                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl border border-rose-100 transition-colors flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Clear History</span>
-                  </button>
-                )
+              {/* Search & Filter Bar */}
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search active notifications by title, message, or user..."
+                    value={bellSearchQuery}
+                    onChange={(e) => setBellSearchQuery(e.target.value)}
+                    className="w-full text-xs pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 font-medium text-slate-800"
+                  />
+                </div>
+
+                <select
+                  value={bellTypeFilter}
+                  onChange={(e) => setBellTypeFilter(e.target.value)}
+                  className="w-full sm:w-52 bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer"
+                >
+                  <option value="all">All Notification Types ({adminAnnouncements.length})</option>
+                  <option value="custom">Custom Broadcasts</option>
+                  <option value="event">Events</option>
+                  <option value="article">Articles &amp; Guides</option>
+                  <option value="pro">Pro Spotlights</option>
+                  <option value="weekend">Weekend Digests</option>
+                </select>
+              </div>
+
+              {/* Notifications Table */}
+              {loadingAnnouncements ? (
+                <div className="py-12 text-center">
+                  <Loader2 className="w-8 h-8 text-yellow-500 animate-spin mx-auto" />
+                </div>
+              ) : filteredBellAnnouncements.length === 0 ? (
+                <div className="py-12 text-center space-y-2">
+                  <Bell className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="text-xs font-bold text-slate-600">No active notifications found in users' Bell center</p>
+                  <p className="text-[11px] text-slate-400">Broadcast a notification from any tab to deliver it to users' Bell dropdown.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px] border-y border-slate-100">
+                      <tr>
+                        <th className="p-3.5">Type</th>
+                        <th className="p-3.5">Title &amp; Content</th>
+                        <th className="p-3.5">Target Audience</th>
+                        <th className="p-3.5">Date Published</th>
+                        <th className="p-3.5 text-center">Status</th>
+                        <th className="p-3.5 text-right">Delete Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredBellAnnouncements.map((ann) => {
+                        const cta = (ann.cta_type || '').toLowerCase();
+                        let typeBadge = { label: 'Custom', bg: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
+                        if (cta === 'event') typeBadge = { label: 'Event', bg: 'bg-orange-50 text-orange-700 border-orange-200' };
+                        else if (cta === 'article' || cta === 'guide') typeBadge = { label: 'Article', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+                        else if (cta === 'pro') typeBadge = { label: 'Pro', bg: 'bg-blue-50 text-blue-700 border-blue-200' };
+                        else if (cta === 'weekend') typeBadge = { label: 'Weekend', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+
+                        const dateFormatted = ann.created_at || ann.updated_at 
+                          ? new Date(ann.created_at || ann.updated_at).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })
+                          : 'Recent';
+
+                        const targetMember = ann.target_user_id 
+                          ? activeUsersList.find(u => u.id === ann.target_user_id) 
+                          : null;
+
+                        const isConfirming = confirmDeleteAnnId === ann.id;
+                        const isDeleting = deletingBellAnnId === ann.id;
+
+                        return (
+                          <tr key={ann.id} className="hover:bg-slate-50/60 transition-colors">
+                            <td className="p-3.5 whitespace-nowrap">
+                              <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border", typeBadge.bg)}>
+                                {typeBadge.label}
+                              </span>
+                            </td>
+                            <td className="p-3.5 min-w-[240px]">
+                              <p className="font-bold text-slate-900 leading-snug">{ann.title || 'Notification'}</p>
+                              <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{ann.content}</p>
+                              {ann.cta_link && (
+                                <span className="text-[10px] font-mono text-blue-600 mt-0.5 inline-block">
+                                  {ann.cta_link}
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3.5 whitespace-nowrap">
+                              {ann.target_user_id ? (
+                                <div>
+                                  <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100 text-[11px] inline-flex items-center gap-1">
+                                    <User className="w-3 h-3" />
+                                    {targetMember?.full_name || targetMember?.email || 'Targeted Member'}
+                                  </span>
+                                  {targetMember?.email && (
+                                    <p className="text-[10px] text-slate-400 mt-0.5">{targetMember.email}</p>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="font-semibold text-slate-700 text-[11px] inline-flex items-center gap-1">
+                                  <Users className="w-3 h-3 text-slate-400" />
+                                  All Members
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3.5 whitespace-nowrap text-slate-500 font-medium text-[11px]">
+                              {dateFormatted}
+                            </td>
+                            <td className="p-3.5 whitespace-nowrap text-center">
+                              <span className={cn(
+                                "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase",
+                                ann.is_active !== false ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-500"
+                              )}>
+                                {ann.is_active !== false ? 'Live in Bell' : 'Hidden'}
+                              </span>
+                            </td>
+                            <td className="p-3.5 whitespace-nowrap text-right">
+                              {isConfirming ? (
+                                <div className="inline-flex items-center gap-1 justify-end">
+                                  <button
+                                    type="button"
+                                    disabled={isDeleting}
+                                    onClick={() => handleDeleteFromBell(ann.id)}
+                                    className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase rounded-lg shadow-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                  >
+                                    {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                    <span>Confirm</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteAnnId(null)}
+                                    className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-[10px] rounded-lg cursor-pointer"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteAnnId(ann.id)}
+                                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl border border-rose-100 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                                  title="Delete this notification from users' notification center"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                  <span>Delete</span>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
+          )}
 
-            {/* Filter and Search Bar */}
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <div className="relative flex-1 w-full">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search log by title, message, or recipient..."
-                  value={logSearchQuery}
-                  onChange={(e) => setLogSearchQuery(e.target.value)}
-                  className="w-full text-xs pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 font-medium text-slate-800"
-                />
+          {/* VIEW 2: Sent Mobile Push Log (OneSignal) */}
+          {dashboardSubTab === 'push' && (
+            <div className="bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-base font-bold font-display text-slate-900 flex items-center gap-2">
+                    <Send className="w-4 h-4 text-blue-500" />
+                    Sent Mobile Push Notifications Log
+                  </h4>
+                  <p className="text-xs text-slate-400 font-medium">Audit real mobile push notifications broadcasted to iOS &amp; Android members via OneSignal.</p>
+                </div>
+
+                {pushLogs.length > 0 && (
+                  confirmClearHistory ? (
+                    <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={handleClearAllHistory}
+                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Confirm Clear All</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmClearHistory(false)}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl cursor-pointer"
+                        title="Cancel"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmClearHistory(true)}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl border border-rose-100 transition-colors flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Clear History</span>
+                    </button>
+                  )
+                )}
               </div>
 
-              <select
-                value={logFilterType}
-                onChange={(e) => setLogFilterType(e.target.value)}
-                className="w-full sm:w-48 bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer"
-              >
-                <option value="all">All Notification Types</option>
-                <option value="custom">Custom Notifications</option>
-                <option value="event">Events</option>
-                <option value="article">Articles & Guides</option>
-                <option value="pro">Pro Spotlights</option>
-                <option value="weekend">Weekend Digests</option>
-                <option value="direct_member">Direct Member Push</option>
-              </select>
+              {/* Filter and Search Bar */}
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search log by title, message, or recipient..."
+                    value={logSearchQuery}
+                    onChange={(e) => setLogSearchQuery(e.target.value)}
+                    className="w-full text-xs pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 font-medium text-slate-800"
+                  />
+                </div>
+
+                <select
+                  value={logFilterType}
+                  onChange={(e) => setLogFilterType(e.target.value)}
+                  className="w-full sm:w-48 bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer"
+                >
+                  <option value="all">All Notification Types</option>
+                  <option value="custom">Custom Notifications</option>
+                  <option value="event">Events</option>
+                  <option value="article">Articles &amp; Guides</option>
+                  <option value="pro">Pro Spotlights</option>
+                  <option value="weekend">Weekend Digests</option>
+                  <option value="direct_member">Direct Member Push</option>
+                </select>
+              </div>
+
+              {/* Log Table */}
+              {filteredPushLogs.length === 0 ? (
+                <div className="py-12 text-center space-y-2">
+                  <History className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="text-xs font-bold text-slate-600">No push notification logs found</p>
+                  <p className="text-[11px] text-slate-400">Send your first push notification from any of the sub-tabs above.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px] border-y border-slate-100">
+                      <tr>
+                        <th className="p-3.5">Date &amp; Time</th>
+                        <th className="p-3.5">Type</th>
+                        <th className="p-3.5">Title &amp; Message</th>
+                        <th className="p-3.5">Target Audience</th>
+                        <th className="p-3.5 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredPushLogs.map((log) => {
+                        const dateFormatted = new Date(log.timestamp).toLocaleString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+
+                        let typeBadge = { label: 'Custom', bg: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
+                        if (log.type === 'event') typeBadge = { label: 'Event', bg: 'bg-orange-50 text-orange-700 border-orange-200' };
+                        if (log.type === 'article') typeBadge = { label: 'Article', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+                        if (log.type === 'pro') typeBadge = { label: 'Pro', bg: 'bg-blue-50 text-blue-700 border-blue-200' };
+                        if (log.type === 'weekend') typeBadge = { label: 'Weekend Digest', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+
+                        return (
+                          <tr key={log.id} className="hover:bg-slate-50/60 transition-colors">
+                            <td className="p-3.5 whitespace-nowrap text-slate-500 font-medium text-[11px]">
+                              {dateFormatted}
+                            </td>
+                            <td className="p-3.5 whitespace-nowrap">
+                              <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border", typeBadge.bg)}>
+                                {typeBadge.label}
+                              </span>
+                            </td>
+                            <td className="p-3.5 min-w-[240px]">
+                              <p className="font-bold text-slate-900 leading-snug">{log.title}</p>
+                              <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{log.body}</p>
+                            </td>
+                            <td className="p-3.5 whitespace-nowrap">
+                              <span className="font-semibold text-slate-800">{log.target}</span>
+                              {log.recipientsCount !== undefined && (
+                                <p className="text-[10px] text-slate-400 font-medium">
+                                  ~{log.recipientsCount} recipient{log.recipientsCount > 1 ? 's' : ''}
+                                </p>
+                              )}
+                            </td>
+                            <td className="p-3.5 whitespace-nowrap text-center">
+                              {log.status === 'sent' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  Sent
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-200">
+                                  <AlertCircle className="w-3 h-3 text-rose-600" />
+                                  Failed
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-
-            {/* Log Table */}
-            {filteredPushLogs.length === 0 ? (
-              <div className="py-12 text-center space-y-2">
-                <History className="w-8 h-8 text-slate-300 mx-auto" />
-                <p className="text-xs font-bold text-slate-600">No push notification logs found</p>
-                <p className="text-[11px] text-slate-400">Send your first push notification from any of the sub-tabs above.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-700">
-                  <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px] border-y border-slate-100">
-                    <tr>
-                      <th className="p-3.5">Date & Time</th>
-                      <th className="p-3.5">Type</th>
-                      <th className="p-3.5">Title & Message</th>
-                      <th className="p-3.5">Target Audience</th>
-                      <th className="p-3.5 text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredPushLogs.map((log) => {
-                      const dateFormatted = new Date(log.timestamp).toLocaleString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      });
-
-                      let typeBadge = { label: 'Custom', bg: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
-                      if (log.type === 'event') typeBadge = { label: 'Event', bg: 'bg-orange-50 text-orange-700 border-orange-200' };
-                      if (log.type === 'article') typeBadge = { label: 'Article', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-                      if (log.type === 'pro') typeBadge = { label: 'Pro', bg: 'bg-blue-50 text-blue-700 border-blue-200' };
-                      if (log.type === 'weekend') typeBadge = { label: 'Weekend Digest', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
-
-                      return (
-                        <tr key={log.id} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="p-3.5 whitespace-nowrap text-slate-500 font-medium text-[11px]">
-                            {dateFormatted}
-                          </td>
-                          <td className="p-3.5 whitespace-nowrap">
-                            <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border", typeBadge.bg)}>
-                              {typeBadge.label}
-                            </span>
-                          </td>
-                          <td className="p-3.5 min-w-[240px]">
-                            <p className="font-bold text-slate-900 leading-snug">{log.title}</p>
-                            <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">{log.body}</p>
-                          </td>
-                          <td className="p-3.5 whitespace-nowrap">
-                            <span className="font-semibold text-slate-800">{log.target}</span>
-                            {log.recipientsCount !== undefined && (
-                              <p className="text-[10px] text-slate-400 font-medium">
-                                ~{log.recipientsCount} recipient{log.recipientsCount > 1 ? 's' : ''}
-                              </p>
-                            )}
-                          </td>
-                          <td className="p-3.5 whitespace-nowrap text-center">
-                            {log.status === 'sent' ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                Sent
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-200">
-                                <AlertCircle className="w-3 h-3 text-rose-600" />
-                                Failed
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       )}
 
@@ -2088,18 +2421,46 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                     </div>
 
                     {pushComposeModal.targetMode === 'specific' && (
-                      <select
-                        value={pushComposeModal.selectedUserId || ''}
-                        onChange={(e) => setPushComposeModal({ ...pushComposeModal, selectedUserId: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                      >
-                        <option value="">-- Select target member ({activeUsersList.length} members) --</option>
-                        {activeUsersList.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.full_name || 'Member'} — {u.email || u.id} {u.onesignal_player_id ? '📱 (Mobile Token Linked)' : ''}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="space-y-2 mt-2">
+                        <select
+                          value={pushComposeModal.selectedUserId || ''}
+                          onChange={(e) => setPushComposeModal({ ...pushComposeModal, selectedUserId: e.target.value })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          <option value="">-- Select target member ({activeUsersList.length} members) --</option>
+                          {activeUsersList.map((u) => {
+                            const hasToken = Boolean(u.onesignal_player_id);
+                            return (
+                              <option key={u.id} value={u.id}>
+                                {u.full_name || 'Member'} — {u.email || u.id} {hasToken ? '📱 [Push Ready]' : '🔔 [In-App Bell Only]'}
+                              </option>
+                            );
+                          })}
+                        </select>
+
+                        {pushComposeModal.selectedUserId && (() => {
+                          const selectedUser = activeUsersList.find(u => u.id === pushComposeModal.selectedUserId);
+                          const hasPush = Boolean(selectedUser?.onesignal_player_id);
+                          return (
+                            <div className={cn(
+                              "p-2.5 rounded-xl border text-[11px] font-medium leading-relaxed",
+                              hasPush ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-200 text-amber-800"
+                            )}>
+                              {hasPush ? (
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  <span><strong>Push Token Linked:</strong> This member has enabled notifications on their device and will receive an instant mobile push banner.</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-start gap-2">
+                                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                  <span><strong>In-App Bell Only:</strong> This user has not yet accepted push notifications on their phone/browser. The message will be published to their in-app Bell, but mobile lockscreen push will report <em>0 recipients</em> in OneSignal until they enable notifications on their device.</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     )}
 
                     {pushComposeModal.targetMode === 'device' && (
