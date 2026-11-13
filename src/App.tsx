@@ -2027,8 +2027,10 @@ export default function App() {
     const cleanProId = extractCleanId(rawProId);
     const rawGuideId = searchParams.get('guideId') || hashParams.get('guideId');
     const cleanGuideId = extractCleanId(rawGuideId);
+    const focusParam = (searchParams.get('focus') || hashParams.get('focus') || '').toLowerCase();
+    const hasWeekendFocus = focusParam === 'weekend-events' || focusParam === 'weekend' || hash.toLowerCase().includes('weekend-events');
 
-    const hasDeepLinkQuery = Boolean(cleanEventId || cleanProId || cleanGuideId);
+    const hasDeepLinkQuery = Boolean(cleanEventId || cleanProId || cleanGuideId || hasWeekendFocus);
 
     const validViews: View[] = [
       'home', 'explore', 'events', 'guides', 'profile', 'community', 'marketplace', 
@@ -2051,6 +2053,7 @@ export default function App() {
       if (cleanEventId) initial = 'events';
       else if (cleanProId) initial = 'explore';
       else if (cleanGuideId) initial = 'guides';
+      else if (hasWeekendFocus) initial = 'home';
     } else if (cleanHash && validViews.includes(cleanHash as View)) {
       initial = cleanHash as View;
     } else if (pathname && validViews.includes(pathname as View)) {
@@ -2444,7 +2447,27 @@ export default function App() {
   }, [initialChat]);
 
   const [deepLinkTrigger, setDeepLinkTrigger] = useState(0);
-  const [homeFocusRequest, setHomeFocusRequest] = useState<{ target: 'weekend-events'; ts: number } | null>(null);
+  const [homeFocusRequest, setHomeFocusRequest] = useState<{ target: 'weekend-events'; ts: number } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const hp = window.location.hash.includes('?')
+        ? new URLSearchParams(window.location.hash.substring(window.location.hash.indexOf('?')))
+        : null;
+      const focusVal = (p.get('focus') || hp?.get('focus') || '').toLowerCase();
+      if (focusVal === 'weekend-events' || focusVal === 'weekend' || window.location.hash.toLowerCase().includes('weekend-events')) {
+        return { target: 'weekend-events', ts: Date.now() };
+      }
+    } catch (_) {}
+    return null;
+  });
+  const homeFocusRequestRef = useRef<{ target: 'weekend-events'; ts: number } | null>(homeFocusRequest);
+  const requestHomeFocus = React.useCallback((target: 'weekend-events') => {
+    const req = { target, ts: Date.now() };
+    homeFocusRequestRef.current = req;
+    setHomeFocusRequest(req);
+  }, []);
+  const handleNavigateRef = useRef<((view: View | 'back', params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any, focusSection?: 'weekend-events' }) => void) | null>(null);
 
   // Extract sharing & push notification parameters (?eventId, ?proId, ?guideId, ?focus=weekend-events) on mount and URL changes
   const checkAndApplyUrlDeepLinks = React.useCallback(() => {
@@ -2489,11 +2512,11 @@ export default function App() {
       setDeepLinkTrigger(c => c + 1);
       setActiveView('guides');
       return true;
-    } else if (focusParam === 'weekend-events' || hashRaw.includes('weekend-events')) {
+    } else if (focusParam === 'weekend-events' || focusParam === 'weekend' || hashRaw.includes('weekend-events')) {
       initialViewRef.current = null;
       isProgrammaticNavigationRef.current = true;
       setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
-      setHomeFocusRequest({ target: 'weekend-events', ts: Date.now() });
+      requestHomeFocus('weekend-events');
       setDeepLinkTrigger(c => c + 1);
       setActiveView('home');
       try {
@@ -2502,7 +2525,7 @@ export default function App() {
       return true;
     }
     return false;
-  }, []);
+  }, [requestHomeFocus]);
 
   useEffect(() => {
     checkAndApplyUrlDeepLinks();
@@ -2513,64 +2536,94 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashOrUrlChange);
   }, [checkAndApplyUrlDeepLinks]);
 
-  // Listen for live OneSignal push notification clicks
+  // Listen for live OneSignal push notification clicks (plus any early buffered click)
   useEffect(() => {
-    const handlePushClick = (e: any) => {
+    const processPushClickDetail = (detail: any) => {
       try {
-        const detail = e?.detail;
         const data = detail?.data || {};
-        const launchUrl = String(detail?.launchUrl || data?.url || data?.launchUrl || '');
-        const notifType = String(data.type || detail?.notification?.type || '').toLowerCase();
+        const notif = detail?.notification || {};
+        const launchUrl = String(detail?.launchUrl || data?.url || data?.launchUrl || notif?.launchUrl || '').toLowerCase();
+        const notifType = String(data.type || notif?.type || '').toLowerCase();
         const notifTheme = String(data.theme || '').toLowerCase();
+        const notifFocus = String(data.focus || '').toLowerCase();
+        const headingText = String(notif?.title || notif?.heading || notif?.headings?.en || data?.title || '').toLowerCase();
+        const bodyText = String(notif?.body || notif?.content || notif?.contents?.en || data?.body || '').toLowerCase();
+        const combinedText = `${headingText} ${bodyText}`;
+
+        const hasSpecificEventId = Boolean(data.eventId || launchUrl.includes('eventid='));
 
         const isWeekendPush =
           notifType === 'weekend' ||
           notifTheme === 'weekend' ||
           notifTheme === 'weekend_digest' ||
+          notifFocus === 'weekend-events' ||
           launchUrl.includes('weekend-events') ||
-          launchUrl.includes('focus=weekend');
+          launchUrl.includes('focus=weekend') ||
+          (!hasSpecificEventId && (
+            combinedText.includes('weekend highlight') ||
+            combinedText.includes('week-end highlight') ||
+            combinedText.includes('week end highlight') ||
+            combinedText.includes('events to check out') ||
+            combinedText.includes('plans to check out') ||
+            combinedText.includes('this weekend') ||
+            combinedText.includes('for the weekend') ||
+            combinedText.includes('weekend spotlight')
+          ));
+
+        const navFn = handleNavigateRef.current;
+        if (!navFn) return;
+
+        setShowNotificationsModal(false);
 
         if (isWeekendPush) {
-          handleNavigate('home', { focusSection: 'weekend-events' });
+          navFn('home', { focusSection: 'weekend-events' });
           return;
         }
 
         let targetEventId = data.eventId || (data.target_id && (notifType === 'event' || launchUrl.includes('event')) ? data.target_id : undefined);
-        let targetProId = data.proId || (data.target_id && (notifType === 'pro' || launchUrl.includes('proId=') || launchUrl.includes('explore')) ? data.target_id : undefined);
+        let targetProId = data.proId || (data.target_id && (notifType === 'pro' || launchUrl.includes('proid=') || launchUrl.includes('explore')) ? data.target_id : undefined);
         let targetGuideId = data.guideId || (data.target_id && (notifType === 'guide' || notifType === 'article' || launchUrl.includes('guide')) ? data.target_id : undefined);
 
         if (!targetEventId && launchUrl) {
-          const match = launchUrl.match(/[?&]eventId=([^&#]+)/) || launchUrl.match(/\/events\/([^/?#]+)/);
+          const match = (detail?.launchUrl || data?.url || '').match(/[?&]eventId=([^&#]+)/i) || (detail?.launchUrl || data?.url || '').match(/\/events\/([^/?#]+)/i);
           if (match && match[1]) targetEventId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
         }
         if (!targetProId && launchUrl) {
-          const match = launchUrl.match(/[?&]proId=([^&#]+)/) || launchUrl.match(/\/pro\/([^/?#]+)/);
+          const match = (detail?.launchUrl || data?.url || '').match(/[?&]proId=([^&#]+)/i) || (detail?.launchUrl || data?.url || '').match(/\/pro\/([^/?#]+)/i);
           if (match && match[1]) targetProId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
         }
         if (!targetGuideId && launchUrl) {
-          const match = launchUrl.match(/[?&]guideId=([^&#]+)/) || launchUrl.match(/\/guides\/([^/?#]+)/);
+          const match = (detail?.launchUrl || data?.url || '').match(/[?&]guideId=([^&#]+)/i) || (detail?.launchUrl || data?.url || '').match(/\/guides\/([^/?#]+)/i);
           if (match && match[1]) targetGuideId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
         }
 
         if (targetEventId) {
-          handleNavigate('events', { eventId: String(targetEventId) });
+          navFn('events', { eventId: String(targetEventId) });
         } else if (targetGuideId) {
-          handleNavigate('guides', { guideId: String(targetGuideId) });
+          navFn('guides', { guideId: String(targetGuideId) });
         } else if (targetProId) {
-          handleNavigate('explore', { proId: String(targetProId) });
+          navFn('explore', { proId: String(targetProId) });
         } else if (launchUrl.includes('#events') || launchUrl.includes('events')) {
-          handleNavigate('events');
+          navFn('events');
         } else if (launchUrl.includes('#guides') || launchUrl.includes('guides')) {
-          handleNavigate('guides');
+          navFn('guides');
         } else if (launchUrl.includes('#directory') || launchUrl.includes('explore')) {
-          handleNavigate('explore');
+          navFn('explore');
         }
       } catch (err) {
         console.warn('Error handling onesignal notification click:', err);
       }
     };
 
+    const handlePushClick = (e: any) => processPushClickDetail(e?.detail);
+
     window.addEventListener('onesignal:notification-clicked', handlePushClick);
+
+    const earlyClick = oneSignalService.consumePendingNotificationClick();
+    if (earlyClick) {
+      processPushClickDetail(earlyClick);
+    }
+
     return () => window.removeEventListener('onesignal:notification-clicked', handlePushClick);
   }, []);
 
@@ -4309,14 +4362,28 @@ export default function App() {
     if (authLoading || activeView !== 'home' || !homeFocusRequest) return;
 
     if (homeFocusRequest.target === 'weekend-events') {
+      let userInteracted = false;
+      const containerEl = mainRef.current;
+      const markUserInteracted = () => {
+        userInteracted = true;
+      };
+
+      if (containerEl) {
+        containerEl.addEventListener('touchstart', markUserInteracted, { passive: true, once: true });
+        containerEl.addEventListener('wheel', markUserInteracted, { passive: true, once: true });
+      }
+      window.addEventListener('touchstart', markUserInteracted, { passive: true, once: true });
+
       const centerWeekendCard = () => {
+        if (userInteracted) return false;
         const el = document.getElementById('discover-card-event');
         const container = mainRef.current;
         if (!el) return false;
 
-        if (container && container.scrollHeight > container.clientHeight) {
+        if (container && container.scrollHeight > container.clientHeight + 4) {
           const elRect = el.getBoundingClientRect();
           const containerRect = container.getBoundingClientRect();
+          if (elRect.height === 0 && containerRect.height === 0) return false;
           const elCenterOffset = (elRect.top - containerRect.top) + (elRect.height / 2);
           const targetScrollTop = Math.max(
             0,
@@ -4329,22 +4396,44 @@ export default function App() {
         return true;
       };
 
-      const rafId = requestAnimationFrame(() => {
-        setTimeout(() => {
+      const t1 = setTimeout(() => {
+        requestAnimationFrame(() => {
           centerWeekendCard();
-        }, 80);
-      });
-      const settleTimer = setTimeout(() => {
+        });
+      }, 100);
+
+      const t2 = setTimeout(() => {
         centerWeekendCard();
-        setHomeFocusRequest(null);
-      }, 420);
+      }, 360);
+
+      const t3 = setTimeout(() => {
+        centerWeekendCard();
+        if (!eventsLoading) {
+          homeFocusRequestRef.current = null;
+          setHomeFocusRequest(null);
+        }
+      }, 720);
+
+      const maxClearTimer = !eventsLoading
+        ? setTimeout(() => {
+            homeFocusRequestRef.current = null;
+            setHomeFocusRequest(null);
+          }, 1100)
+        : null;
 
       return () => {
-        cancelAnimationFrame(rafId);
-        clearTimeout(settleTimer);
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+        if (maxClearTimer) clearTimeout(maxClearTimer);
+        if (containerEl) {
+          containerEl.removeEventListener('touchstart', markUserInteracted);
+          containerEl.removeEventListener('wheel', markUserInteracted);
+        }
+        window.removeEventListener('touchstart', markUserInteracted);
       };
     }
-  }, [homeFocusRequest, activeView, authLoading]);
+  }, [homeFocusRequest, activeView, authLoading, eventsLoading]);
 
   const handleNavigate = async (view: View | 'back', params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any, focusSection?: 'weekend-events' }) => {
     if (view === 'back') {
@@ -4414,10 +4503,14 @@ export default function App() {
     if (params?.searchQuery) setInitialSearch(params.searchQuery);
     if (params?.chat) setInitialChat(params.chat);
     if (params?.focusSection === 'weekend-events') {
-      setHomeFocusRequest({ target: 'weekend-events', ts: Date.now() });
+      requestHomeFocus('weekend-events');
+    } else {
+      homeFocusRequestRef.current = null;
+      setHomeFocusRequest(null);
     }
     navigateTo(finalView, params?.focusSection ? { skipScrollToTop: true } : undefined);
   };
+  handleNavigateRef.current = handleNavigate;
 
   // Bottom Nav Items
   const navItems = [
@@ -4746,18 +4839,23 @@ export default function App() {
   };
 
   useLayoutEffect(() => {
+    if (activeView === 'home' && homeFocusRequestRef.current) return;
     scrollToTop(true);
   }, [activeView]);
 
   useEffect(() => {
+    if (activeView === 'home' && homeFocusRequestRef.current) return;
     scrollToTop(true);
     const r1 = requestAnimationFrame(() => {
+      if (activeViewRef.current === 'home' && homeFocusRequestRef.current) return;
       scrollToTop(true);
     });
     const r2 = requestAnimationFrame(() => {
+      if (activeViewRef.current === 'home' && homeFocusRequestRef.current) return;
       scrollToTop(true);
     });
     const timer = setTimeout(() => {
+      if (activeViewRef.current === 'home' && homeFocusRequestRef.current) return;
       scrollToTop(true);
     }, 60);
 

@@ -544,14 +544,24 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         }
       }
 
+      const themeId = pushComposeModal.themeId;
+      const effectiveType = (type === 'custom' && themeId && ['weekend', 'event', 'article', 'pro'].includes(themeId))
+        ? themeId
+        : type;
+      const effectiveUrl = (url && url !== '/')
+        ? url
+        : (effectiveType === 'weekend' ? '/?focus=weekend-events' : '/');
+
       const resolvedIcon = pushComposeModal.icon || (
-        type === 'event' || type === 'weekend'
-          ? 'event'
-          : type === 'article'
-            ? 'guide'
-            : type === 'pro'
-              ? 'star'
-              : 'megaphone'
+        effectiveType === 'weekend'
+          ? 'weekend'
+          : effectiveType === 'event'
+            ? 'event'
+            : effectiveType === 'article'
+              ? 'guide'
+              : effectiveType === 'pro'
+                ? 'pro'
+                : 'megaphone'
       );
 
       // 1. Save as In-App Bell notification if In-App or Both is selected
@@ -563,10 +573,10 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             content: body.trim(),
             icon: resolvedIcon,
             is_active: true,
-            cta_type: type,
+            cta_type: effectiveType,
             target_id: targetId || null,
             target_user_id: (targetMode === 'specific' && selectedUserId) ? selectedUserId : null,
-            cta_link: url || '/',
+            cta_link: effectiveUrl,
             send_push: false
           });
           savedInBell = true;
@@ -584,15 +594,16 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         const res = await oneSignalService.sendServerNotification(
           title.trim(),
           body.trim(),
-          url || '/',
+          effectiveUrl,
           targetUserIds,
           targetSubscriptionIds,
           pushComposeModal.imageUrl || undefined,
           {
-            type,
-            theme: pushComposeModal.themeId || type,
+            type: effectiveType,
+            theme: themeId || effectiveType,
+            focus: effectiveType === 'weekend' ? 'weekend-events' : undefined,
             target_id: targetId,
-            url: url || '/'
+            url: effectiveUrl
           },
           pushComposeModal.channels || ['ios', 'android', 'web']
         );

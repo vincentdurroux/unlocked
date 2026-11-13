@@ -281,7 +281,7 @@ export function extractProIdFromNotification(item?: InAppNotification | null): s
 export function isWeekendNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
-  if (item.type === 'weekend' || item.cta_type === 'weekend') return true;
+  if (item.type === 'weekend' || item.cta_type === 'weekend' || item.icon === 'weekend') return true;
   if (item.cta_link && (item.cta_link.includes('weekend-events') || item.cta_link.includes('focus=weekend'))) return true;
   if (item.target_id && String(item.target_id).toLowerCase().startsWith('weekend')) return true;
 
@@ -292,12 +292,16 @@ export function isWeekendNotification(item?: InAppNotification | null): boolean 
   );
   if (
     !hasSpecificEventId &&
-    (text.includes('weekend highlights') ||
+    (text.includes('weekend highlight') ||
+      text.includes('week-end highlight') ||
+      text.includes('week end highlight') ||
       text.includes('mycityunlocked weekend') ||
       text.includes('for the weekend') ||
       text.includes('this weekend') ||
       text.includes('weekend spotlight') ||
-      text.includes('weekend plans'))
+      text.includes('weekend plans') ||
+      text.includes('events to check out') ||
+      text.includes('plans to check out'))
   ) {
     return true;
   }
@@ -763,10 +767,10 @@ export function InAppNotificationCenter({
                         } else if ((item.type === 'marketplace' || item.type === 'ad') && onNavigate) {
                           onNavigate('marketplace');
                         } else if (item.cta_link && onNavigate) {
-                          if (item.cta_link.startsWith('http://') || item.cta_link.startsWith('https://')) {
-                            window.open(item.cta_link, '_blank', 'noopener,noreferrer');
-                          } else if (item.cta_link.includes('weekend-events') || item.cta_link.includes('focus=weekend')) {
+                          if (item.cta_link.includes('weekend-events') || item.cta_link.includes('focus=weekend')) {
                             onNavigate('home', { focusSection: 'weekend-events' });
+                          } else if (item.cta_link.startsWith('http://') || item.cta_link.startsWith('https://')) {
+                            window.open(item.cta_link, '_blank', 'noopener,noreferrer');
                           } else if (item.cta_link.includes('guide')) {
                             const targetGuideId = extractGuideIdFromNotification(item);
                             onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);

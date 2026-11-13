@@ -18,6 +18,7 @@ class OneSignalService {
   private nativeSubscriptionId: string | null = null;
 
   private currentUserId: string | null = null;
+  private pendingNotificationClick: { notification: any; data: any; launchUrl: string; ts: number } | null = null;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -59,14 +60,13 @@ class OneSignalService {
       };
       pollMedian();
       setTimeout(pollMedian, 1000);
+
       // Native & Bridge Push Opened callbacks (Median/GoNative, Capacitor, Cordova, WKWebView)
       const handleNativePushOpened = (payload: any) => {
         try {
           const data = payload?.additionalData || payload?.data || payload?.custom?.a || payload || {};
           const launchUrl = payload?.launchUrl || payload?.url || payload?.custom?.u || data?.url || data?.launchUrl || '';
-          window.dispatchEvent(new CustomEvent('onesignal:notification-clicked', {
-            detail: { notification: payload, data, launchUrl }
-          }));
+          this.emitNotificationClick(payload, data, launchUrl);
         } catch (err) {
           console.warn('[OneSignal] Native push click dispatch error:', err);
         }
@@ -77,37 +77,69 @@ class OneSignalService {
       windowAny.handleOneSignalNotificationOpened = handleNativePushOpened;
       window.addEventListener('onesignal-notification-opened', (e: any) => handleNativePushOpened(e.detail || e));
       window.addEventListener('push-notification-clicked', (e: any) => handleNativePushOpened(e.detail || e));
+
+      // Eagerly attach click listener to OneSignal Web SDK v16 deferred queue (initialized in index.html)
+      try {
+        windowAny.OneSignalDeferred = windowAny.OneSignalDeferred || [];
+        windowAny.OneSignalDeferred.push((OS: any) => {
+          this.attachClickListenerToSdk(OS);
+        });
+      } catch (_) {}
     }
   }
 
-  private bindClickListeners(): void {
-    if (this.clickListenerBound || typeof window === 'undefined') return;
-    const windowAny = window as any;
-    const windowOS = windowAny.OneSignal;
+  private emitNotificationClick(notification: any, data: any, launchUrl: string): void {
+    const detail = { notification, data: data || {}, launchUrl: launchUrl || '' };
+    this.pendingNotificationClick = { ...detail, ts: Date.now() };
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('onesignal:notification-clicked', { detail }));
+    }
+  }
 
-    const notifHandler = (event: any) => {
+  consumePendingNotificationClick(): { notification: any; data: any; launchUrl: string; ts: number } | null {
+    const pending = this.pendingNotificationClick;
+    this.pendingNotificationClick = null;
+    if (!pending) return null;
+    // Ignore stale clicks older than 30 seconds
+    if (Date.now() - pending.ts > 30000) return null;
+    return pending;
+  }
+
+  private createNotifClickHandler() {
+    return (event: any) => {
       try {
         const notif = event?.notification || event?.result?.notification || event;
         const data = notif?.additionalData || notif?.data || event?.data || {};
         const launchUrl = notif?.launchUrl || event?.result?.action?.launchUrl || data?.url || data?.launchUrl || '';
-        window.dispatchEvent(new CustomEvent('onesignal:notification-clicked', {
-          detail: { notification: notif, data, launchUrl }
-        }));
+        this.emitNotificationClick(notif, data, launchUrl);
       } catch (clickErr) {
         console.warn('[OneSignal] Notification click handler error:', clickErr);
       }
     };
+  }
 
+  private attachClickListenerToSdk(sdk: any): void {
+    if (this.clickListenerBound || !sdk?.Notifications?.addEventListener) return;
     try {
-      if (OneSignal?.Notifications?.addEventListener) {
-        OneSignal.Notifications.addEventListener('click', notifHandler);
-        this.clickListenerBound = true;
-      } else if (windowOS?.Notifications?.addEventListener) {
-        windowOS.Notifications.addEventListener('click', notifHandler);
-        this.clickListenerBound = true;
-      }
+      sdk.Notifications.addEventListener('click', this.createNotifClickHandler());
+      this.clickListenerBound = true;
     } catch (err) {
       console.warn('[OneSignal] Could not bind Web SDK click event:', err);
+    }
+  }
+
+  private bindClickListeners(): void {
+    if (typeof window === 'undefined') return;
+    const windowAny = window as any;
+    const windowOS = windowAny.OneSignal;
+    const notifHandler = this.createNotifClickHandler();
+
+    if (!this.clickListenerBound) {
+      if (OneSignal?.Notifications?.addEventListener) {
+        this.attachClickListenerToSdk(OneSignal);
+      } else if (windowOS?.Notifications?.addEventListener) {
+        this.attachClickListenerToSdk(windowOS);
+      }
     }
 
     try {
