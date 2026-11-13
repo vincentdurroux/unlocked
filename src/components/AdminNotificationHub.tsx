@@ -2450,31 +2450,87 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                   )}
 
                   {/* 3. IN-APP BELL CENTER PREVIEW */}
-                  {pushComposeModal.previewDevice === 'in_app' && (
-                    <div className="relative rounded-2xl bg-slate-100 p-3.5 border border-slate-300 text-slate-900 shadow-inner space-y-2 select-none">
-                      <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold px-1">
-                        <span>In-App Bell Preview</span>
-                        <span className="text-blue-600">Logo + Title + Short Description</span>
-                      </div>
+                  {pushComposeModal.previewDevice === 'in_app' && (() => {
+                    const cleanPreviewTitle = (pushComposeModal.title || '').trim().toLowerCase();
+                    const hideTitlePreview = [
+                      'mycityunlocked',
+                      'mycityunlocked events',
+                      'mycityunlocked guides',
+                      'mycityunlocked pros',
+                      'mycityunlocked weekend',
+                      'announcement',
+                      'notification',
+                      'new notification',
+                      ''
+                    ].includes(cleanPreviewTitle);
+                    return (
+                      <div className="relative rounded-2xl bg-slate-100 p-3.5 border border-slate-300 text-slate-900 shadow-inner space-y-2.5 select-none">
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold px-1">
+                          <span>In-App Bell Preview</span>
+                          <span className="text-blue-600">
+                            {hideTitlePreview ? 'Unread (Bold) vs Read (Normal)' : 'Logo + Title + Short Description'}
+                          </span>
+                        </div>
 
-                      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-md flex items-start gap-3 text-left">
-                        <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 p-1.5 flex items-center justify-center shrink-0 shadow-xs">
-                          <img src="/logo2.png" alt="Unlocked" className="w-full h-full object-contain" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2 mb-0.5">
-                            <h5 className="font-bold text-xs text-slate-900 leading-snug break-words">
-                              {pushComposeModal.title || 'New Event'}
-                            </h5>
-                            <span className="text-[10px] text-slate-400 font-medium shrink-0">Just now</span>
+                        {/* Unread State */}
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 px-1">Unread</span>
+                          <div className="bg-blue-50/60 p-3 rounded-2xl border border-blue-100 shadow-md flex items-start gap-3 text-left">
+                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 p-1.5 flex items-center justify-center shrink-0 shadow-xs">
+                              <img src="/logo2.png" alt="Unlocked" className="w-full h-full object-contain" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              {!hideTitlePreview && (
+                                <div className="flex items-center justify-between gap-2 mb-0.5">
+                                  <h5 className="font-bold text-xs text-slate-900 leading-snug break-words">
+                                    {pushComposeModal.title}
+                                  </h5>
+                                  <span className="text-[10px] text-slate-400 font-medium shrink-0">Just now</span>
+                                </div>
+                              )}
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="text-xs font-bold text-slate-900 leading-snug break-words line-clamp-2">
+                                  {pushComposeModal.body || 'Short description text.'}
+                                </p>
+                                {hideTitlePreview && (
+                                  <span className="text-[10px] text-slate-400 font-medium shrink-0 pt-0.5">Just now</span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="w-2 h-2 rounded-full bg-blue-600 ring-4 ring-blue-100 self-end mb-1 shrink-0" />
                           </div>
-                          <p className="text-xs text-slate-600 leading-relaxed break-words line-clamp-2">
-                            {pushComposeModal.body || 'Short description text.'}
-                          </p>
+                        </div>
+
+                        {/* Read State */}
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 px-1">Once Read</span>
+                          <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex items-start gap-3 text-left">
+                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 p-1.5 flex items-center justify-center shrink-0 shadow-xs">
+                              <img src="/logo2.png" alt="Unlocked" className="w-full h-full object-contain" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              {!hideTitlePreview && (
+                                <div className="flex items-center justify-between gap-2 mb-0.5">
+                                  <h5 className="font-normal text-xs text-slate-700 leading-snug break-words">
+                                    {pushComposeModal.title}
+                                  </h5>
+                                  <span className="text-[10px] text-slate-400 font-medium shrink-0">2m ago</span>
+                                </div>
+                              )}
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="text-xs font-normal text-slate-600 leading-snug break-words line-clamp-2">
+                                  {pushComposeModal.body || 'Short description text.'}
+                                </p>
+                                {hideTitlePreview && (
+                                  <span className="text-[10px] text-slate-400 font-medium shrink-0 pt-0.5">2m ago</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
                     <div className="flex items-center justify-between">

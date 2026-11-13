@@ -648,6 +648,17 @@ export function InAppNotificationCenter({
 
                   const description = item.content || item.notes || item.message || '';
                   const timeString = formatNotificationTime(item.created_at || item.updated_at);
+                  const normalizedTitle = stripLeadingEmojisAndSymbols(title).toLowerCase();
+                  const hideTitleInCenter = Boolean(description) && [
+                    'mycityunlocked',
+                    'mycityunlocked events',
+                    'mycityunlocked guides',
+                    'mycityunlocked pros',
+                    'mycityunlocked weekend',
+                    'announcement',
+                    'notification',
+                    'new notification'
+                  ].includes(normalizedTitle);
 
                   return (
                     <div
@@ -708,27 +719,45 @@ export function InAppNotificationCenter({
 
                       {/* Notification Content */}
                       <div className="flex-1 min-w-0 pr-1">
-                        <div className="flex items-center justify-between gap-2 mb-0.5">
-                          <h4 className={cn(
-                            "text-xs sm:text-sm font-bold leading-snug break-words",
-                            unread ? "text-slate-900 font-extrabold" : "text-slate-800"
-                          )}>
-                            {title}
-                          </h4>
-                          {timeString && (
-                            <span className="text-[10px] text-slate-400 font-medium shrink-0">
-                              {timeString}
-                            </span>
-                          )}
-                        </div>
+                        {hideTitleInCenter ? (
+                          <div className="flex items-start justify-between gap-2">
+                            <p className={cn(
+                              "text-xs sm:text-[13px] leading-snug break-words line-clamp-2",
+                              unread ? "font-bold text-slate-900" : "font-normal text-slate-600"
+                            )}>
+                              {description}
+                            </p>
+                            {timeString && (
+                              <span className="text-[10px] text-slate-400 font-medium shrink-0 pt-0.5">
+                                {timeString}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between gap-2 mb-0.5">
+                              <h4 className={cn(
+                                "text-xs sm:text-sm leading-snug break-words",
+                                unread ? "text-slate-900 font-bold" : "text-slate-700 font-normal"
+                              )}>
+                                {title}
+                              </h4>
+                              {timeString && (
+                                <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                                  {timeString}
+                                </span>
+                              )}
+                            </div>
 
-                        {description && (
-                          <p className={cn(
-                            "text-xs leading-relaxed break-words line-clamp-2",
-                            unread ? "text-slate-700 font-medium" : "text-slate-500"
-                          )}>
-                            {description}
-                          </p>
+                            {description && (
+                              <p className={cn(
+                                "text-xs leading-relaxed break-words line-clamp-2",
+                                unread ? "text-slate-800 font-bold" : "text-slate-500 font-normal"
+                              )}>
+                                {description}
+                              </p>
+                            )}
+                          </>
                         )}
 
                         {/* Interactive CTAs */}
