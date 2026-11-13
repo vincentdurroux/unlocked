@@ -224,7 +224,8 @@ export function extractProIdFromNotification(item?: InAppNotification | null): s
   }
   if (item.title) {
     const cleanTitle = stripLeadingEmojisAndSymbols(item.title);
-    if (cleanTitle && cleanTitle.toLowerCase() !== 'announcement' && cleanTitle.toLowerCase() !== 'notification') {
+    const lower = cleanTitle.toLowerCase();
+    if (cleanTitle && !['announcement', 'notification', 'new recommended pro', 'new pro request', 'community notice', 'mycityunlocked pros', 'mycityunlocked'].includes(lower)) {
       return cleanTitle;
     }
   }
@@ -235,6 +236,7 @@ export function isEventNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
   if (item.type === 'guide' || item.type === 'article' || item.type === 'pro' || item.cta_type === 'guide' || item.cta_type === 'article' || item.cta_type === 'pro' || item.icon === 'guide' || item.icon === 'star') return false;
+  if (item.icon && ['gift', 'marketplace', 'shield', 'chat', 'recommendation', 'sparkles'].includes(item.icon) && item.type !== 'event' && item.type !== 'weekend' && item.cta_type !== 'event' && item.cta_type !== 'weekend' && !(item.cta_link && (item.cta_link.includes('event') || item.cta_link.includes('eventId=')))) return false;
   if (item.cta_link && (item.cta_link.includes('guideId=') || item.cta_link.includes('#guides') || item.cta_link.includes('proId='))) return false;
   if (item.type === 'event' || item.type === 'weekend' || item.icon === 'event' || item.cta_type === 'event' || item.cta_type === 'weekend') return true;
   if (item.cta_link && (item.cta_link.includes('event') || item.cta_link.includes('eventId='))) return true;
@@ -261,9 +263,10 @@ export function extractEventIdFromNotification(item?: InAppNotification | null):
       return cleanIdHelper(match[1]) || match[1];
     }
   }
-  if (item.title && item.title.toLowerCase() !== 'announcement' && item.title.toLowerCase() !== 'notification') {
+  if (item.title) {
     const cleanTitle = stripLeadingEmojisAndSymbols(item.title);
-    if (cleanTitle && !cleanTitle.toLowerCase().startsWith('valencia weekend')) {
+    const lower = cleanTitle.toLowerCase();
+    if (cleanTitle && !['announcement', 'notification', 'new event', 'weekend highlights', 'community notice', 'mycityunlocked events', 'mycityunlocked weekend', 'mycityunlocked'].includes(lower) && !lower.startsWith('valencia weekend')) {
       return cleanTitle;
     }
   }
@@ -299,6 +302,7 @@ export function isGuideNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
   if (item.type === 'event' || item.type === 'weekend' || item.type === 'pro' || item.cta_type === 'event' || item.cta_type === 'weekend' || item.cta_type === 'pro' || item.icon === 'event' || item.icon === 'star') return false;
+  if (item.icon && ['gift', 'marketplace', 'shield', 'chat', 'recommendation', 'sparkles'].includes(item.icon) && item.type !== 'guide' && item.type !== 'article' && item.cta_type !== 'guide' && item.cta_type !== 'article' && !(item.cta_link && (item.cta_link.includes('guide') || item.cta_link.includes('guideId=')))) return false;
   if (item.cta_link && (item.cta_link.includes('eventId=') || item.cta_link.includes('#events') || item.cta_link.includes('proId='))) return false;
   if (item.type === 'guide' || item.type === 'article' || item.icon === 'guide' || item.cta_type === 'guide' || item.cta_type === 'article') return true;
   if (item.cta_link && (item.cta_link.includes('guide') || item.cta_link.includes('guides') || item.cta_link.includes('guideId='))) return true;
@@ -336,9 +340,10 @@ export function extractGuideIdFromNotification(item?: InAppNotification | null):
   }
 
   // Fallback to cleaned notification title so GuidesView can match the exact article title
-  if (item.title && item.title.toLowerCase() !== 'announcement' && item.title.toLowerCase() !== 'notification') {
+  if (item.title) {
     const cleanTitle = stripLeadingEmojisAndSymbols(item.title);
-    if (cleanTitle) {
+    const lower = cleanTitle.toLowerCase();
+    if (cleanTitle && !['announcement', 'notification', 'new guide', 'community notice', 'mycityunlocked guides', 'mycityunlocked'].includes(lower)) {
       return cleanTitle;
     }
   }
@@ -692,19 +697,18 @@ export function InAppNotificationCenter({
                           : "bg-white hover:bg-slate-50/80 border-transparent"
                       )}
                     >
-                      {/* Category Icon */}
-                      <div className={cn(
-                        "w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-xs border transition-transform group-hover:scale-105",
-                        itemData.bgColor,
-                        itemData.textColor,
-                        itemData.borderColor
-                      )}>
-                        <IconComp className="w-5 h-5 stroke-[2.2]" />
+                      {/* Unlocked Brand Logo */}
+                      <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 p-1.5 flex items-center justify-center shrink-0 shadow-xs transition-transform group-hover:scale-105">
+                        <img
+                          src="/logo2.png"
+                          alt="Unlocked"
+                          className="w-full h-full object-contain"
+                        />
                       </div>
 
                       {/* Notification Content */}
                       <div className="flex-1 min-w-0 pr-1">
-                        <div className="flex items-center justify-between gap-1.5 mb-0.5">
+                        <div className="flex items-center justify-between gap-2 mb-0.5">
                           <h4 className={cn(
                             "text-xs sm:text-sm font-bold leading-snug break-words",
                             unread ? "text-slate-900 font-extrabold" : "text-slate-800"
@@ -720,7 +724,7 @@ export function InAppNotificationCenter({
 
                         {description && (
                           <p className={cn(
-                            "text-xs leading-relaxed break-words",
+                            "text-xs leading-relaxed break-words line-clamp-2",
                             unread ? "text-slate-700 font-medium" : "text-slate-500"
                           )}>
                             {description}
@@ -899,24 +903,18 @@ export function InAppToastBanner({
       onClick={onClickToast}
       className="fixed top-24 right-4 sm:right-6 max-w-[420px] w-[calc(100vw-32px)] bg-white rounded-2xl shadow-xl border border-slate-200 p-3.5 z-50 flex items-start gap-3 cursor-pointer group hover:border-blue-300 transition-colors"
     >
-      <div className={cn(
-        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border",
-        itemData.bgColor,
-        itemData.textColor,
-        itemData.borderColor
-      )}>
-        <IconComp className="w-5 h-5 stroke-[2.2]" />
+      <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 p-1.5 flex items-center justify-center shrink-0 shadow-xs">
+        <img
+          src="/logo2.png"
+          alt="Unlocked"
+          className="w-full h-full object-contain"
+        />
       </div>
 
       <div className="flex-1 min-w-0 pr-1">
-        <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md">
-            New
-          </span>
-          <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-            {title}
-          </h4>
-        </div>
+        <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate mb-0.5">
+          {title}
+        </h4>
         {description && (
           <p className="text-xs text-slate-600 line-clamp-2 leading-snug">
             {description}

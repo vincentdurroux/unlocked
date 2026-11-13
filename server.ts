@@ -1546,12 +1546,13 @@ Ensure each event contains:
         });
       }
 
-      const titleStr = title || "Unlocked Valencia 🌴";
-      const messageStr = message || "Nouvelle notification Unlocked";
+      const titleStr = title || "MyCityUnlocked";
+      const messageStr = message || "New notification from MyCityUnlocked";
 
       const baseUrl = "https://mycityunlocked.app";
       const rawUrl = url || "/";
       const absoluteUrl = rawUrl.startsWith("http") ? rawUrl : `${baseUrl}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
+      const brandLogoUrl = `${baseUrl}/logo2.png`;
 
       const selectedChannels: string[] = Array.isArray(targetChannels) && targetChannels.length > 0 
         ? targetChannels 
@@ -1576,6 +1577,10 @@ Ensure each event contains:
         },
         url: absoluteUrl,
         priority: 10,
+        // Brand Logo for Android & Web Push
+        chrome_web_icon: brandLogoUrl,
+        chrome_web_badge: brandLogoUrl,
+        large_icon: brandLogoUrl,
         // Official OneSignal v1 channel flags:
         isIos: enableIos,
         isAndroid: enableAndroid,

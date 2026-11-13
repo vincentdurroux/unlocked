@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { oneSignalService } from './oneSignalService';
+import { cleanNotificationText, smartTruncate } from '../lib/notificationTemplates';
 
 export interface SupabaseProfessional {
   id: string;
@@ -674,8 +675,11 @@ export const proService = {
 
       // Broadcast Push Notification for Control Center
       try {
-        const title = `Recherche de pro : ${recommendation.pro_category || 'Professionnel'}`;
-        const notesClean = recommendation.notes || `Nouvelle demande de recommandation pour un ${recommendation.pro_category}.`;
+        const categoryLabel = cleanNotificationText(recommendation.pro_category || 'Local Specialist') || 'Local Specialist';
+        const title = 'MyCityUnlocked';
+        const notesClean = recommendation.notes
+          ? smartTruncate(`New Pro Request: ${categoryLabel} — ${cleanNotificationText(recommendation.notes)}`, 115)
+          : smartTruncate(`New Pro Request: Looking for a ${categoryLabel.toLowerCase()} in Valencia.`, 115);
         oneSignalService.sendServerNotification(title, notesClean, '/').catch(() => {});
       } catch (_) {}
 

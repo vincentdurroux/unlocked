@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { oneSignalService } from './oneSignalService';
+import { cleanNotificationText, smartTruncate } from '../lib/notificationTemplates';
 
 export interface Conversation {
   id: string;
@@ -339,10 +340,10 @@ export const chatService = {
     // Trigger Push Notification to recipient with iOS badge increment
     if (otherId) {
       try {
-        const senderName = senderProfile?.full_name || 'Unlocked Member';
-        const truncatedContent = content.length > 90 ? content.substring(0, 90) + '…' : content;
+        const senderName = cleanNotificationText(senderProfile?.full_name) || 'Unlocked Member';
+        const truncatedContent = smartTruncate(content, 110) || 'Sent you a new message.';
         oneSignalService.sendServerNotification(
-          `Message from ${senderName}`,
+          smartTruncate(`Message from ${senderName}`, 50),
           truncatedContent,
           `/#messages`,
           [otherId]

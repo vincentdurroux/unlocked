@@ -35,6 +35,19 @@ import { oneSignalService } from '../services/oneSignalService';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { cn } from '../lib/utils';
 import { getCurrentWeekendInterval } from './LandingEventHighlightsCard';
+import {
+  buildEventNotificationContent,
+  buildArticleNotificationContent,
+  buildProNotificationContent,
+  buildWeekendDigestNotificationContent,
+  CUSTOM_NOTIFICATION_THEMES,
+  NOTIFICATION_EMOJIS,
+  cleanNotificationText,
+  extractLeadingEmoji,
+  replaceLeadingEmoji,
+  smartTruncate,
+  type CustomNotificationTheme
+} from '../lib/notificationTemplates';
 
 export interface PushLogEntry {
   id: string;
@@ -47,6 +60,7 @@ export interface PushLogEntry {
   targetUserId?: string; // Specific recipient user ID when targeted to a single member
   url?: string;
   recipientsCount?: number;
+  deliveryMode?: 'both' | 'in_app' | 'push';
   status: 'sent' | 'error';
   errorMessage?: string;
 }
@@ -274,6 +288,12 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     entityName?: string;
     previewDevice?: 'ios' | 'android' | 'in_app';
     channels?: ('ios' | 'android' | 'web')[];
+    deliveryMode?: 'both' | 'in_app' | 'push';
+    themeId?: string;
+    themeLabel?: string;
+    icon?: CustomNotificationTheme['icon'];
+    toneHint?: string;
+    sourceEntity?: any;
   } | null>(null);
 
   const [isSendingPush, setIsSendingPush] = useState(false);
@@ -490,13 +510,16 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     return match ? match.timestamp : null;
   };
 
-  // Execute Push Notification send
+  // Execute Notification send (In-App Only, Push Only, or Both)
   const handleExecuteSendPush = async () => {
     if (!pushComposeModal) return;
     const { title, body, targetMode, selectedUserId, type, targetId, url } = pushComposeModal;
+    const deliveryMode = pushComposeModal.deliveryMode || 'both';
+    const shouldSendInApp = deliveryMode === 'both' || deliveryMode === 'in_app';
+    const shouldSendPush = deliveryMode === 'both' || deliveryMode === 'push';
 
     if (!title.trim() || !body.trim()) {
-      setMsg({ type: 'error', text: 'Please fill in both the title and body of the push notification.' });
+      setMsg({ type: 'error', text: 'Please fill in both the title and description of the notification.' });
       return;
     }
 
@@ -520,49 +543,64 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         }
       }
 
-      // 1. Always save as in-app announcement FIRST so targeted user(s) see it in the Header Bell
-      // When targetMode === 'specific', target_user_id restricts visibility strictly to that member
-      let savedInBell = false;
-      try {
-        await onSaveAnnouncement({
-          title: title.trim(),
-          content: body.trim(),
-          icon: type === 'event' || type === 'weekend' ? 'event' : type === 'article' ? 'guide' : type === 'pro' ? 'star' : 'megaphone',
-          is_active: true,
-          cta_type: type,
-          target_id: targetId || null,
-          target_user_id: (targetMode === 'specific' && selectedUserId) ? selectedUserId : null,
-          cta_link: url || '/',
-          send_push: false
-        });
-        savedInBell = true;
-        if (onRefetchAnnouncements) {
-          await onRefetchAnnouncements();
-        }
-      } catch (annErr) {
-        console.warn('Notice: announcement DB sync note:', annErr);
-      }
-
-      // 2. Dispatch mobile push notification via OneSignal
-      const res = await oneSignalService.sendServerNotification(
-        title.trim(),
-        body.trim(),
-        url || '/',
-        targetUserIds,
-        targetSubscriptionIds,
-        pushComposeModal.imageUrl,
-        {
-          type,
-          target_id: targetId,
-          url: url || '/'
-        },
-        pushComposeModal.channels || ['ios', 'android', 'web']
+      const resolvedIcon = pushComposeModal.icon || (
+        type === 'event' || type === 'weekend'
+          ? 'event'
+          : type === 'article'
+            ? 'guide'
+            : type === 'pro'
+              ? 'star'
+              : 'megaphone'
       );
 
-      const rawRecipients = res?.recipients ?? res?.result?.recipients;
-      const recipientCount = typeof rawRecipients === 'number' ? rawRecipients : (targetMode === 'specific' ? 0 : 1);
+      // 1. Save as In-App Bell notification if In-App or Both is selected
+      let savedInBell = false;
+      if (shouldSendInApp) {
+        try {
+          await onSaveAnnouncement({
+            title: title.trim(),
+            content: body.trim(),
+            icon: resolvedIcon,
+            is_active: true,
+            cta_type: type,
+            target_id: targetId || null,
+            target_user_id: (targetMode === 'specific' && selectedUserId) ? selectedUserId : null,
+            cta_link: url || '/',
+            send_push: false
+          });
+          savedInBell = true;
+          if (onRefetchAnnouncements) {
+            await onRefetchAnnouncements();
+          }
+        } catch (annErr) {
+          console.warn('Notice: announcement DB sync note:', annErr);
+        }
+      }
 
-      // Record in history log (skip duplicate DB insert if onSaveAnnouncement already saved to Supabase)
+      // 2. Dispatch mobile push notification via OneSignal if Push or Both is selected
+      let recipientCount = 0;
+      if (shouldSendPush) {
+        const res = await oneSignalService.sendServerNotification(
+          title.trim(),
+          body.trim(),
+          url || '/',
+          targetUserIds,
+          targetSubscriptionIds,
+          pushComposeModal.imageUrl || undefined,
+          {
+            type,
+            theme: pushComposeModal.themeId || type,
+            target_id: targetId,
+            url: url || '/'
+          },
+          pushComposeModal.channels || ['ios', 'android', 'web']
+        );
+
+        const rawRecipients = res?.recipients ?? res?.result?.recipients;
+        recipientCount = typeof rawRecipients === 'number' ? rawRecipients : (targetMode === 'specific' ? 0 : 1);
+      }
+
+      // Always pass skipAnnouncementSync = true so "Push Only" never duplicates into In-App Bell
       await savePushLogEntry({
         title: title.trim(),
         body: body.trim(),
@@ -571,31 +609,61 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         targetId,
         targetUserId: (targetMode === 'specific' && selectedUserId) ? selectedUserId : undefined,
         url: url || '/',
-        recipientsCount: recipientCount,
+        recipientsCount: shouldSendPush ? recipientCount : undefined,
+        deliveryMode,
         status: 'sent'
-      }, savedInBell);
+      }, true);
 
       reloadPushLogs();
-      if (recipientCount > 0) {
-        setMsg({ 
-          type: 'success', 
-          text: `🚀 Notification published to Bell & Mobile Push sent successfully to ${recipientCount} device${recipientCount > 1 ? 's' : ''}!` 
+
+      if (deliveryMode === 'in_app') {
+        setMsg({
+          type: 'success',
+          text: targetMode === 'specific'
+            ? `🔔 In-App notification sent to ${targetAudienceLabel}'s Bell center (In-App only).`
+            : `🔔 In-App notification published to the Bell center (In-App only)!`
         });
-      } else if (targetMode === 'specific') {
-        setMsg({ 
-          type: 'success', 
-          text: `🔔 Notification published to the member's in-app Bell! (Note: 0 mobile devices are currently registered in OneSignal for this user — they will see the notification inside the Bell upon opening the app).` 
-        });
+      } else if (deliveryMode === 'push') {
+        if (recipientCount > 0) {
+          setMsg({
+            type: 'success',
+            text: `📲 Push notification sent only to ${recipientCount} device${recipientCount > 1 ? 's' : ''} (not added to In-App Bell).`
+          });
+        } else if (targetMode === 'specific') {
+          setMsg({
+            type: 'error',
+            text: `📲 Push Only: 0 mobile devices are linked in OneSignal for ${targetAudienceLabel}. Pair their device first or choose "In-App" / "Both".`
+          });
+        } else {
+          setMsg({
+            type: 'success',
+            text: `📲 Push notification dispatched to active mobile subscribers (not added to In-App Bell)!`
+          });
+        }
       } else {
-        setMsg({ 
-          type: 'success', 
-          text: `🚀 Notification published to Bell & sent to active subscribers!` 
-        });
+        if (recipientCount > 0) {
+          setMsg({
+            type: 'success',
+            text: `🚀 Notification published to Bell & Mobile Push sent to ${recipientCount} device${recipientCount > 1 ? 's' : ''}!`
+          });
+        } else if (targetMode === 'specific') {
+          setMsg({
+            type: 'success',
+            text: `🔔 Notification published to the member's in-app Bell! (Note: 0 mobile devices are currently registered in OneSignal for this user).`
+          });
+        } else {
+          setMsg({
+            type: 'success',
+            text: `🚀 Notification published to Bell & sent to active subscribers!`
+          });
+        }
       }
-      setPushComposeModal(null);
+
+      if (savedInBell || shouldSendPush) {
+        setPushComposeModal(null);
+      }
     } catch (err: any) {
-      console.error('Error sending push notification:', err);
-      // Record failure entry in log (note: in-app bell notification is already saved above!)
+      console.error('Error sending notification:', err);
       savePushLogEntry({
         title: title.trim(),
         body: body.trim(),
@@ -603,6 +671,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         target: targetMode === 'specific' ? 'Specific User' : 'All Users',
         targetId,
         url: url || '/',
+        deliveryMode,
         status: 'error',
         errorMessage: err?.message || 'Failed to dispatch notification'
       }, true);
@@ -610,7 +679,9 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       setPushComposeModal(null);
       setMsg({
         type: 'error',
-        text: `🔔 Saved to Bell notifications, but OneSignal Push dispatch failed: ${err?.message || 'Check OneSignal setup'}`
+        text: shouldSendInApp
+          ? `🔔 Saved to Bell notifications, but OneSignal Push dispatch failed: ${err?.message || 'Check OneSignal setup'}`
+          : `📲 Push dispatch failed: ${err?.message || 'Check OneSignal setup'}`
       });
     } finally {
       setIsSendingPush(false);
@@ -660,7 +731,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
           );
 
           await savePushLogEntry({
-            title: annTitle.trim() || 'Unlocked Valencia 🌴',
+            title: annTitle.trim() || 'MyCityUnlocked',
             body: annContent.trim(),
             type: 'custom',
             target: targetLabel,
@@ -687,98 +758,117 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
 
   // Open Event Push Compose Modal
   const openEventPushModal = (event: any) => {
-    const dateStr = event.start_date || event.date ? `📅 ${event.start_date || event.date}` : '';
-    const locStr = event.location ? `📍 ${event.location}` : 'Valencia';
-    const bodyStr = [dateStr, locStr].filter(Boolean).join(' · ') || 'Discover this new event on Unlocked!';
-
+    const draft = buildEventNotificationContent(event);
     setPushComposeModal({
       isOpen: true,
       type: 'event',
-      title: `🎉 ${event.title}`,
-      body: bodyStr,
+      title: draft.title,
+      body: draft.body,
       targetMode: 'all',
       targetId: String(event.id),
-      url: `/?eventId=${event.id}#events`,
+      url: draft.defaultUrl || `/?eventId=${event.id}#events`,
       imageUrl: '',
       entityName: event.title,
-      previewDevice: 'ios'
+      previewDevice: 'ios',
+      deliveryMode: 'both',
+      themeId: draft.themeId,
+      themeLabel: draft.themeLabel,
+      icon: draft.icon,
+      toneHint: 'Logo + "MyCityUnlocked" + "New Event: <Event Name>" (no emoji).',
+      sourceEntity: event
     });
   };
 
   // Open Article Push Compose Modal
   const openArticlePushModal = (article: any) => {
-    const excerptStr = article.excerpt ? article.excerpt.substring(0, 90) : 'Check out our new guide on Unlocked!';
+    const draft = buildArticleNotificationContent(article);
     setPushComposeModal({
       isOpen: true,
       type: 'article',
-      title: `📖 ${article.title}`,
-      body: `${excerptStr} · Read the guide on Unlocked!`,
+      title: draft.title,
+      body: draft.body,
       targetMode: 'all',
       targetId: String(article.id),
-      url: `/?guideId=${article.id}#guides`,
+      url: draft.defaultUrl || `/?guideId=${article.id}#guides`,
       imageUrl: '',
       entityName: article.title,
-      previewDevice: 'ios'
+      previewDevice: 'ios',
+      deliveryMode: 'both',
+      themeId: draft.themeId,
+      themeLabel: draft.themeLabel,
+      icon: draft.icon,
+      toneHint: 'Logo + "MyCityUnlocked" + "New Article: <Article Title>" (no emoji).',
+      sourceEntity: article
     });
   };
 
   // Open Pro Push Compose Modal
   const openProPushModal = (pro: any) => {
-    const categoryStr = pro.category ? `${pro.category}` : 'Professional Service';
-    const locationStr = pro.location ? ` in ${pro.location}` : ' in Valencia';
+    const draft = buildProNotificationContent(pro);
     setPushComposeModal({
       isOpen: true,
       type: 'pro',
-      title: `✨ ${pro.full_name || pro.name}`,
-      body: `${categoryStr}${locationStr} · Contact and reviews now available on Unlocked!`,
+      title: draft.title,
+      body: draft.body,
       targetMode: 'all',
       targetId: String(pro.id),
-      url: `/?proId=${pro.id}#explore`,
+      url: draft.defaultUrl || `/?proId=${pro.id}#explore`,
       imageUrl: '',
       entityName: pro.full_name || pro.name,
-      previewDevice: 'ios'
+      previewDevice: 'ios',
+      deliveryMode: 'both',
+      themeId: draft.themeId,
+      themeLabel: draft.themeLabel,
+      icon: draft.icon,
+      toneHint: 'Logo + "MyCityUnlocked" + "New Recommended Pro: <Name> · <Profession>" (no emoji).',
+      sourceEntity: pro
     });
   };
 
   // Open Weekend Digest Push Compose Modal
   const openWeekendDigestPushModal = () => {
-    const titles = weekendData.events.map(e => e.title).filter(Boolean);
-    let sampleText = '';
-    if (titles.length > 0) {
-      sampleText = titles.slice(0, 2).join(', ');
-      if (titles.length > 2) sampleText += `, & ${titles.length - 2} more!`;
-    } else {
-      sampleText = 'Fairs, concerts, and weekend plans!';
-    }
-
+    const draft = buildWeekendDigestNotificationContent(weekendData.events, weekendData.rangeText);
     setPushComposeModal({
       isOpen: true,
       type: 'weekend',
-      title: `🌟 Valencia Weekend (${weekendData.rangeText})`,
-      body: weekendData.count > 0 
-        ? `${weekendData.count} top events this weekend: ${sampleText} Tap to discover plans on Unlocked!`
-        : `Discover weekend events, exhibitions, and concerts in Valencia on Unlocked!`,
+      title: draft.title,
+      body: draft.body,
       targetMode: 'all',
-      url: '/#events',
+      url: draft.defaultUrl || '/#events',
       imageUrl: '',
       entityName: `Weekend Digest (${weekendData.rangeText})`,
-      previewDevice: 'ios'
+      previewDevice: 'ios',
+      deliveryMode: 'both',
+      themeId: draft.themeId,
+      themeLabel: draft.themeLabel,
+      icon: draft.icon,
+      toneHint: 'Logo + "MyCityUnlocked" + "Weekend Highlights: X events to check out!" (no emoji).'
     });
   };
 
   // Open Announcement Push Compose Modal (OneSignal)
   const openAnnouncementPushModal = (ann: any) => {
+    const matchedTheme = CUSTOM_NOTIFICATION_THEMES.find(t => t.icon === ann.icon) || CUSTOM_NOTIFICATION_THEMES[4];
+    const cleanTitle = cleanNotificationText(ann.title);
+    const titleToUse = cleanTitle && cleanTitle !== 'Announcement' ? smartTruncate(cleanTitle, 50) : matchedTheme.defaultTitle;
+    const bodyToUse = ann.content ? smartTruncate(ann.content, 115) : matchedTheme.defaultBody;
+
     setPushComposeModal({
       isOpen: true,
       type: 'custom',
-      title: ann.title && ann.title !== 'Announcement' ? ann.title : 'Unlocked Valencia 🌴',
-      body: ann.content || '',
+      title: titleToUse,
+      body: bodyToUse,
       targetMode: 'all',
       targetId: String(ann.id),
-      url: '/',
+      url: ann.cta_link || matchedTheme.defaultUrl || '/',
       imageUrl: '',
       entityName: ann.title || 'Announcement',
-      previewDevice: 'ios'
+      previewDevice: 'ios',
+      deliveryMode: 'both',
+      themeId: matchedTheme.id,
+      themeLabel: matchedTheme.label,
+      icon: matchedTheme.icon,
+      toneHint: matchedTheme.toneHint
     });
   };
 
@@ -1318,9 +1408,23 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                               {dateFormatted}
                             </td>
                             <td className="p-3.5 whitespace-nowrap">
-                              <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border", typeBadge.bg)}>
-                                {typeBadge.label}
-                              </span>
+                              <div className="flex flex-col items-start gap-1">
+                                <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border", typeBadge.bg)}>
+                                  {typeBadge.label}
+                                </span>
+                                {log.deliveryMode && (
+                                  <span className={cn(
+                                    "px-2 py-0.5 rounded-md text-[9px] font-bold uppercase border",
+                                    log.deliveryMode === 'in_app'
+                                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                                      : log.deliveryMode === 'push'
+                                        ? "bg-sky-50 text-sky-700 border-sky-200"
+                                        : "bg-slate-50 text-slate-600 border-slate-200"
+                                  )}>
+                                    {log.deliveryMode === 'in_app' ? 'In-App Only' : log.deliveryMode === 'push' ? 'Push Only' : 'Push + In-App'}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="p-3.5 min-w-[240px]">
                               <p className="font-bold text-slate-900 leading-snug">{log.title}</p>
@@ -1375,15 +1479,21 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  const defaultTheme = CUSTOM_NOTIFICATION_THEMES[0];
                   setPushComposeModal({
                     isOpen: true,
                     type: 'custom',
-                    title: 'Unlocked Valencia 🌴',
-                    body: '',
+                    title: defaultTheme.defaultTitle,
+                    body: defaultTheme.defaultBody,
                     targetMode: 'all',
-                    url: '/',
+                    url: defaultTheme.defaultUrl,
                     imageUrl: '',
-                    previewDevice: 'ios'
+                    previewDevice: 'ios',
+                    deliveryMode: 'both',
+                    themeId: defaultTheme.id,
+                    themeLabel: defaultTheme.label,
+                    icon: defaultTheme.icon,
+                    toneHint: defaultTheme.toneHint
                   });
                 }}
                 className="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 active:scale-95 text-slate-900 text-xs font-bold uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-yellow-500/10 flex items-center gap-2 cursor-pointer shrink-0"
@@ -1418,11 +1528,38 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
+                    Theme Template (Quick Apply)
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CUSTOM_NOTIFICATION_THEMES.map((theme) => (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        onClick={() => {
+                          setAnnIcon(theme.icon);
+                          setAnnTitle(theme.defaultTitle);
+                          setAnnContent(theme.defaultBody);
+                        }}
+                        className={cn(
+                          "px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer",
+                          annIcon === theme.icon && annContent === theme.defaultBody
+                            ? "bg-slate-900 text-white border-slate-900"
+                            : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+                        )}
+                      >
+                        {theme.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider block">
                     Title / Notification Heading
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Community Announcement, Maintenance, Feature Update"
+                    placeholder="MyCityUnlocked"
                     value={annTitle}
                     onChange={(e) => setAnnTitle(e.target.value)}
                     className="w-full text-xs px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 text-slate-800 font-medium"
@@ -1434,11 +1571,46 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                   <textarea
                     required
                     rows={3}
-                    placeholder="e.g. New features added to Unlocked Valencia! Explore events and local pro recommendations."
+                    placeholder="e.g. New Event: Sunset Acoustic Meetup in Ruzafa"
                     value={annContent}
                     onChange={(e) => setAnnContent(e.target.value)}
                     className="w-full text-xs px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 text-slate-800 font-medium"
                   />
+                  <div className="flex items-center gap-1 flex-wrap pt-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase mr-1">Emoji:</span>
+                    <button
+                      type="button"
+                      onClick={() => setAnnContent(replaceLeadingEmoji(annContent, ''))}
+                      className={cn(
+                        "px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer",
+                        !extractLeadingEmoji(annContent)
+                          ? "bg-slate-900 text-white border-slate-900"
+                          : "bg-slate-50 hover:bg-slate-100 text-slate-500 border-slate-200"
+                      )}
+                      title="Remove emoji"
+                    >
+                      None
+                    </button>
+                    {NOTIFICATION_EMOJIS.map((em) => {
+                      const active = extractLeadingEmoji(annContent) === em;
+                      return (
+                        <button
+                          key={em}
+                          type="button"
+                          onClick={() => setAnnContent(replaceLeadingEmoji(annContent, em))}
+                          className={cn(
+                            "w-7 h-7 rounded-lg text-sm flex items-center justify-center border transition-all cursor-pointer",
+                            active
+                              ? "bg-yellow-100 border-yellow-500 scale-105 shadow-xs"
+                              : "bg-slate-50 hover:bg-slate-100 border-slate-200"
+                          )}
+                          title={`Use ${em}`}
+                        >
+                          {em}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Mobile Push Toggle inside Form */}
@@ -1519,7 +1691,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                   type="submit"
                   className="px-5 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-slate-900 text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md shadow-yellow-500/10 cursor-pointer"
                 >
-                  Save &amp; Publish with OneSignal
+                  {annSendPush ? 'Save & Publish with OneSignal' : 'Save In-App Only'}
                 </button>
               </div>
             </form>
@@ -1585,6 +1757,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                                 setEditingAnnId(ann.id);
                                 setAnnTitle(ann.title || '');
                                 setAnnContent(ann.content || '');
+                                setAnnIcon(ann.icon || 'megaphone');
                                 setAnnSendPush(true);
                                 setShowAnnForm(true);
                               }}
@@ -2112,16 +2285,21 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                       <Bell className="w-5 h-5 stroke-[2.2]" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-slate-900 font-display flex items-center gap-2">
+                      <h3 className="text-lg font-bold text-slate-900 font-display flex items-center gap-2 flex-wrap">
                         Push Notification Studio
                         <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black uppercase border border-blue-200">
                           Live Visual Preview & Editor
                         </span>
+                        {pushComposeModal.themeLabel && (
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[10px] font-black uppercase border border-amber-200">
+                            Theme: {pushComposeModal.themeLabel}
+                          </span>
+                        )}
                       </h3>
                       <p className="text-xs text-slate-500 font-medium">
                         {pushComposeModal.entityName
                           ? `Target: ${pushComposeModal.entityName}`
-                          : 'Custom mobile push broadcast'}
+                          : 'Theme-adapted mobile push & in-app Bell broadcast'}
                       </p>
                     </div>
                   </div>
@@ -2250,37 +2428,22 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                         <span className="text-emerald-400 font-bold">● Live Preview</span>
                       </div>
 
-                      <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl shadow-lg space-y-2 text-left">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] font-bold">
-                              U
-                            </div>
-                            <span className="font-semibold text-slate-300 text-[11px]">
-                              Unlocked Valencia
-                            </span>
-                            <span className="text-[10px] text-slate-500">• 1m</span>
+                      <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl shadow-lg text-left">
+                        <div className="flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-white p-1 shrink-0 border border-slate-700 flex items-center justify-center shadow-xs">
+                            <img src="/logo2.png" alt="Unlocked" className="w-full h-full object-contain" />
                           </div>
-                          <ChevronRight className="w-3.5 h-3.5 text-slate-500 rotate-90" />
-                        </div>
-
-                        <div className="flex items-start gap-2.5">
                           <div className="min-w-0 flex-1 space-y-0.5">
-                            <h5 className="font-bold text-xs text-white break-words">
-                              {pushComposeModal.title || 'Notification Title'}
-                            </h5>
+                            <div className="flex items-center justify-between gap-2">
+                              <h5 className="font-bold text-xs text-white break-words">
+                                {pushComposeModal.title || 'New Event'}
+                              </h5>
+                              <span className="text-[10px] text-slate-400 shrink-0">now</span>
+                            </div>
                             <p className="text-xs text-slate-300 font-normal leading-normal break-words">
-                              {pushComposeModal.body || 'Message body text...'}
+                              {pushComposeModal.body || 'Short description text.'}
                             </p>
                           </div>
-                          {pushComposeModal.imageUrl && (
-                            <img
-                              src={pushComposeModal.imageUrl}
-                              alt=""
-                              className="w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-800"
-                              onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                            />
-                          )}
                         </div>
                       </div>
                     </div>
@@ -2290,59 +2453,154 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                   {pushComposeModal.previewDevice === 'in_app' && (
                     <div className="relative rounded-2xl bg-slate-100 p-3.5 border border-slate-300 text-slate-900 shadow-inner space-y-2 select-none">
                       <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold px-1">
-                        <span>Header Bell Dropdown Preview</span>
-                        <span className="text-blue-600">Unread Badge</span>
+                        <span>In-App Bell Preview</span>
+                        <span className="text-blue-600">Logo + Title + Short Description</span>
                       </div>
 
-                      <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-md space-y-2 text-left">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-extrabold uppercase border border-blue-100">
-                              {pushComposeModal.type.toUpperCase()}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-slate-400 font-medium">Just now</span>
+                      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-md flex items-start gap-3 text-left">
+                        <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 p-1.5 flex items-center justify-center shrink-0 shadow-xs">
+                          <img src="/logo2.png" alt="Unlocked" className="w-full h-full object-contain" />
                         </div>
-
-                        <h5 className="font-bold text-xs text-slate-900 leading-snug break-words">
-                          {pushComposeModal.title || 'Notification Title'}
-                        </h5>
-                        <p className="text-xs text-slate-600 leading-relaxed break-words">
-                          {pushComposeModal.body || 'Message body text.'}
-                        </p>
-
-                        <div className="pt-1 flex justify-end">
-                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 flex items-center gap-1">
-                            Explore {pushComposeModal.url || '/'} →
-                          </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2 mb-0.5">
+                            <h5 className="font-bold text-xs text-slate-900 leading-snug break-words">
+                              {pushComposeModal.title || 'New Event'}
+                            </h5>
+                            <span className="text-[10px] text-slate-400 font-medium shrink-0">Just now</span>
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed break-words line-clamp-2">
+                            {pushComposeModal.body || 'Short description text.'}
+                          </p>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-                    <span>Delivery Reach:</span>
-                    <span className="font-bold text-amber-400">
-                      {pushComposeModal.targetMode === 'specific' ? '🎯 Single Specific Member' : '📢 All Registered Members'}
-                    </span>
+                  <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span>Delivery Mode:</span>
+                      <span className="font-bold text-sky-400">
+                        {(pushComposeModal.deliveryMode || 'both') === 'in_app'
+                          ? '🔔 In-App Bell Only'
+                          : (pushComposeModal.deliveryMode || 'both') === 'push'
+                            ? '📲 Mobile Push Only'
+                            : '📲 + 🔔 Push & In-App'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Audience:</span>
+                      <span className="font-bold text-amber-400">
+                        {pushComposeModal.targetMode === 'specific' ? '🎯 Single Specific Member' : '📢 All Registered Members'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {/* RIGHT COLUMN: INTERACTIVE EDITOR ("Edition") */}
                 <div className="lg:col-span-7 space-y-4">
-                  
-                  {/* Push Title Input & Presets */}
+
+                  {/* Theme & Subject Selector (for custom) or Detected Theme Banner (for entity pushes) */}
+                  {pushComposeModal.type === 'custom' ? (
+                    <div className="bg-slate-50/90 p-3 rounded-2xl border border-slate-200/80 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider">
+                          Notification Theme &amp; Subject
+                        </label>
+                        <span className="text-[10px] font-semibold text-slate-400">
+                          Adapts copy, icon &amp; link
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                        {CUSTOM_NOTIFICATION_THEMES.map((theme) => {
+                          const isSelected = pushComposeModal.themeId === theme.id;
+                          return (
+                            <button
+                              key={theme.id}
+                              type="button"
+                              onClick={() => {
+                                setPushComposeModal({
+                                  ...pushComposeModal,
+                                  themeId: theme.id,
+                                  themeLabel: theme.label,
+                                  icon: theme.icon,
+                                  toneHint: theme.toneHint,
+                                  title: theme.defaultTitle,
+                                  body: theme.defaultBody,
+                                  url: theme.defaultUrl
+                                });
+                              }}
+                              className={cn(
+                                "px-2.5 py-2 rounded-xl text-[11px] font-bold border text-left transition-all cursor-pointer flex items-center justify-between gap-1.5 truncate",
+                                isSelected
+                                  ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                                  : "bg-white hover:bg-blue-50/60 text-slate-700 border-slate-200"
+                              )}
+                            >
+                              <span className="truncate">{theme.label}</span>
+                              {isSelected && <Check className="w-3 h-3 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {pushComposeModal.toneHint && (
+                        <p className="text-[11px] text-slate-600 bg-white/90 px-2.5 py-1.5 rounded-lg border border-slate-200/70 leading-snug">
+                          💡 <span className="font-semibold">Style tip:</span> {pushComposeModal.toneHint}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-blue-50/70 p-3 rounded-2xl border border-blue-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="text-[11px] font-extrabold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <span>Format: Logo + {pushComposeModal.title || pushComposeModal.themeLabel}</span>
+                        </div>
+                        {pushComposeModal.toneHint && (
+                          <p className="text-[11px] text-blue-800/80 leading-snug">{pushComposeModal.toneHint}</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          let refreshed;
+                          if (pushComposeModal.type === 'event' && pushComposeModal.sourceEntity) {
+                            refreshed = buildEventNotificationContent(pushComposeModal.sourceEntity);
+                          } else if (pushComposeModal.type === 'article' && pushComposeModal.sourceEntity) {
+                            refreshed = buildArticleNotificationContent(pushComposeModal.sourceEntity);
+                          } else if (pushComposeModal.type === 'pro' && pushComposeModal.sourceEntity) {
+                            refreshed = buildProNotificationContent(pushComposeModal.sourceEntity);
+                          } else if (pushComposeModal.type === 'weekend') {
+                            refreshed = buildWeekendDigestNotificationContent(weekendData.events, weekendData.rangeText);
+                          }
+                          if (refreshed) {
+                            setPushComposeModal({
+                              ...pushComposeModal,
+                              title: refreshed.title,
+                              body: refreshed.body,
+                              themeId: refreshed.themeId,
+                              themeLabel: refreshed.themeLabel,
+                              icon: refreshed.icon
+                            });
+                          }
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-blue-100/70 text-blue-700 border border-blue-200 text-[10px] font-bold shrink-0 cursor-pointer transition-colors"
+                      >
+                        ↻ Reset Copy
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Notification Title Input */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                        Push Title <span className="text-rose-500">*</span>
+                        Notification Title <span className="text-rose-500">*</span>
                       </label>
                       <span className={cn(
                         "text-[10px] font-mono font-bold px-2 py-0.5 rounded-md",
-                        pushComposeModal.title.length > 60 ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500"
+                        pushComposeModal.title.length > 45 ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-700"
                       )}>
-                        {pushComposeModal.title.length} / 65 chars
+                        {pushComposeModal.title.length} / 45 ideal
                       </span>
                     </div>
 
@@ -2350,50 +2608,105 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                       type="text"
                       value={pushComposeModal.title}
                       onChange={(e) => setPushComposeModal({ ...pushComposeModal, title: e.target.value })}
-                      placeholder="e.g. 🎉 Upcoming Event: Beach Sunset Session"
+                      placeholder="MyCityUnlocked"
                       className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
-
-                    {/* Quick Title Prefix Presets */}
-                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase">Presets:</span>
-                      {['🎉 Event:', '📖 New Guide:', '✨ Pro Spotlight:', '⚡ Announcement:'].map((prefix) => (
-                        <button
-                          key={prefix}
-                          type="button"
-                          onClick={() => {
-                            const clean = pushComposeModal.title.replace(/^([🎉📖✨⚡]\s*[\w\s]+:\s*)?/, '');
-                            setPushComposeModal({ ...pushComposeModal, title: `${prefix} ${clean}`.trim() });
-                          }}
-                          className="px-2 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 text-[10px] font-bold rounded-lg border border-slate-200 transition-colors cursor-pointer"
-                        >
-                          {prefix}
-                        </button>
-                      ))}
-                    </div>
                   </div>
 
-                  {/* Message Body Input */}
+                  {/* Short Description Input */}
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                        Message Body <span className="text-rose-500">*</span>
+                        Short Description <span className="text-rose-500">*</span>
                       </label>
-                      <span className={cn(
-                        "text-[10px] font-mono font-bold px-2 py-0.5 rounded-md",
-                        pushComposeModal.body.length > 140 ? "bg-amber-50 text-amber-600" : "bg-slate-100 text-slate-500"
-                      )}>
-                        {pushComposeModal.body.length} / 180 chars
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {(pushComposeModal.body.length > 130 || pushComposeModal.title.length > 45) && (
+                          <button
+                            type="button"
+                            onClick={() => setPushComposeModal({
+                              ...pushComposeModal,
+                              title: smartTruncate(pushComposeModal.title, 45),
+                              body: smartTruncate(pushComposeModal.body, 130)
+                            })}
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 hover:bg-amber-200 text-amber-800 cursor-pointer transition-colors"
+                          >
+                            ✂️ Keep Short
+                          </button>
+                        )}
+                        <span className={cn(
+                          "text-[10px] font-mono font-bold px-2 py-0.5 rounded-md",
+                          pushComposeModal.body.length > 130 ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
+                        )}>
+                          {pushComposeModal.body.length} / 130 ideal
+                        </span>
+                      </div>
                     </div>
 
                     <textarea
                       rows={3}
                       value={pushComposeModal.body}
                       onChange={(e) => setPushComposeModal({ ...pushComposeModal, body: e.target.value })}
-                      placeholder="Write your push notification message body here..."
+                      placeholder="Write a brief, clear description (kept concise for iPhone, Android & In-App)..."
                       className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all leading-relaxed"
                     />
+
+                    {/* Interactive Emoji Picker */}
+                    <div className="bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider">
+                          Choose Emoji
+                        </span>
+                        {extractLeadingEmoji(pushComposeModal.body) && (
+                          <span className="text-[10px] font-semibold text-slate-500">
+                            Selected: {extractLeadingEmoji(pushComposeModal.body)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPushComposeModal({
+                              ...pushComposeModal,
+                              body: replaceLeadingEmoji(pushComposeModal.body, '')
+                            })
+                          }
+                          className={cn(
+                            "px-2 h-7 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer",
+                            !extractLeadingEmoji(pushComposeModal.body)
+                              ? "bg-slate-900 text-white border-slate-900"
+                              : "bg-white hover:bg-slate-100 text-slate-500 border-slate-200"
+                          )}
+                          title="Remove leading emoji"
+                        >
+                          None
+                        </button>
+                        {NOTIFICATION_EMOJIS.map((em) => {
+                          const isCurrent = extractLeadingEmoji(pushComposeModal.body) === em;
+                          return (
+                            <button
+                              key={em}
+                              type="button"
+                              onClick={() =>
+                                setPushComposeModal({
+                                  ...pushComposeModal,
+                                  body: replaceLeadingEmoji(pushComposeModal.body, em)
+                                })
+                              }
+                              className={cn(
+                                "w-7 h-7 rounded-lg text-sm flex items-center justify-center border transition-all cursor-pointer",
+                                isCurrent
+                                  ? "bg-blue-50 border-blue-500 ring-2 ring-blue-500/20 scale-105 shadow-xs"
+                                  : "bg-white hover:bg-blue-50/60 border-slate-200"
+                              )}
+                              title={`Use ${em}`}
+                            >
+                              {em}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Destination Link / URL */}
@@ -2455,6 +2768,47 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                     </div>
                   </div>
 
+                  {/* Delivery Mode Selector: In-App Only / Push Only / Both */}
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      Delivery Mode
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'both' as const, label: '📲 + 🔔 Both', desc: 'Push & In-App Bell' },
+                        { id: 'in_app' as const, label: '🔔 In-App Only', desc: 'Header Bell only' },
+                        { id: 'push' as const, label: '📲 Push Only', desc: 'OneSignal Mobile only' }
+                      ].map((modeOpt) => {
+                        const isSelected = (pushComposeModal.deliveryMode || 'both') === modeOpt.id;
+                        return (
+                          <button
+                            key={modeOpt.id}
+                            type="button"
+                            onClick={() => setPushComposeModal({
+                              ...pushComposeModal,
+                              deliveryMode: modeOpt.id,
+                              previewDevice: modeOpt.id === 'in_app' ? 'in_app' : (pushComposeModal.previewDevice === 'in_app' && modeOpt.id === 'push' ? 'ios' : pushComposeModal.previewDevice)
+                            })}
+                            className={cn(
+                              "p-2.5 rounded-xl text-left border transition-all cursor-pointer flex flex-col",
+                              isSelected
+                                ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-bold truncate">{modeOpt.label}</span>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                            </div>
+                            <span className={cn("text-[10px]", isSelected ? "text-slate-300" : "text-slate-500")}>
+                              {modeOpt.desc}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* Target Audience */}
                   <div className="space-y-1.5 pt-1">
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
@@ -2511,6 +2865,14 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                         {pushComposeModal.selectedUserId && (() => {
                           const selectedUser = activeUsersList.find(u => u.id === pushComposeModal.selectedUserId);
                           const hasPush = Boolean(selectedUser?.onesignal_player_id);
+                          if ((pushComposeModal.deliveryMode || 'both') === 'in_app') {
+                            return (
+                              <div className="p-3 rounded-xl border bg-blue-50/80 border-blue-200 text-blue-900 text-[11px] font-medium flex items-center gap-2">
+                                <Bell className="w-4 h-4 text-blue-600 shrink-0" />
+                                <span><strong>In-App Bell Ready:</strong> This member will see the notification in their Bell center inside the app (no mobile push will be sent).</span>
+                              </div>
+                            );
+                          }
                           return (
                             <div className={cn(
                               "p-3 rounded-xl border text-[11px] font-medium leading-relaxed",
@@ -2534,7 +2896,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                                 <div className="space-y-2">
                                   <div className="flex items-start gap-2">
                                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                    <span><strong>In-App Bell Only:</strong> No push device is currently linked to this member. To test receiving real mobile push notifications on your phone, pair a device below:</span>
+                                    <span><strong>In-App Bell Only:</strong> No push device is currently linked to this member. Pair a device below to deliver OneSignal mobile push:</span>
                                   </div>
                                   <div className="pt-0.5">
                                     <button
@@ -2555,53 +2917,55 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                     )}
                   </div>
 
-                  {/* Delivery Channels */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                        Delivery Channels
-                      </label>
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/50">
-                        📱 iOS APNs Priority
-                      </span>
+                  {/* Delivery Channels (only needed when Mobile Push is active) */}
+                  {(pushComposeModal.deliveryMode || 'both') !== 'in_app' && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                          Push Delivery Channels
+                        </label>
+                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                          📱 iOS &amp; Android
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: 'ios' as const, label: ' iPhone / iPad', desc: 'iOS App & Safari PWA' },
+                          { id: 'android' as const, label: '🤖 Android', desc: 'Android App & PWA' },
+                          { id: 'web' as const, label: '🌐 Web Push', desc: 'Mobile & Desktop Web' }
+                        ].map((chan) => {
+                          const active = (pushComposeModal.channels || ['ios', 'android', 'web']).includes(chan.id);
+                          return (
+                            <button
+                              key={chan.id}
+                              type="button"
+                              onClick={() => {
+                                const current = pushComposeModal.channels || ['ios', 'android', 'web'];
+                                const next = active
+                                  ? current.filter(c => c !== chan.id)
+                                  : [...current, chan.id];
+                                if (next.length > 0) {
+                                  setPushComposeModal({ ...pushComposeModal, channels: next });
+                                }
+                              }}
+                              className={cn(
+                                "p-2 rounded-xl text-left border transition-all cursor-pointer flex flex-col",
+                                active 
+                                  ? "bg-blue-50/80 border-blue-500 text-blue-900 shadow-sm" 
+                                  : "bg-slate-50 border-slate-200 text-slate-500 opacity-60 hover:opacity-100"
+                              )}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold">{chan.label}</span>
+                                {active && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                              </div>
+                              <span className="text-[10px] text-slate-500">{chan.desc}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: 'ios' as const, label: ' iPhone / iPad', desc: 'iOS App & Safari PWA' },
-                        { id: 'android' as const, label: '🤖 Android', desc: 'Android App & PWA' },
-                        { id: 'web' as const, label: '🌐 Web Push', desc: 'Mobile & Desktop Web' }
-                      ].map((chan) => {
-                        const active = (pushComposeModal.channels || ['ios', 'android', 'web']).includes(chan.id);
-                        return (
-                          <button
-                            key={chan.id}
-                            type="button"
-                            onClick={() => {
-                              const current = pushComposeModal.channels || ['ios', 'android', 'web'];
-                              const next = active
-                                ? current.filter(c => c !== chan.id)
-                                : [...current, chan.id];
-                              if (next.length > 0) {
-                                setPushComposeModal({ ...pushComposeModal, channels: next });
-                              }
-                            }}
-                            className={cn(
-                              "p-2 rounded-xl text-left border transition-all cursor-pointer flex flex-col",
-                              active 
-                                ? "bg-blue-50/80 border-blue-500 text-blue-900 shadow-sm" 
-                                : "bg-slate-50 border-slate-200 text-slate-500 opacity-60 hover:opacity-100"
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold">{chan.label}</span>
-                              {active && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                            </div>
-                            <span className="text-[10px] text-slate-500">{chan.desc}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2610,7 +2974,13 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
               <div className="p-4 sm:p-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 bg-slate-50/80 rounded-b-[28px]">
                 <div className="text-xs text-slate-500 font-medium flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span>Dispatched via OneSignal Push & recorded in Header Bell notifications.</span>
+                  <span>
+                    {(pushComposeModal.deliveryMode || 'both') === 'in_app'
+                      ? 'Will be published only in the In-App Bell notification center.'
+                      : (pushComposeModal.deliveryMode || 'both') === 'push'
+                        ? 'Will be sent only via OneSignal Mobile Push (not saved in In-App Bell).'
+                        : 'Dispatched via OneSignal Push & saved in the In-App Bell center.'}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2.5 shrink-0">
@@ -2632,12 +3002,18 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                     {isSendingPush ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Sending Push...</span>
+                        <span>Sending...</span>
                       </>
                     ) : (
                       <>
                         <Send className="w-4 h-4" />
-                        <span>Dispatch Push Now</span>
+                        <span>
+                          {(pushComposeModal.deliveryMode || 'both') === 'in_app'
+                            ? 'Publish In-App Only'
+                            : (pushComposeModal.deliveryMode || 'both') === 'push'
+                              ? 'Send Push Only'
+                              : 'Send Push & In-App'}
+                        </span>
                       </>
                     )}
                   </button>

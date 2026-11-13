@@ -79,14 +79,15 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const titleStr = title || "Unlocked Valencia 🌴";
-    const messageStr = message || "Nouvelle notification Unlocked";
+    const titleStr = title || "MyCityUnlocked";
+    const messageStr = message || "New notification from MyCityUnlocked";
 
     const baseUrl = "https://mycityunlocked.app";
     const rawUrl = url || customData?.url || "/";
     const absoluteUrl = rawUrl.startsWith("http")
       ? rawUrl
       : `${baseUrl}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
+    const brandLogoUrl = `${baseUrl}/logo2.png`;
 
     const selectedChannels: string[] = Array.isArray(targetChannels) && targetChannels.length > 0
       ? targetChannels
@@ -111,6 +112,10 @@ export default async function handler(req: any, res: any) {
       },
       url: absoluteUrl,
       priority: 10,
+      // Brand Logo for Android & Web Push
+      chrome_web_icon: brandLogoUrl,
+      chrome_web_badge: brandLogoUrl,
+      large_icon: brandLogoUrl,
       // Target platforms: iOS native app, iOS Web Push / PWA, Android, and Web
       isIos: enableIos,
       isAndroid: enableAndroid,
