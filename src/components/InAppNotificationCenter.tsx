@@ -20,7 +20,9 @@ import {
   ExternalLink,
   MessageCircle,
   ShoppingBag,
-  Info
+  Info,
+  Sun,
+  Briefcase
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -56,8 +58,17 @@ export const NOTIFICATION_ICONS_CONFIG = [
     label: 'Events & Meetups', 
     category: 'Events',
     icon: Calendar, 
+    bgColor: 'bg-orange-50', 
+    textColor: 'text-orange-600',
+    borderColor: 'border-orange-200'
+  },
+  { 
+    id: 'weekend', 
+    label: 'Weekend Highlights', 
+    category: 'Weekend',
+    icon: Sun, 
     bgColor: 'bg-amber-50', 
-    textColor: 'text-amber-600',
+    textColor: 'text-orange-600',
     borderColor: 'border-amber-200'
   },
   { 
@@ -65,9 +76,18 @@ export const NOTIFICATION_ICONS_CONFIG = [
     label: 'Guides & Legal', 
     category: 'Guides',
     icon: BookOpen, 
-    bgColor: 'bg-purple-50', 
-    textColor: 'text-purple-600',
-    borderColor: 'border-purple-200'
+    bgColor: 'bg-emerald-50', 
+    textColor: 'text-emerald-600',
+    borderColor: 'border-emerald-200'
+  },
+  { 
+    id: 'pro', 
+    label: 'Recommended Pro', 
+    category: 'Pros',
+    icon: Briefcase, 
+    bgColor: 'bg-blue-50', 
+    textColor: 'text-blue-600',
+    borderColor: 'border-blue-200'
   },
   { 
     id: 'recommendation', 
@@ -92,9 +112,9 @@ export const NOTIFICATION_ICONS_CONFIG = [
     label: 'Top Pro & Featured', 
     category: 'Recommendations',
     icon: Star, 
-    bgColor: 'bg-yellow-50', 
-    textColor: 'text-yellow-600',
-    borderColor: 'border-yellow-200'
+    bgColor: 'bg-blue-50', 
+    textColor: 'text-blue-600',
+    borderColor: 'border-blue-200'
   },
   { 
     id: 'gift', 
@@ -110,18 +130,18 @@ export const NOTIFICATION_ICONS_CONFIG = [
     label: 'Verified & Security', 
     category: 'Trust',
     icon: ShieldCheck, 
-    bgColor: 'bg-emerald-50', 
-    textColor: 'text-emerald-600',
-    borderColor: 'border-emerald-200'
+    bgColor: 'bg-teal-50', 
+    textColor: 'text-teal-600',
+    borderColor: 'border-teal-200'
   },
   { 
     id: 'sparkles', 
     label: 'New Updates', 
     category: 'Updates',
     icon: Sparkles, 
-    bgColor: 'bg-blue-50', 
-    textColor: 'text-blue-600',
-    borderColor: 'border-blue-200'
+    bgColor: 'bg-sky-50', 
+    textColor: 'text-sky-600',
+    borderColor: 'border-sky-200'
   },
   {
     id: 'chat',
@@ -137,13 +157,19 @@ export const NOTIFICATION_ICONS_CONFIG = [
     label: 'Classifieds',
     category: 'Marketplace',
     icon: ShoppingBag,
-    bgColor: 'bg-teal-50',
-    textColor: 'text-teal-600',
-    borderColor: 'border-teal-200'
+    bgColor: 'bg-purple-50',
+    textColor: 'text-purple-600',
+    borderColor: 'border-purple-200'
   }
 ];
 
 export function getInAppNotificationIconData(iconId?: string, type?: string) {
+  if (type === 'weekend') {
+    return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'weekend')!;
+  }
+  if (type === 'pro') {
+    return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'pro')!;
+  }
   if (iconId) {
     const found = NOTIFICATION_ICONS_CONFIG.find(item => item.id === iconId);
     if (found) return found;
@@ -154,7 +180,7 @@ export function getInAppNotificationIconData(iconId?: string, type?: string) {
   if (type === 'event') {
     return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'event')!;
   }
-  if (type === 'guide') {
+  if (type === 'guide' || type === 'article') {
     return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'guide')!;
   }
   if (type === 'chat' || type === 'message') {
@@ -164,6 +190,26 @@ export function getInAppNotificationIconData(iconId?: string, type?: string) {
     return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'marketplace')!;
   }
   return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'megaphone')!;
+}
+
+export function resolveInAppNotificationIconData(item?: InAppNotification | null) {
+  if (!item) return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'megaphone')!;
+  if (isWeekendNotification(item)) {
+    return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'weekend')!;
+  }
+  if (isProNotification(item)) {
+    return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'pro')!;
+  }
+  if (isRecommendProNotification(item)) {
+    return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'recommendation')!;
+  }
+  if (isEventNotification(item)) {
+    return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'event')!;
+  }
+  if (isGuideNotification(item)) {
+    return NOTIFICATION_ICONS_CONFIG.find(i => i.id === 'guide')!;
+  }
+  return getInAppNotificationIconData(item.icon, item.type);
 }
 
 
@@ -232,13 +278,40 @@ export function extractProIdFromNotification(item?: InAppNotification | null): s
   return undefined;
 }
 
+export function isWeekendNotification(item?: InAppNotification | null): boolean {
+  if (!item) return false;
+  if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
+  if (item.type === 'weekend' || item.cta_type === 'weekend') return true;
+  if (item.cta_link && (item.cta_link.includes('weekend-events') || item.cta_link.includes('focus=weekend'))) return true;
+  if (item.target_id && String(item.target_id).toLowerCase().startsWith('weekend')) return true;
+
+  const text = `${item.title || ''} ${item.content || ''} ${item.notes || ''} ${item.message || ''}`.toLowerCase();
+  const hasSpecificEventId = Boolean(
+    (item.target_id && !String(item.target_id).startsWith('push_log_') && !String(item.target_id).toLowerCase().startsWith('weekend')) ||
+    (item.cta_link && item.cta_link.includes('eventId='))
+  );
+  if (
+    !hasSpecificEventId &&
+    (text.includes('weekend highlights') ||
+      text.includes('mycityunlocked weekend') ||
+      text.includes('for the weekend') ||
+      text.includes('this weekend') ||
+      text.includes('weekend spotlight') ||
+      text.includes('weekend plans'))
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function isEventNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
+  if (isWeekendNotification(item)) return false;
   if (item.type === 'guide' || item.type === 'article' || item.type === 'pro' || item.cta_type === 'guide' || item.cta_type === 'article' || item.cta_type === 'pro' || item.icon === 'guide' || item.icon === 'star') return false;
-  if (item.icon && ['gift', 'marketplace', 'shield', 'chat', 'recommendation', 'sparkles'].includes(item.icon) && item.type !== 'event' && item.type !== 'weekend' && item.cta_type !== 'event' && item.cta_type !== 'weekend' && !(item.cta_link && (item.cta_link.includes('event') || item.cta_link.includes('eventId=')))) return false;
+  if (item.icon && ['gift', 'marketplace', 'shield', 'chat', 'recommendation', 'sparkles'].includes(item.icon) && item.type !== 'event' && item.cta_type !== 'event' && !(item.cta_link && (item.cta_link.includes('event') || item.cta_link.includes('eventId=')))) return false;
   if (item.cta_link && (item.cta_link.includes('guideId=') || item.cta_link.includes('#guides') || item.cta_link.includes('proId='))) return false;
-  if (item.type === 'event' || item.type === 'weekend' || item.icon === 'event' || item.cta_type === 'event' || item.cta_type === 'weekend') return true;
+  if (item.type === 'event' || item.icon === 'event' || item.cta_type === 'event') return true;
   if (item.cta_link && (item.cta_link.includes('event') || item.cta_link.includes('eventId='))) return true;
   if (item.target_id && (String(item.target_id).toLowerCase().startsWith('evt-') || String(item.target_id).toLowerCase().startsWith('event-'))) return true;
 
@@ -276,7 +349,7 @@ export function extractEventIdFromNotification(item?: InAppNotification | null):
 export function isRecommendProNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
-  if (isProNotification(item) || isEventNotification(item) || isGuideNotification(item)) return false;
+  if (isProNotification(item) || isWeekendNotification(item) || isEventNotification(item) || isGuideNotification(item)) return false;
   if (item.type === 'recommendation_request' || item.type === 'recommendation') return true;
   if (item.cta_type === 'recommend_pro') return true;
   if (item.icon === 'recommendation') return true;
@@ -301,6 +374,7 @@ export function isRecommendProNotification(item?: InAppNotification | null): boo
 export function isGuideNotification(item?: InAppNotification | null): boolean {
   if (!item) return false;
   if (item.type === 'chat' || String(item.id).startsWith('chat-')) return false;
+  if (isWeekendNotification(item)) return false;
   if (item.type === 'event' || item.type === 'weekend' || item.type === 'pro' || item.cta_type === 'event' || item.cta_type === 'weekend' || item.cta_type === 'pro' || item.icon === 'event' || item.icon === 'star') return false;
   if (item.icon && ['gift', 'marketplace', 'shield', 'chat', 'recommendation', 'sparkles'].includes(item.icon) && item.type !== 'guide' && item.type !== 'article' && item.cta_type !== 'guide' && item.cta_type !== 'article' && !(item.cta_link && (item.cta_link.includes('guide') || item.cta_link.includes('guideId=')))) return false;
   if (item.cta_link && (item.cta_link.includes('eventId=') || item.cta_link.includes('#events') || item.cta_link.includes('proId='))) return false;
@@ -629,7 +703,7 @@ export function InAppNotificationCenter({
               ) : (
                 displayedList.map((item) => {
                   const unread = isItemUnread(item);
-                  const itemData = getInAppNotificationIconData(item.icon, item.type);
+                  const itemData = resolveInAppNotificationIconData(item);
                   const IconComp = itemData.icon;
 
                   let title = item.title && item.title.toLowerCase() !== 'notification' && item.title.toLowerCase() !== 'announcement'
@@ -667,7 +741,9 @@ export function InAppNotificationCenter({
                         onMarkAsRead(String(item.id));
                         onClose();
                         
-                        if (isEventNotification(item)) {
+                        if (isWeekendNotification(item)) {
+                          onNavigate?.('home', { focusSection: 'weekend-events' });
+                        } else if (isEventNotification(item)) {
                           const targetEventId = extractEventIdFromNotification(item);
                           onNavigate?.('events', targetEventId ? { eventId: targetEventId } : undefined);
                         } else if (isGuideNotification(item)) {
@@ -689,6 +765,8 @@ export function InAppNotificationCenter({
                         } else if (item.cta_link && onNavigate) {
                           if (item.cta_link.startsWith('http://') || item.cta_link.startsWith('https://')) {
                             window.open(item.cta_link, '_blank', 'noopener,noreferrer');
+                          } else if (item.cta_link.includes('weekend-events') || item.cta_link.includes('focus=weekend')) {
+                            onNavigate('home', { focusSection: 'weekend-events' });
                           } else if (item.cta_link.includes('guide')) {
                             const targetGuideId = extractGuideIdFromNotification(item);
                             onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
@@ -708,13 +786,14 @@ export function InAppNotificationCenter({
                           : "bg-white hover:bg-slate-50/80 border-transparent"
                       )}
                     >
-                      {/* Unlocked Brand Logo */}
-                      <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 p-1.5 flex items-center justify-center shrink-0 shadow-xs transition-transform group-hover:scale-105">
-                        <img
-                          src="/logo2.png"
-                          alt="Unlocked"
-                          className="w-full h-full object-contain"
-                        />
+                      {/* Theme Icon Badge */}
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 shadow-xs transition-transform group-hover:scale-105",
+                        itemData.bgColor,
+                        itemData.textColor,
+                        itemData.borderColor
+                      )}>
+                        <IconComp className="w-5 h-5 stroke-[2.1]" />
                       </div>
 
                       {/* Notification Content */}
@@ -795,7 +874,23 @@ export function InAppNotificationCenter({
                             </button>
                           )}
 
-                          {(item.type === 'event' || item.cta_type === 'event' || isEventNotification(item)) && onNavigate && (
+                          {isWeekendNotification(item) && onNavigate && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onMarkAsRead(String(item.id));
+                                onClose();
+                                onNavigate('home', { focusSection: 'weekend-events' });
+                              }}
+                              className="px-2.5 py-1 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <Calendar className="w-3 h-3" />
+                              <span>This Weekend&apos;s Events</span>
+                            </button>
+                          )}
+
+                          {!isWeekendNotification(item) && (item.type === 'event' || item.cta_type === 'event' || isEventNotification(item)) && onNavigate && (
                             <button
                               type="button"
                               onClick={(e) => {
@@ -805,7 +900,7 @@ export function InAppNotificationCenter({
                                 const targetEventId = extractEventIdFromNotification(item);
                                 onNavigate('events', targetEventId ? { eventId: targetEventId } : undefined);
                               }}
-                              className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                              className="px-2.5 py-1 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
                             >
                               <Calendar className="w-3 h-3" />
                               <span>View event</span>
@@ -822,7 +917,7 @@ export function InAppNotificationCenter({
                                 const targetGuideId = extractGuideIdFromNotification(item);
                                 onNavigate('guides', targetGuideId ? { guideId: targetGuideId } : undefined);
                               }}
-                              className="px-2.5 py-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                              className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
                             >
                               <BookOpen className="w-3 h-3" />
                               <span>Read guide</span>

@@ -48,6 +48,7 @@ import {
   smartTruncate,
   type CustomNotificationTheme
 } from '../lib/notificationTemplates';
+import { resolveInAppNotificationIconData } from './InAppNotificationCenter';
 
 export interface PushLogEntry {
   id: string;
@@ -834,7 +835,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       title: draft.title,
       body: draft.body,
       targetMode: 'all',
-      url: draft.defaultUrl || '/#events',
+      url: draft.defaultUrl || '/?focus=weekend-events',
       imageUrl: '',
       entityName: `Weekend Digest (${weekendData.rangeText})`,
       previewDevice: 'ios',
@@ -2463,12 +2464,28 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                       'new notification',
                       ''
                     ].includes(cleanPreviewTitle);
+                    const previewIconData = resolveInAppNotificationIconData({
+                      id: 'preview',
+                      title: pushComposeModal.title,
+                      content: pushComposeModal.body,
+                      type: pushComposeModal.type === 'custom' && pushComposeModal.themeId === 'weekend'
+                        ? 'weekend'
+                        : pushComposeModal.type === 'article'
+                          ? 'guide'
+                          : pushComposeModal.type,
+                      icon: pushComposeModal.icon,
+                      cta_type: pushComposeModal.type === 'custom' && pushComposeModal.themeId === 'weekend'
+                        ? 'weekend'
+                        : pushComposeModal.type,
+                      cta_link: pushComposeModal.url
+                    });
+                    const PreviewIcon = previewIconData.icon;
                     return (
                       <div className="relative rounded-2xl bg-slate-100 p-3.5 border border-slate-300 text-slate-900 shadow-inner space-y-2.5 select-none">
                         <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold px-1">
                           <span>In-App Bell Preview</span>
                           <span className="text-blue-600">
-                            {hideTitlePreview ? 'Unread (Bold) vs Read (Normal)' : 'Logo + Title + Short Description'}
+                            {hideTitlePreview ? 'Theme Icon + Bold/Normal' : 'Theme Icon + Title + Text'}
                           </span>
                         </div>
 
@@ -2476,8 +2493,13 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                         <div className="space-y-1">
                           <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 px-1">Unread</span>
                           <div className="bg-blue-50/60 p-3 rounded-2xl border border-blue-100 shadow-md flex items-start gap-3 text-left">
-                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 p-1.5 flex items-center justify-center shrink-0 shadow-xs">
-                              <img src="/logo2.png" alt="Unlocked" className="w-full h-full object-contain" />
+                            <div className={cn(
+                              "w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 shadow-xs",
+                              previewIconData.bgColor,
+                              previewIconData.textColor,
+                              previewIconData.borderColor
+                            )}>
+                              <PreviewIcon className="w-5 h-5 stroke-[2.1]" />
                             </div>
                             <div className="min-w-0 flex-1">
                               {!hideTitlePreview && (
@@ -2505,8 +2527,13 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                         <div className="space-y-1">
                           <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 px-1">Once Read</span>
                           <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex items-start gap-3 text-left">
-                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 p-1.5 flex items-center justify-center shrink-0 shadow-xs">
-                              <img src="/logo2.png" alt="Unlocked" className="w-full h-full object-contain" />
+                            <div className={cn(
+                              "w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 shadow-xs",
+                              previewIconData.bgColor,
+                              previewIconData.textColor,
+                              previewIconData.borderColor
+                            )}>
+                              <PreviewIcon className="w-5 h-5 stroke-[2.1]" />
                             </div>
                             <div className="min-w-0 flex-1">
                               {!hideTitlePreview && (

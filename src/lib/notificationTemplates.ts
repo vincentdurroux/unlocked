@@ -171,7 +171,7 @@ export function buildWeekendDigestNotificationContent(weekendEvents: any[], _ran
     themeId: 'weekend_digest',
     themeLabel: 'Weekend',
     icon: 'event',
-    defaultUrl: '/#events'
+    defaultUrl: '/?focus=weekend-events'
   };
 }
 
@@ -209,7 +209,7 @@ export const CUSTOM_NOTIFICATION_THEMES: CustomNotificationTheme[] = [
     icon: 'event',
     defaultTitle: 'MyCityUnlocked',
     defaultBody: 'Weekend Highlights: 5 events to check out!',
-    defaultUrl: '/#events',
+    defaultUrl: '/?focus=weekend-events',
     toneHint: 'Logo + "MyCityUnlocked" + "Weekend Highlights: X events to check out!" (no emoji).'
   },
   {

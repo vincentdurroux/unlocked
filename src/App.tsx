@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Papa from 'papaparse';
 import { parseProfessionalCSV, rowToPro, detectColumnMappings, parseEventCSV, detectEventColumnMappings, rowToEvent } from './utils/csvParser';
 import { Logo } from './components/Logo';
-import { InAppNotificationCenter, InAppToastBanner, type InAppNotification, isRecommendProNotification, isGuideNotification, extractGuideIdFromNotification, isProNotification, extractProIdFromNotification, isEventNotification, extractEventIdFromNotification } from './components/InAppNotificationCenter';
+import { InAppNotificationCenter, InAppToastBanner, type InAppNotification, isRecommendProNotification, isGuideNotification, extractGuideIdFromNotification, isProNotification, extractProIdFromNotification, isEventNotification, extractEventIdFromNotification, isWeekendNotification } from './components/InAppNotificationCenter';
 import { getCategoryWithEmoji, parseDescriptionSections, renderFormattedContent, cleanDuplicateEmojis } from './components/AdminAiEventSearch';
 import { ReferralSurveyModal, REFERRAL_OPTIONS } from './components/ReferralSurveyModal';
 
@@ -2444,8 +2444,9 @@ export default function App() {
   }, [initialChat]);
 
   const [deepLinkTrigger, setDeepLinkTrigger] = useState(0);
+  const [homeFocusRequest, setHomeFocusRequest] = useState<{ target: 'weekend-events'; ts: number } | null>(null);
 
-  // Extract sharing & push notification parameters (?eventId, ?proId, ?guideId) on mount and URL changes
+  // Extract sharing & push notification parameters (?eventId, ?proId, ?guideId, ?focus=weekend-events) on mount and URL changes
   const checkAndApplyUrlDeepLinks = React.useCallback(() => {
     const params = new URLSearchParams(window.location.search);
 
@@ -2461,6 +2462,8 @@ export default function App() {
     const cleanProId = extractCleanId(rawProId);
     const rawGuideId = params.get('guideId') || hashParams.get('guideId');
     const cleanGuideId = extractCleanId(rawGuideId);
+    const focusParam = (params.get('focus') || hashParams.get('focus') || '').toLowerCase();
+    const hashRaw = window.location.hash.toLowerCase();
 
     if (cleanEventId) {
       initialViewRef.current = null;
@@ -2486,6 +2489,17 @@ export default function App() {
       setDeepLinkTrigger(c => c + 1);
       setActiveView('guides');
       return true;
+    } else if (focusParam === 'weekend-events' || hashRaw.includes('weekend-events')) {
+      initialViewRef.current = null;
+      isProgrammaticNavigationRef.current = true;
+      setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
+      setHomeFocusRequest({ target: 'weekend-events', ts: Date.now() });
+      setDeepLinkTrigger(c => c + 1);
+      setActiveView('home');
+      try {
+        window.history.replaceState({ view: 'home' }, '', window.location.pathname);
+      } catch (_) {}
+      return true;
     }
     return false;
   }, []);
@@ -2507,8 +2521,21 @@ export default function App() {
         const data = detail?.data || {};
         const launchUrl = String(detail?.launchUrl || data?.url || data?.launchUrl || '');
         const notifType = String(data.type || detail?.notification?.type || '').toLowerCase();
+        const notifTheme = String(data.theme || '').toLowerCase();
 
-        let targetEventId = data.eventId || (data.target_id && (notifType === 'event' || notifType === 'weekend' || launchUrl.includes('event')) ? data.target_id : undefined);
+        const isWeekendPush =
+          notifType === 'weekend' ||
+          notifTheme === 'weekend' ||
+          notifTheme === 'weekend_digest' ||
+          launchUrl.includes('weekend-events') ||
+          launchUrl.includes('focus=weekend');
+
+        if (isWeekendPush) {
+          handleNavigate('home', { focusSection: 'weekend-events' });
+          return;
+        }
+
+        let targetEventId = data.eventId || (data.target_id && (notifType === 'event' || launchUrl.includes('event')) ? data.target_id : undefined);
         let targetProId = data.proId || (data.target_id && (notifType === 'pro' || launchUrl.includes('proId=') || launchUrl.includes('explore')) ? data.target_id : undefined);
         let targetGuideId = data.guideId || (data.target_id && (notifType === 'guide' || notifType === 'article' || launchUrl.includes('guide')) ? data.target_id : undefined);
 
@@ -2766,9 +2793,9 @@ export default function App() {
       if (isProgrammaticNavigationRef.current) {
         return;
       }
-      // First check if the URL change is a deep-link push notification open (?eventId, ?guideId, ?proId)
+      // First check if the URL change is a deep-link push notification open (?eventId, ?guideId, ?proId, ?focus=weekend-events)
       const searchStr = window.location.search + (window.location.hash.includes('?') ? window.location.hash.substring(window.location.hash.indexOf('?')) : '');
-      if (searchStr.includes('eventId=') || searchStr.includes('guideId=') || searchStr.includes('proId=')) {
+      if (searchStr.includes('eventId=') || searchStr.includes('guideId=') || searchStr.includes('proId=') || searchStr.includes('focus=weekend-events') || window.location.hash.includes('weekend-events')) {
         if (checkAndApplyUrlDeepLinks()) {
           return;
         }
@@ -4278,7 +4305,48 @@ export default function App() {
     setShowMessagesModal(true);
   };
 
-  const handleNavigate = async (view: View | 'back', params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => {
+  useEffect(() => {
+    if (authLoading || activeView !== 'home' || !homeFocusRequest) return;
+
+    if (homeFocusRequest.target === 'weekend-events') {
+      const centerWeekendCard = () => {
+        const el = document.getElementById('discover-card-event');
+        const container = mainRef.current;
+        if (!el) return false;
+
+        if (container && container.scrollHeight > container.clientHeight) {
+          const elRect = el.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          const elCenterOffset = (elRect.top - containerRect.top) + (elRect.height / 2);
+          const targetScrollTop = Math.max(
+            0,
+            container.scrollTop + elCenterOffset - (containerRect.height / 2)
+          );
+          container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+        } else {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        }
+        return true;
+      };
+
+      const rafId = requestAnimationFrame(() => {
+        setTimeout(() => {
+          centerWeekendCard();
+        }, 80);
+      });
+      const settleTimer = setTimeout(() => {
+        centerWeekendCard();
+        setHomeFocusRequest(null);
+      }, 420);
+
+      return () => {
+        cancelAnimationFrame(rafId);
+        clearTimeout(settleTimer);
+      };
+    }
+  }, [homeFocusRequest, activeView, authLoading]);
+
+  const handleNavigate = async (view: View | 'back', params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any, focusSection?: 'weekend-events' }) => {
     if (view === 'back') {
       navigateTo(previousView);
       return;
@@ -4345,7 +4413,10 @@ export default function App() {
     }
     if (params?.searchQuery) setInitialSearch(params.searchQuery);
     if (params?.chat) setInitialChat(params.chat);
-    navigateTo(finalView);
+    if (params?.focusSection === 'weekend-events') {
+      setHomeFocusRequest({ target: 'weekend-events', ts: Date.now() });
+    }
+    navigateTo(finalView, params?.focusSection ? { skipScrollToTop: true } : undefined);
   };
 
   // Bottom Nav Items
@@ -4394,7 +4465,7 @@ export default function App() {
     }
   };
 
-  const navigateTo = (view: View) => {
+  const navigateTo = (view: View, options?: { skipScrollToTop?: boolean }) => {
     initialViewRef.current = null;
     isProgrammaticNavigationRef.current = true;
     setTimeout(() => {
@@ -4430,7 +4501,9 @@ export default function App() {
       setDirection(0);
     }
     setActiveView(view);
-    scrollToTop();
+    if (!options?.skipScrollToTop) {
+      scrollToTop();
+    }
   };
 
   useEffect(() => {
@@ -4740,7 +4813,9 @@ export default function App() {
                 handleMarkAnnouncementAsRead(String(item.id));
                 setToastNotification(null);
                 
-                if (isEventNotification(item)) {
+                if (isWeekendNotification(item)) {
+                  handleNavigate('home', { focusSection: 'weekend-events' });
+                } else if (isEventNotification(item)) {
                   const targetEventId = extractEventIdFromNotification(item);
                   handleNavigate('events', targetEventId ? { eventId: targetEventId } : undefined);
                 } else if (isGuideNotification(item)) {
@@ -4759,6 +4834,8 @@ export default function App() {
                   handleNavigate('messages', item.target_id ? { chat: { id: String(item.target_id) } } : undefined);
                 } else if (item.type === 'marketplace' || item.type === 'ad') {
                   handleNavigate('marketplace');
+                } else if (item.cta_link && (item.cta_link.includes('weekend-events') || item.cta_link.includes('focus=weekend'))) {
+                  handleNavigate('home', { focusSection: 'weekend-events' });
                 } else {
                   if (!currentUser) {
                     handleNavigate('login');

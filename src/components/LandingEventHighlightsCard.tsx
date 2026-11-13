@@ -382,12 +382,17 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   }, [count, isPaused]);
 
   if (loading) {
-    return <DiscoverCardEventSkeleton />;
+    return (
+      <div id="discover-card-event" className="h-full">
+        <DiscoverCardEventSkeleton />
+      </div>
+    );
   }
 
   if (count === 0) {
     return (
       <div 
+        id="discover-card-event"
         onClick={() => onNavigate('events')}
         className="flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-amber-50/30 to-orange-50/15 text-slate-900 border border-amber-200/70 shadow-sm cursor-pointer h-full min-h-[480px] relative overflow-hidden"
       >
