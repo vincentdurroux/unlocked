@@ -114,18 +114,21 @@
 :root {
   --color-primary: #1677FF;
   --color-bg: #ffffff;
+  background-color: #ffffff;
+  color-scheme: light;
 }
 
 html,
 body,
 #root {
-  background-color: var(--color-bg);
+  background-color: #ffffff !important;
   color: var(--color-brand-navy);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
   height: 100%;
+  min-height: 100dvh;
   width: 100%;
   overflow: hidden;
   position: relative;
