@@ -133,22 +133,34 @@ export const authService = {
   },
 
   async getCurrentUser() {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
+    if (!isSupabaseConfigured) return null;
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session?.user) return null;
+      return session.user;
+    } catch {
+      return null;
+    }
   },
 
   async getProfile(userId: string): Promise<Profile | null> {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
+    if (!isSupabaseConfigured || !userId) return null;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
-    if (error) {
-      console.error('Error fetching profile:', error);
+      if (error) {
+        console.warn('Error fetching profile:', error);
+        return null;
+      }
+      return data;
+    } catch (err) {
+      console.warn('Error fetching profile:', err);
       return null;
     }
-    return data;
   },
 
   async updateProfile(profile: Partial<Profile>) {
@@ -161,10 +173,12 @@ export const authService = {
       if (oldProfile?.full_name) {
         oldName = oldProfile.full_name;
       } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user?.email) {
-          oldName = user.email.split('@')[0];
-        }
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user?.email) {
+            oldName = session.user.email.split('@')[0];
+          }
+        } catch (_) {}
       }
     }
 
@@ -211,8 +225,8 @@ export const authService = {
         console.log(`[Profile Update] Propagating name change from "${oldName}" to "${profile.full_name}" in testimonies...`);
         
         // Get user email for precise matching
-        const { data: { user } } = await supabase.auth.getUser();
-        const email = user?.email?.toLowerCase();
+        const { data: { session } } = await supabase.auth.getSession();
+        const email = session?.user?.email?.toLowerCase();
         
         let targetAuthorSelector = oldName;
         let newAuthorValue = profile.full_name;
@@ -359,7 +373,8 @@ export const authService = {
     if (!isSupabaseConfigured) throw new Error('Supabase is not configured');
     
     if (oldPassword) {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user || !user.email) {
         throw new Error("User credentials not found. Please log in again.");
       }

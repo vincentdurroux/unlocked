@@ -485,9 +485,11 @@ export function AdminEventsManager({
     if (selectedEventIds.length === 0) return;
     setIsBulkDeleting(true);
     try {
-      for (const id of selectedEventIds) {
-        await eventService.deleteEvent(id);
-      }
+      const itemsToDelete = selectedEventIds.map(id => {
+        const matched = events.find(e => String(e.id) === String(id));
+        return { id, title: matched?.title };
+      });
+      await eventService.deleteEventsBulk(itemsToDelete);
       setMsg({ type: 'success', text: `${selectedEventIds.length} events deleted successfully.` });
       setSelectedEventIds([]);
       if (onRefetchEvents) await onRefetchEvents();

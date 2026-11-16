@@ -3228,9 +3228,9 @@ export default function App() {
       if (!isOnline) return;
       fetchAnnouncementsFromDbRef.current();
       if (currentUser?.id) {
-        supabase.auth.getUser().then(({ data: { user }, error }) => {
-          if (user && !error) {
-            setCurrentUser(user);
+        supabase.auth.getSession().then(({ data: { session }, error }) => {
+          if (session?.user && !error) {
+            setCurrentUser(session.user);
           }
         }).catch(() => {});
       }
@@ -3960,9 +3960,11 @@ export default function App() {
     try {
       setEventsLoading(true);
       const data = await eventService.getEvents();
-      if (data && data.length > 0) {
+      if (isSupabaseConfigured) {
+        setEvents(Array.isArray(data) ? data : []);
+      } else if (data && data.length > 0) {
         setEvents(data);
-      } else if (!isSupabaseConfigured) {
+      } else {
         setEvents(MOCK_EVENTS);
       }
     } catch (err) {
@@ -3977,9 +3979,26 @@ export default function App() {
     fetchAds();
     refetchEvents();
 
-    if (!isSupabaseConfigured) return;
+    const handleVisibilityOrFocusEvents = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+        if (isOnline) {
+          refetchEvents();
+        }
+      }
+    };
 
-    // Real-time updates for events and marketplace ads
+    window.addEventListener('focus', handleVisibilityOrFocusEvents);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocusEvents);
+
+    if (!isSupabaseConfigured) {
+      return () => {
+        window.removeEventListener('focus', handleVisibilityOrFocusEvents);
+        document.removeEventListener('visibilitychange', handleVisibilityOrFocusEvents);
+      };
+    }
+
+    // Real-time updates for events, deleted_events_registry in app_settings, and marketplace ads
     const channel = supabase
       .channel('realtime_events_ads')
       .on(
@@ -3999,6 +4018,21 @@ export default function App() {
         {
           event: '*',
           schema: 'public',
+          table: 'app_settings'
+        },
+        (payload: any) => {
+          const changedKey = payload?.new?.key || payload?.old?.key;
+          if (!changedKey || changedKey === 'deleted_events_registry') {
+            console.log('[Realtime] Deleted events registry updated - refetching...');
+            refetchEvents();
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
           table: 'marketplace'
         },
         () => {
@@ -4009,6 +4043,8 @@ export default function App() {
       .subscribe();
 
     return () => {
+      window.removeEventListener('focus', handleVisibilityOrFocusEvents);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocusEvents);
       supabase.removeChannel(channel);
     };
   }, [refetchEvents]);
@@ -5042,8 +5078,8 @@ export default function App() {
                   setShowNotificationsModal(nextOpen);
                   if (nextOpen) {
                     fetchAnnouncementsFromDbRef.current();
-                    supabase.auth.getUser().then(({ data: { user }, error }) => {
-                      if (user && !error) setCurrentUser(user);
+                    supabase.auth.getSession().then(({ data: { session }, error }) => {
+                      if (session?.user && !error) setCurrentUser(session.user);
                     }).catch(() => {});
                   }
                 }}
@@ -5287,8 +5323,10 @@ export default function App() {
                         <ForgotPasswordOTP 
                           onBackToLogin={() => navigateTo('login')}
                           onSuccess={() => {
-                            supabase.auth.getUser().then(({ data: { user } }) => {
-                              if (user) setCurrentUser(user);
+                            supabase.auth.getSession().then(({ data: { session } }) => {
+                              if (session?.user) setCurrentUser(session.user);
+                              navigateTo('home');
+                            }).catch(() => {
                               navigateTo('home');
                             });
                           }}
@@ -13642,10 +13680,12 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
                     if (message) setMessage(null);
                   }}
                   onSuccess={() => {
-                    supabase.auth.getUser().then(({ data: { user } }) => {
-                      if (user) {
-                        onSetUser(user);
+                    supabase.auth.getSession().then(({ data: { session } }) => {
+                      if (session?.user) {
+                        onSetUser(session.user);
                       }
+                      onLoginSuccess();
+                    }).catch(() => {
                       onLoginSuccess();
                     });
                   }}
@@ -20296,9 +20336,9 @@ function EventsView({
 }) {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId || null);
   const [events, setEvents] = useState<Event[]>(() => {
-    return propEvents && propEvents.length > 0 ? propEvents : (isSupabaseConfigured ? [] : MOCK_EVENTS);
+    return propEvents !== undefined ? propEvents : (isSupabaseConfigured ? [] : MOCK_EVENTS);
   });
-  const [internalLoading, setInternalLoading] = useState(!propEvents || propEvents.length === 0);
+  const [internalLoading, setInternalLoading] = useState(propEvents === undefined);
   const loading = propLoading !== undefined ? propLoading : internalLoading;
   const [sharedEventId, setSharedEventId] = useState<string | null>(null);
 
@@ -20310,7 +20350,7 @@ function EventsView({
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'tomorrow' | 'weekend'>('all');
 
   useEffect(() => {
-    if (propEvents && propEvents.length > 0) {
+    if (propEvents !== undefined) {
       setEvents(propEvents);
       setInternalLoading(false);
       return;
@@ -20319,14 +20359,16 @@ function EventsView({
     const loadEvents = async () => {
       try {
         const data = await eventService.getEvents();
-        if (data && data.length > 0) {
+        if (isSupabaseConfigured) {
+          setEvents(Array.isArray(data) ? data : []);
+        } else if (data && data.length > 0) {
           setEvents(data);
-        } else if (!isSupabaseConfigured) {
+        } else {
           setEvents(MOCK_EVENTS);
         }
       } catch (err) {
         console.error('Failed to load events:', err);
-        setEvents(MOCK_EVENTS);
+        if (!isSupabaseConfigured) setEvents(MOCK_EVENTS);
       } finally {
         setInternalLoading(false);
       }

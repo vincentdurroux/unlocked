@@ -45,6 +45,97 @@ export function isSameDay(d1?: string | null, d2?: string | null): boolean {
   return false;
 }
 
+const DELETED_EVENTS_STORAGE_KEY = 'unlocked_deleted_events_v1';
+const DELETED_EVENTS_SETTINGS_KEY = 'deleted_events_registry';
+
+interface DeletedEventsRegistry {
+  ids: string[];
+  titles: string[];
+  updatedAt?: number;
+}
+
+function normalizeEventTitle(title?: string | null): string {
+  return (title || '').trim().toLowerCase();
+}
+
+function getLocalDeletedRegistry(): DeletedEventsRegistry {
+  if (typeof window === 'undefined') return { ids: [], titles: [] };
+  try {
+    const raw = localStorage.getItem(DELETED_EVENTS_STORAGE_KEY);
+    if (!raw) return { ids: [], titles: [] };
+    const parsed = JSON.parse(raw);
+    return {
+      ids: Array.isArray(parsed?.ids) ? parsed.ids.map(String) : [],
+      titles: Array.isArray(parsed?.titles) ? parsed.titles.map(normalizeEventTitle).filter(Boolean) : [],
+      updatedAt: typeof parsed?.updatedAt === 'number' ? parsed.updatedAt : 0
+    };
+  } catch {
+    return { ids: [], titles: [] };
+  }
+}
+
+function saveLocalDeletedRegistry(registry: DeletedEventsRegistry): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(
+      DELETED_EVENTS_STORAGE_KEY,
+      JSON.stringify({
+        ids: Array.from(new Set(registry.ids.filter(Boolean))).slice(-500),
+        titles: Array.from(new Set(registry.titles.map(normalizeEventTitle).filter(Boolean))).slice(-500),
+        updatedAt: registry.updatedAt || Date.now()
+      })
+    );
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+async function fetchRemoteDeletedRegistry(): Promise<DeletedEventsRegistry | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', DELETED_EVENTS_SETTINGS_KEY)
+      .maybeSingle();
+
+    if (error || !data?.value) return null;
+    const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+    return {
+      ids: Array.isArray(parsed?.ids) ? parsed.ids.map(String) : [],
+      titles: Array.isArray(parsed?.titles) ? parsed.titles.map(normalizeEventTitle).filter(Boolean) : [],
+      updatedAt: typeof parsed?.updatedAt === 'number' ? parsed.updatedAt : Date.now()
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function syncDeletedRegistryToCloud(registry: DeletedEventsRegistry): Promise<void> {
+  const cleanRegistry: DeletedEventsRegistry = {
+    ids: Array.from(new Set(registry.ids.map(String).filter(Boolean))).slice(-500),
+    titles: Array.from(new Set(registry.titles.map(normalizeEventTitle).filter(Boolean))).slice(-500),
+    updatedAt: Date.now()
+  };
+  saveLocalDeletedRegistry(cleanRegistry);
+
+  if (!isSupabaseConfigured) return;
+  try {
+    await supabase
+      .from('app_settings')
+      .upsert(
+        {
+          key: DELETED_EVENTS_SETTINGS_KEY,
+          value: JSON.stringify(cleanRegistry),
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'key' }
+      );
+  } catch (err) {
+    console.warn('Could not sync deleted_events_registry to app_settings:', err);
+  }
+}
+
 export const eventService = {
   /**
    * SQL TO CREATE THE TABLE IN SUPABASE:
@@ -65,19 +156,6 @@ export const eventService = {
    *   user_id uuid references auth.users(id),
    *   created_at timestamp with time zone default timezone('utc'::text, now()) not null
    * );
-   * 
-   * -- Add RLS policies (adjust according to your needs)
-   * alter table events enable row level security;
-   * 
-   * create policy "Allow public read access" on events for select using (true);
-   * 
-   * create policy "Allow authenticated users to insert events" on events for insert with check (
-   *   auth.uid() is not null
-   * );
-   * 
-   * create policy "Allow users to update/delete their own events" on events for all using (
-   *   auth.uid() = user_id or (select is_admin from public.profiles where id = auth.uid()) = true
-   * );
    */
 
   async getEvents() {
@@ -86,36 +164,76 @@ export const eventService = {
       return [];
     }
 
-    const { data, error } = await supabase
-      .from('events')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const [eventsRes, remoteRegistry] = await Promise.all([
+      supabase
+        .from('events')
+        .select('*')
+        .order('created_at', { ascending: false }),
+      fetchRemoteDeletedRegistry()
+    ]);
+
+    const { data, error } = eventsRes;
 
     if (error) {
       console.error('Error fetching events:', error);
       return [];
     }
 
-    return (data || []).map((item: any) => {
-      const sDate = item.start_date || item.date || 'Upcoming';
-      const eDate = item.end_date && !isSameDay(sDate, item.end_date) ? item.end_date : null;
-      return {
-        ...item,
-        date: sDate,
-        start_date: sDate,
-        end_date: eDate,
-        time: item.start_time || item.time || '',
-        start_time: item.start_time || item.time || '',
-        end_time: item.end_time || null,
-        image: item.image_url || item.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=800',
-        description: item.description,
-        ticket_url: item.ticket_url || null,
-        price: item.price || null,
-        is_free: typeof item.is_free === 'boolean' ? item.is_free : undefined,
-        sources: item.sources || [],
-        coordinates: (item.lat && item.lng) ? { lat: item.lat, lng: item.lng } : undefined
-      };
-    });
+    const localRegistry = getLocalDeletedRegistry();
+    let effectiveIds: Set<string>;
+    let effectiveTitles: Set<string>;
+
+    if (remoteRegistry) {
+      if ((remoteRegistry.updatedAt || 0) >= (localRegistry.updatedAt || 0)) {
+        effectiveIds = new Set(remoteRegistry.ids);
+        effectiveTitles = new Set(remoteRegistry.titles);
+        saveLocalDeletedRegistry(remoteRegistry);
+      } else {
+        const mergedIds = Array.from(new Set([...remoteRegistry.ids, ...localRegistry.ids]));
+        const mergedTitles = Array.from(new Set([...remoteRegistry.titles, ...localRegistry.titles]));
+        effectiveIds = new Set(mergedIds);
+        effectiveTitles = new Set(mergedTitles);
+        saveLocalDeletedRegistry({
+          ids: mergedIds,
+          titles: mergedTitles,
+          updatedAt: localRegistry.updatedAt
+        });
+      }
+    } else {
+      effectiveIds = new Set(localRegistry.ids);
+      effectiveTitles = new Set(localRegistry.titles);
+    }
+
+    return (data || [])
+      .filter((item: any) => {
+        if (!item) return false;
+        if (item.category === '__DELETED__') return false;
+        const itemId = item.id ? String(item.id) : '';
+        const itemTitle = normalizeEventTitle(item.title);
+        if (itemId && effectiveIds.has(itemId)) return false;
+        if (itemTitle && effectiveTitles.has(itemTitle)) return false;
+        return true;
+      })
+      .map((item: any) => {
+        const sDate = item.start_date || item.date || 'Upcoming';
+        const eDate = item.end_date && !isSameDay(sDate, item.end_date) ? item.end_date : null;
+        return {
+          ...item,
+          date: sDate,
+          start_date: sDate,
+          end_date: eDate,
+          time: item.start_time || item.time || '',
+          start_time: item.start_time || item.time || '',
+          end_time: item.end_time || null,
+          image: item.image_url || item.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=800',
+          description: item.description,
+          ticket_url: item.ticket_url || null,
+          price: item.price || null,
+          is_free: typeof item.is_free === 'boolean' ? item.is_free : undefined,
+          sources: item.sources || [],
+          coordinates: (item.lat && item.lng) ? { lat: item.lat, lng: item.lng } : undefined
+        };
+      });
   },
 
   async createEvent(event: any) {
@@ -123,6 +241,16 @@ export const eventService = {
 
     const sDate = event.start_date || event.date;
     const eDate = event.end_date && !isSameDay(sDate, event.end_date) ? event.end_date : null;
+
+    let resolvedUserId = event.user_id;
+    if (!resolvedUserId) {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        resolvedUserId = sessionData?.session?.user?.id;
+      } catch {
+        // Ignore session lookup errors
+      }
+    }
 
     const payload = {
       title: event.title,
@@ -136,7 +264,7 @@ export const eventService = {
       description: event.description,
       lat: event.coordinates?.lat,
       lng: event.coordinates?.lng,
-      user_id: event.user_id
+      user_id: resolvedUserId
     };
 
     const { data, error } = await supabase
@@ -148,6 +276,27 @@ export const eventService = {
       console.error('Error creating event:', error);
       throw error;
     }
+
+    // If this event title was previously in the deleted registry, remove it so it appears across all devices
+    const normTitle = normalizeEventTitle(event.title);
+    if (normTitle) {
+      try {
+        const remote = await fetchRemoteDeletedRegistry();
+        const local = getLocalDeletedRegistry();
+        const currentIds = new Set([...(remote?.ids || []), ...local.ids]);
+        const currentTitles = new Set([...(remote?.titles || []), ...local.titles]);
+        if (currentTitles.has(normTitle)) {
+          currentTitles.delete(normTitle);
+          await syncDeletedRegistryToCloud({
+            ids: Array.from(currentIds),
+            titles: Array.from(currentTitles)
+          });
+        }
+      } catch {
+        // Non-blocking
+      }
+    }
+
     return data;
   },
 
@@ -242,26 +391,92 @@ export const eventService = {
   },
 
   async deleteEvent(id?: string, title?: string) {
+    return this.deleteEventsBulk([{ id, title }]);
+  },
+
+  async deleteEventsBulk(items: Array<{ id?: string; title?: string }>) {
+    if (!items || items.length === 0) return true;
+
+    const idsToDelete = Array.from(
+      new Set(items.map(i => (i.id ? String(i.id).trim() : '')).filter(Boolean))
+    );
+    const titlesToDelete = Array.from(
+      new Set(items.map(i => (i.title ? i.title.trim() : '')).filter(Boolean))
+    );
+
+    // If titles are missing for some IDs, look them up before deleting so title-based sync works across devices
+    if (isSupabaseConfigured && idsToDelete.length > 0 && titlesToDelete.length < idsToDelete.length) {
+      try {
+        const { data: existingRows } = await supabase
+          .from('events')
+          .select('id, title')
+          .in('id', idsToDelete);
+        if (Array.isArray(existingRows)) {
+          existingRows.forEach((row: any) => {
+            if (row?.title && !titlesToDelete.includes(row.title.trim())) {
+              titlesToDelete.push(row.title.trim());
+            }
+          });
+        }
+      } catch {
+        // Non-blocking
+      }
+    }
+
+    // 1. Persist deletion tombstones locally and in Supabase app_settings for cross-device sync
+    try {
+      const remote = await fetchRemoteDeletedRegistry();
+      const local = getLocalDeletedRegistry();
+      const mergedIds = Array.from(new Set([...(remote?.ids || []), ...local.ids, ...idsToDelete]));
+      const mergedTitles = Array.from(
+        new Set([
+          ...(remote?.titles || []),
+          ...local.titles,
+          ...titlesToDelete.map(normalizeEventTitle).filter(Boolean)
+        ])
+      );
+      await syncDeletedRegistryToCloud({
+        ids: mergedIds,
+        titles: mergedTitles
+      });
+    } catch (regErr) {
+      console.warn('Error updating deleted events registry:', regErr);
+    }
+
     if (!isSupabaseConfigured) return true;
 
+    // 2. Delete from Supabase events table (by ID and by title) + fallback soft-delete if RLS blocks hard DELETE
     try {
-      if (id) {
-        await supabase
+      if (idsToDelete.length > 0) {
+        const { data: deletedById } = await supabase
           .from('events')
           .delete()
-          .eq('id', id);
+          .in('id', idsToDelete)
+          .select('id');
+
+        if (!deletedById || deletedById.length < idsToDelete.length) {
+          await supabase
+            .from('events')
+            .update({ category: '__DELETED__' })
+            .in('id', idsToDelete);
+        }
       }
 
-      if (title && title.trim()) {
+      for (const rawTitle of titlesToDelete) {
         await supabase
           .from('events')
           .delete()
-          .ilike('title', title.trim());
+          .ilike('title', rawTitle);
+
+        await supabase
+          .from('ai_discovered_events')
+          .update({ published_to_events: false })
+          .ilike('title', rawTitle);
       }
 
       return true;
     } catch (error) {
-      console.error('Error deleting event:', error);
+      console.error('Error deleting event(s):', error);
       return true;
     }
   },
