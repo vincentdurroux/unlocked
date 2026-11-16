@@ -6452,7 +6452,7 @@ export default function App() {
       {activeView !== 'login' && (
         <nav 
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2px)' }}
-          className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-100 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] xl:hidden"
+          className="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-slate-100 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] xl:hidden after:content-[''] after:absolute after:top-full after:left-0 after:right-0 after:h-24 after:bg-white after:pointer-events-none"
         >
           <div className="flex items-center justify-between px-2 py-2 max-w-xl mx-auto">
             {navItems.map((item) => (

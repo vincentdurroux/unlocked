@@ -2,7 +2,7 @@
 importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
 
 // Service Worker Caching for Unlocked PWA
-const CACHE_NAME = 'unlocked-cache-v2';
+const CACHE_NAME = 'unlocked-cache-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
