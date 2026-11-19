@@ -77,16 +77,16 @@ interface AdminAiEventSearchProps {
   setDiscoveredEventTitle?: (title: string | null) => void;
 }
 
-const MONTH_OPTIONS = [
-  "October 2026",
-  "September 2026",
-  "November 2026",
-  "December 2026",
-  "January 2027",
-  "February 2027",
-  "March 2027",
-  "All Months / Flexible"
-];
+const MONTH_OPTIONS = (() => {
+  const now = new Date();
+  const options: string[] = [];
+  for (let i = 0; i < 8; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    options.push(d.toLocaleString('en-US', { month: 'long', year: 'numeric' }));
+  }
+  options.push("All Months / Flexible");
+  return options;
+})();
 
 const SEARCH_CATEGORIES = [
   { id: "All Categories", name: "✨ All", icon: "✨", query: "Top popular events, concerts, exhibitions, and shows in Valencia" },
@@ -608,7 +608,7 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
 
   // Search console state
   const [aiQuery, setAiQuery] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('October 2026');
+  const [selectedMonth, setSelectedMonth] = useState(MONTH_OPTIONS[0]);
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
   const [isExpatFocus, setIsExpatFocus] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -1490,22 +1490,16 @@ export const AdminAiEventSearch: React.FC<AdminAiEventSearchProps> = ({ onRefetc
                           className="pl-3 pr-7 py-1.5 bg-white/10 hover:bg-white/15 focus:bg-white/20 text-white rounded-xl border border-white/15 focus:border-brand-blue focus:outline-none transition-all text-xs font-bold appearance-none cursor-pointer"
                         >
                           <option value="auto" className="bg-slate-900 text-white font-medium">
-                            ⚡ Auto-Failover ({tavilyConfigured ? 'Tavily Search en direct +' : ''} Multi-modèles résilient)
-                          </option>
-                          <option value="tavily" className="bg-slate-900 text-white font-medium">
-                            🚀 Tavily AI Deep Search (Recherche web avancée en direct)
-                          </option>
-                          <option value="gemini-2.5-flash-lite" className="bg-slate-900 text-white font-medium">
-                            Gemini 2.5 Flash-Lite (Google Search Grounding illimité Free Tier)
+                            ⚡ Auto (Gemini 3.1 Flash-Lite + Google Search Grounding • Éco-Tokens)
                           </option>
                           <option value="gemini-3.1-flash-lite" className="bg-slate-900 text-white font-medium">
-                            Gemini 3.1 Flash-Lite (Rapide)
+                            🛡️ Gemini 3.1 Flash-Lite + Google Search (Zéro Hallucination & Ultra Éco)
                           </option>
-                          <option value="gemini-3.8-flash" className="bg-slate-900 text-white font-medium">
-                            Gemini 3.8 Flash (Recherche approfondie)
+                          <option value="gemini-4-hydrogen" className="bg-slate-900 text-white font-medium">
+                            ✨ Gemini 4 Flash + Google Search (Précision Maximale)
                           </option>
-                          <option value="gemini-flash-latest" className="bg-slate-900 text-white font-medium">
-                            Gemini Flash Latest
+                          <option value="tavily" className="bg-slate-900 text-white font-medium">
+                            🚀 Tavily Web Search + Gemini 3.1 Flash-Lite
                           </option>
                         </select>
                         <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />

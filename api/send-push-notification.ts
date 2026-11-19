@@ -110,7 +110,9 @@ export default async function handler(req: any, res: any) {
         fr: messageStr,
         es: messageStr
       },
-      url: absoluteUrl,
+      // IMPORTANT: Use web_url (not top-level url) so Web Push / Safari opens the web page,
+      // while native iOS APNs opens the installed iOS app directly and routes via data!
+      web_url: absoluteUrl,
       priority: 10,
       // Brand Logo for Android & Web Push
       chrome_web_icon: brandLogoUrl,

@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 
 function detectRequestedLanguages(query: string): string[] {
   if (!query || typeof query !== "string") return [];
@@ -434,17 +434,16 @@ EVALUATION CRITERIA:
      * If matching pros speak that language, ONLY return those who speak it (score 75-100) and omit non-speakers.
      * If none speak it, return other matching pros with lower scores and explain in summaryMessage in English.`;
 
-  // Resilient multi-model fallback chain:
-  // 1. gemini-3.1-flash-lite: Highest daily request limit & lowest latency
-  // 2. gemini-flash-latest: Independent daily quota pool
-  // 3. gemini-3.8-flash: Third independent quota pool
-  const candidateModels = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+  // Resilient low-token model fallback chain:
+  // 1. gemini-3.1-flash-lite: Highest daily request limit, lowest latency & token consumption
+  // 2. gemini-4-hydrogen: Independent Gemini 4 Flash quota pool with high precision
+  const candidateModels = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"];
   let lastError: any = null;
   let responseText = "";
 
-  // Pass 1: Try each model immediately without stalling if one is unavailable
   for (let i = 0; i < candidateModels.length; i++) {
     const modelName = candidateModels[i];
+    const isGemini4 = modelName.startsWith("gemini-4");
     try {
       const response = await ai.models.generateContent({
         model: modelName,
@@ -455,6 +454,11 @@ ${JSON.stringify(proListBrief)}`,
         config: {
           systemInstruction: sysInstruction,
           responseMimeType: "application/json",
+          maxOutputTokens: 1200,
+          thinkingConfig: {
+            thinkingLevel: modelName === "gemini-3.1-flash-lite" ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW
+          },
+          ...(isGemini4 ? {} : { temperature: 0.1 }),
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -474,8 +478,7 @@ ${JSON.stringify(proListBrief)}`,
               }
             },
             required: ["exactMatchFound", "summaryMessage", "results"]
-          },
-          temperature: 0.1
+          }
         }
       });
 
@@ -488,55 +491,6 @@ ${JSON.stringify(proListBrief)}`,
       const nextModel = candidateModels[i + 1];
       if (nextModel) {
         console.log(`[api/search] Model ${modelName} unavailable, seamlessly trying next fallback: ${nextModel}...`);
-      }
-    }
-  }
-
-  // Pass 2: If all models had a simultaneous spike, wait 1s and try one final pass
-  if (!responseText) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    for (const modelName of candidateModels) {
-      try {
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: `User Query: "${query}"
-
-Professionals:
-${JSON.stringify(proListBrief)}`,
-          config: {
-            systemInstruction: sysInstruction,
-            responseMimeType: "application/json",
-            maxOutputTokens: 1000,
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service/symptom, false if not." },
-                summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 20 words) in English from Jane explaining her found results to the user." },
-                results: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING, description: "The professional's ID as a string" },
-                      score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                      reasonUrlExcerpt: { type: Type.STRING, description: "Concise reason in English (max 10 words)" }
-                    },
-                    required: ["id", "score", "reasonUrlExcerpt"]
-                  }
-                }
-              },
-              required: ["exactMatchFound", "summaryMessage", "results"]
-            },
-            temperature: 0.1
-          }
-        });
-
-        if (response && response.text) {
-          responseText = response.text;
-          break;
-        }
-      } catch (err: any) {
-        lastError = err;
       }
     }
   }

@@ -1,0 +1,22 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "TEAM_ID.app.mycityunlocked.ios"
+        ],
+        "components": [
+          {
+            "/": "/*",
+            "comment": "Open all MyCityUnlocked notification and deep link URLs in the native iOS app when installed"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "TEAM_ID.app.mycityunlocked.ios"
+    ]
+  }
+}

@@ -1575,7 +1575,9 @@ Ensure each event contains:
           fr: messageStr,
           es: messageStr
         },
-        url: absoluteUrl,
+        // IMPORTANT: Use web_url (not top-level url) so Web Push / Safari opens the web page,
+        // while native iOS APNs opens the installed iOS app directly and routes via data!
+        web_url: absoluteUrl,
         priority: 10,
         // Brand Logo for Android & Web Push
         chrome_web_icon: brandLogoUrl,
@@ -1736,6 +1738,54 @@ Ensure each event contains:
         }
       }
     ]);
+  });
+
+  // Apple App Site Association for iOS Universal Links (opens iOS app if installed, web fallback otherwise)
+  app.get(["/.well-known/apple-app-site-association", "/apple-app-site-association"], (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+
+    const envAppId = process.env.APPLE_APP_ID ||
+      (process.env.APPLE_TEAM_ID && process.env.IOS_BUNDLE_ID
+        ? `${process.env.APPLE_TEAM_ID}.${process.env.IOS_BUNDLE_ID}`
+        : "");
+
+    if (envAppId) {
+      const appIDs = envAppId.split(",").map((s: string) => s.trim()).filter(Boolean);
+      return res.json({
+        applinks: {
+          details: [
+            {
+              appIDs,
+              components: [{ "/": "/*", comment: "Match all MyCityUnlocked deep links" }]
+            }
+          ]
+        },
+        webcredentials: {
+          apps: appIDs
+        }
+      });
+    }
+
+    const distAasa = path.join(process.cwd(), "dist", ".well-known", "apple-app-site-association");
+    const publicAasa = path.join(process.cwd(), "public", ".well-known", "apple-app-site-association");
+    if (fs.existsSync(distAasa)) {
+      return res.sendFile(distAasa);
+    }
+    if (fs.existsSync(publicAasa)) {
+      return res.sendFile(publicAasa);
+    }
+
+    return res.json({
+      applinks: {
+        details: [
+          {
+            appIDs: ["TEAM_ID.app.mycityunlocked.ios"],
+            components: [{ "/": "/*" }]
+          }
+        ]
+      }
+    });
   });
 
   // OneSignal & PWA Service Worker headers

@@ -78,6 +78,24 @@ class OneSignalService {
       window.addEventListener('onesignal-notification-opened', (e: any) => handleNativePushOpened(e.detail || e));
       window.addEventListener('push-notification-clicked', (e: any) => handleNativePushOpened(e.detail || e));
 
+      // Native iOS Universal Link & Custom URL Scheme (mycityunlocked://) deep link handlers
+      const handleAppDeepLink = (raw: any) => {
+        const incomingUrl = typeof raw === 'string' ? raw : (raw?.url || raw?.launchUrl || raw?.detail?.url || '');
+        if (!incomingUrl) return;
+        this.emitNotificationClick({ launchUrl: incomingUrl }, { url: incomingUrl, launchUrl: incomingUrl }, incomingUrl);
+      };
+      windowAny.handleUniversalLink = handleAppDeepLink;
+      windowAny.handleDeepLink = handleAppDeepLink;
+      window.addEventListener('universal-link-opened', (e: any) => handleAppDeepLink(e.detail || e));
+
+      try {
+        if (windowAny.Capacitor?.Plugins?.App?.addListener) {
+          windowAny.Capacitor.Plugins.App.addListener('appUrlOpen', (data: any) => {
+            handleAppDeepLink(data);
+          });
+        }
+      } catch (_) {}
+
       // Eagerly attach click listener to OneSignal Web SDK v16 deferred queue (initialized in index.html)
       try {
         windowAny.OneSignalDeferred = windowAny.OneSignalDeferred || [];
