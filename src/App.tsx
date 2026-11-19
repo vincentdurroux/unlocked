@@ -2467,7 +2467,18 @@ export default function App() {
     homeFocusRequestRef.current = req;
     setHomeFocusRequest(req);
   }, []);
+  const lastDeepLinkNavigationRef = useRef<number>(0);
+  const hasActiveDeepLinkTargetRef = useRef<boolean>(false);
+  hasActiveDeepLinkTargetRef.current = Boolean(initialEventId || initialProId || initialGuideId || homeFocusRequest);
   const handleNavigateRef = useRef<((view: View | 'back', params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any, focusSection?: 'weekend-events' }) => void) | null>(null);
+
+  const markDeepLinkActivity = React.useCallback(() => {
+    const now = Date.now();
+    lastDeepLinkNavigationRef.current = now;
+    try {
+      localStorage.setItem('last_activity_timestamp', String(now));
+    } catch (_) {}
+  }, []);
 
   // Extract sharing & push notification parameters (?eventId, ?proId, ?guideId, ?focus=weekend-events) on mount and URL changes
   const checkAndApplyUrlDeepLinks = React.useCallback(() => {
@@ -2483,12 +2494,13 @@ export default function App() {
     const cleanEventId = extractCleanId(rawEventId);
     const rawProId = params.get('proId') || hashParams.get('proId');
     const cleanProId = extractCleanId(rawProId);
-    const rawGuideId = params.get('guideId') || hashParams.get('guideId');
+    const rawGuideId = params.get('guideId') || params.get('articleId') || hashParams.get('guideId') || hashParams.get('articleId');
     const cleanGuideId = extractCleanId(rawGuideId);
     const focusParam = (params.get('focus') || hashParams.get('focus') || '').toLowerCase();
     const hashRaw = window.location.hash.toLowerCase();
 
     if (cleanEventId) {
+      markDeepLinkActivity();
       initialViewRef.current = null;
       isProgrammaticNavigationRef.current = true;
       setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
@@ -2497,6 +2509,7 @@ export default function App() {
       setActiveView('events');
       return true;
     } else if (cleanProId) {
+      markDeepLinkActivity();
       initialViewRef.current = null;
       isProgrammaticNavigationRef.current = true;
       setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
@@ -2505,6 +2518,7 @@ export default function App() {
       setActiveView('explore');
       return true;
     } else if (cleanGuideId) {
+      markDeepLinkActivity();
       initialViewRef.current = null;
       isProgrammaticNavigationRef.current = true;
       setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
@@ -2513,6 +2527,7 @@ export default function App() {
       setActiveView('guides');
       return true;
     } else if (focusParam === 'weekend-events' || focusParam === 'weekend' || hashRaw.includes('weekend-events')) {
+      markDeepLinkActivity();
       initialViewRef.current = null;
       isProgrammaticNavigationRef.current = true;
       setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
@@ -2525,7 +2540,7 @@ export default function App() {
       return true;
     }
     return false;
-  }, [requestHomeFocus]);
+  }, [requestHomeFocus, markDeepLinkActivity]);
 
   useEffect(() => {
     checkAndApplyUrlDeepLinks();
@@ -2540,9 +2555,18 @@ export default function App() {
   useEffect(() => {
     const processPushClickDetail = (detail: any) => {
       try {
+        markDeepLinkActivity();
         const data = detail?.data || {};
         const notif = detail?.notification || {};
-        const launchUrl = String(detail?.launchUrl || data?.url || data?.launchUrl || notif?.launchUrl || '').toLowerCase();
+        const rawLaunchUrl = String(
+          detail?.launchUrl ||
+          data?.launchUrl ||
+          data?.url ||
+          notif?.launchURL ||
+          notif?.launchUrl ||
+          ''
+        );
+        const launchUrl = rawLaunchUrl.toLowerCase();
         const notifType = String(data.type || notif?.type || '').toLowerCase();
         const notifTheme = String(data.theme || '').toLowerCase();
         const notifFocus = String(data.focus || '').toLowerCase();
@@ -2550,7 +2574,31 @@ export default function App() {
         const bodyText = String(notif?.body || notif?.content || notif?.contents?.en || data?.body || '').toLowerCase();
         const combinedText = `${headingText} ${bodyText}`;
 
-        const hasSpecificEventId = Boolean(data.eventId || launchUrl.includes('eventid='));
+        let targetEventId =
+          data.eventId ||
+          (data.target_id && (notifType === 'event' || notifTheme.startsWith('event') || launchUrl.includes('event')) ? data.target_id : undefined);
+        let targetProId =
+          data.proId ||
+          (data.target_id && (notifType === 'pro' || notifTheme.startsWith('pro') || launchUrl.includes('proid=') || launchUrl.includes('explore') || launchUrl.includes('directory') || launchUrl.includes('/pro')) ? data.target_id : undefined);
+        let targetGuideId =
+          data.guideId ||
+          data.articleId ||
+          (data.target_id && (notifType === 'guide' || notifType === 'article' || notifTheme.startsWith('guide') || notifTheme.startsWith('article') || launchUrl.includes('guide') || launchUrl.includes('article')) ? data.target_id : undefined);
+
+        if (!targetEventId && rawLaunchUrl) {
+          const match = rawLaunchUrl.match(/[?&]eventId=([^&#]+)/i) || rawLaunchUrl.match(/\/events?\/([^/?#]+)/i);
+          if (match && match[1]) targetEventId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
+        }
+        if (!targetProId && rawLaunchUrl) {
+          const match = rawLaunchUrl.match(/[?&]proId=([^&#]+)/i) || rawLaunchUrl.match(/\/pros?\/([^/?#]+)/i) || rawLaunchUrl.match(/\/explore\/([^/?#]+)/i);
+          if (match && match[1]) targetProId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
+        }
+        if (!targetGuideId && rawLaunchUrl) {
+          const match = rawLaunchUrl.match(/[?&](?:guideId|articleId)=([^&#]+)/i) || rawLaunchUrl.match(/\/(?:guides?|articles?)\/([^/?#]+)/i);
+          if (match && match[1]) targetGuideId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
+        }
+
+        const hasSpecificTarget = Boolean(targetEventId || targetProId || targetGuideId);
 
         const isWeekendPush =
           notifType === 'weekend' ||
@@ -2559,7 +2607,7 @@ export default function App() {
           notifFocus === 'weekend-events' ||
           launchUrl.includes('weekend-events') ||
           launchUrl.includes('focus=weekend') ||
-          (!hasSpecificEventId && (
+          (!hasSpecificTarget && (
             combinedText.includes('weekend highlight') ||
             combinedText.includes('week-end highlight') ||
             combinedText.includes('week end highlight') ||
@@ -2577,38 +2625,22 @@ export default function App() {
 
         if (isWeekendPush) {
           navFn('home', { focusSection: 'weekend-events' });
-          return;
-        }
-
-        let targetEventId = data.eventId || (data.target_id && (notifType === 'event' || launchUrl.includes('event')) ? data.target_id : undefined);
-        let targetProId = data.proId || (data.target_id && (notifType === 'pro' || launchUrl.includes('proid=') || launchUrl.includes('explore')) ? data.target_id : undefined);
-        let targetGuideId = data.guideId || (data.target_id && (notifType === 'guide' || notifType === 'article' || launchUrl.includes('guide')) ? data.target_id : undefined);
-
-        if (!targetEventId && launchUrl) {
-          const match = (detail?.launchUrl || data?.url || '').match(/[?&]eventId=([^&#]+)/i) || (detail?.launchUrl || data?.url || '').match(/\/events\/([^/?#]+)/i);
-          if (match && match[1]) targetEventId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
-        }
-        if (!targetProId && launchUrl) {
-          const match = (detail?.launchUrl || data?.url || '').match(/[?&]proId=([^&#]+)/i) || (detail?.launchUrl || data?.url || '').match(/\/pro\/([^/?#]+)/i);
-          if (match && match[1]) targetProId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
-        }
-        if (!targetGuideId && launchUrl) {
-          const match = (detail?.launchUrl || data?.url || '').match(/[?&]guideId=([^&#]+)/i) || (detail?.launchUrl || data?.url || '').match(/\/guides\/([^/?#]+)/i);
-          if (match && match[1]) targetGuideId = extractCleanId(match[1]) || decodeURIComponent(match[1]);
-        }
-
-        if (targetEventId) {
+        } else if (targetEventId) {
           navFn('events', { eventId: String(targetEventId) });
         } else if (targetGuideId) {
           navFn('guides', { guideId: String(targetGuideId) });
         } else if (targetProId) {
           navFn('explore', { proId: String(targetProId) });
-        } else if (launchUrl.includes('#events') || launchUrl.includes('events')) {
+        } else if (notifType === 'event' || launchUrl.includes('#events') || launchUrl.includes('events')) {
           navFn('events');
-        } else if (launchUrl.includes('#guides') || launchUrl.includes('guides')) {
+        } else if (notifType === 'guide' || notifType === 'article' || launchUrl.includes('#guides') || launchUrl.includes('guides') || launchUrl.includes('article')) {
           navFn('guides');
-        } else if (launchUrl.includes('#directory') || launchUrl.includes('explore')) {
+        } else if (notifType === 'pro' || launchUrl.includes('#directory') || launchUrl.includes('#explore') || launchUrl.includes('explore') || launchUrl.includes('directory')) {
           navFn('explore');
+        } else if (notifType === 'chat' || notifType === 'message' || launchUrl.includes('#messages')) {
+          navFn('messages');
+        } else if (notifType === 'marketplace' || launchUrl.includes('#marketplace')) {
+          navFn('marketplace');
         }
       } catch (err) {
         console.warn('Error handling onesignal notification click:', err);
@@ -2625,7 +2657,7 @@ export default function App() {
     }
 
     return () => window.removeEventListener('onesignal:notification-clicked', handlePushClick);
-  }, []);
+  }, [markDeepLinkActivity]);
 
   const handleMarkChatAsRead = React.useCallback((chatId: string) => {
     setUnreadConversations(prev => {
@@ -4727,6 +4759,25 @@ export default function App() {
     };
 
     const checkInactivity = () => {
+      const searchStr = `${window.location.search}${window.location.hash}`;
+      const hasUrlDeepLink =
+        searchStr.includes('eventId=') ||
+        searchStr.includes('proId=') ||
+        searchStr.includes('guideId=') ||
+        searchStr.includes('articleId=') ||
+        searchStr.includes('focus=weekend') ||
+        searchStr.toLowerCase().includes('weekend-events');
+
+      if (
+        hasUrlDeepLink ||
+        hasActiveDeepLinkTargetRef.current ||
+        homeFocusRequestRef.current ||
+        (Date.now() - lastDeepLinkNavigationRef.current < 15000)
+      ) {
+        updateLastActivity();
+        return;
+      }
+
       const lastActivity = parseInt(localStorage.getItem(lastActivityKey) || '0');
       if (lastActivity && Date.now() - lastActivity > INACTIVITY_TIMEOUT) {
         if (activeViewRef.current !== 'home' && activeViewRef.current !== 'login') {
@@ -5223,6 +5274,7 @@ export default function App() {
                     loading={prosLoading}
                     onNavigate={handleNavigate} 
                     initialProId={initialProId}
+                    deepLinkTrigger={deepLinkTrigger}
                     initialSearch={initialSearch}
                     onModalClose={() => {
                       setInitialProId(null);
@@ -8353,12 +8405,37 @@ function AdminView({
             ? [targetUser.onesignal_player_id]
             : undefined;
 
+          const derivedType = rawCtaType || (iconToSave === 'weekend' ? 'weekend' : iconToSave === 'event' ? 'event' : iconToSave === 'guide' ? 'guide' : (iconToSave === 'pro' || iconToSave === 'star') ? 'pro' : '');
+          const derivedUrl = ctaLinkToSave || (
+            derivedType === 'weekend'
+              ? '/?focus=weekend-events'
+              : derivedType === 'event'
+                ? (targetIdToSave ? `/?eventId=${encodeURIComponent(targetIdToSave)}#events` : '/#events')
+                : (derivedType === 'guide' || derivedType === 'article')
+                  ? (targetIdToSave ? `/?guideId=${encodeURIComponent(targetIdToSave)}#guides` : '/#guides')
+                  : derivedType === 'pro'
+                    ? (targetIdToSave ? `/?proId=${encodeURIComponent(targetIdToSave)}#explore` : '/#explore')
+                    : '/'
+          );
+
           await oneSignalService.sendServerNotification(
             titleToSave.trim() || 'Unlocked Valencia',
             contentToSave.trim(),
-            ctaLinkToSave || '/',
+            derivedUrl,
             targetUserIds,
-            targetSubscriptionIds
+            targetSubscriptionIds,
+            undefined,
+            derivedType
+              ? {
+                  type: derivedType,
+                  focus: derivedType === 'weekend' ? 'weekend-events' : undefined,
+                  target_id: targetIdToSave || undefined,
+                  eventId: derivedType === 'event' && targetIdToSave ? targetIdToSave : undefined,
+                  guideId: (derivedType === 'guide' || derivedType === 'article') && targetIdToSave ? targetIdToSave : undefined,
+                  proId: derivedType === 'pro' && targetIdToSave ? targetIdToSave : undefined,
+                  url: derivedUrl
+                }
+              : undefined
           );
           pushSuccess = true;
         } catch (pushErr: any) {
@@ -16296,6 +16373,7 @@ function ExploreView({
   allPros, 
   onNavigate, 
   initialProId, 
+  deepLinkTrigger,
   initialSearch, 
   onModalClose, 
   scrollToTop, 
@@ -16312,6 +16390,7 @@ function ExploreView({
   allPros: Professional[], 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   initialProId?: string | null, 
+  deepLinkTrigger?: number,
   initialSearch?: string | null,
   onModalClose?: () => void, 
   scrollToTop?: () => void,
@@ -17116,41 +17195,76 @@ function computeProSearchScore(pro: any, searchStr: string): number {
   };
 
   useEffect(() => {
-    if (initialProId && allPros && allPros.length > 0) {
-      const cleanId = extractCleanId(String(initialProId));
-      if (!cleanId) return;
-      const pro = allPros.find(p => String(p.id) === cleanId || (p.name && p.name.toLowerCase().includes(cleanId.toLowerCase())));
-      if (pro) {
-        // 1. Find pro's category and select it
-        const proCats = [
-          ...(Array.isArray(pro.categories) ? pro.categories : []),
-          ...(typeof pro.category === 'string' ? pro.category.split(',') : [])
-        ].map(c => normalizeCategoryName(String(c))).filter(Boolean);
+    if (!isActive || !initialProId || !allPros || allPros.length === 0) return;
 
-        const targetCat = proCats.length > 0 ? proCats[0] : 'All';
-        setSelectedCategory(targetCat);
-        setSearchMode('standard');
-        setSearch('');
-        setDeferredSearch('');
-        setAiResults(null);
+    const rawId = String(initialProId).trim();
+    const cleanId = extractCleanId(rawId) || rawId;
+    const strippedId = cleanId.replace(/^pro-/i, '').toLowerCase();
+    const cleanQuery = cleanId.toLowerCase();
 
-        // 2. Center map on this pro if coordinates exist
-        if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
-          setMapCenter({ lat: pro.coordinates.lat, lng: pro.coordinates.lng });
-          setMapCenterTrigger(prev => prev + 1);
-        }
+    const pro = allPros.find((p: any) => {
+      const pid = String(p.id).toLowerCase();
+      const pName = String(p.name || p.full_name || '').toLowerCase();
+      return (
+        pid === rawId.toLowerCase() ||
+        pid === cleanQuery ||
+        pid.replace(/^pro-/i, '') === strippedId ||
+        (cleanQuery.length > 2 && pName && (pName.includes(cleanQuery) || cleanQuery.includes(pName)))
+      );
+    });
 
-        // 3. Open and expand targeted pro card
-        setExpandedProId(String(pro.id));
-        setTimeout(() => {
-          scrollToPro(pro, true);
-        }, 250);
+    if (pro) {
+      // 1. Find pro's category and reset secondary filters so the pro card is guaranteed visible
+      const proCats = [
+        ...(Array.isArray(pro.categories) ? pro.categories : []),
+        ...(typeof pro.category === 'string' ? pro.category.split(',') : [])
+      ].map(c => normalizeCategoryName(String(c))).filter(Boolean);
 
-        // Clear initialProId from parent so subsequent navigations are clean
-        onModalClose?.();
+      const targetCat = proCats.length > 0 ? proCats[0] : 'All';
+      setSelectedCategory(targetCat);
+      setSelectedLanguage('All');
+      setMinRating(0);
+      setSearchMode('standard');
+      setSearch('');
+      setDeferredSearch('');
+      setAiResults(null);
+
+      // 2. Center map on this pro if coordinates exist
+      if (pro.coordinates && typeof pro.coordinates.lat === 'number' && typeof pro.coordinates.lng === 'number') {
+        setMapCenter({ lat: pro.coordinates.lat, lng: pro.coordinates.lng });
+        setMapCenterTrigger(prev => prev + 1);
       }
+
+      // 3. Expand and run staged scroll passes after display:hidden -> block settles
+      setExpandedProId(String(pro.id));
+      let userInteracted = false;
+      const stopOnUserTouch = () => { userInteracted = true; };
+      window.addEventListener('touchmove', stopOnUserTouch, { passive: true });
+      window.addEventListener('wheel', stopOnUserTouch, { passive: true });
+
+      const t1 = setTimeout(() => {
+        if (!userInteracted) scrollToPro(pro, true);
+      }, 150);
+      const t2 = setTimeout(() => {
+        if (!userInteracted) scrollToPro(pro, true);
+      }, 420);
+      const t3 = setTimeout(() => {
+        if (!userInteracted) scrollToPro(pro, true);
+      }, 750);
+      const tClear = setTimeout(() => {
+        onModalClose?.();
+      }, 900);
+
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+        clearTimeout(tClear);
+        window.removeEventListener('touchmove', stopOnUserTouch);
+        window.removeEventListener('wheel', stopOnUserTouch);
+      };
     }
-  }, [initialProId, allPros]);
+  }, [isActive, initialProId, allPros, deepLinkTrigger]);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(() => {
     try {
       const saved = localStorage.getItem('unlocked_user_location');

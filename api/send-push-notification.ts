@@ -135,9 +135,9 @@ export default async function handler(req: any, res: any) {
       ios_badgeType: "Increase",
       ios_badgeCount: 1,
       data: {
+        ...(customData || {}),
         url: absoluteUrl,
-        launchUrl: absoluteUrl,
-        ...(customData || {})
+        launchUrl: absoluteUrl
       }
     };
 

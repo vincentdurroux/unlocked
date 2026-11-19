@@ -1602,9 +1602,9 @@ Ensure each event contains:
         android_accent_color: "2563EB",
         android_sound: "default",
         data: {
+          ...(req.body?.data || {}),
           url: absoluteUrl,
-          launchUrl: absoluteUrl,
-          ...(req.body?.data || {})
+          launchUrl: absoluteUrl
         }
       };
 

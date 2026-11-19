@@ -545,19 +545,28 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
       }
 
       const themeId = pushComposeModal.themeId;
-      const effectiveType = (type === 'custom' && themeId && ['weekend', 'event', 'article', 'pro'].includes(themeId))
+      const effectiveType = (type === 'custom' && themeId && ['weekend', 'event', 'article', 'guide', 'pro'].includes(themeId))
         ? themeId
         : type;
+
+      const buildDefaultUrlForType = () => {
+        if (effectiveType === 'weekend') return '/?focus=weekend-events';
+        if (effectiveType === 'event') return targetId ? `/?eventId=${encodeURIComponent(String(targetId))}#events` : '/#events';
+        if (effectiveType === 'article' || effectiveType === 'guide') return targetId ? `/?guideId=${encodeURIComponent(String(targetId))}#guides` : '/#guides';
+        if (effectiveType === 'pro') return targetId ? `/?proId=${encodeURIComponent(String(targetId))}#explore` : '/#explore';
+        return '/';
+      };
+
       const effectiveUrl = (url && url !== '/')
         ? url
-        : (effectiveType === 'weekend' ? '/?focus=weekend-events' : '/');
+        : buildDefaultUrlForType();
 
       const resolvedIcon = pushComposeModal.icon || (
         effectiveType === 'weekend'
           ? 'weekend'
           : effectiveType === 'event'
             ? 'event'
-            : effectiveType === 'article'
+            : (effectiveType === 'article' || effectiveType === 'guide')
               ? 'guide'
               : effectiveType === 'pro'
                 ? 'pro'
@@ -602,7 +611,10 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             type: effectiveType,
             theme: themeId || effectiveType,
             focus: effectiveType === 'weekend' ? 'weekend-events' : undefined,
-            target_id: targetId,
+            target_id: targetId || undefined,
+            eventId: effectiveType === 'event' && targetId ? String(targetId) : undefined,
+            guideId: (effectiveType === 'article' || effectiveType === 'guide') && targetId ? String(targetId) : undefined,
+            proId: effectiveType === 'pro' && targetId ? String(targetId) : undefined,
             url: effectiveUrl
           },
           pushComposeModal.channels || ['ios', 'android', 'web']
@@ -731,14 +743,24 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         }
 
         try {
+          const derivedType = annCtaType || (annIcon === 'weekend' ? 'weekend' : annIcon === 'event' ? 'event' : annIcon === 'guide' ? 'guide' : (annIcon === 'pro' || annIcon === 'star') ? 'pro' : undefined);
+          const derivedUrl = derivedType === 'weekend'
+            ? '/?focus=weekend-events'
+            : derivedType === 'event'
+              ? '/#events'
+              : derivedType === 'guide' || derivedType === 'article'
+                ? '/#guides'
+                : derivedType === 'pro'
+                  ? '/#explore'
+                  : '/';
           const res = await oneSignalService.sendServerNotification(
             annTitle.trim() || 'Unlocked Valencia 🌴',
             annContent.trim(),
-            '/',
+            derivedUrl,
             targetUserIds,
             targetSubscriptionIds,
             undefined,
-            undefined,
+            derivedType ? { type: derivedType, focus: derivedType === 'weekend' ? 'weekend-events' : undefined, url: derivedUrl } : undefined,
             ['ios', 'android', 'web']
           );
 
@@ -860,18 +882,27 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
 
   // Open Announcement Push Compose Modal (OneSignal)
   const openAnnouncementPushModal = (ann: any) => {
-    const matchedTheme = CUSTOM_NOTIFICATION_THEMES.find(t => t.icon === ann.icon) || CUSTOM_NOTIFICATION_THEMES[4];
+    const annTypeLower = String(ann?.cta_type || ann?.type || '').toLowerCase();
+    const matchedTheme =
+      CUSTOM_NOTIFICATION_THEMES.find(t => t.id === annTypeLower || t.icon === ann?.icon) ||
+      CUSTOM_NOTIFICATION_THEMES[4];
     const cleanTitle = cleanNotificationText(ann.title);
     const titleToUse = cleanTitle && cleanTitle !== 'Announcement' ? smartTruncate(cleanTitle, 50) : matchedTheme.defaultTitle;
     const bodyToUse = ann.content ? smartTruncate(ann.content, 115) : matchedTheme.defaultBody;
+    const modalType: 'custom' | 'event' | 'article' | 'pro' | 'weekend' =
+      annTypeLower === 'event' ? 'event' :
+      (annTypeLower === 'guide' || annTypeLower === 'article') ? 'article' :
+      annTypeLower === 'pro' ? 'pro' :
+      annTypeLower === 'weekend' ? 'weekend' :
+      'custom';
 
     setPushComposeModal({
       isOpen: true,
-      type: 'custom',
+      type: modalType,
       title: titleToUse,
       body: bodyToUse,
       targetMode: 'all',
-      targetId: String(ann.id),
+      targetId: ann?.target_id ? String(ann.target_id) : undefined,
       url: ann.cta_link || matchedTheme.defaultUrl || '/',
       imageUrl: '',
       entityName: ann.title || 'Announcement',

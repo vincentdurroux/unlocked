@@ -61,12 +61,30 @@ class OneSignalService {
       pollMedian();
       setTimeout(pollMedian, 1000);
 
-      // Native & Bridge Push Opened callbacks (Median/GoNative, Capacitor, Cordova, WKWebView)
+      // Native & Bridge Push Opened callbacks (Median/GoNative, Capacitor, Cordova, WKWebView, iOS SDK)
       const handleNativePushOpened = (payload: any) => {
         try {
-          const data = payload?.additionalData || payload?.data || payload?.custom?.a || payload || {};
-          const launchUrl = payload?.launchUrl || payload?.url || payload?.custom?.u || data?.url || data?.launchUrl || '';
-          this.emitNotificationClick(payload, data, launchUrl);
+          const notifObj = payload?.notification || payload;
+          const data =
+            notifObj?.additionalData ||
+            payload?.additionalData ||
+            payload?.data ||
+            payload?.custom?.a ||
+            payload?.rawPayload?.custom?.a ||
+            payload ||
+            {};
+          const launchUrl =
+            notifObj?.launchURL ||
+            notifObj?.launchUrl ||
+            payload?.launchURL ||
+            payload?.launchUrl ||
+            payload?.url ||
+            payload?.custom?.u ||
+            payload?.rawPayload?.custom?.u ||
+            data?.launchUrl ||
+            data?.url ||
+            '';
+          this.emitNotificationClick(notifObj, data, launchUrl);
         } catch (err) {
           console.warn('[OneSignal] Native push click dispatch error:', err);
         }
@@ -80,7 +98,7 @@ class OneSignalService {
 
       // Native iOS Universal Link & Custom URL Scheme (mycityunlocked://) deep link handlers
       const handleAppDeepLink = (raw: any) => {
-        const incomingUrl = typeof raw === 'string' ? raw : (raw?.url || raw?.launchUrl || raw?.detail?.url || '');
+        const incomingUrl = typeof raw === 'string' ? raw : (raw?.url || raw?.launchUrl || raw?.launchURL || raw?.detail?.url || '');
         if (!incomingUrl) return;
         this.emitNotificationClick({ launchUrl: incomingUrl }, { url: incomingUrl, launchUrl: incomingUrl }, incomingUrl);
       };
@@ -96,7 +114,9 @@ class OneSignalService {
         }
       } catch (_) {}
 
-      // Eagerly attach click listener to OneSignal Web SDK v16 deferred queue (initialized in index.html)
+      // Eagerly attach native Cordova/Capacitor click listeners & OneSignal Web SDK v16 deferred queue
+      this.bindClickListeners();
+      setTimeout(() => this.bindClickListeners(), 500);
       try {
         windowAny.OneSignalDeferred = windowAny.OneSignalDeferred || [];
         windowAny.OneSignalDeferred.push((OS: any) => {
@@ -118,8 +138,8 @@ class OneSignalService {
     const pending = this.pendingNotificationClick;
     this.pendingNotificationClick = null;
     if (!pending) return null;
-    // Ignore stale clicks older than 30 seconds
-    if (Date.now() - pending.ts > 30000) return null;
+    // Ignore stale clicks older than 60 seconds
+    if (Date.now() - pending.ts > 60000) return null;
     return pending;
   }
 
@@ -127,8 +147,20 @@ class OneSignalService {
     return (event: any) => {
       try {
         const notif = event?.notification || event?.result?.notification || event;
-        const data = notif?.additionalData || notif?.data || event?.data || {};
-        const launchUrl = notif?.launchUrl || event?.result?.action?.launchUrl || data?.url || data?.launchUrl || '';
+        const data =
+          notif?.additionalData ||
+          notif?.data ||
+          event?.data ||
+          notif?.rawPayload?.custom?.a ||
+          {};
+        const launchUrl =
+          notif?.launchURL ||
+          notif?.launchUrl ||
+          event?.result?.action?.launchUrl ||
+          event?.result?.action?.launchURL ||
+          data?.launchUrl ||
+          data?.url ||
+          '';
         this.emitNotificationClick(notif, data, launchUrl);
       } catch (clickErr) {
         console.warn('[OneSignal] Notification click handler error:', clickErr);
@@ -161,12 +193,23 @@ class OneSignalService {
     }
 
     try {
-      if (windowAny.OneSignalPlugin?.Notifications?.addEventListener) {
-        windowAny.OneSignalPlugin.Notifications.addEventListener('click', notifHandler);
-      } else if (windowAny.plugins?.OneSignal?.Notifications?.addEventListener) {
-        windowAny.plugins.OneSignal.Notifications.addEventListener('click', notifHandler);
-      } else if (windowAny.plugins?.OneSignal?.setNotificationOpenedHandler) {
-        windowAny.plugins.OneSignal.setNotificationOpenedHandler(notifHandler);
+      if (!windowAny.__mcuNativePushListenerBound) {
+        if (windowAny.Capacitor?.Plugins?.OneSignal?.Notifications?.addEventListener) {
+          windowAny.Capacitor.Plugins.OneSignal.Notifications.addEventListener('click', notifHandler);
+          windowAny.__mcuNativePushListenerBound = true;
+        } else if (windowAny.Capacitor?.Plugins?.OneSignalPlugin?.Notifications?.addEventListener) {
+          windowAny.Capacitor.Plugins.OneSignalPlugin.Notifications.addEventListener('click', notifHandler);
+          windowAny.__mcuNativePushListenerBound = true;
+        } else if (windowAny.OneSignalPlugin?.Notifications?.addEventListener) {
+          windowAny.OneSignalPlugin.Notifications.addEventListener('click', notifHandler);
+          windowAny.__mcuNativePushListenerBound = true;
+        } else if (windowAny.plugins?.OneSignal?.Notifications?.addEventListener) {
+          windowAny.plugins.OneSignal.Notifications.addEventListener('click', notifHandler);
+          windowAny.__mcuNativePushListenerBound = true;
+        } else if (windowAny.plugins?.OneSignal?.setNotificationOpenedHandler) {
+          windowAny.plugins.OneSignal.setNotificationOpenedHandler(notifHandler);
+          windowAny.__mcuNativePushListenerBound = true;
+        }
       }
     } catch (_) {}
   }
