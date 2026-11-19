@@ -9,9 +9,8 @@ import {
   CloudFog, 
   Wind, 
   Droplets, 
-  ChevronDown, 
   MapPin, 
-  Cloud
+  Cloud 
 } from 'lucide-react';
 
 interface WeatherData {
@@ -29,7 +28,7 @@ interface WeatherData {
   }>;
 }
 
-// Helper to translate WMO weather codes to icon and soft warm English label
+// Helper to translate WMO weather codes to icon and label
 function getWeatherDetails(code: number) {
   if (code === 0) {
     return { icon: Sun, label: 'Sunny', color: 'text-amber-500 fill-amber-300/60' };
@@ -115,7 +114,6 @@ export function HeaderWeatherWidget() {
     let isCancelled = false;
 
     const initWeather = async () => {
-      // Default coordinates for Valencia City
       const DEFAULT_LAT = 39.4699;
       const DEFAULT_LNG = -0.3763;
 
@@ -126,13 +124,11 @@ export function HeaderWeatherWidget() {
             const lat = pos.coords.latitude;
             const lng = pos.coords.longitude;
 
-            // Bounding box of the Valencian Community (Castellón, Valencia, Alicante)
             const isInsideValencianCommunity = (lat >= 37.84 && lat <= 40.80) && (lng >= -1.55 && lng <= 0.70);
 
             if (isInsideValencianCommunity) {
               let detectedCity = 'Valencia';
               try {
-                // Reverse-geocode to get the city/municipality name in Valencian Community
                 const geoRes = await fetch(
                   `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
                 );
@@ -151,14 +147,12 @@ export function HeaderWeatherWidget() {
                 fetchWeatherForCoords(lat, lng, detectedCity, true);
               }
             } else {
-              // Outside Valencian Community -> fallback to Valencia
               if (!isCancelled) {
                 fetchWeatherForCoords(DEFAULT_LAT, DEFAULT_LNG, 'Valencia', false);
               }
             }
           },
           () => {
-            // Geolocation not granted or error -> fallback to Valencia
             if (!isCancelled) {
               fetchWeatherForCoords(DEFAULT_LAT, DEFAULT_LNG, 'Valencia', false);
             }
@@ -201,140 +195,99 @@ export function HeaderWeatherWidget() {
 
   return (
     <div className="relative inline-block text-left z-40" ref={containerRef}>
-      {/* Seamless Clean Header Trigger Button - enlarged slightly for better comfort and readability */}
+      {/* Compact Minimal Trigger Button */}
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="group flex items-center gap-2 py-1.5 px-3 sm:px-3.5 rounded-2xl transition-all duration-200 cursor-pointer select-none shrink-0 text-slate-800 hover:text-slate-950 hover:bg-slate-100/80 active:scale-98"
+        className="flex items-center gap-1.5 px-2 py-1 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer select-none shrink-0"
         title={`${locationName} Weather`}
         aria-label={`${locationName} Weather`}
       >
-        <div className="flex flex-col items-center leading-tight">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <CurrentIcon className={`w-5 h-5 sm:w-6 sm:h-6 ${currentDetails.color} shrink-0 transition-transform group-hover:scale-110`} />
-            <span className="font-black text-slate-900 tracking-tight text-base sm:text-lg">
-              {weather.temp}°C
-            </span>
-          </div>
-          <span className="font-extrabold text-slate-600 text-[11px] sm:text-xs tracking-tight -mt-0.5 flex items-center gap-0.5 max-w-[90px] truncate">
-            {isGeolocated && <MapPin className="w-2.5 h-2.5 text-emerald-600 shrink-0 inline" />}
+        <CurrentIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${currentDetails.color} shrink-0`} />
+        <div className="flex flex-col items-start leading-none">
+          <span className="text-xs sm:text-sm font-bold font-display text-brand-navy tabular-nums">
+            {weather.temp}°C
+          </span>
+          <span className="text-[9px] font-semibold text-slate-400 flex items-center gap-0.5 max-w-[64px] truncate mt-0.5">
+            {isGeolocated && <MapPin className="w-2 h-2 text-emerald-500 shrink-0" />}
             <span className="truncate">{locationName}</span>
           </span>
         </div>
-
-        <ChevronDown 
-          className={`w-4 h-4 sm:w-4.5 sm:h-4.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-900' : 'group-hover:text-slate-600'}`} 
-        />
       </button>
 
-      {/* Soft Warm Minimal Dropdown Panel - Responsive positioning: centered bottom sheet/card on mobile, aligned popup on desktop */}
+      {/* Clean White Dropdown Popover */}
       <AnimatePresence>
         {isOpen && (
-          <>
-            {/* Mobile backdrop to prevent tap-through & allow easy dismissal */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsOpen(false)}
-              className="fixed inset-0 bg-slate-900/25 backdrop-blur-[2px] z-40 sm:hidden"
-            />
-
-            <motion.div
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.95 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 top-20 sm:top-full mt-0 sm:mt-2.5 max-w-sm sm:max-w-none sm:w-80 mx-auto sm:mx-0 rounded-3xl bg-white border border-[#EFE5D5] shadow-2xl p-4 sm:p-5 z-50 text-slate-800"
-            >
-              {/* Soft Warm Header Bar */}
-              <div className="flex items-center justify-between pb-3 border-b border-[#F4EDE0]">
-                <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                  <MapPin className={`w-4 h-4 ${isGeolocated ? 'text-emerald-600' : 'text-amber-500'}`} />
-                  <span className="tracking-tight">
-                    {locationName}{locationName.toLowerCase() === 'valencia' ? ', Spain' : ', Comunitat Valenciana'}
-                  </span>
-                  {isGeolocated && (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-md">
-                      GPS
-                    </span>
-                  )}
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.97 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+            className="absolute right-0 top-full mt-2 w-[276px] sm:w-[292px] rounded-2xl bg-white border border-slate-100 shadow-xl p-4 z-50 text-slate-800 space-y-3.5"
+          >
+            {/* Header: Location & Current Temperature */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1 text-xs font-bold text-brand-navy truncate">
+                  <MapPin className="w-3.5 h-3.5 text-brand-blue shrink-0" />
+                  <span className="truncate">{locationName}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-amber-800/85 bg-[#FFF7E8] px-2.5 py-0.5 rounded-full border border-[#F3E5C8]">
-                    {currentDetails.label}
-                  </span>
-                  {/* Close button on mobile */}
-                  <button
-                    onClick={() => setIsOpen(false)}
-                    className="sm:hidden p-1 -mr-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                    aria-label="Close weather"
-                  >
-                    <span className="text-sm font-bold leading-none px-1">✕</span>
-                  </button>
-                </div>
+                <p className="text-[11px] font-medium text-slate-400 mt-0.5">
+                  {currentDetails.label} · H:{weather.tempMax}° L:{weather.tempMin}°
+                </p>
               </div>
-
-              {/* Main Temperature Display */}
-              <div className="py-4 flex items-center justify-between">
-                <div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-black text-slate-900 font-display tracking-tight">
-                      {weather.temp}°C
-                    </span>
-                  </div>
-                  <p className="text-xs font-medium text-slate-500 mt-1">
-                    High <span className="font-semibold text-slate-700">{weather.tempMax}°</span> • Low <span className="font-semibold text-slate-700">{weather.tempMin}°</span>
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-[#FFFBF0] border border-[#F5EAD4] shrink-0 shadow-sm">
-                  <CurrentIcon className={`w-10 h-10 ${currentDetails.color}`} />
-                </div>
-              </div>
-
-              {/* Soft Metrics */}
-              <div className="grid grid-cols-2 gap-3 py-2.5 px-3.5 bg-[#FAF7F0]/80 rounded-2xl border border-[#F0E8D8] text-xs text-center mb-4">
-                <div>
-                  <span className="text-[11px] text-slate-400 font-medium block">Humidity</span>
-                  <span className="font-bold text-slate-800 text-sm flex items-center justify-center gap-1.5 mt-0.5">
-                    <Droplets className="w-3.5 h-3.5 text-sky-500" />
-                    {weather.humidity}%
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-400 font-medium block">Wind</span>
-                  <span className="font-bold text-slate-800 text-sm flex items-center justify-center gap-1.5 mt-0.5">
-                    <Wind className="w-3.5 h-3.5 text-teal-600" />
-                    {weather.windSpeed} km/h
-                  </span>
-                </div>
-              </div>
-
-              {/* 3-Day Forecast */}
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
-                  3-Day Forecast
+              <div className="flex items-center gap-1.5 shrink-0">
+                <CurrentIcon className={`w-6 h-6 ${currentDetails.color}`} />
+                <span className="text-2xl font-bold font-display text-brand-navy tabular-nums leading-none">
+                  {weather.temp}°
                 </span>
-                <div className="grid grid-cols-3 gap-2">
-                  {weather.forecast.map((f, i) => {
-                    const details = getWeatherDetails(f.code);
-                    const IconComp = details.icon;
-                    return (
-                      <div 
-                        key={i} 
-                        className="p-2.5 rounded-2xl bg-[#FAF8F3] border border-[#F0E6D5] flex flex-col items-center text-center shadow-2xs hover:bg-[#F7F3EA] transition-colors"
-                      >
-                        <span className="text-[11px] font-bold text-slate-700">{f.day}</span>
-                        <IconComp className={`w-4.5 h-4.5 ${details.color} my-1.5`} />
-                        <span className="text-xs font-extrabold text-slate-800">{f.max}°</span>
-                        <span className="text-[10px] font-medium text-slate-400">{f.min}°</span>
-                      </div>
-                    );
-                  })}
+              </div>
+            </div>
+
+            {/* Compact Metrics Row */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-100">
+                <Droplets className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                <div className="leading-tight">
+                  <span className="text-[10px] text-slate-400 block">Humidity</span>
+                  <span className="text-xs font-bold text-brand-navy tabular-nums">{weather.humidity}%</span>
                 </div>
               </div>
-            </motion.div>
-          </>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-100">
+                <Wind className="w-3.5 h-3.5 text-teal-500 shrink-0" />
+                <div className="leading-tight">
+                  <span className="text-[10px] text-slate-400 block">Wind</span>
+                  <span className="text-xs font-bold text-brand-navy tabular-nums">{weather.windSpeed} km/h</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3-Day Forecast */}
+            <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100">
+              {weather.forecast.map((f, i) => {
+                const details = getWeatherDetails(f.code);
+                const IconComp = details.icon;
+                return (
+                  <div
+                    key={i}
+                    className={`flex flex-col items-center gap-1.5 py-2 px-1.5 rounded-xl text-center ${
+                      i === 0 ? 'bg-brand-blue/5' : 'bg-slate-50/70'
+                    }`}
+                  >
+                    <span className={`text-[10px] font-bold truncate max-w-full ${
+                      i === 0 ? 'text-brand-blue' : 'text-slate-500'
+                    }`}>
+                      {f.day}
+                    </span>
+                    <IconComp className={`w-4 h-4 ${details.color}`} />
+                    <div className="text-[11px] font-bold text-brand-navy tabular-nums">
+                      {f.max}° <span className="font-medium text-slate-400">{f.min}°</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

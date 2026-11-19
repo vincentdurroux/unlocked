@@ -14041,11 +14041,25 @@ function HomeView({
   const partnerMode = propPartnerMode || partnerService.getHighlightMode();
 
   const [sec1Idx, setSec1Idx] = useState(0);
+  const [sec1Direction, setSec1Direction] = useState<1 | -1>(1);
+  const [sec1DragOffset, setSec1DragOffset] = useState(0);
+  const [isSec1Touching, setIsSec1Touching] = useState(false);
+  const sec1TouchStartRef = useRef<{ x: number; y: number; time: number; active: boolean; isHorizontal: boolean }>({
+    x: 0,
+    y: 0,
+    time: 0,
+    active: false,
+    isHorizontal: false,
+  });
+  const sec1DidSwipeRef = useRef(false);
+
   const [sec2Idx, setSec2Idx] = useState(0);
   const [sec3Idx, setSec3Idx] = useState(0);
   const [sec4Idx, setSec4Idx] = useState(0);
 
   const [partnerCarouselIdx, setPartnerCarouselIdx] = useState(0);
+  const partnerTouchStartRef = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
+  const partnerDidSwipeRef = useRef(false);
   const [expandedLandingProId, setExpandedLandingProId] = useState<string | null>(null);
   const [expandedLandingPartner, setExpandedLandingPartner] = useState(false);
 
@@ -14082,15 +14096,42 @@ function HomeView({
     loadTestimonies();
   }, [allPros]);
 
-  // Auto-rotate "Meet a local Pro" carousel every 15 seconds
+  // Preload highlighted pro photos so swiping "Meet a local Pro" is instantaneous
   useEffect(() => {
-    if (expandedLandingProId) return; // Pause auto-rotation when user expands a pro
+    if (!allPros || allPros.length === 0) return;
+    const dbHighlighted = allPros.filter(
+      p => p.is_highlighted === true || (p.is_highlighted as any) === 'true' || (p.is_highlighted as any) === 1
+    );
+    const prosToPreload = dbHighlighted.length > 0
+      ? dbHighlighted
+      : allPros.filter(p => highlightedProIds.includes(String(p.id)));
+    prosToPreload.forEach((p) => {
+      if (!p.image) return;
+      const img = new Image();
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.onload = () => img.decode?.().catch(() => {});
+      img.src = p.image;
+    });
+  }, [allPros, highlightedProIds]);
+
+  // Auto-rotate "Meet a local Pro" carousel every 15 seconds (pauses while touching or expanded, resets on manual swipe)
+  useEffect(() => {
+    if (expandedLandingProId || isSec1Touching) return;
     const timer = setInterval(() => {
+      setSec1Direction(1);
       setSec1Idx(prev => prev + 1);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [expandedLandingProId, isSec1Touching, sec1Idx]);
+
+  // Auto-rotate "Tips of the Week" guide carousel every 15 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
       setSec3Idx(prev => prev + 1);
     }, 15000);
     return () => clearInterval(timer);
-  }, [expandedLandingProId]);
+  }, []);
 
   // Body scroll lock and Escape key listener when pro modal is open
   useEffect(() => {
@@ -14326,7 +14367,31 @@ function HomeView({
             // Case A: Multi-Partner Carousel Only Mode
             if (activePartners.length > 0 && partnerMode === 'partner' && currentPartner) {
               return (
-                <div className="h-full">
+                <div
+                  className="h-full touch-pan-y"
+                  onTouchStart={(e) => {
+                    partnerTouchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
+                    partnerDidSwipeRef.current = false;
+                  }}
+                  onTouchEnd={(e) => {
+                    if (activePartners.length <= 1) return;
+                    const dx = e.changedTouches[0].clientX - partnerTouchStartRef.current.x;
+                    const dy = e.changedTouches[0].clientY - partnerTouchStartRef.current.y;
+                    const elapsed = Date.now() - partnerTouchStartRef.current.time;
+                    const isQuickFlick = Math.abs(dx) > 20 && elapsed < 220;
+                    if ((Math.abs(dx) > 32 || isQuickFlick) && Math.abs(dx) > Math.abs(dy) * 1.15) {
+                      partnerDidSwipeRef.current = true;
+                      if (dx < 0) {
+                        setPartnerCarouselIdx(prev => (prev + 1) % activePartners.length);
+                      } else {
+                        setPartnerCarouselIdx(prev => (prev - 1 + activePartners.length) % activePartners.length);
+                      }
+                      setTimeout(() => {
+                        partnerDidSwipeRef.current = false;
+                      }, 250);
+                    }
+                  }}
+                >
                   <PartnerHighlightCard
                     partner={currentPartner}
                     isExpanded={expandedLandingPartner}
@@ -14341,6 +14406,10 @@ function HomeView({
                       setPartnerCarouselIdx(prev => (prev - 1 + activePartners.length) % activePartners.length);
                     }}
                     onToggleExpand={() => {
+                      if (partnerDidSwipeRef.current) {
+                        partnerDidSwipeRef.current = false;
+                        return;
+                      }
                       setExpandedLandingPartner(prev => !prev);
                       setExpandedLandingProId(null);
                       if (!expandedLandingPartner) {
@@ -14391,7 +14460,36 @@ function HomeView({
             // Render partner item inside carousel
             if (currentItem.type === 'partner') {
               return (
-                <div className="relative h-full">
+                <div
+                  className="relative h-full touch-pan-y"
+                  onTouchStart={(e) => {
+                    partnerTouchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
+                    partnerDidSwipeRef.current = false;
+                    setIsSec1Touching(true);
+                  }}
+                  onTouchEnd={(e) => {
+                    setIsSec1Touching(false);
+                    if (section1Items.length < 2) return;
+                    const dx = e.changedTouches[0].clientX - partnerTouchStartRef.current.x;
+                    const dy = e.changedTouches[0].clientY - partnerTouchStartRef.current.y;
+                    const elapsed = Date.now() - partnerTouchStartRef.current.time;
+                    const isQuickFlick = Math.abs(dx) > 20 && elapsed < 220;
+                    if ((Math.abs(dx) > 32 || isQuickFlick) && Math.abs(dx) > Math.abs(dy) * 1.15) {
+                      partnerDidSwipeRef.current = true;
+                      if (dx < 0) {
+                        setSec1Direction(1);
+                        setSec1Idx((activeIndex + 1) % section1Items.length);
+                      } else {
+                        setSec1Direction(-1);
+                        setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
+                      }
+                      setTimeout(() => {
+                        partnerDidSwipeRef.current = false;
+                      }, 250);
+                    }
+                  }}
+                  onTouchCancel={() => setIsSec1Touching(false)}
+                >
                   <PartnerHighlightCard
                     partner={currentItem.data}
                     isExpanded={expandedLandingPartner}
@@ -14406,6 +14504,10 @@ function HomeView({
                       setPartnerCarouselIdx(prev => (prev - 1 + activePartners.length) % activePartners.length);
                     }}
                     onToggleExpand={() => {
+                      if (partnerDidSwipeRef.current) {
+                        partnerDidSwipeRef.current = false;
+                        return;
+                      }
                       setExpandedLandingPartner(prev => !prev);
                       setExpandedLandingProId(null);
                       if (!expandedLandingPartner) {
@@ -14420,6 +14522,7 @@ function HomeView({
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
+                          setSec1Direction(-1);
                           setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
                         }}
                         className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/70 backdrop-blur shadow text-slate-400 hover:text-emerald-700 hover:border-emerald-200 transition-all z-30 cursor-pointer"
@@ -14429,6 +14532,7 @@ function HomeView({
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
+                          setSec1Direction(1);
                           setSec1Idx((activeIndex + 1) % section1Items.length);
                         }}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/70 backdrop-blur shadow text-slate-400 hover:text-emerald-700 hover:border-emerald-200 transition-all z-30 cursor-pointer"
@@ -14477,13 +14581,80 @@ function HomeView({
             return (
               <div 
                 className={cn(
-                  "flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-sky-50/25 to-blue-50/15 border transition-all duration-300 cursor-pointer group relative overflow-hidden h-full min-h-[480px]",
+                  "flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-sky-50/25 to-blue-50/15 border transition-all duration-300 cursor-pointer group relative overflow-hidden h-full min-h-[480px] touch-pan-y select-none",
                   isCardProExpanded
                     ? "border-brand-blue ring-2 ring-brand-blue/30 shadow-xl bg-blue-50/35"
                     : "border-blue-100/90 hover:border-brand-blue/40 shadow-sm hover:shadow-xl hover:-translate-y-1"
                 )}
                 id="discover-card-pro"
+                onTouchStart={(e) => {
+                  sec1TouchStartRef.current = {
+                    x: e.touches[0].clientX,
+                    y: e.touches[0].clientY,
+                    time: Date.now(),
+                    active: true,
+                    isHorizontal: false,
+                  };
+                  sec1DidSwipeRef.current = false;
+                  setIsSec1Touching(true);
+                }}
+                onTouchMove={(e) => {
+                  if (!sec1TouchStartRef.current.active || section1Items.length < 2) return;
+                  const dx = e.touches[0].clientX - sec1TouchStartRef.current.x;
+                  const dy = e.touches[0].clientY - sec1TouchStartRef.current.y;
+                  if (!sec1TouchStartRef.current.isHorizontal) {
+                    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+                      if (Math.abs(dx) > Math.abs(dy) * 1.1) {
+                        sec1TouchStartRef.current.isHorizontal = true;
+                        sec1DidSwipeRef.current = true;
+                      } else {
+                        sec1TouchStartRef.current.active = false;
+                        setSec1DragOffset(0);
+                        setIsSec1Touching(false);
+                        return;
+                      }
+                    }
+                  }
+                  if (sec1TouchStartRef.current.isHorizontal) {
+                    const clamped = Math.max(-72, Math.min(72, dx * 0.55));
+                    setSec1DragOffset(clamped);
+                  }
+                }}
+                onTouchEnd={(e) => {
+                  const wasHorizontal = sec1TouchStartRef.current.isHorizontal;
+                  const endX = e.changedTouches?.[0]?.clientX ?? sec1TouchStartRef.current.x;
+                  const dx = endX - sec1TouchStartRef.current.x;
+                  const elapsed = Date.now() - sec1TouchStartRef.current.time;
+                  const isQuickFlick = Math.abs(dx) > 18 && elapsed < 220;
+                  sec1TouchStartRef.current.active = false;
+                  sec1TouchStartRef.current.isHorizontal = false;
+                  setSec1DragOffset(0);
+                  setIsSec1Touching(false);
+
+                  if (wasHorizontal && section1Items.length >= 2) {
+                    if (dx < -30 || (dx < 0 && isQuickFlick)) {
+                      setSec1Direction(1);
+                      setSec1Idx((activeIndex + 1) % section1Items.length);
+                    } else if (dx > 30 || (dx > 0 && isQuickFlick)) {
+                      setSec1Direction(-1);
+                      setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
+                    }
+                    setTimeout(() => {
+                      sec1DidSwipeRef.current = false;
+                    }, 250);
+                  }
+                }}
+                onTouchCancel={() => {
+                  sec1TouchStartRef.current.active = false;
+                  sec1TouchStartRef.current.isHorizontal = false;
+                  setSec1DragOffset(0);
+                  setIsSec1Touching(false);
+                }}
                 onClick={() => {
+                  if (sec1DidSwipeRef.current) {
+                    sec1DidSwipeRef.current = false;
+                    return;
+                  }
                   setExpandedLandingPartner(false);
                   setExpandedLandingProId(String(proToShow.id));
                 }}
@@ -14507,106 +14678,144 @@ function HomeView({
                     </div>
                   </div>
 
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.div
-                      key={activeIndex}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{ duration: 0.2 }}
-                      className="h-full flex flex-col items-center justify-center text-center flex-1 my-auto"
-                    >
-                      <div className="flex-1 flex flex-col justify-center items-center h-full w-full">
-                        {currentItem.type === 'testimony' ? (
-                          <div className="space-y-4 flex flex-col h-full items-center justify-center w-full">
-                            <div className="flex items-center gap-3">
-                              <img 
-                                src={proToShow.image || "/people.png"} 
-                                alt={proToShow.name} 
-                                className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover ring-2 ring-blue-100 shadow-md shrink-0"
-                                referrerPolicy="no-referrer"
-                              />
-                              <div className="text-left min-w-0">
-                                <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors max-w-[220px] truncate leading-tight uppercase tracking-tight text-xs sm:text-sm">{proToShow.name}</h4>
-                                <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-tight truncate">{proToShow.category}</p>
+                  <div
+                    className="flex-1 flex flex-col justify-center will-change-transform"
+                    style={{
+                      transform: sec1DragOffset !== 0 ? `translate3d(${sec1DragOffset}px, 0, 0)` : undefined,
+                      transition: sec1DragOffset === 0 ? 'transform 0.2s cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
+                    }}
+                  >
+                    <AnimatePresence mode="wait" initial={false} custom={sec1Direction}>
+                      <motion.div
+                        key={activeIndex}
+                        custom={sec1Direction}
+                        variants={{
+                          enter: (dir: number) => ({ opacity: 0, x: dir > 0 ? 44 : -44 }),
+                          center: { opacity: 1, x: 0 },
+                          exit: (dir: number) => ({ opacity: 0, x: dir > 0 ? -44 : 44 }),
+                        }}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                        className="h-full flex flex-col items-center justify-center text-center flex-1 my-auto"
+                      >
+                        <div className="flex-1 flex flex-col justify-center items-center h-full w-full">
+                          {currentItem.type === 'testimony' ? (
+                            <div className="space-y-4 flex flex-col h-full items-center justify-center w-full">
+                              <div className="flex items-center gap-3">
+                                <img 
+                                  src={proToShow.image || "/people.png"} 
+                                  alt={proToShow.name} 
+                                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover ring-2 ring-blue-100 shadow-md shrink-0"
+                                  referrerPolicy="no-referrer"
+                                  decoding="async"
+                                  draggable={false}
+                                  onError={(e) => {
+                                    const img = e.currentTarget as HTMLImageElement;
+                                    if (!img.src.endsWith('/people.png')) img.src = '/people.png';
+                                  }}
+                                />
+                                <div className="text-left min-w-0">
+                                  <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors max-w-[220px] truncate leading-tight uppercase tracking-tight text-xs sm:text-sm">{proToShow.name}</h4>
+                                  <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-tight truncate">{proToShow.category}</p>
+                                </div>
+                              </div>
+
+                              <div className="relative bg-white/90 p-5 rounded-2xl border border-blue-100/80 shadow-xs backdrop-blur-xs text-left w-full">
+                                <p className="text-xs sm:text-[13px] text-slate-700 leading-relaxed font-medium italic">
+                                  "{commentToShow}"
+                                </p>
+                                <div className="mt-3 flex items-center justify-end gap-2">
+                                  <div className="h-[1px] w-4 bg-brand-blue/20" />
+                                  <span className="text-[10px] font-black text-brand-blue uppercase tracking-tight">
+                                    {formatName(authorToShow)}
+                                  </span>
+                                </div>
                               </div>
                             </div>
+                          ) : (
+                            <div className="flex flex-col space-y-3.5 flex-1 items-center justify-center h-full w-full py-2">
+                              <div className="relative">
+                                <img 
+                                  src={proToShow.image || "/people.png"} 
+                                  alt={proToShow.name} 
+                                  className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-3xl object-cover shadow-lg ring-4 ring-white border border-blue-100/80 group-hover:scale-105 transition-all duration-300"
+                                  referrerPolicy="no-referrer"
+                                  decoding="async"
+                                  draggable={false}
+                                  onError={(e) => {
+                                    const img = e.currentTarget as HTMLImageElement;
+                                    if (!img.src.endsWith('/people.png')) img.src = '/people.png';
+                                  }}
+                                />
+                              </div>
+                              <div className="space-y-1 text-center w-full px-2">
+                                <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-base md:text-lg leading-tight truncate">{proToShow.name}</h4>
+                                <p className="text-xs font-bold text-brand-blue uppercase tracking-wide truncate">{proToShow.category}</p>
+                                
+                                {((proToShow.review_count && proToShow.review_count > 0) || proApprovedTestimoniesCount > 0) ? (
+                                  <div className="flex items-center gap-1 pt-1 justify-center">
+                                    {[...Array(5)].map((_, i) => (
+                                      <Star 
+                                        key={i} 
+                                        className={`w-3.5 h-3.5 ${i < Math.floor(ratingToShow) ? 'text-brand-yellow fill-current' : 'text-slate-200'}`} 
+                                      />
+                                    ))}
+                                    <span className="text-[11px] text-slate-500 font-extrabold ml-1">({reviewCountToShow})</span>
+                                  </div>
+                                ) : null}
 
-                            <div className="relative bg-white/90 p-5 rounded-2xl border border-blue-100/80 shadow-xs backdrop-blur-xs text-left w-full">
-                              <p className="text-xs sm:text-[13px] text-slate-700 leading-relaxed font-medium italic">
-                                "{commentToShow}"
-                              </p>
-                              <div className="mt-3 flex items-center justify-end gap-2">
-                                <div className="h-[1px] w-4 bg-brand-blue/20" />
-                                <span className="text-[10px] font-black text-brand-blue uppercase tracking-tight">
-                                  {formatName(authorToShow)}
-                                </span>
+                                {proToShow.top_qualities && proToShow.top_qualities.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 pt-2 justify-center">
+                                    {proToShow.top_qualities.slice(0, 2).map((quality: string) => {
+                                      const cfg = getQualityConfig(quality);
+                                      const QualityIcon = cfg.icon;
+                                      return (
+                                        <span 
+                                          key={quality} 
+                                          className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[9px] font-bold border ${cfg.color} shrink-0 bg-white/80 shadow-3xs`}
+                                        >
+                                          <QualityIcon className={`w-3 h-3 ${cfg.iconColor} shrink-0`} />
+                                          {quality}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col space-y-3.5 flex-1 items-center justify-center h-full w-full py-2">
-                            <div className="relative">
-                              <img 
-                                src={proToShow.image || "/people.png"} 
-                                alt={proToShow.name} 
-                                className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-3xl object-cover shadow-lg ring-4 ring-white border border-blue-100/80 group-hover:scale-105 transition-all duration-300"
-                                referrerPolicy="no-referrer"
-                              />
-                            </div>
-                            <div className="space-y-1 text-center w-full px-2">
-                              <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-base md:text-lg leading-tight truncate">{proToShow.name}</h4>
-                              <p className="text-xs font-bold text-brand-blue uppercase tracking-wide truncate">{proToShow.category}</p>
-                              
-                              {((proToShow.review_count && proToShow.review_count > 0) || proApprovedTestimoniesCount > 0) ? (
-                                <div className="flex items-center gap-1 pt-1 justify-center">
-                                  {[...Array(5)].map((_, i) => (
-                                    <Star 
-                                      key={i} 
-                                      className={`w-3.5 h-3.5 ${i < Math.floor(ratingToShow) ? 'text-brand-yellow fill-current' : 'text-slate-200'}`} 
-                                    />
-                                  ))}
-                                  <span className="text-[11px] text-slate-500 font-extrabold ml-1">({reviewCountToShow})</span>
-                                </div>
-                              ) : null}
-
-                              {proToShow.top_qualities && proToShow.top_qualities.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 pt-2 justify-center">
-                                  {proToShow.top_qualities.slice(0, 2).map((quality: string) => {
-                                    const cfg = getQualityConfig(quality);
-                                    const QualityIcon = cfg.icon;
-                                    return (
-                                      <span 
-                                        key={quality} 
-                                        className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[9px] font-bold border ${cfg.color} shrink-0 bg-white/80 shadow-3xs`}
-                                      >
-                                        <QualityIcon className={`w-3 h-3 ${cfg.iconColor} shrink-0`} />
-                                        {quality}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  </AnimatePresence>
+                          )}
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
 
                   {/* Clean Footer */}
                   <div className="pt-3 border-t border-blue-100/70 flex items-center justify-between mt-auto w-full">
                     {section1Items.length > 1 && (
                       <div className="flex items-center gap-1.5">
-                        {section1Items.slice(0, 6).map((_, idx) => (
-                          <span 
-                            key={idx}
-                            className={cn(
-                              "h-1.5 rounded-full transition-all duration-300",
-                              idx === activeIndex ? "w-5 bg-brand-blue" : "w-1.5 bg-blue-200"
-                            )}
-                          />
-                        ))}
+                        {section1Items.slice(0, 6).map((_, idx) => {
+                          const isDotActive = section1Items.length <= 6
+                            ? idx === activeIndex
+                            : idx === activeIndex % 6;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              aria-label={`Slide ${idx + 1}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSec1Direction(idx >= activeIndex ? 1 : -1);
+                                setSec1Idx(idx);
+                              }}
+                              className={cn(
+                                "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
+                                isDotActive ? "w-5 bg-brand-blue" : "w-1.5 bg-blue-200 hover:bg-blue-300"
+                              )}
+                            />
+                          );
+                        })}
                       </div>
                     )}
                     <div className="text-[11px] font-bold text-brand-blue flex items-center gap-1 group-hover:translate-x-0.5 transition-transform ml-auto">
@@ -14619,20 +14828,24 @@ function HomeView({
                 {section1Items.length >= 2 && (
                   <>
                     <button 
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        setSec1Direction(-1);
                         setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30 cursor-pointer"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button 
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        setSec1Direction(1);
                         setSec1Idx((activeIndex + 1) % section1Items.length);
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30 cursor-pointer"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>

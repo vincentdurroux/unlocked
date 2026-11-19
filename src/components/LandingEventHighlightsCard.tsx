@@ -73,22 +73,89 @@ function getEventBadgeLabel(event: Event, refDate = new Date()): string {
   return `${s.getDate()} ${monthNames[s.getMonth()]}`;
 }
 
+const DEFAULT_EVENT_IMAGE =
+  "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80";
+
+const loadedPosterUrls = new Set<string>();
+
+const EventPosterImage: React.FC<{ src?: string; alt: string }> = ({ src, alt }) => {
+  const initialSrc = src || DEFAULT_EVENT_IMAGE;
+  const [imgSrc, setImgSrc] = useState(initialSrc);
+  const [useNoReferrer, setUseNoReferrer] = useState(true);
+  const [isLoaded, setIsLoaded] = useState(() => loadedPosterUrls.has(initialSrc));
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const nextSrc = src || DEFAULT_EVENT_IMAGE;
+    setImgSrc(nextSrc);
+    setUseNoReferrer(true);
+    setIsLoaded(loadedPosterUrls.has(nextSrc));
+  }, [src]);
+
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalWidth > 0) {
+      loadedPosterUrls.add(imgSrc);
+      setIsLoaded(true);
+    }
+  }, [imgSrc]);
+
+  return (
+    <>
+      {!isLoaded && (
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-700 to-amber-950/60 animate-pulse pointer-events-none" />
+      )}
+      <img
+        ref={imgRef}
+        src={imgSrc}
+        alt={alt}
+        className={cn(
+          "absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-200",
+          isLoaded ? "opacity-100" : "opacity-0"
+        )}
+        referrerPolicy={useNoReferrer ? "no-referrer" : undefined}
+        loading="eager"
+        decoding="async"
+        draggable={false}
+        onLoad={() => {
+          loadedPosterUrls.add(imgSrc);
+          setIsLoaded(true);
+        }}
+        onError={() => {
+          if (useNoReferrer && imgSrc !== DEFAULT_EVENT_IMAGE) {
+            setUseNoReferrer(false);
+          } else if (imgSrc !== DEFAULT_EVENT_IMAGE) {
+            setImgSrc(DEFAULT_EVENT_IMAGE);
+          } else {
+            setIsLoaded(true);
+          }
+        }}
+      />
+    </>
+  );
+};
+
 export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProps> = ({
   events,
   onNavigate,
   loading = false,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [rawScrollIndex, setRawScrollIndex] = useState(0);
-  const [scrollLeftState, setScrollLeftState] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedEventForModal, setSelectedEventForModal] = useState<Event | null>(null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const currentIndexRef = useRef<number>(currentIndex);
-  const isScrollingTouchRef = useRef<boolean>(false);
-  const rafRef = useRef<number | null>(null);
+  const currentIndexRef = useRef<number>(0);
+  const rawScrollIndexRef = useRef<number>(0);
+  const isPointerDownRef = useRef<boolean>(false);
+  const isAnimatingScrollRef = useRef<boolean>(false);
+  const scrollRafRef = useRef<number | null>(null);
+  const animRafRef = useRef<number | null>(null);
+  const scrollIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastManualInteractRef = useRef<number>(0);
+  const touchStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const touchDraggedRef = useRef<boolean>(false);
 
   // Keyboard accessibility and body scroll lock when modal is open
   useEffect(() => {
@@ -116,6 +183,15 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       }
     }
   }, [selectedEventForModal]);
+
+  // Cleanup timers & animations on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+      if (animRafRef.current) cancelAnimationFrame(animRafRef.current);
+      if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
+    };
+  }, []);
 
   // Automatically refresh date periodically so weekend shifts seamlessly as time progresses
   useEffect(() => {
@@ -155,121 +231,239 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     });
   }, [events, currentDate]);
 
-  // 5 buffered sets for completely seamless infinite sliding without any teleportation jumps between cards
+  const count = activeEvents.length;
+  const setCount = count <= 1 ? 1 : count <= 3 ? 5 : 3;
+  const middleSetIndex = Math.floor(setCount / 2);
+
+  const eventsKey = useMemo(
+    () => activeEvents.map((e, i) => `${e.id || i}:${e.image || ''}`).join('|'),
+    [activeEvents]
+  );
+
+  // Buffered sets for seamless infinite sliding while keeping total DOM nodes light on iOS/Android
   const repeatedEvents = useMemo(() => {
     if (!activeEvents || activeEvents.length === 0) return [];
-    return [
-      ...activeEvents,
-      ...activeEvents,
-      ...activeEvents, // Set 2 (Middle Primary)
-      ...activeEvents,
-      ...activeEvents,
-    ];
-  }, [activeEvents]);
+    const list: Event[] = [];
+    for (let s = 0; s < setCount; s++) {
+      list.push(...activeEvents);
+    }
+    return list;
+  }, [activeEvents, setCount]);
 
-  // Preload all event poster images up-front into browser cache for instant rendering
+  // Preload & decode unique event poster images up-front so swiped cards appear instantaneously
   useEffect(() => {
     if (!activeEvents || activeEvents.length === 0) return;
-    
+    const seen = new Set<string>();
     activeEvents.forEach((event) => {
-      const imageUrl = event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80";
-      const img = new Image();
-      img.src = imageUrl;
+      const imageUrl = event.image || DEFAULT_EVENT_IMAGE;
+      if (!seen.has(imageUrl)) {
+        seen.add(imageUrl);
+        const img = new Image();
+        img.decoding = 'async';
+        img.referrerPolicy = 'no-referrer';
+        img.onload = () => {
+          loadedPosterUrls.add(imageUrl);
+          img.decode?.().catch(() => {});
+        };
+        img.src = imageUrl;
+      }
     });
   }, [activeEvents]);
-
-  const count = activeEvents.length;
 
   // Sync currentIndexRef
   useEffect(() => {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
 
-  const rawScrollIndexRef = useRef<number>(2 * count);
-  const normalizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const getItemWidth = () => {
-    if (!scrollContainerRef.current) return 210;
-    const children = scrollContainerRef.current.children;
-    if (children.length > 1) {
-      return (children[1] as HTMLElement).offsetLeft - (children[0] as HTMLElement).offsetLeft;
-    }
-    return (children[0] as HTMLElement)?.offsetWidth || 210;
-  };
-
-  const scrollToVirtualIndex = (vIndex: number, smooth = true) => {
-    if (!scrollContainerRef.current) return;
+  const getCenteredScrollLeftForVirtualIndex = (vIndex: number): number | null => {
     const container = scrollContainerRef.current;
-    const targetChild = container.children[vIndex] as HTMLElement;
-    if (targetChild) {
-      const targetCenter = targetChild.offsetLeft + targetChild.offsetWidth / 2;
-      const scrollPos = targetCenter - container.clientWidth / 2;
-      container.scrollTo({
-        left: scrollPos,
-        behavior: smooth ? 'smooth' : 'instant' as ScrollBehavior,
-      });
+    if (!container) return null;
+    const targetChild = container.children[vIndex] as HTMLElement | undefined;
+    if (!targetChild) return null;
+    const targetCenter = targetChild.offsetLeft + targetChild.offsetWidth / 2;
+    return Math.max(0, targetCenter - container.clientWidth / 2);
+  };
+
+  // Silently re-center into middle set ONLY when scrolling has completely settled.
+  // Because card active styling uses (virtualIdx % count === currentIndex), this shift produces
+  // zero React re-renders and zero visual flicker.
+  const normalizeToMiddleSet = () => {
+    const container = scrollContainerRef.current;
+    if (!container || count <= 1 || isPointerDownRef.current || isAnimatingScrollRef.current) return;
+
+    const currentIdx = rawScrollIndexRef.current;
+    const normalized = ((currentIdx % count) + count) % count;
+    const targetIdx = middleSetIndex * count + normalized;
+
+    if (targetIdx !== currentIdx) {
+      const targetLeft = getCenteredScrollLeftForVirtualIndex(targetIdx);
+      if (targetLeft !== null) {
+        container.style.scrollSnapType = 'none';
+        container.scrollLeft = targetLeft;
+        rawScrollIndexRef.current = targetIdx;
+        requestAnimationFrame(() => {
+          if (scrollContainerRef.current && !isAnimatingScrollRef.current) {
+            scrollContainerRef.current.style.scrollSnapType = '';
+          }
+        });
+      }
     }
   };
 
-  // Silently re-center into Set 2 (middle set) when stationary so the user is never near the boundary
-  const scheduleNormalization = (delay = 400) => {
-    if (normalizeTimeoutRef.current) clearTimeout(normalizeTimeoutRef.current);
-    normalizeTimeoutRef.current = setTimeout(() => {
-      if (!scrollContainerRef.current || count === 0 || isScrollingTouchRef.current) return;
-      const container = scrollContainerRef.current;
-      const currentIdx = rawScrollIndexRef.current;
-      const normalized = currentIdx % count;
-      const targetIdx = 2 * count + normalized;
-
-      if (targetIdx !== currentIdx) {
-        const itemWidth = getItemWidth();
-        const diff = targetIdx - currentIdx;
-        container.scrollLeft += diff * itemWidth;
-        rawScrollIndexRef.current = targetIdx;
-        setRawScrollIndex(targetIdx);
-        setScrollLeftState(container.scrollLeft);
+  const cancelProgrammaticScroll = () => {
+    if (animRafRef.current) {
+      cancelAnimationFrame(animRafRef.current);
+      animRafRef.current = null;
+    }
+    if (isAnimatingScrollRef.current) {
+      isAnimatingScrollRef.current = false;
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.style.scrollSnapType = '';
       }
-    }, delay);
+    }
   };
 
-  // Center strictly on middle set start card upon mounting or when event count changes
+  // Silky 60/120fps rAF eased scroll for auto-rotation & arrows (avoids iOS scroll-snap vs smooth-scroll fighting)
+  const scrollToVirtualIndex = (vIndex: number, smooth = true) => {
+    const container = scrollContainerRef.current;
+    if (!container || count === 0) return;
+
+    const clampedTarget = Math.max(0, Math.min(repeatedEvents.length - 1, vIndex));
+    const targetLeft = getCenteredScrollLeftForVirtualIndex(clampedTarget);
+    if (targetLeft === null) return;
+
+    cancelProgrammaticScroll();
+
+    if (!smooth) {
+      container.style.scrollSnapType = 'none';
+      container.scrollLeft = targetLeft;
+      rawScrollIndexRef.current = clampedTarget;
+      const norm = ((clampedTarget % count) + count) % count;
+      if (norm !== currentIndexRef.current) {
+        setCurrentIndex(norm);
+      }
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current && !isAnimatingScrollRef.current) {
+          scrollContainerRef.current.style.scrollSnapType = '';
+        }
+      });
+      return;
+    }
+
+    const startLeft = container.scrollLeft;
+    const distance = targetLeft - startLeft;
+    if (Math.abs(distance) < 1) {
+      normalizeToMiddleSet();
+      return;
+    }
+
+    const duration = 520;
+    const startTime = performance.now();
+    isAnimatingScrollRef.current = true;
+    container.style.scrollSnapType = 'none';
+
+    const step = (now: number) => {
+      if (!scrollContainerRef.current || isPointerDownRef.current) {
+        cancelProgrammaticScroll();
+        return;
+      }
+
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      // Smooth cubic ease-out
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      scrollContainerRef.current.scrollLeft = startLeft + distance * eased;
+
+      if (progress < 1) {
+        animRafRef.current = requestAnimationFrame(step);
+      } else {
+        animRafRef.current = null;
+        isAnimatingScrollRef.current = false;
+        scrollContainerRef.current.scrollLeft = targetLeft;
+        scrollContainerRef.current.style.scrollSnapType = '';
+        rawScrollIndexRef.current = clampedTarget;
+        const norm = ((clampedTarget % count) + count) % count;
+        if (norm !== currentIndexRef.current) {
+          setCurrentIndex(norm);
+        }
+        requestAnimationFrame(() => normalizeToMiddleSet());
+      }
+    };
+
+    animRafRef.current = requestAnimationFrame(step);
+  };
+
+  // Center strictly on middle set start card upon mounting or when events list updates
   useEffect(() => {
     if (count === 0 || !scrollContainerRef.current) return;
-    
+
     const timer = requestAnimationFrame(() => {
-      const container = scrollContainerRef.current;
-      const targetVirtualIndex = 2 * count;
-      if (!container || container.children.length <= targetVirtualIndex) return;
-      
-      const targetChild = container.children[targetVirtualIndex] as HTMLElement;
-      if (targetChild) {
-        const targetCenter = targetChild.offsetLeft + targetChild.offsetWidth / 2;
-        const scrollPos = targetCenter - container.clientWidth / 2;
-        container.scrollLeft = scrollPos;
-        setScrollLeftState(scrollPos);
-        setRawScrollIndex(targetVirtualIndex);
-        rawScrollIndexRef.current = targetVirtualIndex;
-      }
+      const initialVirtualIndex = count > 1 ? middleSetIndex * count : 0;
+      scrollToVirtualIndex(initialVirtualIndex, false);
+      setCurrentIndex(0);
     });
 
     return () => cancelAnimationFrame(timer);
-  }, [count]);
+  }, [eventsKey, count, middleSetIndex]);
 
-  // Ultra-lightweight 120Hz scroll listener using refs only
+  // Keep active card centered if container width changes (e.g., mobile rotation or layout settle)
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || count === 0 || typeof ResizeObserver === 'undefined') return;
+
+    let lastWidth = container.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (!scrollContainerRef.current || isPointerDownRef.current || isAnimatingScrollRef.current) return;
+      const nextWidth = scrollContainerRef.current.clientWidth;
+      if (Math.abs(nextWidth - lastWidth) > 2) {
+        lastWidth = nextWidth;
+        scrollToVirtualIndex(rawScrollIndexRef.current, false);
+      }
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [count, repeatedEvents.length]);
+
+  // Listen for native scrollend (modern iOS Safari & Android Chrome) for instant zero-jank loop recentering
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || count <= 1) return;
+    const onScrollEnd = () => {
+      if (!isPointerDownRef.current && !isAnimatingScrollRef.current) {
+        if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
+        normalizeToMiddleSet();
+      }
+    };
+    container.addEventListener('scrollend', onScrollEnd, { passive: true });
+    return () => container.removeEventListener('scrollend', onScrollEnd);
+  }, [count, middleSetIndex]);
+
+  // Lightweight scroll listener: only triggers React state when active event index actually changes
   const handleScroll = () => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    
-    rafRef.current = requestAnimationFrame(() => {
-      if (!scrollContainerRef.current || count === 0) return;
-      const container = scrollContainerRef.current;
-      const currentScrollLeft = container.scrollLeft;
+    if (scrollIdleTimerRef.current) {
+      clearTimeout(scrollIdleTimerRef.current);
+    }
 
-      const containerCenter = currentScrollLeft + container.clientWidth / 2;
+    if (!isAnimatingScrollRef.current && !isPointerDownRef.current) {
+      scrollIdleTimerRef.current = setTimeout(() => {
+        normalizeToMiddleSet();
+      }, 280);
+    }
+
+    if (scrollRafRef.current) return;
+
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      const container = scrollContainerRef.current;
+      if (!container || count === 0) return;
+
+      const containerCenter = container.scrollLeft + container.clientWidth / 2;
       const children = container.children;
       if (children.length === 0) return;
 
       let minDistance = Infinity;
-      let centeredVirtualIndex = 0;
+      let centeredVirtualIndex = rawScrollIndexRef.current;
 
       for (let i = 0; i < children.length; i++) {
         const child = children[i] as HTMLElement;
@@ -281,105 +475,48 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         }
       }
 
-      // ONLY emergency boundary protection if the user scrolls to the extreme edges (Set 0 or Set 4)
-      // Never teleports during normal sliding between Set 1, 2, or 3!
-      if (!isScrollingTouchRef.current) {
-        if (centeredVirtualIndex < count) {
-          const itemWidth = getItemWidth();
-          container.scrollLeft += 2 * count * itemWidth;
-          centeredVirtualIndex += 2 * count;
-        } else if (centeredVirtualIndex >= 4 * count) {
-          const itemWidth = getItemWidth();
-          container.scrollLeft -= 2 * count * itemWidth;
-          centeredVirtualIndex -= 2 * count;
+      if (centeredVirtualIndex !== rawScrollIndexRef.current) {
+        rawScrollIndexRef.current = centeredVirtualIndex;
+        const normalizedIndex = ((centeredVirtualIndex % count) + count) % count;
+        if (normalizedIndex !== currentIndexRef.current) {
+          setCurrentIndex(normalizedIndex);
         }
-      }
-
-      rawScrollIndexRef.current = centeredVirtualIndex;
-      setRawScrollIndex(centeredVirtualIndex);
-      setScrollLeftState(container.scrollLeft);
-
-      const normalizedIndex = centeredVirtualIndex % count;
-      if (normalizedIndex !== currentIndexRef.current) {
-        setCurrentIndex(normalizedIndex);
-      }
-
-      // Schedule seamless invisible normalization when movement rests
-      if (!isScrollingTouchRef.current) {
-        scheduleNormalization(350);
       }
     });
   };
 
-  // Calculate dynamic opacity and center status based on physical distance from container center
-  const getCardProgress = (virtualIdx: number) => {
-    const isCenterFallback = virtualIdx === rawScrollIndex;
-    const defaultProgress = {
-      opacity: isCenterFallback ? 1.0 : 0.75,
-      isCenterCard: isCenterFallback,
-    };
+  // Step forward or backward cleanly from middle set so we never hit a track edge
+  const stepCarousel = (delta: 1 | -1) => {
+    if (count <= 1) return;
+    const currentIdx = rawScrollIndexRef.current;
+    let baseIdx = currentIdx;
 
-    if (!scrollContainerRef.current) {
-      return defaultProgress;
-    }
-
-    const container = scrollContainerRef.current;
-    const child = container.children[virtualIdx] as HTMLElement;
-    if (!child) {
-      return defaultProgress;
-    }
-
-    const containerCenter = scrollLeftState + container.clientWidth / 2;
-    const childCenter = child.offsetLeft + child.offsetWidth / 2;
-    const offsetPx = Math.abs(childCenter - containerCenter);
-
-    let itemWidth = 210;
-    if (container.children.length > 1) {
-      const child0 = container.children[0] as HTMLElement;
-      const child1 = container.children[1] as HTMLElement;
-      if (child0 && child1) {
-        const diff = child1.offsetLeft - child0.offsetLeft;
-        if (diff > 0) {
-          itemWidth = diff;
-        }
+    if (currentIdx + delta < 1 || currentIdx + delta >= repeatedEvents.length - 1) {
+      const norm = ((currentIdx % count) + count) % count;
+      baseIdx = middleSetIndex * count + norm;
+      const resetLeft = getCenteredScrollLeftForVirtualIndex(baseIdx);
+      if (resetLeft !== null && scrollContainerRef.current) {
+        scrollContainerRef.current.style.scrollSnapType = 'none';
+        scrollContainerRef.current.scrollLeft = resetLeft;
+        rawScrollIndexRef.current = baseIdx;
       }
     }
 
-    let ratio = itemWidth > 0 ? offsetPx / itemWidth : 0;
-    if (isNaN(ratio) || !isFinite(ratio)) {
-      ratio = 0;
-    }
-    ratio = Math.min(1, Math.max(0, ratio));
-
-    let smoothFactor = Math.max(0, 1 - Math.pow(ratio, 1.2));
-    if (isNaN(smoothFactor) || !isFinite(smoothFactor)) {
-      smoothFactor = 1;
-    }
-
-    let opacity = 0.75 + (1.00 - 0.75) * smoothFactor;
-    if (isNaN(opacity) || !isFinite(opacity)) {
-      opacity = isCenterFallback ? 1.0 : 0.75;
-    } else {
-      opacity = Math.max(0.75, Math.min(1.0, opacity));
-    }
-
-    const isCenterCard = virtualIdx === rawScrollIndex;
-
-    return { opacity, isCenterCard };
+    scrollToVirtualIndex(baseIdx + delta, true);
   };
 
   // Auto-rotation every 6 seconds in continuous infinite loop
   useEffect(() => {
-    if (count <= 1 || isPaused || isScrollingTouchRef.current) return;
+    if (count <= 1 || isPaused || selectedEventForModal) return;
 
     const autoScrollTimer = setInterval(() => {
-      if (!scrollContainerRef.current) return;
-      scrollToVirtualIndex(rawScrollIndexRef.current + 1, true);
-      scheduleNormalization(450);
+      if (!scrollContainerRef.current || isPointerDownRef.current || isAnimatingScrollRef.current) return;
+      if (Date.now() - lastManualInteractRef.current < 4500) return;
+      stepCarousel(1);
     }, 6000);
 
     return () => clearInterval(autoScrollTimer);
-  }, [count, isPaused]);
+  }, [count, isPaused, selectedEventForModal, middleSetIndex]);
 
   if (loading) {
     return (
@@ -408,18 +545,6 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       </div>
     );
   }
-
-  const handleNext = (e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    scrollToVirtualIndex(rawScrollIndexRef.current + 1, true);
-    scheduleNormalization(450);
-  };
-
-  const handlePrev = (e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    scrollToVirtualIndex(rawScrollIndexRef.current - 1, true);
-    scheduleNormalization(450);
-  };
 
   return (
     <div
@@ -463,18 +588,52 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
       </div>
 
-      {/* 120Hz Infinite Continuous WebKit CSS Scroll Track with Zoom-In effect */}
+      {/* Hardware-accelerated Native Scroll-Snap Track */}
       <div className="relative z-10 w-full flex-1 flex items-center py-2 overflow-hidden min-h-[340px]">
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          onTouchStart={() => { isScrollingTouchRef.current = true; setIsPaused(true); }}
-          onTouchEnd={() => { 
-            isScrollingTouchRef.current = false; 
-            setIsPaused(false); 
-            scheduleNormalization(500);
+          onPointerDown={() => {
+            lastManualInteractRef.current = Date.now();
+            cancelProgrammaticScroll();
           }}
-          className="w-full flex items-center gap-3.5 sm:gap-5 overflow-x-auto py-3 px-[calc(50%-102.5px)] sm:px-[calc(50%-120px)] touch-pan-x [&::-webkit-scrollbar]:hidden"
+          onWheel={() => {
+            lastManualInteractRef.current = Date.now();
+            cancelProgrammaticScroll();
+          }}
+          onTouchStart={(e) => {
+            isPointerDownRef.current = true;
+            touchDraggedRef.current = false;
+            lastManualInteractRef.current = Date.now();
+            touchStartRef.current = {
+              x: e.touches[0].clientX,
+              y: e.touches[0].clientY,
+            };
+            setIsPaused(true);
+            cancelProgrammaticScroll();
+            if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
+          }}
+          onTouchMove={(e) => {
+            const dx = Math.abs(e.touches[0].clientX - touchStartRef.current.x);
+            const dy = Math.abs(e.touches[0].clientY - touchStartRef.current.y);
+            if (dx > 8 || dy > 8) {
+              touchDraggedRef.current = true;
+            }
+          }}
+          onTouchEnd={() => { 
+            isPointerDownRef.current = false; 
+            lastManualInteractRef.current = Date.now();
+            setIsPaused(false);
+            if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
+            scrollIdleTimerRef.current = setTimeout(() => {
+              normalizeToMiddleSet();
+            }, 300);
+          }}
+          onTouchCancel={() => {
+            isPointerDownRef.current = false;
+            setIsPaused(false);
+          }}
+          className="w-full flex items-center gap-3.5 sm:gap-5 overflow-x-auto snap-x snap-mandatory py-3 px-[calc(50%-102.5px)] sm:px-[calc(50%-120px)] [&::-webkit-scrollbar]:hidden"
           style={{
             WebkitOverflowScrolling: 'touch',
             scrollbarWidth: 'none',
@@ -482,55 +641,38 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
           }}
         >
           {repeatedEvents.map((event, virtualIdx) => {
-            const badge = getEventBadgeLabel(event);
             const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
-            
-            // Continuous proportional morphing calculations
-            const { opacity, isCenterCard } = getCardProgress(virtualIdx);
-
-            const syncTransition = isScrollingTouchRef.current
-              ? 'none'
-              : 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)';
+            const isCenterCard = count > 0 && (virtualIdx % count) === currentIndex;
 
             return (
               <div
                 key={`${event.id || 'evt'}-${virtualIdx}`}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (touchDraggedRef.current) {
+                    touchDraggedRef.current = false;
+                    return;
+                  }
                   setSelectedEventForModal(event);
                 }}
-                style={{
-                  opacity: typeof opacity === 'number' && !isNaN(opacity) && isFinite(opacity) ? opacity : 1,
-                  WebkitMaskImage: '-webkit-radial-gradient(white, black)',
-                  maskImage: 'radial-gradient(white, black)',
-                  transition: syncTransition,
-                }}
                 className={cn(
-                  "shrink-0 w-[205px] h-[290px] sm:w-[240px] sm:h-[345px] rounded-2xl overflow-hidden cursor-pointer bg-slate-900 border-2 transform-gpu relative group/card select-none z-10",
+                  "shrink-0 snap-center w-[205px] h-[290px] sm:w-[240px] sm:h-[345px] rounded-2xl overflow-hidden cursor-pointer bg-slate-800 border-2 relative group/card select-none z-10 transition-[opacity,transform] duration-200 ease-out",
                   isCenterCard
-                    ? "border-orange-500 shadow-xl shadow-orange-500/30 ring-2 ring-orange-500/20 -translate-y-1.5"
-                    : "border-slate-200/90 shadow-sm opacity-75 translate-y-0"
+                    ? "opacity-100 border-orange-500 shadow-lg shadow-orange-500/20 -translate-y-1"
+                    : "opacity-75 border-slate-200/80 shadow-sm translate-y-0"
                 )}
               >
-                {/* Poster Background Image directly inside card */}
-                <img
-                  src={event.image || "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80"}
-                  alt={event.title}
-                  className="absolute inset-0 w-full h-full object-cover pointer-events-none brightness-100 contrast-[1.02]"
-                  referrerPolicy="no-referrer"
-                  loading="eager"
-                  decoding="sync"
-                />
+                {/* Reliable Poster Background Image with preload cache & fallback */}
+                <EventPosterImage src={event.image} alt={event.title} />
 
                 {/* Deep gradient at the bottom for crystal-clear readability with full titles */}
                 <div className="absolute bottom-0 left-0 right-0 h-44 sm:h-52 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent pointer-events-none" />
 
-                {/* Top Timing Badge: Clean, high-contrast luminous pill showing opening/closing dates */}
+                {/* Top Timing Badge */}
                 <div className="absolute top-2.5 left-2.5 z-20 pointer-events-none">
                   <span 
-                    style={{ transition: syncTransition }}
                     className={cn(
-                      "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md border",
+                      "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md border transition-colors duration-200",
                       isCenterCard 
                         ? "bg-orange-500 text-white border-orange-400" 
                         : "bg-white/95 text-slate-800 border-slate-200"
@@ -563,6 +705,36 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
             );
           })}
         </div>
+
+        {/* Desktop hover navigation arrows */}
+        {count > 1 && (
+          <>
+            <button
+              type="button"
+              aria-label="Previous weekend event"
+              onClick={(e) => {
+                e.stopPropagation();
+                lastManualInteractRef.current = Date.now();
+                stepCarousel(-1);
+              }}
+              className="hidden md:flex items-center justify-center absolute left-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/85 backdrop-blur shadow-sm text-slate-500 hover:text-orange-600 transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Next weekend event"
+              onClick={(e) => {
+                e.stopPropagation();
+                lastManualInteractRef.current = Date.now();
+                stepCarousel(1);
+              }}
+              className="hidden md:flex items-center justify-center absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/85 backdrop-blur shadow-sm text-slate-500 hover:text-orange-600 transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
+        )}
       </div>
 
 
