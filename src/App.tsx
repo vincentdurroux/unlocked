@@ -14111,12 +14111,12 @@ function HomeView({
   }, [expandedLandingProId]);
 
   return (
-    <div className="px-6 pt-12 md:pt-20 pb-12 md:pb-24 xl:pb-6 space-y-12 md:space-y-20 lg:space-y-28 max-w-7xl mx-auto w-full overflow-hidden">
+    <div className="px-6 pt-4 sm:pt-6 lg:pt-8 pb-12 md:pb-24 xl:pb-6 space-y-12 md:space-y-20 lg:space-y-28 max-w-7xl mx-auto w-full overflow-hidden">
 
       {/* Welcome & Search Group */}
       <div className="space-y-0">
         {/* Welcome & Illustration Section */}
-        <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 md:gap-16 pt-4 mb-0">
+        <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 md:gap-16 mb-0">
           <div className="space-y-1.5 md:space-y-8 flex flex-col items-start text-left max-w-xl pb-4 md:pb-10 pl-1 sm:pl-2 md:pl-0">
             <div className="flex items-center gap-3">
               <h2 className="text-[28px] md:text-[30px] lg:text-[38px] font-semibold font-display text-brand-navy leading-tight">
@@ -17531,7 +17531,7 @@ function computeProSearchScore(pro: any, searchStr: string): number {
     : [];
 
   return (
-    <div className="p-4 md:p-12 pt-20 md:pt-24 space-y-16 pb-32 max-w-7xl mx-auto">
+    <div className="px-4 md:px-12 pt-4 sm:pt-6 lg:pt-8 pb-32 space-y-16 max-w-7xl mx-auto">
       {/* Search & Filters */}
       <div className="space-y-10">
         <div className="max-w-2xl mx-auto space-y-6">
