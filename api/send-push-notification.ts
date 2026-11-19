@@ -89,6 +89,76 @@ export default async function handler(req: any, res: any) {
       : `${baseUrl}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
     const brandLogoUrl = `${baseUrl}/logo2.png`;
 
+    const buildIosAppUrl = (inputUrl: string, extraData: any): string => {
+      const safeRaw = String(inputUrl || '/').trim();
+      const d = extraData && typeof extraData === 'object' ? extraData : {};
+      const notifType = String(d.type || '').toLowerCase();
+      const notifTheme = String(d.theme || '').toLowerCase();
+      const notifFocus = String(d.focus || '').toLowerCase();
+
+      const urlEventMatch = safeRaw.match(/[?&]eventId=([^&#]+)/i) || safeRaw.match(/\/events?\/([^/?#]+)/i);
+      const urlGuideMatch = safeRaw.match(/[?&](?:guideId|articleId)=([^&#]+)/i) || safeRaw.match(/\/(?:guides?|articles?)\/([^/?#]+)/i);
+      const urlProMatch = safeRaw.match(/[?&]proId=([^&#]+)/i) || safeRaw.match(/\/(?:pros?|explore)\/([^/?#]+)/i);
+
+      const eventId =
+        d.eventId ||
+        (urlEventMatch?.[1] ? decodeURIComponent(urlEventMatch[1]) : '') ||
+        (d.target_id && (notifType === 'event' || notifTheme.startsWith('event')) ? String(d.target_id) : '');
+      const guideId =
+        d.guideId ||
+        d.articleId ||
+        (urlGuideMatch?.[1] ? decodeURIComponent(urlGuideMatch[1]) : '') ||
+        (d.target_id && (notifType === 'guide' || notifType === 'article' || notifTheme.startsWith('guide') || notifTheme.startsWith('article')) ? String(d.target_id) : '');
+      const proId =
+        d.proId ||
+        (urlProMatch?.[1] ? decodeURIComponent(urlProMatch[1]) : '') ||
+        (d.target_id && (notifType === 'pro' || notifTheme.startsWith('pro')) ? String(d.target_id) : '');
+
+      if (eventId) return `mycityunlocked://open?eventId=${encodeURIComponent(String(eventId))}`;
+      if (guideId) return `mycityunlocked://open?guideId=${encodeURIComponent(String(guideId))}`;
+      if (proId) return `mycityunlocked://open?proId=${encodeURIComponent(String(proId))}`;
+
+      if (
+        notifFocus === 'weekend-events' ||
+        notifType === 'weekend' ||
+        notifTheme === 'weekend' ||
+        notifTheme === 'weekend_digest' ||
+        /focus=weekend/i.test(safeRaw) ||
+        /weekend-events/i.test(safeRaw)
+      ) {
+        return 'mycityunlocked://open?focus=weekend-events';
+      }
+
+      if (notifType === 'event' || /#events\b/i.test(safeRaw) || /^\/?events\b/i.test(safeRaw)) {
+        return 'mycityunlocked://open?view=events';
+      }
+      if (notifType === 'guide' || notifType === 'article' || /#guides\b/i.test(safeRaw) || /^\/?(?:guides|articles)\b/i.test(safeRaw)) {
+        return 'mycityunlocked://open?view=guides';
+      }
+      if (notifType === 'pro' || /#(?:explore|directory)\b/i.test(safeRaw) || /^\/?(?:explore|directory)\b/i.test(safeRaw)) {
+        return 'mycityunlocked://open?view=explore';
+      }
+      if (notifType === 'chat' || notifType === 'message' || /#messages\b/i.test(safeRaw)) {
+        return 'mycityunlocked://open?view=messages';
+      }
+      if (notifType === 'marketplace' || /#marketplace\b/i.test(safeRaw)) {
+        return 'mycityunlocked://open?view=marketplace';
+      }
+
+      try {
+        const parsed = safeRaw.startsWith('http')
+          ? new URL(safeRaw)
+          : new URL(`${baseUrl}${safeRaw.startsWith('/') ? '' : '/'}${safeRaw}`);
+        if (parsed.search || parsed.hash) {
+          return `mycityunlocked://open${parsed.search}${parsed.hash}`;
+        }
+      } catch (_) {}
+
+      return 'mycityunlocked://open';
+    };
+
+    const iosAppUrl = buildIosAppUrl(rawUrl, customData);
+
     const selectedChannels: string[] = Array.isArray(targetChannels) && targetChannels.length > 0
       ? targetChannels
       : (Array.isArray(channels) && channels.length > 0 ? channels : ['ios', 'android', 'web']);
@@ -98,7 +168,9 @@ export default async function handler(req: any, res: any) {
     // Crucial: Android PWA/TWA/Chrome and iPhone Safari PWA rely on Web Push in OneSignal
     const enableWeb = selectedChannels.includes('web') || enableIos || enableAndroid;
 
-    const basePayload: any = {
+    const cleanImg = (imageUrl && typeof imageUrl === 'string' && imageUrl.trim()) ? imageUrl.trim() : '';
+
+    const commonPayload: any = {
       app_id: appId,
       headings: {
         en: titleStr,
@@ -110,43 +182,14 @@ export default async function handler(req: any, res: any) {
         fr: messageStr,
         es: messageStr
       },
-      // IMPORTANT: Use web_url (not top-level url) so Web Push / Safari opens the web page,
-      // while native iOS APNs opens the installed iOS app directly and routes via data!
-      web_url: absoluteUrl,
       priority: 10,
-      // Brand Logo for Android & Web Push
-      chrome_web_icon: brandLogoUrl,
-      chrome_web_badge: brandLogoUrl,
-      large_icon: brandLogoUrl,
-      // Target platforms: iOS native app, iOS Web Push / PWA, Android, and Web
-      isIos: enableIos,
-      isAndroid: enableAndroid,
-      isChromeWeb: enableWeb,
-      isSafariWeb: enableWeb,
-      isFirefox: enableWeb,
-      isEdge: enableWeb,
-      isAnyWeb: enableWeb,
-      ios_sound: "default",
-      content_available: true,
-      mutable_content: true,
-      android_visibility: 1,
-      android_accent_color: "2563EB",
-      android_sound: "default",
-      ios_badgeType: "Increase",
-      ios_badgeCount: 1,
       data: {
         ...(customData || {}),
         url: absoluteUrl,
-        launchUrl: absoluteUrl
+        launchUrl: absoluteUrl,
+        appUrl: iosAppUrl
       }
     };
-
-    if (imageUrl && typeof imageUrl === 'string' && imageUrl.trim()) {
-      const cleanImg = imageUrl.trim();
-      basePayload.ios_attachments = { id1: cleanImg };
-      basePayload.big_picture = cleanImg;
-      basePayload.chrome_web_image = cleanImg;
-    }
 
     // Support comma-separated list of multiple device subscription IDs per user
     const rawSubs = (targetSubscriptionIds && Array.isArray(targetSubscriptionIds) ? targetSubscriptionIds : [])
@@ -162,21 +205,8 @@ export default async function handler(req: any, res: any) {
 
     const hasUserIds = Boolean(targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0);
     const isSpecificMember = subs.length > 0 || hasUserIds;
-    const payload: any = { ...basePayload };
 
-    if (subs.length > 0) {
-      payload.include_player_ids = subs;
-      payload.include_subscription_ids = subs;
-    } else if (hasUserIds) {
-      payload.include_aliases = { external_id: targetUserIds };
-      payload.include_external_user_ids = targetUserIds;
-      payload.target_channel = "push";
-    } else {
-      payload.included_segments = ["Total Subscriptions", "Active Subscriptions"];
-    }
-
-    const initialAuth = restApiKey.startsWith("os_v2_") ? `Bearer ${restApiKey}` : `Basic ${restApiKey}`;
-    const sendToOneSignal = async (bodyPayload: any, auth: string = initialAuth) => {
+    const sendToOneSignal = async (bodyPayload: any, auth: string) => {
       return fetch("https://onesignal.com/api/v1/notifications", {
         method: "POST",
         headers: {
@@ -187,50 +217,118 @@ export default async function handler(req: any, res: any) {
       });
     };
 
-    let activeAuth = initialAuth;
-    let oneSignalRes = await sendToOneSignal(payload, activeAuth);
-    let data = await oneSignalRes.json();
+    let activeAuth = restApiKey.startsWith("os_v2_") ? `Bearer ${restApiKey}` : `Basic ${restApiKey}`;
 
-    if (oneSignalRes.status === 401) {
-      activeAuth = initialAuth.startsWith("Bearer ") ? `Basic ${restApiKey}` : `Bearer ${restApiKey}`;
-      oneSignalRes = await sendToOneSignal(payload, activeAuth);
-      data = await oneSignalRes.json();
-    }
+    const dispatchPass = async (platformBase: any) => {
+      const passPayload: any = { ...platformBase };
+      if (subs.length > 0) {
+        passPayload.include_player_ids = subs;
+        passPayload.include_subscription_ids = subs;
+      } else if (hasUserIds) {
+        passPayload.include_aliases = { external_id: targetUserIds };
+        passPayload.include_external_user_ids = targetUserIds;
+        passPayload.target_channel = "push";
+      } else {
+        passPayload.included_segments = ["Total Subscriptions", "Active Subscriptions"];
+      }
 
-    // Fallback if Total Subscriptions segment name differs (only when broadcasting to All Users)
-    if (!isSpecificMember && !oneSignalRes.ok && payload.included_segments && JSON.stringify(data).includes("Total Subscriptions")) {
-      payload.included_segments = ["Subscribed Users"];
-      oneSignalRes = await sendToOneSignal(payload, activeAuth);
-      data = await oneSignalRes.json();
-    }
+      let res = await sendToOneSignal(passPayload, activeAuth);
+      let resData = await res.json();
 
-    // If targeting a specific user and both subs & external ID were available, retry fallback if needed
-    if (isSpecificMember && subs.length > 0 && (!oneSignalRes.ok || !data?.id || data?.recipients === 0)) {
-      if (hasUserIds) {
-        const aliasPayload: any = {
-          ...basePayload,
-          include_aliases: { external_id: targetUserIds },
-          include_external_user_ids: targetUserIds,
-          target_channel: "push"
-        };
-        const aliasRes = await sendToOneSignal(aliasPayload, activeAuth);
-        const aliasData = await aliasRes.json();
-        if (aliasRes.ok && aliasData?.id && (aliasData?.recipients || 0) > 0) {
-          oneSignalRes = aliasRes;
-          data = aliasData;
+      if (res.status === 401) {
+        activeAuth = activeAuth.startsWith("Bearer ") ? `Basic ${restApiKey}` : `Bearer ${restApiKey}`;
+        res = await sendToOneSignal(passPayload, activeAuth);
+        resData = await res.json();
+      }
+
+      if (!isSpecificMember && !res.ok && passPayload.included_segments && JSON.stringify(resData).includes("Total Subscriptions")) {
+        passPayload.included_segments = ["Subscribed Users"];
+        res = await sendToOneSignal(passPayload, activeAuth);
+        resData = await res.json();
+      }
+
+      if (isSpecificMember && subs.length > 0 && (!res.ok || !resData?.id || (resData?.recipients || 0) === 0)) {
+        if (hasUserIds) {
+          const aliasPayload: any = {
+            ...platformBase,
+            include_aliases: { external_id: targetUserIds },
+            include_external_user_ids: targetUserIds,
+            target_channel: "push"
+          };
+          const aliasRes = await sendToOneSignal(aliasPayload, activeAuth);
+          const aliasData = await aliasRes.json();
+          if (aliasRes.ok && aliasData?.id && (aliasData?.recipients || 0) > 0) {
+            res = aliasRes;
+            resData = aliasData;
+          }
         }
       }
-    }
 
-    if (!oneSignalRes.ok) {
-      const errDetail = Array.isArray(data?.errors) ? data.errors.join(', ') : ( JSON.stringify(data?.errors || data) );
-      return res.status(oneSignalRes.status).json({ 
-        error: errDetail || "Échec de l'envoi de la notification push OneSignal.",
-        details: data 
+      return { ok: res.ok, status: res.status, data: resData };
+    };
+
+    const passPayloads: any[] = [];
+
+    if (enableIos) {
+      passPayloads.push({
+        ...commonPayload,
+        // Native iOS APNs receives custom URL scheme so tapping notification opens the iOS app directly
+        app_url: iosAppUrl,
+        isIos: true,
+        isAndroid: false,
+        isChromeWeb: false,
+        isSafariWeb: false,
+        isFirefox: false,
+        isEdge: false,
+        isAnyWeb: false,
+        ios_sound: "default",
+        content_available: true,
+        mutable_content: true,
+        ios_badgeType: "Increase",
+        ios_badgeCount: 1,
+        ...(cleanImg ? { ios_attachments: { id1: cleanImg } } : {})
       });
     }
 
-    const recipientCount = data.recipients ?? (data.id ? 1 : 0);
+    if (enableAndroid || enableWeb) {
+      passPayloads.push({
+        ...commonPayload,
+        ...(enableWeb ? { web_url: absoluteUrl } : {}),
+        ...(enableAndroid ? { app_url: absoluteUrl } : {}),
+        chrome_web_icon: brandLogoUrl,
+        chrome_web_badge: brandLogoUrl,
+        large_icon: brandLogoUrl,
+        isIos: false,
+        isAndroid: enableAndroid,
+        isChromeWeb: enableWeb,
+        isSafariWeb: enableWeb,
+        isFirefox: enableWeb,
+        isEdge: enableWeb,
+        isAnyWeb: enableWeb,
+        android_visibility: 1,
+        android_accent_color: "2563EB",
+        android_sound: "default",
+        ...(cleanImg ? { big_picture: cleanImg, chrome_web_image: cleanImg } : {})
+      });
+    }
+
+    const passResults = await Promise.all(passPayloads.map((p) => dispatchPass(p)));
+    const okResults = passResults.filter((r) => r.ok);
+
+    if (okResults.length === 0) {
+      const firstFail = passResults[0];
+      const errDetail = Array.isArray(firstFail?.data?.errors)
+        ? firstFail.data.errors.join(', ')
+        : JSON.stringify(firstFail?.data?.errors || firstFail?.data);
+      return res.status(firstFail?.status || 400).json({
+        error: errDetail || "Échec de l'envoi de la notification push OneSignal.",
+        details: firstFail?.data
+      });
+    }
+
+    const primaryData = okResults.find((r) => r.data?.id && (r.data?.recipients || 0) > 0)?.data || okResults[0].data;
+    const recipientCount = okResults.reduce((sum, r) => sum + (typeof r.data?.recipients === 'number' ? r.data.recipients : (r.data?.id ? 1 : 0)), 0);
+
     let warning: string | undefined = undefined;
     if (recipientCount === 0) {
       warning = "La notification a été acceptée par OneSignal mais aucun appareil actif n'était ciblé (0 destinataire). Vérifiez que votre téléphone est bien abonné aux notifications.";
@@ -238,9 +336,9 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({
       success: true,
-      result: data,
+      result: primaryData,
       recipients: recipientCount,
-      id: data.id,
+      id: primaryData?.id,
       warning
     });
   } catch (err: any) {

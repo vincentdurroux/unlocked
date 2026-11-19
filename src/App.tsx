@@ -2480,7 +2480,7 @@ export default function App() {
     } catch (_) {}
   }, []);
 
-  // Extract sharing & push notification parameters (?eventId, ?proId, ?guideId, ?focus=weekend-events) on mount and URL changes
+  // Extract sharing & push notification parameters (?eventId, ?proId, ?guideId, ?focus=weekend-events, ?view=...) on mount and URL changes
   const checkAndApplyUrlDeepLinks = React.useCallback(() => {
     const params = new URLSearchParams(window.location.search);
 
@@ -2497,6 +2497,7 @@ export default function App() {
     const rawGuideId = params.get('guideId') || params.get('articleId') || hashParams.get('guideId') || hashParams.get('articleId');
     const cleanGuideId = extractCleanId(rawGuideId);
     const focusParam = (params.get('focus') || hashParams.get('focus') || '').toLowerCase();
+    const viewParam = (params.get('view') || hashParams.get('view') || '').toLowerCase();
     const hashRaw = window.location.hash.toLowerCase();
 
     if (cleanEventId) {
@@ -2538,6 +2539,14 @@ export default function App() {
         window.history.replaceState({ view: 'home' }, '', window.location.pathname);
       } catch (_) {}
       return true;
+    } else if (viewParam === 'events' || viewParam === 'guides' || viewParam === 'explore' || viewParam === 'marketplace' || viewParam === 'home') {
+      markDeepLinkActivity();
+      initialViewRef.current = null;
+      isProgrammaticNavigationRef.current = true;
+      setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
+      setDeepLinkTrigger(c => c + 1);
+      setActiveView(viewParam as View);
+      return true;
     }
     return false;
   }, [requestHomeFocus, markDeepLinkActivity]);
@@ -2551,16 +2560,21 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashOrUrlChange);
   }, [checkAndApplyUrlDeepLinks]);
 
+  const processPushClickDetailRef = useRef<((detail: any) => void) | null>(null);
+  const pendingAuthPushDetailRef = useRef<any | null>(null);
+
   // Listen for live OneSignal push notification clicks (plus any early buffered click)
   useEffect(() => {
     const processPushClickDetail = (detail: any) => {
       try {
         markDeepLinkActivity();
+        initialViewRef.current = null;
         const data = detail?.data || {};
         const notif = detail?.notification || {};
         const rawLaunchUrl = String(
           detail?.launchUrl ||
           data?.launchUrl ||
+          data?.appUrl ||
           data?.url ||
           notif?.launchURL ||
           notif?.launchUrl ||
@@ -2570,6 +2584,8 @@ export default function App() {
         const notifType = String(data.type || notif?.type || '').toLowerCase();
         const notifTheme = String(data.theme || '').toLowerCase();
         const notifFocus = String(data.focus || '').toLowerCase();
+        const viewMatch = rawLaunchUrl.match(/[?&]view=([^&#]+)/i);
+        const launchView = viewMatch?.[1] ? decodeURIComponent(viewMatch[1]).toLowerCase() : '';
         const headingText = String(notif?.title || notif?.heading || notif?.headings?.en || data?.title || '').toLowerCase();
         const bodyText = String(notif?.body || notif?.content || notif?.contents?.en || data?.body || '').toLowerCase();
         const combinedText = `${headingText} ${bodyText}`;
@@ -2619,7 +2635,21 @@ export default function App() {
           ));
 
         const navFn = handleNavigateRef.current;
-        if (!navFn) return;
+        if (!navFn) {
+          pendingAuthPushDetailRef.current = detail;
+          return;
+        }
+
+        const isProtectedTarget =
+          notifType === 'chat' ||
+          notifType === 'message' ||
+          launchView === 'messages' ||
+          launchView === 'profile' ||
+          launchUrl.includes('#messages');
+
+        if (authLoading && isProtectedTarget) {
+          pendingAuthPushDetailRef.current = detail;
+        }
 
         setShowNotificationsModal(false);
 
@@ -2631,22 +2661,25 @@ export default function App() {
           navFn('guides', { guideId: String(targetGuideId) });
         } else if (targetProId) {
           navFn('explore', { proId: String(targetProId) });
-        } else if (notifType === 'event' || launchUrl.includes('#events') || launchUrl.includes('events')) {
+        } else if (launchView === 'events' || notifType === 'event' || launchUrl.includes('#events') || launchUrl.includes('events')) {
           navFn('events');
-        } else if (notifType === 'guide' || notifType === 'article' || launchUrl.includes('#guides') || launchUrl.includes('guides') || launchUrl.includes('article')) {
+        } else if (launchView === 'guides' || notifType === 'guide' || notifType === 'article' || launchUrl.includes('#guides') || launchUrl.includes('guides') || launchUrl.includes('article')) {
           navFn('guides');
-        } else if (notifType === 'pro' || launchUrl.includes('#directory') || launchUrl.includes('#explore') || launchUrl.includes('explore') || launchUrl.includes('directory')) {
+        } else if (launchView === 'explore' || launchView === 'directory' || notifType === 'pro' || launchUrl.includes('#directory') || launchUrl.includes('#explore') || launchUrl.includes('explore') || launchUrl.includes('directory')) {
           navFn('explore');
-        } else if (notifType === 'chat' || notifType === 'message' || launchUrl.includes('#messages')) {
+        } else if (launchView === 'messages' || notifType === 'chat' || notifType === 'message' || launchUrl.includes('#messages')) {
           navFn('messages');
-        } else if (notifType === 'marketplace' || launchUrl.includes('#marketplace')) {
+        } else if (launchView === 'marketplace' || notifType === 'marketplace' || launchUrl.includes('#marketplace')) {
           navFn('marketplace');
+        } else if (launchView === 'home') {
+          navFn('home');
         }
       } catch (err) {
         console.warn('Error handling onesignal notification click:', err);
       }
     };
 
+    processPushClickDetailRef.current = processPushClickDetail;
     const handlePushClick = (e: any) => processPushClickDetail(e?.detail);
 
     window.addEventListener('onesignal:notification-clicked', handlePushClick);
@@ -2657,7 +2690,20 @@ export default function App() {
     }
 
     return () => window.removeEventListener('onesignal:notification-clicked', handlePushClick);
-  }, [markDeepLinkActivity]);
+  }, [markDeepLinkActivity, authLoading]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (pendingAuthPushDetailRef.current) {
+      const deferred = pendingAuthPushDetailRef.current;
+      pendingAuthPushDetailRef.current = null;
+      processPushClickDetailRef.current?.(deferred);
+    }
+    const pendingClick = oneSignalService.consumePendingNotificationClick();
+    if (pendingClick) {
+      processPushClickDetailRef.current?.(pendingClick);
+    }
+  }, [authLoading]);
 
   const handleMarkChatAsRead = React.useCallback((chatId: string) => {
     setUnreadConversations(prev => {

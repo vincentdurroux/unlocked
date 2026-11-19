@@ -65,9 +65,14 @@ class OneSignalService {
       const handleNativePushOpened = (payload: any) => {
         try {
           const notifObj = payload?.notification || payload;
+          const nestedPayload = notifObj?.payload || payload?.payload || {};
           const data =
             notifObj?.additionalData ||
+            nestedPayload?.additionalData ||
+            notifObj?.data?.custom?.a ||
+            notifObj?.data ||
             payload?.additionalData ||
+            payload?.data?.custom?.a ||
             payload?.data ||
             payload?.custom?.a ||
             payload?.rawPayload?.custom?.a ||
@@ -76,11 +81,17 @@ class OneSignalService {
           const launchUrl =
             notifObj?.launchURL ||
             notifObj?.launchUrl ||
+            nestedPayload?.launchURL ||
+            nestedPayload?.launchUrl ||
             payload?.launchURL ||
             payload?.launchUrl ||
+            payload?.result?.url ||
+            payload?.result?.action?.launchUrl ||
+            payload?.result?.action?.launchURL ||
             payload?.url ||
             payload?.custom?.u ||
             payload?.rawPayload?.custom?.u ||
+            notifObj?.data?.custom?.u ||
             data?.launchUrl ||
             data?.url ||
             '';
@@ -90,33 +101,79 @@ class OneSignalService {
         }
       };
 
-      windowAny.gonative_onesignal_push_opened = handleNativePushOpened;
-      windowAny.median_onesignal_push_opened = handleNativePushOpened;
-      windowAny.handleOneSignalNotificationOpened = handleNativePushOpened;
-      window.addEventListener('onesignal-notification-opened', (e: any) => handleNativePushOpened(e.detail || e));
-      window.addEventListener('push-notification-clicked', (e: any) => handleNativePushOpened(e.detail || e));
-
       // Native iOS Universal Link & Custom URL Scheme (mycityunlocked://) deep link handlers
       const handleAppDeepLink = (raw: any) => {
         const incomingUrl = typeof raw === 'string' ? raw : (raw?.url || raw?.launchUrl || raw?.launchURL || raw?.detail?.url || '');
         if (!incomingUrl) return;
         this.emitNotificationClick({ launchUrl: incomingUrl }, { url: incomingUrl, launchUrl: incomingUrl }, incomingUrl);
       };
+
+      windowAny.gonative_onesignal_push_opened = handleNativePushOpened;
+      windowAny.median_onesignal_push_opened = handleNativePushOpened;
+      windowAny.handleOneSignalNotificationOpened = handleNativePushOpened;
       windowAny.handleUniversalLink = handleAppDeepLink;
       windowAny.handleDeepLink = handleAppDeepLink;
-      window.addEventListener('universal-link-opened', (e: any) => handleAppDeepLink(e.detail || e));
 
+      // Connect synchronous early queue from index.html
+      windowAny.__mcuOneSignalDispatch = (kind: string, payload: any) => {
+        if (kind === 'deeplink') {
+          handleAppDeepLink(payload);
+        } else {
+          handleNativePushOpened(payload);
+        }
+      };
+
+      if (Array.isArray(windowAny.__mcuEarlyPushQueue) && windowAny.__mcuEarlyPushQueue.length > 0) {
+        const queued = windowAny.__mcuEarlyPushQueue.splice(0);
+        queued.forEach((entry: any) => {
+          if (entry && Date.now() - (entry.ts || 0) < 60000) {
+            windowAny.__mcuOneSignalDispatch(entry.kind, entry.payload);
+          }
+        });
+      }
+
+      // Capacitor App plugin: warm appUrlOpen + cold start getLaunchUrl()
       try {
-        if (windowAny.Capacitor?.Plugins?.App?.addListener) {
-          windowAny.Capacitor.Plugins.App.addListener('appUrlOpen', (data: any) => {
+        const capApp = windowAny.Capacitor?.Plugins?.App;
+        if (capApp?.addListener && !windowAny.__mcuCapAppBound) {
+          windowAny.__mcuCapAppBound = true;
+          capApp.addListener('appUrlOpen', (data: any) => {
             handleAppDeepLink(data);
           });
         }
+        if (capApp?.getLaunchUrl) {
+          Promise.resolve(capApp.getLaunchUrl()).then((res: any) => {
+            if (res?.url) {
+              handleAppDeepLink(res.url);
+            }
+          }).catch(() => {});
+        }
       } catch (_) {}
 
-      // Eagerly attach native Cordova/Capacitor click listeners & OneSignal Web SDK v16 deferred queue
+      // Capacitor PushNotifications plugin listener (APNs action performed)
+      const bindCapacitorPushAction = () => {
+        try {
+          const capPush = windowAny.Capacitor?.Plugins?.PushNotifications;
+          if (capPush?.addListener && !windowAny.__mcuCapPushActionBound) {
+            windowAny.__mcuCapPushActionBound = true;
+            capPush.addListener('pushNotificationActionPerformed', (action: any) => {
+              handleNativePushOpened(action);
+            });
+          }
+        } catch (_) {}
+      };
+      bindCapacitorPushAction();
+
+      // Eagerly attach native Cordova/Capacitor click listeners (and retry on deviceready & staged intervals)
       this.bindClickListeners();
-      setTimeout(() => this.bindClickListeners(), 500);
+      document.addEventListener('deviceready', () => {
+        bindCapacitorPushAction();
+        this.bindClickListeners();
+      }, false);
+      setTimeout(() => { bindCapacitorPushAction(); this.bindClickListeners(); }, 500);
+      setTimeout(() => { bindCapacitorPushAction(); this.bindClickListeners(); }, 1500);
+      setTimeout(() => { bindCapacitorPushAction(); this.bindClickListeners(); }, 3000);
+
       try {
         windowAny.OneSignalDeferred = windowAny.OneSignalDeferred || [];
         windowAny.OneSignalDeferred.push((OS: any) => {
@@ -129,14 +186,31 @@ class OneSignalService {
   private emitNotificationClick(notification: any, data: any, launchUrl: string): void {
     const detail = { notification, data: data || {}, launchUrl: launchUrl || '' };
     this.pendingNotificationClick = { ...detail, ts: Date.now() };
+    try {
+      sessionStorage.setItem('__mcu_pending_push_click', JSON.stringify({ data: detail.data, launchUrl: detail.launchUrl, ts: Date.now() }));
+    } catch (_) {}
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('onesignal:notification-clicked', { detail }));
     }
   }
 
   consumePendingNotificationClick(): { notification: any; data: any; launchUrl: string; ts: number } | null {
-    const pending = this.pendingNotificationClick;
+    let pending = this.pendingNotificationClick;
     this.pendingNotificationClick = null;
+    if (!pending && typeof sessionStorage !== 'undefined') {
+      try {
+        const raw = sessionStorage.getItem('__mcu_pending_push_click');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.ts === 'number') {
+            pending = { notification: { launchUrl: parsed.launchUrl }, data: parsed.data || {}, launchUrl: parsed.launchUrl || '', ts: parsed.ts };
+          }
+        }
+      } catch (_) {}
+    }
+    try {
+      sessionStorage.removeItem('__mcu_pending_push_click');
+    } catch (_) {}
     if (!pending) return null;
     // Ignore stale clicks older than 60 seconds
     if (Date.now() - pending.ts > 60000) return null;
@@ -147,8 +221,11 @@ class OneSignalService {
     return (event: any) => {
       try {
         const notif = event?.notification || event?.result?.notification || event;
+        const nestedPayload = notif?.payload || {};
         const data =
           notif?.additionalData ||
+          nestedPayload?.additionalData ||
+          notif?.data?.custom?.a ||
           notif?.data ||
           event?.data ||
           notif?.rawPayload?.custom?.a ||
@@ -156,8 +233,12 @@ class OneSignalService {
         const launchUrl =
           notif?.launchURL ||
           notif?.launchUrl ||
+          nestedPayload?.launchURL ||
+          nestedPayload?.launchUrl ||
+          event?.result?.url ||
           event?.result?.action?.launchUrl ||
           event?.result?.action?.launchURL ||
+          notif?.data?.custom?.u ||
           data?.launchUrl ||
           data?.url ||
           '';

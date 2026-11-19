@@ -31,6 +31,28 @@
     <meta property="og:description" content="MyCityUnlocked helps expats and local residents find trusted professionals, practical guides, and local events" />
     <meta name="twitter:title" content="MyCityUnlocked - Local Professionals, Guides & Events" />
     <meta name="twitter:description" content="MyCityUnlocked helps expats and local residents find trusted professionals, practical guides, and local events" />
+    <script>
+      (function() {
+        window.__mcuEarlyPushQueue = window.__mcuEarlyPushQueue || [];
+        var pushNative = function(kind, payload) {
+          try {
+            if (typeof window.__mcuOneSignalDispatch === 'function') {
+              window.__mcuOneSignalDispatch(kind, payload);
+            } else {
+              window.__mcuEarlyPushQueue.push({ kind: kind, payload: payload, ts: Date.now() });
+            }
+          } catch (_) {}
+        };
+        window.gonative_onesignal_push_opened = function(p) { pushNative('push', p); };
+        window.median_onesignal_push_opened = function(p) { pushNative('push', p); };
+        window.handleOneSignalNotificationOpened = function(p) { pushNative('push', p); };
+        window.handleUniversalLink = function(u) { pushNative('deeplink', u); };
+        window.handleDeepLink = function(u) { pushNative('deeplink', u); };
+        window.addEventListener('onesignal-notification-opened', function(e) { pushNative('push', e && e.detail !== undefined ? e.detail : e); });
+        window.addEventListener('push-notification-clicked', function(e) { pushNative('push', e && e.detail !== undefined ? e.detail : e); });
+        window.addEventListener('universal-link-opened', function(e) { pushNative('deeplink', e && e.detail !== undefined ? e.detail : e); });
+      })();
+    </script>
     <!-- OneSignal Web SDK v16 -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
