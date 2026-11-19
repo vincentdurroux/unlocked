@@ -14111,7 +14111,7 @@ function HomeView({
   }, [expandedLandingProId]);
 
   return (
-    <div className="px-6 pt-4 sm:pt-6 lg:pt-8 pb-12 md:pb-24 xl:pb-6 space-y-12 md:space-y-20 lg:space-y-28 max-w-7xl mx-auto w-full overflow-hidden">
+    <div className="px-6 pt-7 sm:pt-8 lg:pt-10 pb-12 md:pb-24 xl:pb-6 space-y-12 md:space-y-20 lg:space-y-28 max-w-7xl mx-auto w-full overflow-hidden">
 
       {/* Welcome & Search Group */}
       <div className="space-y-0">
@@ -14119,7 +14119,7 @@ function HomeView({
         <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 md:gap-16 mb-0">
           <div className="space-y-1.5 md:space-y-8 flex flex-col items-start text-left max-w-xl pb-4 md:pb-10 pl-1 sm:pl-2 md:pl-0">
             <div className="flex items-center gap-3">
-              <h2 className="text-[28px] md:text-[30px] lg:text-[38px] font-semibold font-display text-brand-navy leading-tight">
+              <h2 className="text-2xl sm:text-3xl font-bold font-display text-brand-navy tracking-tight">
                 {currentUser ? (userProfile?.full_name ? `Hello ${userProfile.full_name.split(' ')[0]}, 👋` : 'Hello, 👋') : 'Hello Guest, 👋'}
               </h2>
               {unreadConversations.length > 0 && (
@@ -17531,7 +17531,7 @@ function computeProSearchScore(pro: any, searchStr: string): number {
     : [];
 
   return (
-    <div className="px-4 md:px-12 pt-4 sm:pt-6 lg:pt-8 pb-32 space-y-16 max-w-7xl mx-auto">
+    <div className="px-4 md:px-12 pt-7 sm:pt-8 lg:pt-10 pb-32 space-y-16 max-w-7xl mx-auto">
       {/* Search & Filters */}
       <div className="space-y-10">
         <div className="max-w-2xl mx-auto space-y-6">
@@ -17539,8 +17539,8 @@ function computeProSearchScore(pro: any, searchStr: string): number {
           {/* Ask Jane Search Interface */}
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="text-left space-y-1">
-              <h2 className="text-3xl md:text-4xl font-semibold font-display text-slate-900 tracking-tight leading-tight">
-                <span className="text-brand-blue font-semibold">What</span> are you looking for?
+              <h2 className="text-2xl sm:text-3xl font-bold font-display text-slate-800 tracking-tight">
+                <span className="text-brand-blue font-bold">What</span> are you looking for?
               </h2>
               <p className="text-slate-500 text-sm md:text-base leading-relaxed">
                 Search for a professional or let Jane, your AI assistant, find the best match for you.
@@ -20723,9 +20723,9 @@ function EventsView({
   }, [events]);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+    <div className="px-4 sm:px-6 lg:px-8 pt-7 sm:pt-8 lg:pt-10 pb-4 sm:pb-6 lg:pb-8 space-y-6 max-w-7xl mx-auto w-full">
       {/* Header Section */}
-      <div className="border-b border-slate-100 pb-5">
+      <div>
         <h2 className="text-2xl sm:text-3xl font-bold font-display text-slate-800 tracking-tight">
           <span className="text-orange-500 font-bold">What's Up</span> in Your City
         </h2>
@@ -21744,7 +21744,7 @@ function GuidesView({
     <div className="pb-32">
       {isNavigatedMode && selectedCategory ? (
         /* Category Sub-page Layout */
-        <div className="px-6 pt-6">
+        <div className="px-6 pt-7 sm:pt-8 lg:pt-10">
           <button 
             onClick={() => {
               setIsNavigatedMode(false);
@@ -21767,7 +21767,7 @@ function GuidesView({
                      <div className={cat?.color.replace('bg-', 'text-') || 'text-brand-blue'}>
                        {TopicIcon(cat?.icon_name || 'HomeIcon', 'w-10 h-10')}
                      </div>
-                     <h2 className="text-2xl font-bold font-display text-brand-navy">{cat?.title}</h2>
+                     <h2 className="text-2xl sm:text-3xl font-bold font-display text-brand-navy tracking-tight">{cat?.title}</h2>
                    </div>
                    <p className="text-slate-500 text-sm max-w-xl">{cat?.description}</p>
                  </div>
@@ -21829,9 +21829,9 @@ function GuidesView({
         </div>
       ) : (
         /* Main Guides Dashboard Layout */
-        <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+        <div className="px-4 sm:px-6 lg:px-8 pt-7 sm:pt-8 lg:pt-10 pb-4 sm:pb-6 lg:pb-8 space-y-6 max-w-7xl mx-auto w-full">
           {/* Header Section */}
-          <div className="border-b border-slate-100 pb-5">
+          <div>
             <h2 className="text-2xl sm:text-3xl font-bold font-display text-slate-800 tracking-tight">
               Ready to <span className="text-emerald-600 font-bold">settle into</span> your City?
             </h2>
@@ -22453,9 +22453,9 @@ function MarketplaceView({
   };
 
   return (
-    <div className="p-4 md:p-10 pt-6 sm:pt-8 md:pt-10 space-y-6 pb-32 max-w-7xl mx-auto">
+    <div className="px-4 md:px-10 pt-7 sm:pt-8 lg:pt-10 pb-32 space-y-6 max-w-7xl mx-auto">
       {/* Modern, Clean Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-200/80 shrink-0 shadow-2xs">
@@ -23754,22 +23754,22 @@ function ProfileView({
 
   if (!currentUser) {
     return (
-      <div className="min-h-full flex flex-col items-center justify-center p-8 bg-slate-50 pb-32">
-        <div className="w-20 h-20 bg-brand-blue/10 rounded-[30px] flex items-center justify-center mb-6">
-          <User className="w-10 h-10 text-brand-blue opacity-50" />
+      <div className="min-h-full flex flex-col items-center justify-center px-6 pt-7 sm:pt-8 lg:pt-10 pb-32 bg-slate-50/50">
+        <div className="w-16 h-16 bg-brand-blue/10 rounded-2xl flex items-center justify-center mb-6">
+          <User className="w-8 h-8 text-brand-blue" />
         </div>
-        <div className="text-center space-y-3 mb-10 max-w-xs">
-          <h2 className="text-2xl font-bold font-display text-brand-navy">Your Profile</h2>
-          <p className="text-slate-400 text-sm leading-relaxed">
-            Join the Unlocked community to save your favorite pros, participate in events, and chat with members.
+        <div className="text-center space-y-2.5 mb-8 max-w-xs">
+          <h2 className="text-2xl sm:text-3xl font-bold font-display text-brand-navy tracking-tight">Your Profile</h2>
+          <p className="text-slate-500 text-sm leading-relaxed">
+            Join the Unlocked community to save your favorite pros, RSVP to events, and chat with members.
           </p>
         </div>
         <button 
           onClick={() => onNavigate?.('login')}
-          className="w-full max-w-[280px] py-4 bg-brand-blue text-white rounded-2xl font-bold shadow-lg shadow-brand-blue/20 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all"
+          className="w-full max-w-[260px] py-3.5 bg-brand-blue hover:bg-brand-blue/90 text-white rounded-2xl font-bold shadow-md shadow-brand-blue/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
         >
-          <Lock className="w-5 h-5" />
-          Log In or Sign Up
+          <Lock className="w-4 h-4" />
+          <span>Log In or Sign Up</span>
         </button>
       </div>
     );
@@ -23854,65 +23854,71 @@ function ProfileView({
     }
   };
 
-  const menuItems = [
-    { label: 'My Account', icon: User, color: 'text-brand-blue font-bold text-brand-blue' },
-    ...(isAdmin ? [{ label: 'Admin Dashboard', icon: ShieldCheck, color: 'text-brand-blue', action: () => onNavigate?.('admin') }] : []),
-    { label: 'Suggest a Pro', icon: Star, color: 'text-brand-yellow', action: () => onAddPro?.() },
-    { label: 'Feedback', icon: MessageSquare, color: 'text-[#00C2A8]' },
-    { label: 'Settings', icon: SlidersHorizontal },
-    { label: 'About MyCityUnlocked', icon: Info },
-    { label: 'Legal', icon: FileText },
+  const primaryMenuItems = [
+    { label: 'My Account', icon: User, badgeBg: 'bg-brand-blue/10', iconColor: 'text-brand-blue' },
+    ...(isAdmin ? [{ label: 'Admin Dashboard', icon: ShieldCheck, badgeBg: 'bg-indigo-50', iconColor: 'text-indigo-600', action: () => onNavigate?.('admin') }] : []),
+    { label: 'Suggest a Pro', icon: Star, badgeBg: 'bg-amber-50', iconColor: 'text-amber-500', action: () => onAddPro?.() },
   ];
 
+  const secondaryMenuItems = [
+    { label: 'Feedback', icon: MessageSquare, badgeBg: 'bg-teal-50', iconColor: 'text-teal-600' },
+    { label: 'Settings', icon: SlidersHorizontal, badgeBg: 'bg-slate-100', iconColor: 'text-slate-600' },
+    { label: 'About MyCityUnlocked', icon: Info, badgeBg: 'bg-sky-50', iconColor: 'text-sky-600' },
+    { label: 'Legal', icon: FileText, badgeBg: 'bg-slate-100', iconColor: 'text-slate-500' },
+  ];
+
+  const displayName = userProfile?.full_name || userEmail.split('@')[0];
+
   return (
-    <div className="min-h-full w-full pb-16 flex flex-col bg-white">
-      {/* Profile Header */}
-      <div className="flex flex-col items-center pt-8 pb-10 bg-white border-b border-slate-100">
-        <div 
-          onClick={handleAvatarClick}
-          className="relative w-24 h-24 rounded-full bg-brand-blue/10 border-4 border-white shadow-sm overflow-hidden mb-4 flex items-center justify-center cursor-pointer group"
-        >
-          {userProfile?.avatar_url ? (
-            <img src={userProfile.avatar_url} alt="" className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" />
-          ) : (
-            <User className="w-12 h-12 text-brand-blue group-hover:opacity-50 transition-opacity" />
-          )}
-          
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
-            {isUpdatingAvatar ? (
-              <Loader2 className="w-6 h-6 text-white animate-spin" />
+    <div className="min-h-full w-full pb-24 flex flex-col bg-slate-50/50">
+      <div className="w-full max-w-xl mx-auto px-4 sm:px-6 pt-7 sm:pt-8 lg:pt-10 space-y-6">
+        {/* Minimal Profile Header */}
+        <div className="flex flex-col items-center text-center pt-1 pb-2">
+          <div 
+            onClick={handleAvatarClick}
+            className="relative w-22 h-22 rounded-full bg-brand-blue/10 ring-4 ring-white shadow-sm overflow-hidden mb-3.5 flex items-center justify-center cursor-pointer group"
+            title="Change profile photo"
+          >
+            {userProfile?.avatar_url ? (
+              <img src={userProfile.avatar_url} alt={displayName} className="w-full h-full object-cover group-hover:opacity-60 transition-opacity" />
             ) : (
-              <Camera className="w-6 h-6 text-white" />
+              <User className="w-10 h-10 text-brand-blue group-hover:opacity-60 transition-opacity" />
             )}
-          </div>
-          
-          {/* Discreet camera indicator for mobile/tablet only */}
-          {!isUpdatingAvatar && (
-            <div className="absolute bottom-1 right-1 p-1 bg-white rounded-full shadow-sm border border-slate-100 text-brand-blue xl:hidden">
-              <Camera className="w-3.5 h-3.5" />
+
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/20">
+              {isUpdatingAvatar ? (
+                <Loader2 className="w-5 h-5 text-white animate-spin" />
+              ) : (
+                <Camera className="w-5 h-5 text-white" />
+              )}
             </div>
-          )}
-          <input 
-            type="file"
-            ref={avatarInputRef}
-            onChange={handleAvatarChange}
-            accept="image/*"
-            className="hidden"
-          />
-        </div>
-        <div className="text-center">
-          <h2 className="text-xl font-semibold font-display text-brand-navy flex items-center justify-center gap-2">
-            {userProfile?.full_name || userEmail.split('@')[0]}
+
+            {!isUpdatingAvatar && (
+              <div className="absolute bottom-1 right-1 p-1 bg-white rounded-full shadow-sm border border-slate-100 text-brand-blue xl:hidden">
+                <Camera className="w-3 h-3" />
+              </div>
+            )}
+            <input 
+              type="file"
+              ref={avatarInputRef}
+              onChange={handleAvatarChange}
+              accept="image/*"
+              className="hidden"
+            />
+          </div>
+
+          <h2 className="text-2xl sm:text-3xl font-bold font-display text-brand-navy tracking-tight flex items-center justify-center gap-2">
+            <span>{displayName}</span>
             {unreadConversations.length > 0 && (
               <motion.button
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 onClick={() => onNavigate?.('messages' as any)}
-                className="relative group active:scale-90 transition-all ml-1"
+                className="relative group active:scale-90 transition-all cursor-pointer"
                 title={`${unreadConversations.length} new message${unreadConversations.length > 1 ? 's' : ''}`}
               >
-                <div className="w-5 h-5 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-200 group-hover:bg-brand-blue/5 group-hover:border-brand-blue/20 transition-all">
-                  <MessageCircle className="w-3 h-3 text-slate-400 group-hover:text-brand-blue" />
+                <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center border border-slate-200 shadow-2xs group-hover:border-brand-blue/30 transition-all">
+                  <MessageCircle className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand-blue" />
                 </div>
                 <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
@@ -23921,43 +23927,74 @@ function ProfileView({
               </motion.button>
             )}
           </h2>
+
+          {userEmail && (
+            <p className="text-xs text-slate-400 mt-1">{userEmail}</p>
+          )}
+
           {isAdmin && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/10 text-brand-blue text-[10px] font-semibold uppercase tracking-widest rounded-full mt-1">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue text-[10px] font-semibold uppercase tracking-widest rounded-full mt-2">
               <ShieldCheck className="w-3 h-3" /> Admin
             </span>
           )}
         </div>
-      </div>
 
-      {/* Menu List */}
-      <div className="bg-white border-y border-slate-100">
-        {menuItems.map((item, index) => (
+        {/* Grouped Menu Cards */}
+        <div className="space-y-3.5">
+          <div className="bg-white rounded-3xl border border-slate-200/60 shadow-2xs overflow-hidden divide-y divide-slate-100/80">
+            {primaryMenuItems.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => item.action ? item.action() : setActiveSubPage(item.label)}
+                className="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/70 active:bg-slate-100/60 transition-colors group cursor-pointer text-left"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center shrink-0", item.badgeBg)}>
+                    <item.icon className={cn("w-4 h-4", item.iconColor)} />
+                  </div>
+                  <span className="text-[15px] font-medium text-slate-700 group-hover:text-brand-navy transition-colors">
+                    {item.label}
+                  </span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-brand-blue transition-colors" />
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-3xl border border-slate-200/60 shadow-2xs overflow-hidden divide-y divide-slate-100/80">
+            {secondaryMenuItems.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => setActiveSubPage(item.label)}
+                className="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/70 active:bg-slate-100/60 transition-colors group cursor-pointer text-left"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center shrink-0", item.badgeBg)}>
+                    <item.icon className={cn("w-4 h-4", item.iconColor)} />
+                  </div>
+                  <span className="text-[15px] font-medium text-slate-700 group-hover:text-brand-navy transition-colors">
+                    {item.label}
+                  </span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-brand-blue transition-colors" />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Logout */}
+        <div className="pt-2">
           <button 
-            key={index}
-            onClick={() => item.action ? item.action() : setActiveSubPage(item.label)}
-            className={cn(
-              "w-full px-6 py-4 flex justify-between items-center active:bg-slate-50 hover:bg-slate-50/50 transition-all group",
-              index !== menuItems.length - 1 && "border-b border-slate-50"
-            )}
+            type="button"
+            onClick={handleLogout}
+            className="w-full py-3 text-sm font-medium text-slate-400 hover:text-rose-500 transition-colors flex items-center justify-center gap-2 cursor-pointer"
           >
-            <div className="flex items-center gap-3 group-hover:translate-x-1 transition-transform">
-              <item.icon className={cn("w-5 h-5 text-slate-400 group-hover:text-brand-blue transition-colors", item.color)} />
-              <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors uppercase tracking-wider">{item.label}</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-brand-blue transition-colors" />
+            <LogOut className="w-4 h-4" />
+            <span>Logout</span>
           </button>
-        ))}
-      </div>
-
-      {/* Logout Button */}
-      <div className="px-6 mt-8">
-        <button 
-          onClick={handleLogout}
-          className="w-full py-4 text-slate-500 font-medium hover:text-red-500 transition-colors flex items-center justify-center gap-2"
-        >
-          <LogOut className="w-5 h-5" />
-          Logout
-        </button>
+        </div>
       </div>
 
       {/* Sub-pages */}
