@@ -199,17 +199,17 @@ export function HeaderWeatherWidget() {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer select-none shrink-0"
+        className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer select-none shrink-0"
         title={`${locationName} Weather`}
         aria-label={`${locationName} Weather`}
       >
-        <CurrentIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${currentDetails.color} shrink-0`} />
+        <CurrentIcon className={`w-5 h-5 sm:w-6 sm:h-6 ${currentDetails.color} shrink-0`} />
         <div className="flex flex-col items-start leading-none">
-          <span className="text-xs sm:text-sm font-bold font-display text-brand-navy tabular-nums">
+          <span className="text-sm sm:text-base font-bold font-display text-brand-navy tabular-nums">
             {weather.temp}°C
           </span>
-          <span className="text-[9px] font-semibold text-slate-400 flex items-center gap-0.5 max-w-[64px] truncate mt-0.5">
-            {isGeolocated && <MapPin className="w-2 h-2 text-emerald-500 shrink-0" />}
+          <span className="text-[10px] sm:text-[11px] font-semibold text-slate-500 flex items-center gap-0.5 max-w-[78px] sm:max-w-[96px] truncate mt-0.5">
+            {isGeolocated && <MapPin className="w-2.5 h-2.5 text-emerald-500 shrink-0" />}
             <span className="truncate">{locationName}</span>
           </span>
         </div>
@@ -219,26 +219,33 @@ export function HeaderWeatherWidget() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 6, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.97 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.16, ease: 'easeOut' }}
-            className="absolute right-0 top-full mt-2 w-[276px] sm:w-[292px] rounded-2xl bg-white border border-slate-100 shadow-xl p-4 z-50 text-slate-800 space-y-3.5"
+            className="absolute left-1/2 -translate-x-1/2 lg:left-auto lg:translate-x-0 lg:right-0 top-full mt-2 z-50"
           >
+            <motion.div
+              initial={{ y: 6, scale: 0.97 }}
+              animate={{ y: 0, scale: 1 }}
+              exit={{ y: 4, scale: 0.97 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              className="w-[296px] max-w-[calc(100vw-2rem)] sm:w-[316px] rounded-2xl bg-white border border-slate-100 shadow-xl p-4.5 sm:p-5 text-slate-800 space-y-4"
+            >
             {/* Header: Location & Current Temperature */}
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-1 text-xs font-bold text-brand-navy truncate">
+                <div className="flex items-center gap-1.5 text-sm font-bold text-brand-navy truncate">
                   <MapPin className="w-3.5 h-3.5 text-brand-blue shrink-0" />
                   <span className="truncate">{locationName}</span>
                 </div>
-                <p className="text-[11px] font-medium text-slate-400 mt-0.5">
+                <p className="text-xs font-medium text-slate-400 mt-0.5">
                   {currentDetails.label} · H:{weather.tempMax}° L:{weather.tempMin}°
                 </p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <CurrentIcon className={`w-6 h-6 ${currentDetails.color}`} />
-                <span className="text-2xl font-bold font-display text-brand-navy tabular-nums leading-none">
+                <CurrentIcon className={`w-7 h-7 ${currentDetails.color}`} />
+                <span className="text-2xl sm:text-[26px] font-bold font-display text-brand-navy tabular-nums leading-none">
                   {weather.temp}°
                 </span>
               </div>
@@ -287,6 +294,7 @@ export function HeaderWeatherWidget() {
                 );
               })}
             </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -5091,7 +5091,7 @@ export default function App() {
           style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
           className="bg-white px-4 md:px-6 pb-2 md:pt-3 md:pb-3 flex justify-between items-center border-b border-slate-100 flex-shrink-0 z-30 relative"
         >
-          <div className="flex items-center lg:flex-1">
+          <div className="flex items-center flex-1 min-w-0">
             <div 
               onClick={() => navigateTo('home')}
               className="hover:opacity-80 transition-opacity cursor-pointer flex flex-col items-center md:items-start"
@@ -5126,9 +5126,11 @@ export default function App() {
             ))}
           </nav>
           
-          <div className="flex items-center justify-end gap-2 md:gap-4 lg:flex-1">
-            {/* Header Weather Widget */}
-            <HeaderWeatherWidget />
+          <div className="contents lg:flex lg:items-center lg:justify-end lg:gap-4 lg:flex-1">
+            {/* Header Weather Widget — centered on mobile, right-aligned on desktop */}
+            <div className="flex items-center justify-center shrink-0">
+              <HeaderWeatherWidget />
+            </div>
 
             {/* Desktop Profile Link */}
             <div className="hidden lg:flex items-center gap-4 border-r border-slate-100 pr-4 mr-2">
@@ -5163,7 +5165,8 @@ export default function App() {
                </button>
             </div>
             {/* Notification Bell Button */}
-            <div className="relative">
+            <div className="flex items-center justify-end flex-1 lg:flex-initial">
+              <div className="relative">
               <button 
                 onClick={() => {
                   if (!currentUser) {
@@ -5254,6 +5257,7 @@ export default function App() {
                   />
                 )}
               </AnimatePresence>
+              </div>
             </div>
           </div>
         </header>
@@ -13966,6 +13970,794 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
   );
 }
 
+type MeetLocalProSlide =
+  | {
+      type: 'pro' | 'testimony';
+      key: string;
+      pro: Professional;
+      rating: number;
+      comment: string;
+      author: string;
+      reviewCount: number;
+      hasReviews: boolean;
+    }
+  | {
+      type: 'partner';
+      key: string;
+      partner: AppPartner;
+    };
+
+function MeetLocalProCard({
+  items,
+  expandedLandingProId,
+  onSelectPro,
+  expandedLandingPartner,
+  onToggleExpandPartner,
+  activePartnersCount,
+  partnerCarouselIdx,
+  onNextPartner,
+  onPrevPartner,
+}: {
+  items: MeetLocalProSlide[];
+  expandedLandingProId: string | null;
+  onSelectPro: (proId: string) => void;
+  expandedLandingPartner: boolean;
+  onToggleExpandPartner: () => void;
+  activePartnersCount: number;
+  partnerCarouselIdx: number;
+  onNextPartner: (e: React.MouseEvent) => void;
+  onPrevPartner: (e: React.MouseEvent) => void;
+}) {
+  const count = items.length;
+  const setCount = count <= 1 ? 1 : count <= 2 ? 5 : 3;
+  const middleSetIndex = Math.floor(setCount / 2);
+
+  const repeatedItems = useMemo(() => {
+    if (count === 0) return [];
+    const list: MeetLocalProSlide[] = [];
+    for (let s = 0; s < setCount; s++) {
+      list.push(...items);
+    }
+    return list;
+  }, [items, count, setCount]);
+
+  const itemsKey = useMemo(() => items.map((it) => it.key).join('|'), [items]);
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+
+  const trackRef = useRef<HTMLDivElement>(null);
+  const currentIndexRef = useRef(0);
+  const rawVirtualIdxRef = useRef(0);
+  const isTouchingRef = useRef(false);
+  const isAnimatingRef = useRef(false);
+  const scrollRafRef = useRef<number | null>(null);
+  const animRafRef = useRef<number | null>(null);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastManualInteractRef = useRef(0);
+  const touchStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const touchDraggedRef = useRef(false);
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+      if (animRafRef.current) cancelAnimationFrame(animRafRef.current);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, []);
+
+  const cancelAnimation = () => {
+    if (animRafRef.current) {
+      cancelAnimationFrame(animRafRef.current);
+      animRafRef.current = null;
+    }
+    if (isAnimatingRef.current) {
+      isAnimatingRef.current = false;
+      if (trackRef.current) {
+        trackRef.current.style.scrollSnapType = '';
+      }
+    }
+  };
+
+  const getSlideLeft = (vIndex: number): number | null => {
+    const track = trackRef.current;
+    if (!track) return null;
+    const slide = track.children[vIndex] as HTMLElement | undefined;
+    if (!slide) return null;
+    return slide.offsetLeft;
+  };
+
+  const normalizeToMiddleSet = () => {
+    const track = trackRef.current;
+    if (!track || count <= 1 || isTouchingRef.current || isAnimatingRef.current) return;
+    const currentIdx = rawVirtualIdxRef.current;
+    const norm = ((currentIdx % count) + count) % count;
+    const targetIdx = middleSetIndex * count + norm;
+
+    if (targetIdx !== currentIdx) {
+      const targetLeft = getSlideLeft(targetIdx);
+      if (targetLeft !== null) {
+        track.style.scrollSnapType = 'none';
+        track.scrollLeft = targetLeft;
+        rawVirtualIdxRef.current = targetIdx;
+        requestAnimationFrame(() => {
+          if (trackRef.current && !isAnimatingRef.current) {
+            trackRef.current.style.scrollSnapType = '';
+          }
+        });
+      }
+    }
+  };
+
+  const scrollToVirtual = (vIndex: number, smooth = true) => {
+    const track = trackRef.current;
+    if (!track || count === 0) return;
+
+    const clamped = Math.max(0, Math.min(repeatedItems.length - 1, vIndex));
+    const targetLeft = getSlideLeft(clamped);
+    if (targetLeft === null) return;
+
+    cancelAnimation();
+
+    if (!smooth) {
+      track.style.scrollSnapType = 'none';
+      track.scrollLeft = targetLeft;
+      rawVirtualIdxRef.current = clamped;
+      const norm = ((clamped % count) + count) % count;
+      if (norm !== currentIndexRef.current) {
+        setCurrentIndex(norm);
+      }
+      requestAnimationFrame(() => {
+        if (trackRef.current && !isAnimatingRef.current) {
+          trackRef.current.style.scrollSnapType = '';
+        }
+      });
+      return;
+    }
+
+    const startLeft = track.scrollLeft;
+    const distance = targetLeft - startLeft;
+    if (Math.abs(distance) < 1) {
+      normalizeToMiddleSet();
+      return;
+    }
+
+    const duration = 380;
+    const startTime = performance.now();
+    isAnimatingRef.current = true;
+    track.style.scrollSnapType = 'none';
+
+    const step = (now: number) => {
+      if (!trackRef.current || isTouchingRef.current) {
+        cancelAnimation();
+        return;
+      }
+      const progress = Math.min(1, (now - startTime) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      trackRef.current.scrollLeft = startLeft + distance * eased;
+
+      if (progress < 1) {
+        animRafRef.current = requestAnimationFrame(step);
+      } else {
+        animRafRef.current = null;
+        isAnimatingRef.current = false;
+        trackRef.current.scrollLeft = targetLeft;
+        trackRef.current.style.scrollSnapType = '';
+        rawVirtualIdxRef.current = clamped;
+        const norm = ((clamped % count) + count) % count;
+        if (norm !== currentIndexRef.current) {
+          setCurrentIndex(norm);
+        }
+        requestAnimationFrame(() => normalizeToMiddleSet());
+      }
+    };
+
+    animRafRef.current = requestAnimationFrame(step);
+  };
+
+  // Initial snap to middle set
+  useEffect(() => {
+    if (count === 0 || !trackRef.current) return;
+    const raf = requestAnimationFrame(() => {
+      const startVIdx = count > 1 ? middleSetIndex * count : 0;
+      scrollToVirtual(startVIdx, false);
+      setCurrentIndex(0);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [itemsKey, count, middleSetIndex]);
+
+  // Keep slide aligned on container width changes
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || count === 0 || typeof ResizeObserver === 'undefined') return;
+    let lastWidth = track.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (!trackRef.current || isTouchingRef.current || isAnimatingRef.current) return;
+      const nextWidth = trackRef.current.clientWidth;
+      if (Math.abs(nextWidth - lastWidth) > 2) {
+        lastWidth = nextWidth;
+        scrollToVirtual(rawVirtualIdxRef.current, false);
+      }
+    });
+    ro.observe(track);
+    return () => ro.disconnect();
+  }, [count, repeatedItems.length]);
+
+  // Native scrollend recentering for zero-jank infinite loop on iOS & Android
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || count <= 1) return;
+    const onScrollEnd = () => {
+      if (!isTouchingRef.current && !isAnimatingRef.current) {
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+        normalizeToMiddleSet();
+      }
+    };
+    track.addEventListener('scrollend', onScrollEnd, { passive: true });
+    return () => track.removeEventListener('scrollend', onScrollEnd);
+  }, [count, middleSetIndex]);
+
+  const handleScroll = () => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (!isAnimatingRef.current && !isTouchingRef.current) {
+      idleTimerRef.current = setTimeout(() => {
+        normalizeToMiddleSet();
+      }, 240);
+    }
+
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      const track = trackRef.current;
+      if (!track || count === 0 || track.clientWidth === 0) return;
+
+      const vIdx = Math.round(track.scrollLeft / track.clientWidth);
+      const clamped = Math.max(0, Math.min(repeatedItems.length - 1, vIdx));
+      if (clamped !== rawVirtualIdxRef.current) {
+        rawVirtualIdxRef.current = clamped;
+        const norm = ((clamped % count) + count) % count;
+        if (norm !== currentIndexRef.current) {
+          setCurrentIndex(norm);
+        }
+      }
+    });
+  };
+
+  const stepSlide = (delta: 1 | -1) => {
+    if (count <= 1) return;
+    const currentIdx = rawVirtualIdxRef.current;
+    let baseIdx = currentIdx;
+    if (currentIdx + delta < 1 || currentIdx + delta >= repeatedItems.length - 1) {
+      const norm = ((currentIdx % count) + count) % count;
+      baseIdx = middleSetIndex * count + norm;
+      const resetLeft = getSlideLeft(baseIdx);
+      if (resetLeft !== null && trackRef.current) {
+        trackRef.current.style.scrollSnapType = 'none';
+        trackRef.current.scrollLeft = resetLeft;
+        rawVirtualIdxRef.current = baseIdx;
+      }
+    }
+    scrollToVirtual(baseIdx + delta, true);
+  };
+
+  const jumpToIndex = (targetNormIdx: number) => {
+    if (count <= 1) return;
+    const currentIdx = rawVirtualIdxRef.current;
+    const currentNorm = ((currentIdx % count) + count) % count;
+    const diff = targetNormIdx - currentNorm;
+    if (diff === 0) return;
+    scrollToVirtual(currentIdx + diff, true);
+  };
+
+  // Auto-rotate every 15 seconds (pauses when hovering, touching, or modal expanded)
+  useEffect(() => {
+    if (count <= 1 || isHovered || expandedLandingProId || expandedLandingPartner) return;
+    const timer = setInterval(() => {
+      if (isTouchingRef.current || isAnimatingRef.current) return;
+      if (Date.now() - lastManualInteractRef.current < 5000) return;
+      stepSlide(1);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [count, isHovered, expandedLandingProId, expandedLandingPartner, middleSetIndex]);
+
+  if (count === 0) return null;
+
+  const activeItem = items[currentIndex % count] || items[0];
+  const isCardProExpanded = activeItem.type !== 'partner' && expandedLandingProId === String(activeItem.pro.id);
+
+  // If partner slide is mixed in ('both' mode), wrap full cards in a native horizontal scroll-snap track
+  const hasMixedPartner = items.some((it) => it.type === 'partner');
+
+  if (hasMixedPartner) {
+    return (
+      <div
+        className="relative h-full group"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div
+          ref={trackRef}
+          onScroll={handleScroll}
+          onPointerDown={() => {
+            lastManualInteractRef.current = Date.now();
+            cancelAnimation();
+          }}
+          onTouchStart={(e) => {
+            isTouchingRef.current = true;
+            touchDraggedRef.current = false;
+            lastManualInteractRef.current = Date.now();
+            touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            cancelAnimation();
+            if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+          }}
+          onTouchMove={(e) => {
+            const dx = Math.abs(e.touches[0].clientX - touchStartRef.current.x);
+            const dy = Math.abs(e.touches[0].clientY - touchStartRef.current.y);
+            if (dx > 8 || dy > 8) touchDraggedRef.current = true;
+          }}
+          onTouchEnd={() => {
+            isTouchingRef.current = false;
+            lastManualInteractRef.current = Date.now();
+            if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+            idleTimerRef.current = setTimeout(() => normalizeToMiddleSet(), 260);
+          }}
+          onTouchCancel={() => {
+            isTouchingRef.current = false;
+          }}
+          className="flex h-full overflow-x-auto snap-x snap-mandatory [&::-webkit-scrollbar]:hidden rounded-3xl"
+          style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {repeatedItems.map((item, vIdx) => (
+            <div key={`${item.key}-${vIdx}`} className="w-full shrink-0 snap-center snap-always h-full">
+              {item.type === 'partner' ? (
+                <PartnerHighlightCard
+                  partner={item.partner}
+                  isExpanded={expandedLandingPartner}
+                  totalPartners={activePartnersCount}
+                  currentIndex={partnerCarouselIdx % Math.max(1, activePartnersCount)}
+                  onNextPartner={onNextPartner}
+                  onPrevPartner={onPrevPartner}
+                  onToggleExpand={() => {
+                    if (touchDraggedRef.current) {
+                      touchDraggedRef.current = false;
+                      return;
+                    }
+                    onToggleExpandPartner();
+                  }}
+                />
+              ) : (
+                <div
+                  onClick={() => {
+                    if (touchDraggedRef.current) {
+                      touchDraggedRef.current = false;
+                      return;
+                    }
+                    onSelectPro(String(item.pro.id));
+                  }}
+                  className={cn(
+                    "flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-sky-50/25 to-blue-50/15 border transition-colors duration-200 cursor-pointer relative overflow-hidden h-full min-h-[480px] select-none",
+                    expandedLandingProId === String(item.pro.id)
+                      ? "border-brand-blue ring-2 ring-brand-blue/30 shadow-xl bg-blue-50/35"
+                      : "border-blue-100/90 hover:border-brand-blue/40 shadow-sm"
+                  )}
+                >
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue to-sky-500 flex items-center justify-center text-white shadow-md shadow-brand-blue/20 shrink-0">
+                      <Star className="w-4 h-4 fill-current" />
+                    </div>
+                    <h3 className="font-extrabold font-display text-sm sm:text-base text-slate-900 tracking-tight leading-none">
+                      Meet a local Pro
+                    </h3>
+                  </div>
+
+                  <div className="flex-1 flex flex-col justify-center items-center text-center w-full">
+                    {item.type === 'testimony' ? (
+                      <div className="space-y-4 flex flex-col items-center justify-center w-full">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={item.pro.image || "/people.png"}
+                            alt={item.pro.name}
+                            className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover ring-2 ring-blue-100 shadow-md shrink-0"
+                            referrerPolicy="no-referrer"
+                            decoding="async"
+                            draggable={false}
+                            onError={(e) => {
+                              const img = e.currentTarget as HTMLImageElement;
+                              if (!img.src.endsWith('/people.png')) img.src = '/people.png';
+                            }}
+                          />
+                          <div className="text-left min-w-0">
+                            <h4 className="font-bold text-slate-900 max-w-[220px] truncate leading-tight uppercase tracking-tight text-xs sm:text-sm">{item.pro.name}</h4>
+                            <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-tight truncate">{item.pro.category}</p>
+                          </div>
+                        </div>
+                        <div className="bg-white/90 p-5 rounded-2xl border border-blue-100/80 shadow-xs text-left w-full">
+                          <p className="text-xs sm:text-[13px] text-slate-700 leading-relaxed font-medium italic">"{item.comment}"</p>
+                          <div className="mt-3 flex items-center justify-end gap-2">
+                            <div className="h-[1px] w-4 bg-brand-blue/20" />
+                            <span className="text-[10px] font-black text-brand-blue uppercase tracking-tight">{formatName(item.author)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col space-y-3.5 items-center justify-center w-full py-2">
+                        <img
+                          src={item.pro.image || "/people.png"}
+                          alt={item.pro.name}
+                          className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-3xl object-cover shadow-lg ring-4 ring-white border border-blue-100/80"
+                          referrerPolicy="no-referrer"
+                          decoding="async"
+                          draggable={false}
+                          onError={(e) => {
+                            const img = e.currentTarget as HTMLImageElement;
+                            if (!img.src.endsWith('/people.png')) img.src = '/people.png';
+                          }}
+                        />
+                        <div className="space-y-1 text-center w-full px-2">
+                          <h4 className="font-bold text-slate-900 text-base md:text-lg leading-tight truncate">{item.pro.name}</h4>
+                          <p className="text-xs font-bold text-brand-blue uppercase tracking-wide truncate">{item.pro.category}</p>
+                          {item.hasReviews && (
+                            <div className="flex items-center gap-1 pt-1 justify-center">
+                              {[...Array(5)].map((_, i) => (
+                                <Star key={i} className={`w-3.5 h-3.5 ${i < Math.floor(item.rating) ? 'text-brand-yellow fill-current' : 'text-slate-200'}`} />
+                              ))}
+                              <span className="text-[11px] text-slate-500 font-extrabold ml-1">({item.reviewCount})</span>
+                            </div>
+                          )}
+                          {item.pro.top_qualities && item.pro.top_qualities.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-2 justify-center">
+                              {item.pro.top_qualities.slice(0, 2).map((quality: string) => {
+                                const cfg = getQualityConfig(quality);
+                                const QualityIcon = cfg.icon;
+                                return (
+                                  <span key={quality} className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[9px] font-bold border ${cfg.color} shrink-0 bg-white/80 shadow-3xs`}>
+                                    <QualityIcon className={`w-3 h-3 ${cfg.iconColor} shrink-0`} />
+                                    {quality}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-3 border-t border-blue-100/70 flex items-center justify-between mt-auto w-full">
+                    {count > 1 && (
+                      <div className="flex items-center gap-1.5">
+                        {items.slice(0, 6).map((_, idx) => {
+                          const isDotActive = count <= 6 ? idx === currentIndex : idx === currentIndex % 6;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              aria-label={`Slide ${idx + 1}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                lastManualInteractRef.current = Date.now();
+                                jumpToIndex(idx);
+                              }}
+                              className={cn(
+                                "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
+                                isDotActive ? "w-5 bg-brand-blue" : "w-1.5 bg-blue-200 hover:bg-blue-300"
+                              )}
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="text-[11px] font-bold text-brand-blue flex items-center gap-1 ml-auto">
+                      <span>{expandedLandingProId === String(item.pro.id) ? "Close profile" : "View profile"}</span>
+                      <span>→</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {count >= 2 && (
+          <>
+            <button
+              type="button"
+              aria-label="Previous slide"
+              onClick={(e) => {
+                e.stopPropagation();
+                lastManualInteractRef.current = Date.now();
+                stepSlide(-1);
+              }}
+              className="hidden md:flex items-center justify-center absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/85 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Next slide"
+              onClick={(e) => {
+                e.stopPropagation();
+                lastManualInteractRef.current = Date.now();
+                stepSlide(1);
+              }}
+              className="hidden md:flex items-center justify-center absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/85 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      id="discover-card-pro"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={cn(
+        "flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-sky-50/25 to-blue-50/15 border transition-all duration-300 group relative overflow-hidden h-full min-h-[480px]",
+        isCardProExpanded
+          ? "border-brand-blue ring-2 ring-brand-blue/30 shadow-xl bg-blue-50/35"
+          : "border-blue-100/90 hover:border-brand-blue/40 shadow-sm hover:shadow-xl hover:-translate-y-1"
+      )}
+    >
+      {/* Subtle soft ambient light */}
+      <div className="absolute -top-20 -right-20 w-52 h-52 bg-sky-200/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-20 -left-20 w-52 h-52 bg-blue-200/15 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="relative z-10 flex-1 flex flex-col justify-between min-w-0">
+        {/* Header: Meet a local Pro */}
+        <div className="flex items-center justify-between gap-3 mb-2 w-full">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue to-sky-500 flex items-center justify-center text-white shadow-md shadow-brand-blue/20 shrink-0">
+              <Star className="w-4 h-4 fill-current" />
+            </div>
+            <div className="text-left">
+              <h3 className="font-extrabold font-display text-sm sm:text-base text-slate-900 tracking-tight leading-none">
+                Meet a local Pro
+              </h3>
+            </div>
+          </div>
+        </div>
+
+        {/* Native 60/120fps Horizontal Scroll-Snap Track */}
+        <div
+          ref={trackRef}
+          onScroll={handleScroll}
+          onPointerDown={() => {
+            lastManualInteractRef.current = Date.now();
+            cancelAnimation();
+          }}
+          onWheel={() => {
+            lastManualInteractRef.current = Date.now();
+            cancelAnimation();
+          }}
+          onTouchStart={(e) => {
+            isTouchingRef.current = true;
+            touchDraggedRef.current = false;
+            lastManualInteractRef.current = Date.now();
+            touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            cancelAnimation();
+            if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+          }}
+          onTouchMove={(e) => {
+            const dx = Math.abs(e.touches[0].clientX - touchStartRef.current.x);
+            const dy = Math.abs(e.touches[0].clientY - touchStartRef.current.y);
+            if (dx > 8 || dy > 8) {
+              touchDraggedRef.current = true;
+            }
+          }}
+          onTouchEnd={() => {
+            isTouchingRef.current = false;
+            lastManualInteractRef.current = Date.now();
+            if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+            idleTimerRef.current = setTimeout(() => {
+              normalizeToMiddleSet();
+            }, 260);
+          }}
+          onTouchCancel={() => {
+            isTouchingRef.current = false;
+          }}
+          className="-mx-6 sm:-mx-7 flex flex-1 items-center overflow-x-auto snap-x snap-mandatory [&::-webkit-scrollbar]:hidden"
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+        >
+          {repeatedItems.map((item, vIdx) => {
+            if (item.type === 'partner') return null;
+            return (
+              <div
+                key={`${item.key}-${vIdx}`}
+                onClick={() => {
+                  if (touchDraggedRef.current) {
+                    touchDraggedRef.current = false;
+                    return;
+                  }
+                  onSelectPro(String(item.pro.id));
+                }}
+                className="w-full shrink-0 snap-center snap-always px-6 sm:px-7 py-2 flex flex-col items-center justify-center text-center cursor-pointer select-none"
+              >
+                {item.type === 'testimony' ? (
+                  <div className="space-y-4 flex flex-col items-center justify-center w-full">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={item.pro.image || "/people.png"}
+                        alt={item.pro.name}
+                        className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover ring-2 ring-blue-100 shadow-md shrink-0"
+                        referrerPolicy="no-referrer"
+                        loading="eager"
+                        decoding="async"
+                        draggable={false}
+                        onError={(e) => {
+                          const img = e.currentTarget as HTMLImageElement;
+                          if (!img.src.endsWith('/people.png')) img.src = '/people.png';
+                        }}
+                      />
+                      <div className="text-left min-w-0">
+                        <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors max-w-[220px] truncate leading-tight uppercase tracking-tight text-xs sm:text-sm">
+                          {item.pro.name}
+                        </h4>
+                        <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-tight truncate">
+                          {item.pro.category}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="relative bg-white/90 p-5 rounded-2xl border border-blue-100/80 shadow-xs text-left w-full">
+                      <p className="text-xs sm:text-[13px] text-slate-700 leading-relaxed font-medium italic">
+                        "{item.comment}"
+                      </p>
+                      <div className="mt-3 flex items-center justify-end gap-2">
+                        <div className="h-[1px] w-4 bg-brand-blue/20" />
+                        <span className="text-[10px] font-black text-brand-blue uppercase tracking-tight">
+                          {formatName(item.author)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col space-y-3.5 items-center justify-center w-full">
+                    <div className="relative">
+                      <img
+                        src={item.pro.image || "/people.png"}
+                        alt={item.pro.name}
+                        className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-3xl object-cover shadow-lg ring-4 ring-white border border-blue-100/80 group-hover:scale-105 transition-transform duration-300"
+                        referrerPolicy="no-referrer"
+                        loading="eager"
+                        decoding="async"
+                        draggable={false}
+                        onError={(e) => {
+                          const img = e.currentTarget as HTMLImageElement;
+                          if (!img.src.endsWith('/people.png')) img.src = '/people.png';
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1 text-center w-full px-2">
+                      <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-base md:text-lg leading-tight truncate">
+                        {item.pro.name}
+                      </h4>
+                      <p className="text-xs font-bold text-brand-blue uppercase tracking-wide truncate">
+                        {item.pro.category}
+                      </p>
+
+                      {item.hasReviews && (
+                        <div className="flex items-center gap-1 pt-1 justify-center">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-3.5 h-3.5 ${i < Math.floor(item.rating) ? 'text-brand-yellow fill-current' : 'text-slate-200'}`}
+                            />
+                          ))}
+                          <span className="text-[11px] text-slate-500 font-extrabold ml-1">
+                            ({item.reviewCount})
+                          </span>
+                        </div>
+                      )}
+
+                      {item.pro.top_qualities && item.pro.top_qualities.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-2 justify-center">
+                          {item.pro.top_qualities.slice(0, 2).map((quality: string) => {
+                            const cfg = getQualityConfig(quality);
+                            const QualityIcon = cfg.icon;
+                            return (
+                              <span
+                                key={quality}
+                                className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[9px] font-bold border ${cfg.color} shrink-0 bg-white/80 shadow-3xs`}
+                              >
+                                <QualityIcon className={`w-3 h-3 ${cfg.iconColor} shrink-0`} />
+                                {quality}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Clean Footer */}
+        <div
+          onClick={() => {
+            if (activeItem.type !== 'partner') {
+              onSelectPro(String(activeItem.pro.id));
+            }
+          }}
+          className="pt-3 border-t border-blue-100/70 flex items-center justify-between mt-auto w-full cursor-pointer"
+        >
+          {count > 1 && (
+            <div className="flex items-center gap-1.5">
+              {items.slice(0, 6).map((_, idx) => {
+                const isDotActive = count <= 6 ? idx === currentIndex : idx === currentIndex % 6;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    aria-label={`Slide ${idx + 1}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      lastManualInteractRef.current = Date.now();
+                      jumpToIndex(idx);
+                    }}
+                    className={cn(
+                      "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
+                      isDotActive ? "w-5 bg-brand-blue" : "w-1.5 bg-blue-200 hover:bg-blue-300"
+                    )}
+                  />
+                );
+              })}
+            </div>
+          )}
+          <div className="text-[11px] font-bold text-brand-blue flex items-center gap-1 group-hover:translate-x-0.5 transition-transform ml-auto">
+            <span>{isCardProExpanded ? "Close profile" : "View profile"}</span>
+            <span>→</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop hover navigation arrows */}
+      {count >= 2 && (
+        <>
+          <button
+            type="button"
+            aria-label="Previous pro"
+            onClick={(e) => {
+              e.stopPropagation();
+              lastManualInteractRef.current = Date.now();
+              stepSlide(-1);
+            }}
+            className="hidden md:flex items-center justify-center absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/85 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="Next pro"
+            onClick={(e) => {
+              e.stopPropagation();
+              lastManualInteractRef.current = Date.now();
+              stepSlide(1);
+            }}
+            className="hidden md:flex items-center justify-center absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/85 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function HomeView({ 
   onNavigate, 
   allPros, 
@@ -14040,19 +14832,6 @@ function HomeView({
   const activePartners = partnersList.filter(p => p.is_active !== false);
   const partnerMode = propPartnerMode || partnerService.getHighlightMode();
 
-  const [sec1Idx, setSec1Idx] = useState(0);
-  const [sec1Direction, setSec1Direction] = useState<1 | -1>(1);
-  const [sec1DragOffset, setSec1DragOffset] = useState(0);
-  const [isSec1Touching, setIsSec1Touching] = useState(false);
-  const sec1TouchStartRef = useRef<{ x: number; y: number; time: number; active: boolean; isHorizontal: boolean }>({
-    x: 0,
-    y: 0,
-    time: 0,
-    active: false,
-    isHorizontal: false,
-  });
-  const sec1DidSwipeRef = useRef(false);
-
   const [sec2Idx, setSec2Idx] = useState(0);
   const [sec3Idx, setSec3Idx] = useState(0);
   const [sec4Idx, setSec4Idx] = useState(0);
@@ -14114,16 +14893,6 @@ function HomeView({
       img.src = p.image;
     });
   }, [allPros, highlightedProIds]);
-
-  // Auto-rotate "Meet a local Pro" carousel every 15 seconds (pauses while touching or expanded, resets on manual swipe)
-  useEffect(() => {
-    if (expandedLandingProId || isSec1Touching) return;
-    const timer = setInterval(() => {
-      setSec1Direction(1);
-      setSec1Idx(prev => prev + 1);
-    }, 15000);
-    return () => clearInterval(timer);
-  }, [expandedLandingProId, isSec1Touching, sec1Idx]);
 
   // Auto-rotate "Tips of the Week" guide carousel every 15 seconds
   useEffect(() => {
@@ -14434,424 +15203,83 @@ function HomeView({
               ? dbHighlightedTestimonies 
               : approvedTestimonies.filter(t => highlightedTestimoniesIds.includes(String(t.id)));
 
-            const section1Items: { type: 'pro' | 'testimony' | 'partner'; data: any }[] = [];
+            const slides: MeetLocalProSlide[] = [];
 
-            // Case B: Alternating Mode - Add active partner to carousel items
             if (activePartners.length > 0 && partnerMode === 'both' && currentPartner) {
-              section1Items.push({ type: 'partner', data: currentPartner });
+              slides.push({
+                type: 'partner',
+                key: `partner-${currentPartner.id}`,
+                partner: currentPartner,
+              });
             }
 
-            highlightedPros.forEach(p => {
-              section1Items.push({ type: 'pro', data: p });
+            highlightedPros.forEach((p) => {
+              const proTestimonies = approvedTestimonies.filter(t => String(t.pro_id) === String(p.id));
+              const latest = proTestimonies[0];
+              const reviewCount = Math.max(p.review_count || 0, proTestimonies.length) || 1;
+              slides.push({
+                type: 'pro',
+                key: `pro-${p.id}`,
+                pro: p,
+                rating: p.rating || latest?.rating || 5,
+                comment: latest?.comment || "Highly recommended professional with excellent track record on Unlocked!",
+                author: latest?.author || "Community Member",
+                reviewCount,
+                hasReviews: Boolean((p.review_count && p.review_count > 0) || proTestimonies.length > 0),
+              });
             });
-            highlightedTestimonies.forEach(t => {
-              section1Items.push({ type: 'testimony', data: t });
+
+            highlightedTestimonies.forEach((t) => {
+              const linkedPro = allPros.find(p => String(p.id) === String(t.pro_id));
+              if (!linkedPro) return;
+              const proApprovedCount = approvedTestimonies.filter(x => String(x.pro_id) === String(linkedPro.id)).length;
+              slides.push({
+                type: 'testimony',
+                key: `testimony-${t.id}`,
+                pro: linkedPro,
+                rating: t.rating || 5,
+                comment: t.comment || "",
+                author: t.author || "Anonymous",
+                reviewCount: Math.max(linkedPro.review_count || 0, proApprovedCount) || 1,
+                hasReviews: true,
+              });
             });
 
             if (prosLoading || (allPros.length === 0 && isSupabaseConfigured && activePartners.length === 0)) {
               return <DiscoverCardProSkeleton />;
             }
 
-            if (section1Items.length === 0) return prosLoading ? <DiscoverCardProSkeleton /> : null;
-
-            const activeIndex = sec1Idx % section1Items.length;
-            const currentItem = section1Items[activeIndex];
-
-            // Render partner item inside carousel
-            if (currentItem.type === 'partner') {
-              return (
-                <div
-                  className="relative h-full touch-pan-y"
-                  onTouchStart={(e) => {
-                    partnerTouchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
-                    partnerDidSwipeRef.current = false;
-                    setIsSec1Touching(true);
-                  }}
-                  onTouchEnd={(e) => {
-                    setIsSec1Touching(false);
-                    if (section1Items.length < 2) return;
-                    const dx = e.changedTouches[0].clientX - partnerTouchStartRef.current.x;
-                    const dy = e.changedTouches[0].clientY - partnerTouchStartRef.current.y;
-                    const elapsed = Date.now() - partnerTouchStartRef.current.time;
-                    const isQuickFlick = Math.abs(dx) > 20 && elapsed < 220;
-                    if ((Math.abs(dx) > 32 || isQuickFlick) && Math.abs(dx) > Math.abs(dy) * 1.15) {
-                      partnerDidSwipeRef.current = true;
-                      if (dx < 0) {
-                        setSec1Direction(1);
-                        setSec1Idx((activeIndex + 1) % section1Items.length);
-                      } else {
-                        setSec1Direction(-1);
-                        setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
-                      }
-                      setTimeout(() => {
-                        partnerDidSwipeRef.current = false;
-                      }, 250);
-                    }
-                  }}
-                  onTouchCancel={() => setIsSec1Touching(false)}
-                >
-                  <PartnerHighlightCard
-                    partner={currentItem.data}
-                    isExpanded={expandedLandingPartner}
-                    totalPartners={activePartners.length}
-                    currentIndex={partnerCarouselIdx % activePartners.length}
-                    onNextPartner={(e) => {
-                      e.stopPropagation();
-                      setPartnerCarouselIdx(prev => (prev + 1) % activePartners.length);
-                    }}
-                    onPrevPartner={(e) => {
-                      e.stopPropagation();
-                      setPartnerCarouselIdx(prev => (prev - 1 + activePartners.length) % activePartners.length);
-                    }}
-                    onToggleExpand={() => {
-                      if (partnerDidSwipeRef.current) {
-                        partnerDidSwipeRef.current = false;
-                        return;
-                      }
-                      setExpandedLandingPartner(prev => !prev);
-                      setExpandedLandingProId(null);
-                      if (!expandedLandingPartner) {
-                        setTimeout(() => {
-                          document.getElementById('landing-expanded-partner-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        }, 120);
-                      }
-                    }}
-                  />
-                  {section1Items.length >= 2 && (
-                    <>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSec1Direction(-1);
-                          setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
-                        }}
-                        className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/70 backdrop-blur shadow text-slate-400 hover:text-emerald-700 hover:border-emerald-200 transition-all z-30 cursor-pointer"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSec1Direction(1);
-                          setSec1Idx((activeIndex + 1) % section1Items.length);
-                        }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/70 backdrop-blur shadow text-slate-400 hover:text-emerald-700 hover:border-emerald-200 transition-all z-30 cursor-pointer"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              );
-            }
-
-            // Determine details for rendering standard pro/testimony
-            let proToShow = null;
-            let ratingToShow = 5;
-            let commentToShow = "Excellent communication in English, incredibly punctual, and provided perfect local help. Absolutely recommended!";
-            let authorToShow = "Community Member";
-
-            if (currentItem.type === 'testimony') {
-              proToShow = allPros && allPros.find(p => String(p.id) === String(currentItem.data.pro_id));
-              ratingToShow = currentItem.data.rating || 5;
-              commentToShow = currentItem.data.comment || "";
-              authorToShow = currentItem.data.author || "Anonymous";
-            } else {
-              proToShow = currentItem.data;
-              const proTestimonies = approvedTestimonies.filter(t => String(t.pro_id) === String(proToShow.id));
-              if (proTestimonies && proTestimonies.length > 0) {
-                const latest = proTestimonies[0];
-                ratingToShow = proToShow.rating || latest.rating || 5;
-                commentToShow = latest.comment || "";
-                authorToShow = latest.author || "Anonymous";
-              } else {
-                ratingToShow = proToShow.rating || 5;
-                commentToShow = "Highly recommended professional with excellent track record on Unlocked!";
-                authorToShow = "Community Member";
-              }
-            }
-
-            if (!proToShow) return prosLoading ? <DiscoverCardProSkeleton /> : null;
-
-            const proApprovedTestimoniesCount = approvedTestimonies.filter(t => String(t.pro_id) === String(proToShow.id)).length;
-            const reviewCountToShow = Math.max(proToShow.review_count || 0, proApprovedTestimoniesCount) || 1;
-
-            const isCardProExpanded = expandedLandingProId === String(proToShow.id);
+            if (slides.length === 0) return prosLoading ? <DiscoverCardProSkeleton /> : null;
 
             return (
-              <div 
-                className={cn(
-                  "flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-sky-50/25 to-blue-50/15 border transition-all duration-300 cursor-pointer group relative overflow-hidden h-full min-h-[480px] touch-pan-y select-none",
-                  isCardProExpanded
-                    ? "border-brand-blue ring-2 ring-brand-blue/30 shadow-xl bg-blue-50/35"
-                    : "border-blue-100/90 hover:border-brand-blue/40 shadow-sm hover:shadow-xl hover:-translate-y-1"
-                )}
-                id="discover-card-pro"
-                onTouchStart={(e) => {
-                  sec1TouchStartRef.current = {
-                    x: e.touches[0].clientX,
-                    y: e.touches[0].clientY,
-                    time: Date.now(),
-                    active: true,
-                    isHorizontal: false,
-                  };
-                  sec1DidSwipeRef.current = false;
-                  setIsSec1Touching(true);
-                }}
-                onTouchMove={(e) => {
-                  if (!sec1TouchStartRef.current.active || section1Items.length < 2) return;
-                  const dx = e.touches[0].clientX - sec1TouchStartRef.current.x;
-                  const dy = e.touches[0].clientY - sec1TouchStartRef.current.y;
-                  if (!sec1TouchStartRef.current.isHorizontal) {
-                    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
-                      if (Math.abs(dx) > Math.abs(dy) * 1.1) {
-                        sec1TouchStartRef.current.isHorizontal = true;
-                        sec1DidSwipeRef.current = true;
-                      } else {
-                        sec1TouchStartRef.current.active = false;
-                        setSec1DragOffset(0);
-                        setIsSec1Touching(false);
-                        return;
-                      }
-                    }
-                  }
-                  if (sec1TouchStartRef.current.isHorizontal) {
-                    const clamped = Math.max(-72, Math.min(72, dx * 0.55));
-                    setSec1DragOffset(clamped);
-                  }
-                }}
-                onTouchEnd={(e) => {
-                  const wasHorizontal = sec1TouchStartRef.current.isHorizontal;
-                  const endX = e.changedTouches?.[0]?.clientX ?? sec1TouchStartRef.current.x;
-                  const dx = endX - sec1TouchStartRef.current.x;
-                  const elapsed = Date.now() - sec1TouchStartRef.current.time;
-                  const isQuickFlick = Math.abs(dx) > 18 && elapsed < 220;
-                  sec1TouchStartRef.current.active = false;
-                  sec1TouchStartRef.current.isHorizontal = false;
-                  setSec1DragOffset(0);
-                  setIsSec1Touching(false);
-
-                  if (wasHorizontal && section1Items.length >= 2) {
-                    if (dx < -30 || (dx < 0 && isQuickFlick)) {
-                      setSec1Direction(1);
-                      setSec1Idx((activeIndex + 1) % section1Items.length);
-                    } else if (dx > 30 || (dx > 0 && isQuickFlick)) {
-                      setSec1Direction(-1);
-                      setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
-                    }
-                    setTimeout(() => {
-                      sec1DidSwipeRef.current = false;
-                    }, 250);
-                  }
-                }}
-                onTouchCancel={() => {
-                  sec1TouchStartRef.current.active = false;
-                  sec1TouchStartRef.current.isHorizontal = false;
-                  setSec1DragOffset(0);
-                  setIsSec1Touching(false);
-                }}
-                onClick={() => {
-                  if (sec1DidSwipeRef.current) {
-                    sec1DidSwipeRef.current = false;
-                    return;
-                  }
+              <MeetLocalProCard
+                items={slides}
+                expandedLandingProId={expandedLandingProId}
+                onSelectPro={(proId) => {
                   setExpandedLandingPartner(false);
-                  setExpandedLandingProId(String(proToShow.id));
+                  setExpandedLandingProId(proId);
                 }}
-              >
-                {/* Subtle soft ambient light */}
-                <div className="absolute -top-20 -right-20 w-52 h-52 bg-sky-200/20 rounded-full blur-3xl pointer-events-none" />
-                <div className="absolute -bottom-20 -left-20 w-52 h-52 bg-blue-200/15 rounded-full blur-3xl pointer-events-none" />
-
-                <div className="relative z-10 flex-1 flex flex-col justify-between">
-                  {/* Distinctive Header: Meet a local Pro */}
-                  <div className="flex items-center justify-between gap-3 mb-4 w-full">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-blue to-sky-500 flex items-center justify-center text-white shadow-md shadow-brand-blue/20 shrink-0">
-                        <Star className="w-4 h-4 fill-current" />
-                      </div>
-                      <div className="text-left">
-                        <h3 className="font-extrabold font-display text-sm sm:text-base text-slate-900 tracking-tight leading-none">
-                          Meet a local Pro
-                        </h3>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    className="flex-1 flex flex-col justify-center will-change-transform"
-                    style={{
-                      transform: sec1DragOffset !== 0 ? `translate3d(${sec1DragOffset}px, 0, 0)` : undefined,
-                      transition: sec1DragOffset === 0 ? 'transform 0.2s cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
-                    }}
-                  >
-                    <AnimatePresence mode="wait" initial={false} custom={sec1Direction}>
-                      <motion.div
-                        key={activeIndex}
-                        custom={sec1Direction}
-                        variants={{
-                          enter: (dir: number) => ({ opacity: 0, x: dir > 0 ? 44 : -44 }),
-                          center: { opacity: 1, x: 0 },
-                          exit: (dir: number) => ({ opacity: 0, x: dir > 0 ? -44 : 44 }),
-                        }}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                        className="h-full flex flex-col items-center justify-center text-center flex-1 my-auto"
-                      >
-                        <div className="flex-1 flex flex-col justify-center items-center h-full w-full">
-                          {currentItem.type === 'testimony' ? (
-                            <div className="space-y-4 flex flex-col h-full items-center justify-center w-full">
-                              <div className="flex items-center gap-3">
-                                <img 
-                                  src={proToShow.image || "/people.png"} 
-                                  alt={proToShow.name} 
-                                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover ring-2 ring-blue-100 shadow-md shrink-0"
-                                  referrerPolicy="no-referrer"
-                                  decoding="async"
-                                  draggable={false}
-                                  onError={(e) => {
-                                    const img = e.currentTarget as HTMLImageElement;
-                                    if (!img.src.endsWith('/people.png')) img.src = '/people.png';
-                                  }}
-                                />
-                                <div className="text-left min-w-0">
-                                  <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors max-w-[220px] truncate leading-tight uppercase tracking-tight text-xs sm:text-sm">{proToShow.name}</h4>
-                                  <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-tight truncate">{proToShow.category}</p>
-                                </div>
-                              </div>
-
-                              <div className="relative bg-white/90 p-5 rounded-2xl border border-blue-100/80 shadow-xs backdrop-blur-xs text-left w-full">
-                                <p className="text-xs sm:text-[13px] text-slate-700 leading-relaxed font-medium italic">
-                                  "{commentToShow}"
-                                </p>
-                                <div className="mt-3 flex items-center justify-end gap-2">
-                                  <div className="h-[1px] w-4 bg-brand-blue/20" />
-                                  <span className="text-[10px] font-black text-brand-blue uppercase tracking-tight">
-                                    {formatName(authorToShow)}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col space-y-3.5 flex-1 items-center justify-center h-full w-full py-2">
-                              <div className="relative">
-                                <img 
-                                  src={proToShow.image || "/people.png"} 
-                                  alt={proToShow.name} 
-                                  className="w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-3xl object-cover shadow-lg ring-4 ring-white border border-blue-100/80 group-hover:scale-105 transition-all duration-300"
-                                  referrerPolicy="no-referrer"
-                                  decoding="async"
-                                  draggable={false}
-                                  onError={(e) => {
-                                    const img = e.currentTarget as HTMLImageElement;
-                                    if (!img.src.endsWith('/people.png')) img.src = '/people.png';
-                                  }}
-                                />
-                              </div>
-                              <div className="space-y-1 text-center w-full px-2">
-                                <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-base md:text-lg leading-tight truncate">{proToShow.name}</h4>
-                                <p className="text-xs font-bold text-brand-blue uppercase tracking-wide truncate">{proToShow.category}</p>
-                                
-                                {((proToShow.review_count && proToShow.review_count > 0) || proApprovedTestimoniesCount > 0) ? (
-                                  <div className="flex items-center gap-1 pt-1 justify-center">
-                                    {[...Array(5)].map((_, i) => (
-                                      <Star 
-                                        key={i} 
-                                        className={`w-3.5 h-3.5 ${i < Math.floor(ratingToShow) ? 'text-brand-yellow fill-current' : 'text-slate-200'}`} 
-                                      />
-                                    ))}
-                                    <span className="text-[11px] text-slate-500 font-extrabold ml-1">({reviewCountToShow})</span>
-                                  </div>
-                                ) : null}
-
-                                {proToShow.top_qualities && proToShow.top_qualities.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5 pt-2 justify-center">
-                                    {proToShow.top_qualities.slice(0, 2).map((quality: string) => {
-                                      const cfg = getQualityConfig(quality);
-                                      const QualityIcon = cfg.icon;
-                                      return (
-                                        <span 
-                                          key={quality} 
-                                          className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[9px] font-bold border ${cfg.color} shrink-0 bg-white/80 shadow-3xs`}
-                                        >
-                                          <QualityIcon className={`w-3 h-3 ${cfg.iconColor} shrink-0`} />
-                                          {quality}
-                                        </span>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
-
-                  {/* Clean Footer */}
-                  <div className="pt-3 border-t border-blue-100/70 flex items-center justify-between mt-auto w-full">
-                    {section1Items.length > 1 && (
-                      <div className="flex items-center gap-1.5">
-                        {section1Items.slice(0, 6).map((_, idx) => {
-                          const isDotActive = section1Items.length <= 6
-                            ? idx === activeIndex
-                            : idx === activeIndex % 6;
-                          return (
-                            <button
-                              key={idx}
-                              type="button"
-                              aria-label={`Slide ${idx + 1}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSec1Direction(idx >= activeIndex ? 1 : -1);
-                                setSec1Idx(idx);
-                              }}
-                              className={cn(
-                                "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
-                                isDotActive ? "w-5 bg-brand-blue" : "w-1.5 bg-blue-200 hover:bg-blue-300"
-                              )}
-                            />
-                          );
-                        })}
-                      </div>
-                    )}
-                    <div className="text-[11px] font-bold text-brand-blue flex items-center gap-1 group-hover:translate-x-0.5 transition-transform ml-auto">
-                      <span>{isCardProExpanded ? "Close profile" : "View profile"}</span>
-                      <span>→</span>
-                    </div>
-                  </div>
-                </div>
-
-                {section1Items.length >= 2 && (
-                  <>
-                    <button 
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSec1Direction(-1);
-                        setSec1Idx((activeIndex - 1 + section1Items.length) % section1Items.length);
-                      }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30 cursor-pointer"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSec1Direction(1);
-                        setSec1Idx((activeIndex + 1) % section1Items.length);
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-brand-blue hover:border-brand-blue/30 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30 cursor-pointer"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </>
-                )}
-              </div>
+                expandedLandingPartner={expandedLandingPartner}
+                onToggleExpandPartner={() => {
+                  setExpandedLandingPartner(prev => !prev);
+                  setExpandedLandingProId(null);
+                  if (!expandedLandingPartner) {
+                    setTimeout(() => {
+                      document.getElementById('landing-expanded-partner-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 120);
+                  }
+                }}
+                activePartnersCount={activePartners.length}
+                partnerCarouselIdx={partnerCarouselIdx}
+                onNextPartner={(e) => {
+                  e.stopPropagation();
+                  setPartnerCarouselIdx(prev => (prev + 1) % activePartners.length);
+                }}
+                onPrevPartner={(e) => {
+                  e.stopPropagation();
+                  setPartnerCarouselIdx(prev => (prev - 1 + activePartners.length) % activePartners.length);
+                }}
+              />
             );
           })()}
 
