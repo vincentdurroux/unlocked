@@ -88,190 +88,6 @@ function isQuotaOrRateLimitError(error: any): boolean {
   );
 }
 
-export function fallbackSmartSearch(query: string, professionals: any[]) {
-  if (!query || !query.trim() || !professionals || !Array.isArray(professionals) || professionals.length === 0) {
-    return { exactMatchFound: false, summaryMessage: null, results: [] };
-  }
-
-  const cleanQuery = query.toLowerCase().trim();
-  const requestedLangs = detectRequestedLanguages(cleanQuery);
-  const rawTokens = cleanQuery
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .split(/[\s,.;:!?/\\+&|()"-]+/)
-    .filter(t => t.length >= 2);
-
-  const topicSynonyms: Record<string, { keywords: string[]; targetTerms: string[]; summary: string }> = {
-    back_pain: {
-      keywords: ["dos", "back", "colonne", "spine", "vertebre", "lombes", "lombaire", "lumbago", "sciatique", "sciatica", "hernie", "cervical", "posture", "kine", "kinesitherapeute", "physio", "physiotherapist", "physiotherapy", "osteo", "osteopathe", "osteopath", "osteopathy", "chiro", "chiropractor", "chiropracteur"],
-      targetTerms: ["physiotherapist", "kinésithérapeute", "fisioterapia", "osteopath", "ostéopathe", "chiropractor", "chiropracteur", "physiotherapy", "rehabilitation", "spine", "back"],
-      summary: "To help with your back and spine care, I've selected trusted physiotherapists and osteopaths in Valencia."
-    },
-    dental: {
-      keywords: ["dent", "dents", "dentiste", "dentist", "dentaire", "dental", "orthodontiste", "orthodontist", "carie", "implant", "teeth", "tooth"],
-      targetTerms: ["dentist", "dentiste", "orthodontist", "dental", "dentaire"],
-      summary: "Here are the top-rated dental and orthodontics specialists in Valencia."
-    },
-    plumbing: {
-      keywords: ["plombier", "plumber", "fontanero", "fuite", "leak", "tuyau", "tuyauterie", "robinet", "eau", "water", "plomberie", "chauffe-eau", "canalisation", "evier", "wc"],
-      targetTerms: ["plumber", "plombier", "fontanero", "plumbing"],
-      summary: "Here are trusted plumbing specialists available in Valencia for repairs and installations."
-    },
-    electricity: {
-      keywords: ["electricien", "electrician", "electricidad", "courant", "panne", "tableau electrique", "prise", "eclairage", "lumiere"],
-      targetTerms: ["electrician", "électricien", "electricidad", "electrical"],
-      summary: "Here are certified electricians in Valencia for your electrical installations and repairs."
-    },
-    legal_tax: {
-      keywords: ["avocat", "lawyer", "abogado", "juriste", "legal", "droit", "visa", "nie", "empadronamiento", "residence", "fiscal", "tax", "taxes", "impot", "gestor", "gestoria", "comptable", "accountant", "contable", "contrat"],
-      targetTerms: ["lawyer", "avocat", "abogado", "legal", "gestor", "gestoria", "gestoría", "tax advisor", "accountant", "comptable"],
-      summary: "Here are experienced legal, immigration, and tax advisors in Valencia to guide you."
-    },
-    doctor_health: {
-      keywords: ["medecin", "doctor", "medico", "general practitioner", "docteur", "sante", "health", "pediatre", "pediatrician", "gynecologue", "dermatologue", "ophtalmo", "clinic", "clinique"],
-      targetTerms: ["doctor", "médecin", "médico", "general practitioner", "clinic", "pediatrician", "health"],
-      summary: "Here are verified medical doctors and healthcare professionals in Valencia."
-    },
-    real_estate: {
-      keywords: ["immobilier", "real estate", "inmobiliaria", "appartement", "apartment", "flat", "maison", "house", "location", "rent", "louer", "achat", "buy", "realtor", "agence"],
-      targetTerms: ["real estate", "immobilier", "inmobiliaria", "property", "realtor"],
-      summary: "Here are trusted real estate and property consultants in Valencia."
-    },
-    renovation_building: {
-      keywords: ["travaux", "renovation", "architect", "architecte", "peintre", "painter", "peinture", "macon", "handyman", "manitas", "interior designer", "cuisine", "salle de bain"],
-      targetTerms: ["architect", "architecte", "renovation", "painter", "peintre", "handyman", "contractor"],
-      summary: "Here are recommended architects, renovation specialists, and handymen in Valencia."
-    },
-    moving: {
-      keywords: ["demenagement", "moving", "movers", "relocation", "installation", "expat"],
-      targetTerms: ["movers", "moving", "déménagement", "relocation", "gestor"],
-      summary: "Here are relocation and moving specialists in Valencia to make your transition smooth."
-    },
-    languages_translation: {
-      keywords: ["traducteur", "traduction", "translator", "translation", "traductor", "assermente", "sworn", "professeur", "cours", "language", "langue"],
-      targetTerms: ["translator", "traducteur", "traductor", "language", "sworn"],
-      summary: "Here are sworn translators and language specialists in Valencia."
-    },
-    hair_beauty: {
-      keywords: ["coiffeur", "coiffure", "hairdresser", "hair", "barber", "barbier", "peluquero", "ongles", "nails", "beaute", "massage", "spa", "esthetique"],
-      targetTerms: ["hairdresser", "coiffeur", "barber", "beauty", "massage", "spa"],
-      summary: "Here are recommended hair stylists, barbers, and beauty professionals in Valencia."
-    },
-    mind_wellness: {
-      keywords: ["psychologue", "psychologist", "therapeute", "therapist", "coach", "coaching", "mental", "stress", "anxiete", "burnout", "hypnose", "sophrologie", "yoga", "pilates"],
-      targetTerms: ["psychologist", "psychologue", "therapist", "counselor", "coach", "yoga", "pilates"],
-      summary: "Here are certified therapists, counselors, and wellness coaches in Valencia."
-    }
-  };
-
-  let matchedTopic: { keywords: string[]; targetTerms: string[]; summary: string } | null = null;
-  for (const topicKey of Object.keys(topicSynonyms)) {
-    const topic = topicSynonyms[topicKey];
-    if (topic.keywords.some(kw => cleanQuery.includes(kw) || rawTokens.includes(kw))) {
-      matchedTopic = topic;
-      break;
-    }
-  }
-
-  const scoredPros: { id: string; score: number; reasonUrlExcerpt: string }[] = [];
-
-  professionals.forEach((p: any) => {
-    if (!p || p.id == null) return;
-    const proId = String(p.id);
-    const pName = (p.name || "").toLowerCase();
-    const pCompany = (p.company_name || "").toLowerCase();
-    const pCategory = (p.category || p.profession || "").toLowerCase();
-    const pCats = [
-      pCategory,
-      ...(Array.isArray(p.categories) ? p.categories.map((c: any) => String(c).toLowerCase()) : [])
-    ].join(" ");
-    const pBio = (p.bio || p.description || "").toLowerCase();
-    const pQualities = (Array.isArray(p.top_qualities) ? p.top_qualities.map((q: any) => String(q).toLowerCase()) : []).join(" ");
-    const pFullText = `${pName} ${pCompany} ${pCats} ${pBio} ${pQualities}`;
-    const pNorm = pFullText.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-    let score = 0;
-    let matchedReason = "";
-
-    // Topic / Specialty matching
-    if (matchedTopic) {
-      const hitsTarget = matchedTopic.targetTerms.some(term => pNorm.includes(term));
-      if (hitsTarget) {
-        score += 75;
-        matchedReason = `Specialized in ${p.category || p.profession || 'this discipline'} in Valencia.`;
-      }
-    }
-
-    // Word tokens matching
-    let tokenMatches = 0;
-    rawTokens.forEach(tok => {
-      if (tok.length <= 2) return;
-      if (pName.includes(tok)) {
-        score += 35;
-        tokenMatches++;
-      } else if (pCats.includes(tok)) {
-        score += 30;
-        tokenMatches++;
-      } else if (pNorm.includes(tok)) {
-        score += 15;
-        tokenMatches++;
-      }
-    });
-
-    if (tokenMatches > 0 && !matchedReason) {
-      matchedReason = `Verified ${p.category || p.profession || 'professional'} in Valencia matching '${query}'.`;
-    }
-
-    // Spoken language filter
-    if (requestedLangs.length > 0) {
-      const speaksLang = proSpeaksAnyLanguage(p, requestedLangs);
-      if (speaksLang) {
-        score += 25;
-        matchedReason = matchedReason 
-          ? `${matchedReason} (Speaks ${requestedLangs.join(', ')})`
-          : `Verified professional in Valencia who speaks ${requestedLangs.join(', ')}.`;
-      } else if (score > 0) {
-        score = Math.max(0, score - 50);
-      }
-    }
-
-    if (p.is_recommended && score > 0) {
-      score += 5;
-    }
-
-    score = Math.min(score, 98);
-
-    if (score > 0) {
-      scoredPros.push({
-        id: proId,
-        score,
-        reasonUrlExcerpt: matchedReason || `Recommended ${p.category || p.profession || 'professional'} in Valencia.`
-      });
-    }
-  });
-
-  scoredPros.sort((a, b) => b.score - a.score);
-
-  const exactMatchFound = scoredPros.length > 0 && scoredPros[0].score >= 40;
-
-  let summaryMessage: string | null = null;
-  if (requestedLangs.length > 0) {
-    summaryMessage = `Here are the recommended professionals in Valencia who speak ${requestedLangs.join(', ')}.`;
-  } else if (matchedTopic) {
-    summaryMessage = matchedTopic.summary;
-  } else if (exactMatchFound) {
-    summaryMessage = `Here are the top-rated professionals in Valencia matching "${query}".`;
-  } else {
-    summaryMessage = `I couldn't find an exact match for "${query}", but here are top community-recommended professionals in Valencia.`;
-  }
-
-  return {
-    exactMatchFound,
-    summaryMessage,
-    results: scoredPros
-  };
-}
-
 // Global in-memory cache for fast repeated queries
 const searchCache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL_MS = 1000 * 60 * 60 * 2; // 2 hours
@@ -296,13 +112,12 @@ function setCachedResult(key: string, data: any) {
 }
 
 export async function processSearch(query: string, professionals: any[]) {
-  // Jane AI Paused flag: only pauses if explicitly requested via environment variable
-  const isAiPaused = process.env.PAUSE_JANE_AI === "true";
   const apiKey = process.env.GEMINI_API_KEY;
 
-  if (isAiPaused || !apiKey) {
-    console.log(`[api/search] Jane AI running in local high-precision mode: "${query}"`);
-    return fallbackSmartSearch(query, professionals);
+  if (!apiKey) {
+    const missingErr: any = new Error("GEMINI_API_KEY is not configured on the server.");
+    missingErr.status = 503;
+    throw missingErr;
   }
 
   if (!query || !query.trim() || !professionals || !Array.isArray(professionals)) {
@@ -310,7 +125,8 @@ export async function processSearch(query: string, professionals: any[]) {
   }
 
   const cleanKey = query.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const cached = getCachedResult(cleanKey);
+  const cacheKey = `v6_h4_${cleanKey}__${professionals.length}`;
+  const cached = getCachedResult(cacheKey);
   if (cached) {
     return cached;
   }
@@ -324,154 +140,83 @@ export async function processSearch(query: string, professionals: any[]) {
     },
   });
 
-  // Fast candidate pre-filtering to keep prompt payload lean and speed up inference by 2x
-  let targetPros = professionals;
-  if (professionals.length > 35) {
-    const qTokens = cleanKey.split(/[\s,.'"-]+/).filter(t => t.length > 2);
-    const scoredCandidates = professionals.map(p => {
-      let candidateScore = 0;
-      const pName = (p.name || '').toLowerCase();
-      const pCat = (p.category || p.profession || '').toLowerCase();
-      const pBio = (p.bio || p.description || '').toLowerCase();
-      for (const t of qTokens) {
-        if (pName.includes(t)) candidateScore += 40;
-        if (pCat.includes(t)) candidateScore += 35;
-        if (pBio.includes(t)) candidateScore += 15;
-      }
-      if (p.is_recommended !== false) candidateScore += 10;
-      return { p, candidateScore };
-    });
-    scoredCandidates.sort((a, b) => b.candidateScore - a.candidateScore);
-    targetPros = scoredCandidates.slice(0, 35).map(c => c.p);
-  }
-
-  // Compact pro representation to keep prompt tokens well below free-tier TPM limits
+  // Encode ALL professionals (up to 300) into an ultra-compact pipe-delimited table
+  // (~65% fewer input tokens than JSON, so Jane sees the full directory without dropping pros at 35)
   // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
-  const proListBrief = targetPros.map((p: any) => ({
-    id: String(p.id),
-    name: p.name,
-    company_name: p.company_name || "",
-    category: p.category || p.profession || "",
-    categories: p.categories || (typeof p.profession === "string" ? p.profession.split(",").map((s: string) => s.trim()) : []),
-    bio: (p.bio || p.description || "").slice(0, 140),
-    top_qualities: (p.top_qualities || []).slice(0, 2),
-    languages: p.languages || [],
-    location: p.location || "",
-    is_recommended: p.is_recommended ?? true
-  }));
+  const cleanCell = (val: any, maxLen = 120) =>
+    String(val ?? '')
+      .replace(/[|\r\n]+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+      .slice(0, maxLen);
 
-  const sysInstruction = `You are an expert matching AI assistant ("Jane") for "Unlocked" - a community-curated directory of verified local professionals in Valencia, Spain.
-Your purpose is to deeply understand the user's natural language request and match ALL relevant professionals from the directory.
+  const directoryRows = professionals.slice(0, 300).map((p: any) => {
+    const cats = Array.isArray(p.categories) && p.categories.length > 0
+      ? p.categories.join(', ')
+      : (p.category || p.profession || '');
+    const langs = Array.isArray(p.languages) ? p.languages.join(', ') : '';
+    return [
+      cleanCell(p.id, 40),
+      cleanCell(p.name, 60),
+      cleanCell(p.company_name, 50),
+      cleanCell(cats, 60),
+      cleanCell(langs, 50),
+      cleanCell(p.location, 45),
+      p.is_recommended === false ? '0' : '1',
+      cleanCell(p.bio || p.description, 120)
+    ].join('|');
+  }).join('\n');
 
-EVALUATION CRITERIA:
+  const sysInstruction = `You are Jane, the AI matching assistant for "MyCityUnlocked", a local professionals directory in Valencia, Spain.
+Match ALL relevant professionals from the pipe-delimited directory (ID|Name|Company|Category|Languages|Location|Rec|Bio) to the user's request.
 
-1. STRICT RULE ON REVIEWS & RATINGS (CRITICAL):
-   - Reviews left by users, review counts, or ratings MUST NEVER bring more match points or higher match scores.
-   - The match score evaluates PURELY the objective professional relevance between the user's need/symptom/trade/location/language and what the professional does.
-   - A professional with zero reviews or newly added must receive the exact same match score as any other professional if their specialty matches the user's request.
+RULES:
+1. NO REVIEW BIAS: Score purely on objective specialty, symptom/need fit, location, and language. Never favor older listings over new ones.
+2. SYMPTOMS & MULTI-DISCIPLINE MATCHING:
+   - Back/neck/muscle/joint pain ("mal de dos", "back pain", "sciatica", "hernia"): match ALL relevant disciplines in the list (Physiotherapists/Kiné/Fisio, Osteopaths, Chiropractors, Doctors/GP/Sports Medicine, Therapeutic Massage/Acupuncture) as strong matches (75-95).
+   - Stress/anxiety/burnout/mental health: match Psychologists, Therapists, Counselors, Life Coaches.
+   - Home leaks/repairs/renovation ("fuite d'eau", "water leak", "bathroom"): match Plumbers/Fontaneros, Handymen/Manitas, Electricians, Contractors (never wellness/lymphatic drainage).
+   - Relocation/moving ("déménagement", "moving"): match Movers, Real Estate Agents, Relocation/Gestors, Handymen.
+   - Legal/tax/business/visa ("autonomo", "NIE", "taxes"): match Lawyers/Abogados/Avocats, Gestors, Tax Advisors, Accountants.
+   - Dental/teeth: match Dentists, Orthodontists, Oral Surgeons.
+3. MULTILINGUAL SYNONYMS (EN/FR/ES/CA): Recognize all translations (e.g. coiffeur/peluquero/hairdresser/barber; médecin/médico/doctor/GP; plombier/fontanero/plumber; agent immobilier/inmobiliaria/realtor; kiné/fisioterapeuta/physiotherapist; avocat/abogado/lawyer).
+4. LOCATION: "Valencia" matches Valencia city and metro towns (Ruzafa, Carmen, Campanar, Alboraya, Paterna, Torrent, La Eliana, Bétera, etc.).
+5. SPOKEN LANGUAGE (HIGHEST PRIORITY): If a spoken language is requested ("qui parle français", "French speaking", "habla español", etc.) and matching pros speak it, ONLY return those speakers (score 75-100) and omit non-speakers. If none speak it, return closest trade matches with lower scores and mention it in summaryMessage.
+6. COMPREHENSIVE SCORING: Return ALL matching pros (both Rec=1 community-recommended at 85-95 and Rec=0 Google-sourced at 70-80; adjacent alternatives 20-50). Omit unrelated pros (do NOT output score 0 entries).
+7. ENGLISH & CONCISE OUTPUT: ALWAYS write "summaryMessage" (1-2 friendly first-person English sentences, max 25 words) and each "reasonUrlExcerpt" (1 concise English sentence, max 16 words) in ENGLISH regardless of query language. Set exactMatchFound=true if any result has score >= 40.`;
 
-2. SYMPTOM, NEED & MULTI-DISCIPLINE MATCHING (CRITICAL):
-   When the user expresses a symptom, physical issue, project, or general need (rather than naming a single job title):
-   - You MUST identify and include ALL relevant professions/trades in the directory that can legitimately address that issue.
-   - For MUSCULOSKELETAL / BACK / BODY PAIN ("I hurt my back", "mal de dos", "back pain", "sciatica", "neck pain", "hernia", "muscle soreness"):
-     * Do NOT arbitrarily limit results to only Chiropractors!
-     * You MUST match and return ALL relevant health disciplines present in the directory:
-       - Physiotherapists (Physiotherapy, Kinésithérapeute, Fisioterapia)
-       - Osteopaths (Osteopathy, Ostéopathe)
-       - Chiropractors (Chiropractic, Chiropracteur)
-       - General Practitioners / Doctors / Sports Medicine (Doctor, Physician, Médecin, Médico)
-       - Medical Acupuncture / Therapeutic Massage specialists (if applicable to pain recovery)
-     * All of these disciplines qualify as DIRECT HIGH MATCHES (Score 75-95).
-   - For STRESS / MENTAL WELLNESS ("feeling anxious", "burnout", "mental health"):
-     * Match Psychologists, Therapists, Counselors, Life Coaches, and Mind-Body practitioners.
-   - For HOME LEAKS & RENOVATIONS ("water leak", "fuite d'eau", "renovating bathroom", "kitchen work"):
-     * Match Plumbers, Handymen/Manitas, Electricians, Masons, Tile specialists, or General Contractors. (Never match wellness or lymphatic drainage with water plumbing).
-   - For MOVING & RELOCATION ("moving to Valencia", "déménagement"):
-     * Match Movers, Real Estate Agents, Relocation Gestors/Specialists, Handymen.
-   - For LEGAL & BUSINESS CREATION ("starting a business", "autonomo", "taxes", "visa"):
-     * Match Lawyers (Abogados/Avocats), Gestors/Gestorías, Tax Advisors, Accountants (Comptables).
-   - For DENTAL PAIN / TEETH:
-     * Match Dentists, Orthodontists, Oral Surgeons.
-
-2. QUERY PARSING, SYNONYMS & TRANSLATIONS:
-   - Always recognize synonyms and translations across English, French, Spanish, and Catalan:
-     * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "barber" ALL match Hairdresser/Barber/Beauty.
-     * "doctor", "physician", "médecin", "gp", "médico" ALL match Medical/Doctor services.
-     * "realtor", "real estate agent", "inmobiliaria", "agent immobilier" ALL match Real Estate.
-     * "plumber", "plombier", "fontanero" ALL match Plumbing.
-   - Location Matching:
-     * "Valencia", "in Valencia", "around Valencia", "Valencia area" matches Valencia city and its metropolitan area (Ruzafa, Carmen, Campanar, Alboraya, Paterna, Torrent, La Eliana, Betera, etc.).
-
-3. COMPREHENSIVE RESULTS:
-   - Return ALL qualifying professionals in the provided directory whose skills match the need.
-   - Do NOT stop after 1 or 2 entries if more matching professionals are available.
-   - DIRECT MATCH (Score 70-100): Matches requested trade/discipline and location.
-   - ADJACENT / ALTERNATIVE (Score 20-50): Neighboring service or town.
-   - UNRELATED (Score 0): Omit or score 0.
-
-4. PRIORITIZATION:
-   - Community-vetted professionals (is_recommended: true) should receive a slight score boost (e.g. 85-95) over Google-sourced listings (is_recommended: false, scored 70-80).
-   - Both recommended and non-recommended pros must be returned if they match.
-
-5. LANGUAGE REQUIREMENT (CRITICAL - ALWAYS ENGLISH):
-   - You MUST ALWAYS write all explanations in ENGLISH, even if the user query was written in French, Spanish, or any other language!
-   - Both "summaryMessage" and "reasonUrlExcerpt" MUST ALWAYS be written in English.
-
-6. "exactMatchFound" & "summaryMessage" (JANE'S SHORT EXPLANATION):
-   - "exactMatchFound": Set to true if at least one professional is a direct or strong match (score >= 40), false otherwise.
-   - "summaryMessage" (MANDATORY): Always provide a SHORT, friendly explanation (1 to 2 sentences max, 15 to 25 words) written as Jane speaking naturally in the first person ("I") in ENGLISH.
-   - In this short text, Jane explains her found results and why these professions/disciplines were chosen for the user's specific request.
-   - English Examples:
-     * "To help with your back pain, I've selected trusted physiotherapists and osteopaths in Valencia."
-     * "Here are the top-rated professionals in Valencia matching your request."
-     * "Here are the recommended professionals in Valencia who speak French."
-     * If no exact match: "I couldn't find an exact match in our directory, but here are some close alternatives that may help."
-
-7. Under "reasonUrlExcerpt" for each matched professional, write a concise sentence in ENGLISH explaining why they are recommended for this specific problem (e.g. "Physiotherapist specialized in spine rehabilitation and back pain", "Osteopath offering gentle postural realignment").
-
-8. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
-   - If the query explicitly asks for a language (e.g. "qui parle français", "french speaking", "habla español", etc.):
-     * If matching pros speak that language, ONLY return those who speak it (score 75-100) and omit non-speakers.
-     * If none speak it, return other matching pros with lower scores and explain in summaryMessage in English.`;
-
-  // Resilient low-token model fallback chain:
-  // 1. gemini-3.1-flash-lite: Highest daily request limit, lowest latency & token consumption
-  // 2. gemini-4-hydrogen: Independent Gemini 4 Flash quota pool with high precision
-  const candidateModels = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"];
+  // Frugal, high-precision free-tier compatible chain:
+  // 1. gemini-4-hydrogen (Gemini 4 Flash): best semantic accuracy with ThinkingLevel.LOW for low token use & latency
+  // 2. gemini-3.1-flash-lite: ultra-low-cost independent quota fallback
+  const candidateModels = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
   let lastError: any = null;
   let responseText = "";
 
   for (let i = 0; i < candidateModels.length; i++) {
     const modelName = candidateModels[i];
-    const isGemini4 = modelName.startsWith("gemini-4");
     try {
       const response = await ai.models.generateContent({
         model: modelName,
-        contents: `User Query: "${query}"
-
-Professionals:
-${JSON.stringify(proListBrief)}`,
+        contents: `Query: "${query}"\n\nID|Name|Company|Category|Languages|Location|Rec|Bio\n${directoryRows}`,
         config: {
           systemInstruction: sysInstruction,
           responseMimeType: "application/json",
-          maxOutputTokens: 1200,
           thinkingConfig: {
-            thinkingLevel: modelName === "gemini-3.1-flash-lite" ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW
+            thinkingLevel: ThinkingLevel.LOW
           },
-          ...(isGemini4 ? {} : { temperature: 0.1 }),
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service/symptom, false if not." },
-              summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 25 words) in English from Jane explaining her found results to the user." },
+              exactMatchFound: { type: Type.BOOLEAN, description: "True if at least one direct match (score >= 40) is found." },
+              summaryMessage: { type: Type.STRING, description: "Short, friendly 1-2 sentence explanation (max 25 words) in English from Jane." },
               results: {
                 type: Type.ARRAY,
                 items: {
                   type: Type.OBJECT,
                   properties: {
                     id: { type: Type.STRING, description: "The professional's ID as a string" },
-                    score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                    reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation in English" }
+                    score: { type: Type.INTEGER, description: "Relevancy match score from 1 to 100" },
+                    reasonUrlExcerpt: { type: Type.STRING, description: "Concise 1-sentence match explanation in English (max 16 words)" }
                   },
                   required: ["id", "score", "reasonUrlExcerpt"]
                 }
@@ -499,7 +244,18 @@ ${JSON.stringify(proListBrief)}`,
     throw lastError || new Error("All AI matching models failed to generate a response.");
   }
 
-  const parsedData = JSON.parse(responseText || "{}");
+  let parsedData: any = {};
+  try {
+    const cleaned = responseText.replace(/```json/gi, "").replace(/```/g, "").trim();
+    parsedData = JSON.parse(cleaned || "{}");
+  } catch {
+    const firstBrace = responseText.indexOf("{");
+    const lastBrace = responseText.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      parsedData = JSON.parse(responseText.slice(firstBrace, lastBrace + 1));
+    }
+  }
+
   let results: any[] = [];
   let exactMatchFound = true;
   let summaryMessage: string | null = null;
@@ -511,6 +267,9 @@ ${JSON.stringify(proListBrief)}`,
     exactMatchFound = typeof parsedData.exactMatchFound === "boolean" ? parsedData.exactMatchFound : true;
     summaryMessage = parsedData.summaryMessage || null;
   }
+
+  // Drop zero-score noise if any slipped through
+  results = results.filter((r: any) => r && r.id != null && (Number(r.score) || 0) > 0);
 
   // Spoken language post-filtering and prioritization
   const requestedLangs = detectRequestedLanguages(query);
@@ -559,7 +318,7 @@ ${JSON.stringify(proListBrief)}`,
   }
 
   const outputPayload = { exactMatchFound, summaryMessage, results };
-  setCachedResult(cleanKey, outputPayload);
+  setCachedResult(cacheKey, outputPayload);
   return outputPayload;
 }
 
@@ -590,59 +349,18 @@ export default async function handler(req: any, res: any) {
 
   try {
     const result = await processSearch(query, professionals);
-    res.setHeader("Cache-Control", "public, s-maxage=1800, stale-while-revalidate=3600");
     return res.status(200).json(result);
   } catch (error: any) {
-    console.warn("[api/search] Gemini API quota reached. Serving high-precision catalog matching fallback:", error?.message || error);
-    
-    const cleanQuery = (query || "").trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const allTokens = cleanQuery.split(/[\s,.'"-]+/).filter((t: string) => t.length > 1);
-
-    const locationTokens = allTokens.filter((t: string) => ['valencia', 'valence', 'spain', 'espagne', 'espana', 'ruzafa', 'russafa', 'carmen', 'canovas', 'alboraya', 'benimaclet'].includes(t));
-    const tradeTokens = allTokens.filter((t: string) => !locationTokens.includes(t) && !['cherche', 'recherche', 'besoin', 'trouver', 'bon', 'bonne', 'meilleur', 'top', 'pro', 'recommande', 'expert', 'specialiste', 'pour', 'dans', 'avec', 'qui', 'parle', 'un', 'une', 'des', 'le', 'la', 'les'].includes(t));
-
-    const fallbackResults = (professionals || []).map((p: any) => {
-      const id = String(p.id);
-      const pName = (p.name || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const pCat = (p.category || p.profession || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const pCats = ((Array.isArray(p.categories) ? p.categories : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const pCompany = (p.company_name || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const pBio = (p.bio || p.description || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const pLoc = (p.location || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-      let score = 0;
-      let matchReason = `Specialized professional in Valencia`;
-
-      if (tradeTokens.length > 0) {
-        let matchedCount = 0;
-        for (const t of tradeTokens) {
-          let m = false;
-          if (pName.includes(t)) { score += 60; m = true; }
-          else if (pCat.includes(t) || pCats.includes(t)) { score += 55; m = true; matchReason = `Specialized in ${p.category || p.profession || 'services'}`; }
-          else if (pCompany.includes(t)) { score += 45; m = true; }
-          else if (pBio.length > 0 && new RegExp(`(^|[^a-z0-9])${t}([^a-z0-9]|$)`, 'i').test(pBio)) { score += 35; m = true; }
-          if (m) matchedCount++;
-        }
-        if (matchedCount === 0) return { id, score: 0, reasonUrlExcerpt: "" };
-        if (locationTokens.length > 0 && locationTokens.some((loc: string) => pLoc.includes(loc))) score += 10;
-      } else if (locationTokens.length > 0) {
-        const specificLoc = locationTokens.filter((t: string) => !['valencia', 'valence', 'spain', 'espagne', 'espana'].includes(t));
-        if (specificLoc.length > 0 && specificLoc.some((loc: string) => pLoc.includes(loc))) score = 75;
-        else if (specificLoc.length === 0) score = 60;
-      }
-
-      return {
-        id,
-        score: Math.min(100, score),
-        reasonUrlExcerpt: matchReason
-      };
-    }).filter((r: any) => r.score >= 45).sort((a: any, b: any) => b.score - a.score);
-
-    return res.status(200).json({
-      exactMatchFound: fallbackResults.length > 0,
-      summaryMessage: fallbackResults.length > 0 ? `Here are the top professionals matching your search for "${query}".` : `No matching professionals found for "${query}".`,
-      results: fallbackResults,
-      fallback_used: true
+    console.error("[api/search] Jane Gemini AI matching error:", error?.message || error);
+    if (isQuotaOrRateLimitError(error)) {
+      return res.status(429).json({
+        error: "Jane is currently very busy! Please wait a few seconds and try again."
+      });
+    }
+    const status = Number(error?.status || error?.statusCode) || 500;
+    const safeStatus = status >= 400 && status < 600 ? status : 500;
+    return res.status(safeStatus).json({
+      error: error?.message || "Jane AI search is temporarily unavailable. Please try again shortly."
     });
   }
 }

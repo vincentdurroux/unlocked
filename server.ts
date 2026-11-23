@@ -1,8 +1,9 @@
 import express from "express";
+import http from "http";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import { Resend } from "resend";
 import dotenv from "dotenv";
 import { tavily } from "@tavily/core";
@@ -122,7 +123,11 @@ function extractJsonFromModelResponse(rawText: string): any {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const portArgIdx = process.argv.indexOf("--port");
+  const cliPort = portArgIdx !== -1 ? Number(process.argv[portArgIdx + 1]) : NaN;
+  const PORT = Number.isFinite(cliPort) && cliPort > 0
+    ? cliPort
+    : (process.env.NODE_ENV === "production" ? (Number(process.env.PORT) || 3000) : 3000);
 
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -178,17 +183,31 @@ async function startServer() {
     },
     customModels?: string[]
   ): Promise<any> => {
-    // Models in order of priority: gemini-3.1-flash-lite, gemini-flash-latest, gemini-3.8-flash
-    const models = customModels || ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+    // Frugal, high-precision free-tier compatible chain:
+    // 1. gemini-4-hydrogen (Gemini 4 Flash): best semantic accuracy & multilingual reasoning
+    // 2. gemini-3.1-flash-lite: ultra-low-cost independent quota fallback
+    const models = customModels || ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
     let lastError: any = null;
 
-    // Pass 1: Try each model immediately. If a model encounters high demand (503) or rate limit (429),
-    // immediately fail over to the next available model without stalling the user request.
+    const buildConfigForModel = (modelName: string, rawConfig?: any) => {
+      if (!rawConfig) return undefined;
+      const cfg = { ...rawConfig };
+      if (modelName.startsWith("gemini-4")) {
+        delete cfg.temperature;
+        delete cfg.topP;
+        delete cfg.topK;
+        delete cfg.candidateCount;
+      }
+      return cfg;
+    };
+
+    // Pass 1: Try each model immediately without stalling on 429/503 spikes
     for (let i = 0; i < models.length; i++) {
       const modelName = models[i];
       try {
         const response = await getAiClient().models.generateContent({
           ...params,
+          config: buildConfigForModel(modelName, params.config),
           model: modelName,
         });
         if (response && response.text) {
@@ -203,19 +222,22 @@ async function startServer() {
       }
     }
 
-    // Pass 2: If all models had a simultaneous spike, wait 1s and try one final pass across the models
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    for (const modelName of models) {
-      try {
-        const response = await getAiClient().models.generateContent({
-          ...params,
-          model: modelName,
-        });
-        if (response && response.text) {
-          return response;
+    // Pass 2: Brief 800ms backoff retry only on transient quota/availability errors
+    if (isQuotaOrRateLimitError(lastError)) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      for (const modelName of models) {
+        try {
+          const response = await getAiClient().models.generateContent({
+            ...params,
+            config: buildConfigForModel(modelName, params.config),
+            model: modelName,
+          });
+          if (response && response.text) {
+            return response;
+          }
+        } catch (err: any) {
+          lastError = err;
         }
-      } catch (err: any) {
-        lastError = err;
       }
     }
 
@@ -317,163 +339,94 @@ async function startServer() {
 
     try {
       const qLower = query.toLowerCase().trim();
+      const qNormalized = qLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-      // Use versioned cache key to ensure fresh prompt responses with Jane's commentary in English
-      const cacheKey = `v5_en_${qLower}__${professionals.length}`;
+      // Versioned cache key including directory size so newly added pros invalidate old results
+      const cacheKey = `v6_h4_${qNormalized}__${professionals.length}`;
       const cached = getCachedSearch(cacheKey);
       if (cached) {
         console.log(`[ai] Returning cached Jane search result for: "${qLower}"`);
         return res.json(cached);
       }
 
-      // Fast candidate pre-filtering to keep prompt payload lean and speed up inference by 2x
-      let targetPros = professionals;
-      if (professionals.length > 35) {
-        const qClean = qLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const qTokens = qClean.split(/[\s,.'"-]+/).filter((t: string) => t.length > 2);
-        const scoredCandidates = professionals.map((p: any) => {
-          let candidateScore = 0;
-          const pName = (p.name || '').toLowerCase();
-          const pCat = (p.category || p.profession || '').toLowerCase();
-          const pBio = (p.bio || p.description || '').toLowerCase();
-          for (const t of qTokens) {
-            if (pName.includes(t)) candidateScore += 40;
-            if (pCat.includes(t)) candidateScore += 35;
-            if (pBio.includes(t)) candidateScore += 15;
-          }
-          if (p.is_recommended !== false) candidateScore += 10;
-          return { p, candidateScore };
-        });
-        scoredCandidates.sort((a: any, b: any) => b.candidateScore - a.candidateScore);
-        targetPros = scoredCandidates.slice(0, 35).map((c: any) => c.p);
-      }
-
-      // Compact pro representation to keep prompt tokens well below free-tier TPM limits
+      // Encode ALL professionals (up to 300) into an ultra-compact pipe-delimited table
+      // (~65% fewer input tokens than JSON, so Jane sees the full directory without dropping pros at 35)
       // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
-      const proListBrief = targetPros.map((p: any) => ({
-        id: String(p.id),
-        name: p.name,
-        company_name: p.company_name || "",
-        category: p.category || p.profession || "",
-        categories: p.categories || (typeof p.profession === 'string' ? p.profession.split(',').map((s: string) => s.trim()) : []),
-        bio: (p.bio || p.description || "").slice(0, 140),
-        top_qualities: (p.top_qualities || []).slice(0, 2),
-        languages: p.languages || [],
-        location: p.location || "",
-        is_recommended: p.is_recommended ?? true
-      }));
+      const cleanCell = (val: any, maxLen = 120) =>
+        String(val ?? '')
+          .replace(/[|\r\n]+/g, ' ')
+          .replace(/\s{2,}/g, ' ')
+          .trim()
+          .slice(0, maxLen);
 
-      const sysInstruction = `You are an expert matching AI assistant ("Jane") for "Unlocked" - a community-curated directory of verified local professionals in Valencia, Spain.
-The directory contains BOTH community-recommended professionals (is_recommended: true) AND Google-sourced professionals (is_recommended: false).
+      const directoryRows = professionals.slice(0, 300).map((p: any) => {
+        const cats = Array.isArray(p.categories) && p.categories.length > 0
+          ? p.categories.join(', ')
+          : (p.category || p.profession || '');
+        const langs = Array.isArray(p.languages) ? p.languages.join(', ') : '';
+        return [
+          cleanCell(p.id, 40),
+          cleanCell(p.name, 60),
+          cleanCell(p.company_name, 50),
+          cleanCell(cats, 60),
+          cleanCell(langs, 50),
+          cleanCell(p.location, 45),
+          p.is_recommended === false ? '0' : '1',
+          cleanCell(p.bio || p.description, 120)
+        ].join('|');
+      }).join('\n');
 
-YOUR MANDATE: Examine the user's natural language request and return ALL relevant matching professionals found in the provided list. Do NOT arbitrarily limit results to only 1 or 2 professionals or only a single trade.
+      const sysInstruction = `You are Jane, the AI matching assistant for "MyCityUnlocked", a local professionals directory in Valencia, Spain.
+Match ALL relevant professionals from the pipe-delimited directory (ID|Name|Company|Category|Languages|Location|Rec|Bio) to the user's request.
 
-EVALUATION CRITERIA:
+RULES:
+1. NO REVIEW BIAS: Score purely on objective specialty, symptom/need fit, location, and language. Never favor older listings over new ones.
+2. SYMPTOMS & MULTI-DISCIPLINE MATCHING:
+   - Back/neck/muscle/joint pain ("mal de dos", "back pain", "sciatica", "hernia"): match ALL relevant disciplines in the list (Physiotherapists/Kiné/Fisio, Osteopaths, Chiropractors, Doctors/GP/Sports Medicine, Therapeutic Massage/Acupuncture) as strong matches (75-95).
+   - Stress/anxiety/burnout/mental health: match Psychologists, Therapists, Counselors, Life Coaches.
+   - Home leaks/repairs/renovation ("fuite d'eau", "water leak", "bathroom"): match Plumbers/Fontaneros, Handymen/Manitas, Electricians, Contractors (never wellness/lymphatic drainage).
+   - Relocation/moving ("déménagement", "moving"): match Movers, Real Estate Agents, Relocation/Gestors, Handymen.
+   - Legal/tax/business/visa ("autonomo", "NIE", "taxes"): match Lawyers/Abogados/Avocats, Gestors, Tax Advisors, Accountants.
+   - Dental/teeth: match Dentists, Orthodontists, Oral Surgeons.
+3. MULTILINGUAL SYNONYMS (EN/FR/ES/CA): Recognize all translations (e.g. coiffeur/peluquero/hairdresser/barber; médecin/médico/doctor/GP; plombier/fontanero/plumber; agent immobilier/inmobiliaria/realtor; kiné/fisioterapeuta/physiotherapist; avocat/abogado/lawyer).
+4. LOCATION: "Valencia" matches Valencia city and metro towns (Ruzafa, Carmen, Campanar, Alboraya, Paterna, Torrent, La Eliana, Bétera, etc.).
+5. SPOKEN LANGUAGE (HIGHEST PRIORITY): If a spoken language is requested ("qui parle français", "French speaking", "habla español", etc.) and matching pros speak it, ONLY return those speakers (score 75-100) and omit non-speakers. If none speak it, return closest trade matches with lower scores and mention it in summaryMessage.
+6. COMPREHENSIVE SCORING: Return ALL matching pros (both Rec=1 community-recommended at 85-95 and Rec=0 Google-sourced at 70-80; adjacent alternatives 20-50). Omit unrelated pros (do NOT output score 0 entries).
+7. ENGLISH & CONCISE OUTPUT: ALWAYS write "summaryMessage" (1-2 friendly first-person English sentences, max 25 words) and each "reasonUrlExcerpt" (1 concise English sentence, max 16 words) in ENGLISH regardless of query language. Set exactMatchFound=true if any result has score >= 40.`;
 
-1. STRICT RULE ON REVIEWS & RATINGS (CRITICAL):
-   - Reviews left by users, review counts, or ratings MUST NEVER bring more match points or higher match scores.
-   - The match score evaluates PURELY the objective professional relevance between the user's need/symptom/trade/location/language and what the professional does.
-   - A professional with zero reviews or newly added must receive the exact same match score as any other professional if their specialty matches the user's request.
-
-2. SYMPTOM, NEED & MULTI-DISCIPLINE MATCHING (CRITICAL):
-   When the user expresses a symptom, physical issue, project, or general need (rather than naming a single job title):
-   - You MUST identify and include ALL relevant professions/trades in the directory that can legitimately address that issue.
-   - For MUSCULOSKELETAL / BACK / BODY PAIN ("I hurt my back", "mal de dos", "back pain", "sciatica", "neck pain", "hernia", "muscle soreness"):
-     * Do NOT arbitrarily limit results to only Chiropractors!
-     * You MUST match and return ALL relevant health disciplines present in the directory:
-       - Physiotherapists (Physiotherapy, Kinésithérapeute, Fisioterapia)
-       - Osteopaths (Osteopathy, Ostéopathe)
-       - Chiropractors (Chiropractic, Chiropracteur)
-       - General Practitioners / Doctors / Sports Medicine (Doctor, Physician, Médecin, Médico)
-       - Medical Acupuncture / Therapeutic Massage specialists (if applicable to pain recovery)
-     * All of these disciplines qualify as DIRECT HIGH MATCHES (Score 75-95).
-   - For STRESS / MENTAL WELLNESS ("feeling anxious", "burnout", "mental health"):
-     * Match Psychologists, Therapists, Counselors, Life Coaches, and Mind-Body practitioners.
-   - For HOME LEAKS & RENOVATIONS ("water leak", "fuite d'eau", "renovating bathroom", "kitchen work"):
-     * Match Plumbers, Handymen/Manitas, Electricians, Masons, Tile specialists, or General Contractors. (Never match wellness or lymphatic drainage with water plumbing).
-   - For MOVING & RELOCATION ("moving to Valencia", "déménagement"):
-     * Match Movers, Real Estate Agents, Relocation Gestors/Specialists, Handymen.
-   - For LEGAL & BUSINESS CREATION ("starting a business", "autonomo", "taxes", "visa"):
-     * Match Lawyers (Abogados/Avocats), Gestors/Gestorías, Tax Advisors, Accountants (Comptables).
-   - For DENTAL PAIN / TEETH:
-     * Match Dentists, Orthodontists, Oral Surgeons.
-
-2. QUERY PARSING, SYNONYMS & TRANSLATIONS:
-   - Always recognize synonyms and translations across English, French, Spanish, and Catalan:
-     * "hair dresser", "hairdresser", "hair stylist", "coiffeur", "peluquero", "barber" ALL match Hairdresser/Barber/Beauty.
-     * "doctor", "physician", "médecin", "gp", "médico" ALL match Medical/Doctor services.
-     * "realtor", "real estate agent", "inmobiliaria", "agent immobilier" ALL match Real Estate.
-     * "plumber", "plombier", "fontanero" ALL match Plumbing.
-   - Location Matching:
-     * "Valencia", "in Valencia", "around Valencia", "Valencia area" matches Valencia city and its metropolitan area (Ruzafa, Carmen, Campanar, Alboraya, Paterna, Torrent, La Eliana, Betera, etc.).
-
-3. COMPREHENSIVE MATCHING & SCORING:
-   - DIRECT MATCH (Score 70-100): Matches requested trade/service/discipline and location (or no location specified).
-   - ADJACENT / ALTERNATIVE MATCH (Score 20-50): Closely related trade, or neighboring town.
-   - UNRELATED (Score 0): Do not include in results or score 0.
-   - IMPORTANT: Return ALL professionals in the list who match the trade/symptom (Score > 0). Do not cut off or omit Google pros (is_recommended: false) when they match the trade.
-
-4. PRIORITIZATION:
-   - Professionals with "is_recommended: true" are community-vetted and should receive higher scores (e.g., 85-95) or be ranked above Google-sourced pros (is_recommended: false, scored 70-80).
-   - Both recommended and non-recommended matching professionals MUST be returned in the results array so the user has access to all available pros.
-
-5. LANGUAGE REQUIREMENT (CRITICAL - ALWAYS ENGLISH):
-   - You MUST ALWAYS write all explanations in ENGLISH, even if the user query was written in French, Spanish, or any other language!
-   - Both "summaryMessage" and "reasonUrlExcerpt" MUST ALWAYS be written in English.
-
-6. "exactMatchFound" & "summaryMessage" (JANE'S SHORT EXPLANATION):
-   - "exactMatchFound": Set to true if at least one professional is a direct or strong match (score >= 40), false otherwise.
-   - "summaryMessage" (MANDATORY): Always provide a SHORT, friendly explanation (1 to 2 sentences max, 15 to 25 words) written as Jane speaking naturally in the first person ("I") in ENGLISH.
-   - In this short text, Jane explains her found results and why these professions/disciplines were chosen for the user's specific request.
-   - English Examples:
-     * "To help with your back pain, I've selected trusted physiotherapists and osteopaths in Valencia."
-     * "Here are the top-rated professionals in Valencia matching your request."
-     * "Here are the recommended professionals in Valencia who speak French."
-     * If no exact match: "I couldn't find an exact match in our directory, but here are some close alternatives that may help."
-
-7. Under "reasonUrlExcerpt" for each professional:
-   - Provide a single clear sentence in ENGLISH explaining why they matched (trade, specialty, location, or symptom solution).
-   - E.g.: "Physiotherapist specialized in spine rehabilitation and back pain."
-
-8. SPOKEN LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
-   - If the user's query explicitly requests a specific spoken language (e.g. "qui parle français", "french speaking", "habla español", etc.):
-     * If matching professionals speak that language: ONLY return professionals who speak that language (give them score 75-100).
-     * If no professional speaks that language: return other matching pros with lower scores and explain in summaryMessage in English.`;
-
-      const response = await generateContentWithFallback({
-        contents: `User Query: "${query}"
-
-Professionals:
-${JSON.stringify(proListBrief)}`,
-        config: {
-          systemInstruction: sysInstruction,
-          responseMimeType: "application/json",
-          maxOutputTokens: 1000,
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              exactMatchFound: { type: Type.BOOLEAN, description: "True if direct match found for requested trade/service, false if not." },
-              summaryMessage: { type: Type.STRING, description: "A very short, friendly 1-2 sentence explanation (max 25 words) in English from Jane explaining her found results to the user." },
-              results: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING, description: "The professional's ID as a string" },
-                    score: { type: Type.INTEGER, description: "The relevancy match score from 0 to 100" },
-                    reasonUrlExcerpt: { type: Type.STRING, description: "Explanation of match or recommendation in English" }
-                  },
-                  required: ["id", "score", "reasonUrlExcerpt"]
+      const response = await generateContentWithFallback(
+        {
+          contents: `Query: "${query}"\n\nID|Name|Company|Category|Languages|Location|Rec|Bio\n${directoryRows}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: "application/json",
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                exactMatchFound: { type: Type.BOOLEAN, description: "True if at least one direct match (score >= 40) is found." },
+                summaryMessage: { type: Type.STRING, description: "Short, friendly 1-2 sentence explanation (max 25 words) in English from Jane." },
+                results: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING, description: "The professional's ID as a string" },
+                      score: { type: Type.INTEGER, description: "Relevancy match score from 1 to 100" },
+                      reasonUrlExcerpt: { type: Type.STRING, description: "Concise 1-sentence match explanation in English (max 16 words)" }
+                    },
+                    required: ["id", "score", "reasonUrlExcerpt"]
+                  }
                 }
-              }
-            },
-            required: ["exactMatchFound", "summaryMessage", "results"]
-          },
-          temperature: 0.1
-        }
-      });
+              },
+              required: ["exactMatchFound", "summaryMessage", "results"]
+            }
+          }
+        },
+        ["gemini-4-hydrogen", "gemini-3.1-flash-lite"]
+      );
 
-      const parsedData = JSON.parse(response.text || "{}");
+      const parsedData = extractJsonFromModelResponse(response.text || "{}");
       let results: any[] = [];
       let exactMatchFound = true;
       let summaryMessage: string | null = null;
@@ -485,6 +438,9 @@ ${JSON.stringify(proListBrief)}`,
         exactMatchFound = typeof parsedData.exactMatchFound === "boolean" ? parsedData.exactMatchFound : true;
         summaryMessage = parsedData.summaryMessage || null;
       }
+
+      // Drop zero-score noise if any slipped through
+      results = results.filter((r: any) => r && r.id != null && (Number(r.score) || 0) > 0);
 
       // Check if user requested a specific spoken language
       const requestedLangs = detectRequestedLanguages(query);
@@ -508,13 +464,10 @@ ${JSON.stringify(proListBrief)}`,
               const pro = proLookup[String(r.id)];
               return pro && proSpeaksAnyLanguage(pro, requestedLangs);
             })
-            .map((r: any) => {
-              // Ensure speakers have strong direct match scores
-              return {
-                ...r,
-                score: Math.max(r.score || 0, 75)
-              };
-            });
+            .map((r: any) => ({
+              ...r,
+              score: Math.max(r.score || 0, 75)
+            }));
 
           // Prioritize by recommended status and score
           results.sort((a: any, b: any) => {
@@ -544,56 +497,16 @@ ${JSON.stringify(proListBrief)}`,
 
       return res.json(responsePayload);
     } catch (error: any) {
-      console.warn("[api] Gemini AI Search API hit limit/quota. Seamlessly activating high-precision catalog matching fallback:", error?.message || error);
-      
-      const cleanQuery = (query || "").trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const allTokens = cleanQuery.split(/[\s,.'"-]+/).filter(t => t.length > 1);
-
-      const locationTokens = allTokens.filter(t => ['valencia', 'valence', 'spain', 'espagne', 'espana', 'ruzafa', 'russafa', 'carmen', 'canovas', 'alboraya', 'benimaclet'].includes(t));
-      const tradeTokens = allTokens.filter(t => !locationTokens.includes(t) && !['cherche', 'recherche', 'besoin', 'trouver', 'bon', 'bonne', 'meilleur', 'top', 'pro', 'recommande', 'expert', 'specialiste', 'pour', 'dans', 'avec', 'qui', 'parle', 'un', 'une', 'des', 'le', 'la', 'les'].includes(t));
-
-      const fallbackResults = (professionals || []).map((p: any) => {
-        const id = String(p.id);
-        const pName = (p.name || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const pCat = (p.category || p.profession || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const pCats = ((Array.isArray(p.categories) ? p.categories : []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const pCompany = (p.company_name || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const pBio = (p.bio || p.description || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const pLoc = (p.location || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-        let score = 0;
-        let matchReason = `Specialized professional in Valencia`;
-
-        if (tradeTokens.length > 0) {
-          let matchedCount = 0;
-          for (const t of tradeTokens) {
-            let m = false;
-            if (pName.includes(t)) { score += 60; m = true; }
-            else if (pCat.includes(t) || pCats.includes(t)) { score += 55; m = true; matchReason = `Specialized in ${p.category || p.profession || 'services'}`; }
-            else if (pCompany.includes(t)) { score += 45; m = true; }
-            else if (pBio.length > 0 && new RegExp(`(^|[^a-z0-9])${t}([^a-z0-9]|$)`, 'i').test(pBio)) { score += 35; m = true; }
-            if (m) matchedCount++;
-          }
-          if (matchedCount === 0) return { id, score: 0, reasonUrlExcerpt: "" };
-          if (locationTokens.length > 0 && locationTokens.some(loc => pLoc.includes(loc))) score += 10;
-        } else if (locationTokens.length > 0) {
-          const specificLoc = locationTokens.filter(t => !['valencia', 'valence', 'spain', 'espagne', 'espana'].includes(t));
-          if (specificLoc.length > 0 && specificLoc.some(loc => pLoc.includes(loc))) score = 75;
-          else if (specificLoc.length === 0) score = 60;
-        }
-
-        return {
-          id,
-          score: Math.min(100, score),
-          reasonUrlExcerpt: matchReason
-        };
-      }).filter((r: any) => r.score >= 45).sort((a: any, b: any) => b.score - a.score);
-
-      return res.json({
-        exactMatchFound: fallbackResults.length > 0,
-        summaryMessage: fallbackResults.length > 0 ? `Here are the top professionals matching your search for "${query}".` : `No matching professionals found for "${query}".`,
-        results: fallbackResults,
-        fallback_used: true
+      console.error("[api/search] Jane Gemini AI matching error:", error?.message || error);
+      if (isQuotaOrRateLimitError(error)) {
+        return res.status(429).json({
+          error: "Jane is currently very busy! Please wait a few seconds and try again."
+        });
+      }
+      const status = Number(error?.status || error?.statusCode) || 500;
+      const safeStatus = status >= 400 && status < 600 ? status : 500;
+      return res.status(safeStatus).json({
+        error: error?.message || "Jane AI search is temporarily unavailable. Please try again shortly."
       });
     }
   });
@@ -869,8 +782,8 @@ CRITICAL EMOJI & FORMATTING DIRECTIVE:
 
       const ai = getAiClient();
 
-      // Candidate models for search: gemini-3.1-flash-lite, followed by gemini-flash-latest and gemini-3.8-flash
-      const defaultChain = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"];
+      // Candidate models for search: gemini-4-hydrogen followed by gemini-3.1-flash-lite
+      const defaultChain = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
       const candidateModels: string[] = [];
       if (preferredModel && preferredModel !== "auto" && typeof preferredModel === "string") {
         candidateModels.push(preferredModel);
@@ -1552,10 +1465,10 @@ Ensure each event contains:
       const customData = req.body?.data;
       const baseUrl = "https://mycityunlocked.app";
       const rawUrl = url || customData?.url || "/";
-      const absoluteUrl = rawUrl.startsWith("http") ? rawUrl : `${baseUrl}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
       const brandLogoUrl = `${baseUrl}/logo2.png`;
 
-      const buildIosAppUrl = (inputUrl: string, extraData: any): string => {
+      // Build canonical HTTPS Launch URL so iOS, Android, and Web Push all open the exact event/article/pro/section
+      const buildCanonicalTargetUrl = (inputUrl: string, extraData: any): string => {
         const safeRaw = String(inputUrl || '/').trim();
         const d = extraData && typeof extraData === 'object' ? extraData : {};
         const notifType = String(d.type || '').toLowerCase();
@@ -1580,9 +1493,9 @@ Ensure each event contains:
           (urlProMatch?.[1] ? decodeURIComponent(urlProMatch[1]) : '') ||
           (d.target_id && (notifType === 'pro' || notifTheme.startsWith('pro')) ? String(d.target_id) : '');
 
-        if (eventId) return `mycityunlocked://open?eventId=${encodeURIComponent(String(eventId))}`;
-        if (guideId) return `mycityunlocked://open?guideId=${encodeURIComponent(String(guideId))}`;
-        if (proId) return `mycityunlocked://open?proId=${encodeURIComponent(String(proId))}`;
+        if (eventId) return `${baseUrl}/?eventId=${encodeURIComponent(String(eventId))}#events`;
+        if (guideId) return `${baseUrl}/?guideId=${encodeURIComponent(String(guideId))}#guides`;
+        if (proId) return `${baseUrl}/?proId=${encodeURIComponent(String(proId))}#explore`;
 
         if (
           notifFocus === 'weekend-events' ||
@@ -1592,38 +1505,32 @@ Ensure each event contains:
           /focus=weekend/i.test(safeRaw) ||
           /weekend-events/i.test(safeRaw)
         ) {
-          return 'mycityunlocked://open?focus=weekend-events';
+          return `${baseUrl}/?focus=weekend-events`;
         }
 
         if (notifType === 'event' || /#events\b/i.test(safeRaw) || /^\/?events\b/i.test(safeRaw)) {
-          return 'mycityunlocked://open?view=events';
+          return `${baseUrl}/?view=events#events`;
         }
         if (notifType === 'guide' || notifType === 'article' || /#guides\b/i.test(safeRaw) || /^\/?(?:guides|articles)\b/i.test(safeRaw)) {
-          return 'mycityunlocked://open?view=guides';
+          return `${baseUrl}/?view=guides#guides`;
         }
         if (notifType === 'pro' || /#(?:explore|directory)\b/i.test(safeRaw) || /^\/?(?:explore|directory)\b/i.test(safeRaw)) {
-          return 'mycityunlocked://open?view=explore';
+          return `${baseUrl}/?view=explore#explore`;
         }
         if (notifType === 'chat' || notifType === 'message' || /#messages\b/i.test(safeRaw)) {
-          return 'mycityunlocked://open?view=messages';
+          return `${baseUrl}/?view=messages#messages`;
         }
         if (notifType === 'marketplace' || /#marketplace\b/i.test(safeRaw)) {
-          return 'mycityunlocked://open?view=marketplace';
+          return `${baseUrl}/?view=marketplace#marketplace`;
         }
 
-        try {
-          const parsed = safeRaw.startsWith('http')
-            ? new URL(safeRaw)
-            : new URL(`${baseUrl}${safeRaw.startsWith('/') ? '' : '/'}${safeRaw}`);
-          if (parsed.search || parsed.hash) {
-            return `mycityunlocked://open${parsed.search}${parsed.hash}`;
-          }
-        } catch (_) {}
-
-        return 'mycityunlocked://open';
+        if (safeRaw.startsWith('http://') || safeRaw.startsWith('https://')) {
+          return safeRaw;
+        }
+        return `${baseUrl}${safeRaw.startsWith('/') ? '' : '/'}${safeRaw}`;
       };
 
-      const iosAppUrl = buildIosAppUrl(rawUrl, customData);
+      const targetUrl = buildCanonicalTargetUrl(rawUrl, customData);
 
       const selectedChannels: string[] = Array.isArray(targetChannels) && targetChannels.length > 0 
         ? targetChannels 
@@ -1636,7 +1543,7 @@ Ensure each event contains:
 
       const cleanImg = (imageUrl && typeof imageUrl === 'string' && imageUrl.trim()) ? imageUrl.trim() : '';
 
-      const commonPayload: any = {
+      const oneSignalPayload: any = {
         app_id: appId,
         headings: {
           en: titleStr,
@@ -1648,12 +1555,38 @@ Ensure each event contains:
           fr: messageStr,
           es: messageStr
         },
+        // Unified Launch URL for iOS, Android, and Web Push
+        url: targetUrl,
         priority: 10,
+        isIos: enableIos,
+        isAndroid: enableAndroid,
+        isChromeWeb: enableWeb,
+        isSafariWeb: enableWeb,
+        isFirefox: enableWeb,
+        isEdge: enableWeb,
+        isAnyWeb: enableWeb,
+        ...(enableIos ? {
+          ios_sound: "default",
+          content_available: true,
+          mutable_content: true,
+          ios_badgeType: "Increase",
+          ios_badgeCount: 1,
+          ...(cleanImg ? { ios_attachments: { id1: cleanImg } } : {})
+        } : {}),
+        ...(enableAndroid || enableWeb ? {
+          chrome_web_icon: brandLogoUrl,
+          chrome_web_badge: brandLogoUrl,
+          large_icon: brandLogoUrl,
+          android_visibility: 1,
+          android_accent_color: "2563EB",
+          android_sound: "default",
+          ...(cleanImg ? { big_picture: cleanImg, chrome_web_image: cleanImg } : {})
+        } : {}),
         data: {
           ...(customData || {}),
-          url: absoluteUrl,
-          launchUrl: absoluteUrl,
-          appUrl: iosAppUrl
+          url: targetUrl,
+          launchUrl: targetUrl,
+          appUrl: targetUrl
         }
       };
 
@@ -1733,51 +1666,7 @@ Ensure each event contains:
         return { ok: res.ok, status: res.status, data: resData };
       };
 
-      const passPayloads: any[] = [];
-
-      if (enableIos) {
-        passPayloads.push({
-          ...commonPayload,
-          app_url: iosAppUrl,
-          isIos: true,
-          isAndroid: false,
-          isChromeWeb: false,
-          isSafariWeb: false,
-          isFirefox: false,
-          isEdge: false,
-          isAnyWeb: false,
-          ios_sound: "default",
-          content_available: true,
-          mutable_content: true,
-          ios_badgeType: "Increase",
-          ios_badgeCount: 1,
-          ...(cleanImg ? { ios_attachments: { id1: cleanImg } } : {})
-        });
-      }
-
-      if (enableAndroid || enableWeb) {
-        passPayloads.push({
-          ...commonPayload,
-          ...(enableWeb ? { web_url: absoluteUrl } : {}),
-          ...(enableAndroid ? { app_url: absoluteUrl } : {}),
-          chrome_web_icon: brandLogoUrl,
-          chrome_web_badge: brandLogoUrl,
-          large_icon: brandLogoUrl,
-          isIos: false,
-          isAndroid: enableAndroid,
-          isChromeWeb: enableWeb,
-          isSafariWeb: enableWeb,
-          isFirefox: enableWeb,
-          isEdge: enableWeb,
-          isAnyWeb: enableWeb,
-          android_visibility: 1,
-          android_accent_color: "2563EB",
-          android_sound: "default",
-          ...(cleanImg ? { big_picture: cleanImg, chrome_web_image: cleanImg } : {})
-        });
-      }
-
-      const passResults = await Promise.all(passPayloads.map((p) => dispatchPass(p)));
+      const passResults = [await dispatchPass(oneSignalPayload)];
       const okResults = passResults.filter((r) => r.ok);
 
       if (okResults.length === 0) {
@@ -1888,13 +1777,19 @@ Ensure each event contains:
     next();
   });
 
+  const httpServer = http.createServer(app);
+  let viteServer: Awaited<ReturnType<typeof createViteServer>> | null = null;
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
+    viteServer = await createViteServer({
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR === "true" ? false : { server: httpServer },
+      },
       appType: "spa",
     });
-    app.use(vite.middlewares);
+    app.use(viteServer.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath, { dotfiles: 'allow' }));
@@ -1903,9 +1798,21 @@ Ensure each event contains:
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+
+  const shutdown = async () => {
+    try {
+      if (viteServer) await viteServer.close();
+    } catch (_) {}
+    httpServer.close(() => process.exit(0));
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error("[server] Fatal startup error:", err);
+  process.exit(1);
+});

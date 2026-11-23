@@ -632,7 +632,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
         target: targetAudienceLabel,
         targetId,
         targetUserId: (targetMode === 'specific' && selectedUserId) ? selectedUserId : undefined,
-        url: url || '/',
+        url: effectiveUrl || '/',
         recipientsCount: shouldSendPush ? recipientCount : undefined,
         deliveryMode,
         status: 'sent'
@@ -770,7 +770,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             type: 'custom',
             target: targetLabel,
             targetId: annPushUserId || undefined,
-            url: '/',
+            url: derivedUrl || '/',
             recipientsCount: res?.recipients ?? 1,
             status: 'sent'
           }, true);

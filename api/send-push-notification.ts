@@ -84,12 +84,10 @@ export default async function handler(req: any, res: any) {
 
     const baseUrl = "https://mycityunlocked.app";
     const rawUrl = url || customData?.url || "/";
-    const absoluteUrl = rawUrl.startsWith("http")
-      ? rawUrl
-      : `${baseUrl}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
     const brandLogoUrl = `${baseUrl}/logo2.png`;
 
-    const buildIosAppUrl = (inputUrl: string, extraData: any): string => {
+    // Build canonical HTTPS Launch URL so iOS, Android, and Web Push all open the exact event/article/pro/section
+    const buildCanonicalTargetUrl = (inputUrl: string, extraData: any): string => {
       const safeRaw = String(inputUrl || '/').trim();
       const d = extraData && typeof extraData === 'object' ? extraData : {};
       const notifType = String(d.type || '').toLowerCase();
@@ -114,9 +112,9 @@ export default async function handler(req: any, res: any) {
         (urlProMatch?.[1] ? decodeURIComponent(urlProMatch[1]) : '') ||
         (d.target_id && (notifType === 'pro' || notifTheme.startsWith('pro')) ? String(d.target_id) : '');
 
-      if (eventId) return `mycityunlocked://open?eventId=${encodeURIComponent(String(eventId))}`;
-      if (guideId) return `mycityunlocked://open?guideId=${encodeURIComponent(String(guideId))}`;
-      if (proId) return `mycityunlocked://open?proId=${encodeURIComponent(String(proId))}`;
+      if (eventId) return `${baseUrl}/?eventId=${encodeURIComponent(String(eventId))}#events`;
+      if (guideId) return `${baseUrl}/?guideId=${encodeURIComponent(String(guideId))}#guides`;
+      if (proId) return `${baseUrl}/?proId=${encodeURIComponent(String(proId))}#explore`;
 
       if (
         notifFocus === 'weekend-events' ||
@@ -126,38 +124,32 @@ export default async function handler(req: any, res: any) {
         /focus=weekend/i.test(safeRaw) ||
         /weekend-events/i.test(safeRaw)
       ) {
-        return 'mycityunlocked://open?focus=weekend-events';
+        return `${baseUrl}/?focus=weekend-events`;
       }
 
       if (notifType === 'event' || /#events\b/i.test(safeRaw) || /^\/?events\b/i.test(safeRaw)) {
-        return 'mycityunlocked://open?view=events';
+        return `${baseUrl}/?view=events#events`;
       }
       if (notifType === 'guide' || notifType === 'article' || /#guides\b/i.test(safeRaw) || /^\/?(?:guides|articles)\b/i.test(safeRaw)) {
-        return 'mycityunlocked://open?view=guides';
+        return `${baseUrl}/?view=guides#guides`;
       }
       if (notifType === 'pro' || /#(?:explore|directory)\b/i.test(safeRaw) || /^\/?(?:explore|directory)\b/i.test(safeRaw)) {
-        return 'mycityunlocked://open?view=explore';
+        return `${baseUrl}/?view=explore#explore`;
       }
       if (notifType === 'chat' || notifType === 'message' || /#messages\b/i.test(safeRaw)) {
-        return 'mycityunlocked://open?view=messages';
+        return `${baseUrl}/?view=messages#messages`;
       }
       if (notifType === 'marketplace' || /#marketplace\b/i.test(safeRaw)) {
-        return 'mycityunlocked://open?view=marketplace';
+        return `${baseUrl}/?view=marketplace#marketplace`;
       }
 
-      try {
-        const parsed = safeRaw.startsWith('http')
-          ? new URL(safeRaw)
-          : new URL(`${baseUrl}${safeRaw.startsWith('/') ? '' : '/'}${safeRaw}`);
-        if (parsed.search || parsed.hash) {
-          return `mycityunlocked://open${parsed.search}${parsed.hash}`;
-        }
-      } catch (_) {}
-
-      return 'mycityunlocked://open';
+      if (safeRaw.startsWith('http://') || safeRaw.startsWith('https://')) {
+        return safeRaw;
+      }
+      return `${baseUrl}${safeRaw.startsWith('/') ? '' : '/'}${safeRaw}`;
     };
 
-    const iosAppUrl = buildIosAppUrl(rawUrl, customData);
+    const targetUrl = buildCanonicalTargetUrl(rawUrl, customData);
 
     const selectedChannels: string[] = Array.isArray(targetChannels) && targetChannels.length > 0
       ? targetChannels
@@ -170,7 +162,7 @@ export default async function handler(req: any, res: any) {
 
     const cleanImg = (imageUrl && typeof imageUrl === 'string' && imageUrl.trim()) ? imageUrl.trim() : '';
 
-    const commonPayload: any = {
+    const oneSignalPayload: any = {
       app_id: appId,
       headings: {
         en: titleStr,
@@ -182,12 +174,38 @@ export default async function handler(req: any, res: any) {
         fr: messageStr,
         es: messageStr
       },
+      // Unified Launch URL for iOS, Android, and Web Push
+      url: targetUrl,
       priority: 10,
+      isIos: enableIos,
+      isAndroid: enableAndroid,
+      isChromeWeb: enableWeb,
+      isSafariWeb: enableWeb,
+      isFirefox: enableWeb,
+      isEdge: enableWeb,
+      isAnyWeb: enableWeb,
+      ...(enableIos ? {
+        ios_sound: "default",
+        content_available: true,
+        mutable_content: true,
+        ios_badgeType: "Increase",
+        ios_badgeCount: 1,
+        ...(cleanImg ? { ios_attachments: { id1: cleanImg } } : {})
+      } : {}),
+      ...(enableAndroid || enableWeb ? {
+        chrome_web_icon: brandLogoUrl,
+        chrome_web_badge: brandLogoUrl,
+        large_icon: brandLogoUrl,
+        android_visibility: 1,
+        android_accent_color: "2563EB",
+        android_sound: "default",
+        ...(cleanImg ? { big_picture: cleanImg, chrome_web_image: cleanImg } : {})
+      } : {}),
       data: {
         ...(customData || {}),
-        url: absoluteUrl,
-        launchUrl: absoluteUrl,
-        appUrl: iosAppUrl
+        url: targetUrl,
+        launchUrl: targetUrl,
+        appUrl: targetUrl
       }
     };
 
@@ -267,52 +285,7 @@ export default async function handler(req: any, res: any) {
       return { ok: res.ok, status: res.status, data: resData };
     };
 
-    const passPayloads: any[] = [];
-
-    if (enableIos) {
-      passPayloads.push({
-        ...commonPayload,
-        // Native iOS APNs receives custom URL scheme so tapping notification opens the iOS app directly
-        app_url: iosAppUrl,
-        isIos: true,
-        isAndroid: false,
-        isChromeWeb: false,
-        isSafariWeb: false,
-        isFirefox: false,
-        isEdge: false,
-        isAnyWeb: false,
-        ios_sound: "default",
-        content_available: true,
-        mutable_content: true,
-        ios_badgeType: "Increase",
-        ios_badgeCount: 1,
-        ...(cleanImg ? { ios_attachments: { id1: cleanImg } } : {})
-      });
-    }
-
-    if (enableAndroid || enableWeb) {
-      passPayloads.push({
-        ...commonPayload,
-        ...(enableWeb ? { web_url: absoluteUrl } : {}),
-        ...(enableAndroid ? { app_url: absoluteUrl } : {}),
-        chrome_web_icon: brandLogoUrl,
-        chrome_web_badge: brandLogoUrl,
-        large_icon: brandLogoUrl,
-        isIos: false,
-        isAndroid: enableAndroid,
-        isChromeWeb: enableWeb,
-        isSafariWeb: enableWeb,
-        isFirefox: enableWeb,
-        isEdge: enableWeb,
-        isAnyWeb: enableWeb,
-        android_visibility: 1,
-        android_accent_color: "2563EB",
-        android_sound: "default",
-        ...(cleanImg ? { big_picture: cleanImg, chrome_web_image: cleanImg } : {})
-      });
-    }
-
-    const passResults = await Promise.all(passPayloads.map((p) => dispatchPass(p)));
+    const passResults = [await dispatchPass(oneSignalPayload)];
     const okResults = passResults.filter((r) => r.ok);
 
     if (okResults.length === 0) {

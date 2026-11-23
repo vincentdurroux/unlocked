@@ -2025,12 +2025,13 @@ export default function App() {
     const cleanEventId = extractCleanId(rawEventId);
     const rawProId = searchParams.get('proId') || hashParams.get('proId');
     const cleanProId = extractCleanId(rawProId);
-    const rawGuideId = searchParams.get('guideId') || hashParams.get('guideId');
+    const rawGuideId = searchParams.get('guideId') || searchParams.get('articleId') || hashParams.get('guideId') || hashParams.get('articleId');
     const cleanGuideId = extractCleanId(rawGuideId);
     const focusParam = (searchParams.get('focus') || hashParams.get('focus') || '').toLowerCase();
+    const rawViewParam = (searchParams.get('view') || hashParams.get('view') || '').toLowerCase();
+    const normalizedViewParam = rawViewParam === 'directory' ? 'explore' : rawViewParam;
+    const normalizedCleanHash = cleanHash === 'directory' ? 'explore' : cleanHash;
     const hasWeekendFocus = focusParam === 'weekend-events' || focusParam === 'weekend' || hash.toLowerCase().includes('weekend-events');
-
-    const hasDeepLinkQuery = Boolean(cleanEventId || cleanProId || cleanGuideId || hasWeekendFocus);
 
     const validViews: View[] = [
       'home', 'explore', 'events', 'guides', 'profile', 'community', 'marketplace', 
@@ -2038,6 +2039,9 @@ export default function App() {
       'update-password', 'privacy-policy', 'user-terms', 'provider-terms', 
       'community-guidelines', 'cookie-policy', 'feedback'
     ];
+
+    const hasValidViewParam = Boolean(normalizedViewParam && validViews.includes(normalizedViewParam as View));
+    const hasDeepLinkQuery = Boolean(cleanEventId || cleanProId || cleanGuideId || hasWeekendFocus || hasValidViewParam);
 
     const isSupabaseHash = hash.includes('access_token=') || 
                            hash.includes('refresh_token=') || 
@@ -2054,8 +2058,9 @@ export default function App() {
       else if (cleanProId) initial = 'explore';
       else if (cleanGuideId) initial = 'guides';
       else if (hasWeekendFocus) initial = 'home';
-    } else if (cleanHash && validViews.includes(cleanHash as View)) {
-      initial = cleanHash as View;
+      else if (hasValidViewParam) initial = normalizedViewParam as View;
+    } else if (normalizedCleanHash && validViews.includes(normalizedCleanHash as View)) {
+      initial = normalizedCleanHash as View;
     } else if (pathname && validViews.includes(pathname as View)) {
       initial = pathname as View;
     } else if (isColdStart) {
@@ -2106,7 +2111,7 @@ export default function App() {
     try {
       const p = new URLSearchParams(window.location.search);
       const hp = window.location.hash.includes('?') ? new URLSearchParams(window.location.hash.substring(window.location.hash.indexOf('?'))) : null;
-      const clean = extractCleanId(p.get('guideId') || hp?.get('guideId'));
+      const clean = extractCleanId(p.get('guideId') || p.get('articleId') || hp?.get('guideId') || hp?.get('articleId'));
       if (clean) return clean;
     } catch (_) {}
     return localStorage.getItem('unlocked_initial_guide_id');
@@ -2539,13 +2544,38 @@ export default function App() {
         window.history.replaceState({ view: 'home' }, '', window.location.pathname);
       } catch (_) {}
       return true;
-    } else if (viewParam === 'events' || viewParam === 'guides' || viewParam === 'explore' || viewParam === 'marketplace' || viewParam === 'home') {
+    } else if (
+      viewParam === 'events' ||
+      viewParam === 'guides' ||
+      viewParam === 'explore' ||
+      viewParam === 'directory' ||
+      viewParam === 'messages' ||
+      viewParam === 'marketplace' ||
+      viewParam === 'home'
+    ) {
+      const resolvedView = (viewParam === 'directory' ? 'explore' : viewParam) as View;
       markDeepLinkActivity();
       initialViewRef.current = null;
       isProgrammaticNavigationRef.current = true;
       setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
       setDeepLinkTrigger(c => c + 1);
-      setActiveView(viewParam as View);
+      setActiveView(resolvedView);
+      return true;
+    } else if (
+      hashRaw === '#events' ||
+      hashRaw === '#guides' ||
+      hashRaw === '#explore' ||
+      hashRaw === '#directory' ||
+      hashRaw === '#messages' ||
+      hashRaw === '#marketplace'
+    ) {
+      const hashView = hashRaw.slice(1) === 'directory' ? 'explore' : hashRaw.slice(1);
+      markDeepLinkActivity();
+      initialViewRef.current = null;
+      isProgrammaticNavigationRef.current = true;
+      setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
+      setDeepLinkTrigger(c => c + 1);
+      setActiveView(hashView as View);
       return true;
     }
     return false;
@@ -17571,12 +17601,12 @@ function computeProSearchScore(pro: any, searchStr: string): number {
     // Ensure all disciplines matched by Jane (physio, osteo, doctor, etc.) can be displayed
     setSelectedCategory('All');
 
-    // Warning timer if search takes more than 4.5s
+    // Warning timer if search takes more than 5s
     searchTimeoutRef.current = setTimeout(() => {
       setIsSearchTakingLonger(true);
-    }, 4500);
+    }, 5000);
 
-    // Hard timeout if search appears blocked after 10.5 seconds
+    // Hard timeout if search appears blocked after 18 seconds
     const hardTimeoutId = setTimeout(() => {
       if (controller && !controller.signal.aborted) {
         controller.abort();
@@ -17585,7 +17615,7 @@ function computeProSearchScore(pro: any, searchStr: string): number {
         setIsSearchTakingLonger(false);
         setAiError("Jane search appears to be blocked or is taking too long. You can switch to search by category or try again later.");
       }
-    }, 10500);
+    }, 18000);
 
     // Create a compact payload to avoid sending large images/reviews over the wire and blowing Gemini token limits
     // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
