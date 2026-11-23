@@ -48,7 +48,7 @@ export function SmartSearchProgressBar({
 
       const delayTimer = setTimeout(() => {
         setInternalTakingLonger(true);
-      }, 4500);
+      }, 8000);
 
       const interval = setInterval(() => {
         let next: number;

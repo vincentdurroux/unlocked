@@ -125,7 +125,7 @@ export async function processSearch(query: string, professionals: any[]) {
   }
 
   const cleanKey = query.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const cacheKey = `v6_h4_${cleanKey}__${professionals.length}`;
+  const cacheKey = `v7_fl31_${cleanKey}__${professionals.length}`;
   const cached = getCachedResult(cacheKey);
   if (cached) {
     return cached;
@@ -185,63 +185,85 @@ RULES:
 6. COMPREHENSIVE SCORING: Return ALL matching pros (both Rec=1 community-recommended at 85-95 and Rec=0 Google-sourced at 70-80; adjacent alternatives 20-50). Omit unrelated pros (do NOT output score 0 entries).
 7. ENGLISH & CONCISE OUTPUT: ALWAYS write "summaryMessage" (1-2 friendly first-person English sentences, max 25 words) and each "reasonUrlExcerpt" (1 concise English sentence, max 16 words) in ENGLISH regardless of query language. Set exactMatchFound=true if any result has score >= 40.`;
 
-  // Frugal, high-precision free-tier compatible chain:
-  // 1. gemini-4-hydrogen (Gemini 4 Flash): best semantic accuracy with ThinkingLevel.LOW for low token use & latency
-  // 2. gemini-3.1-flash-lite: ultra-low-cost independent quota fallback
-  const candidateModels = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
+  // Exclusively use gemini-3.1-flash-lite with ThinkingLevel.MINIMAL for fastest latency & highest quota
+  const modelName = "gemini-3.1-flash-lite";
   let lastError: any = null;
   let responseText = "";
 
-  for (let i = 0; i < candidateModels.length; i++) {
-    const modelName = candidateModels[i];
-    try {
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: `Query: "${query}"\n\nID|Name|Company|Category|Languages|Location|Rec|Bio\n${directoryRows}`,
-        config: {
-          systemInstruction: sysInstruction,
-          responseMimeType: "application/json",
-          thinkingConfig: {
-            thinkingLevel: ThinkingLevel.LOW
-          },
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              exactMatchFound: { type: Type.BOOLEAN, description: "True if at least one direct match (score >= 40) is found." },
-              summaryMessage: { type: Type.STRING, description: "Short, friendly 1-2 sentence explanation (max 25 words) in English from Jane." },
-              results: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING, description: "The professional's ID as a string" },
-                    score: { type: Type.INTEGER, description: "Relevancy match score from 1 to 100" },
-                    reasonUrlExcerpt: { type: Type.STRING, description: "Concise 1-sentence match explanation in English (max 16 words)" }
-                  },
-                  required: ["id", "score", "reasonUrlExcerpt"]
-                }
-              }
-            },
-            required: ["exactMatchFound", "summaryMessage", "results"]
-          }
-        }
-      });
+  const isTransient503 = (err: any) => {
+    const st = err?.status || err?.statusCode || err?.code;
+    if (st === 503) return true;
+    const msg = String(err?.message || "").toLowerCase();
+    return msg.includes("503") || msg.includes("unavailable") || msg.includes("high demand");
+  };
 
+  const callWithTimeout = async (timeoutMs: number) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        const timeoutErr: any = new Error(`Model ${modelName} timed out after ${timeoutMs}ms`);
+        timeoutErr.status = 504;
+        reject(timeoutErr);
+      }, timeoutMs);
+    });
+    try {
+      return await Promise.race([
+        ai.models.generateContent({
+          model: modelName,
+          contents: `Query: "${query}"\n\nID|Name|Company|Category|Languages|Location|Rec|Bio\n${directoryRows}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: "application/json",
+            thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                exactMatchFound: { type: Type.BOOLEAN, description: "True if at least one direct match (score >= 40) is found." },
+                summaryMessage: { type: Type.STRING, description: "Short, friendly 1-2 sentence explanation (max 25 words) in English from Jane." },
+                results: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING, description: "The professional's ID as a string" },
+                      score: { type: Type.INTEGER, description: "Relevancy match score from 1 to 100" },
+                      reasonUrlExcerpt: { type: Type.STRING, description: "Concise 1-sentence match explanation in English (max 16 words)" }
+                    },
+                    required: ["id", "score", "reasonUrlExcerpt"]
+                  }
+                }
+              },
+              required: ["exactMatchFound", "summaryMessage", "results"]
+            }
+          }
+        }),
+        timeoutPromise,
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await callWithTimeout(14000);
       if (response && response.text) {
         responseText = response.text;
         break;
       }
     } catch (err: any) {
       lastError = err;
-      const nextModel = candidateModels[i + 1];
-      if (nextModel) {
-        console.log(`[api/search] Model ${modelName} unavailable, seamlessly trying next fallback: ${nextModel}...`);
+      if (attempt === 1 && isTransient503(err)) {
+        console.warn(`[api/search] ${modelName} hit transient 503, retrying once in 700ms...`);
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        continue;
       }
+      break;
     }
   }
 
   if (!responseText) {
-    throw lastError || new Error("All AI matching models failed to generate a response.");
+    throw lastError || new Error("Jane AI model failed to generate a response.");
   }
 
   let parsedData: any = {};
@@ -358,6 +380,11 @@ export default async function handler(req: any, res: any) {
       });
     }
     const status = Number(error?.status || error?.statusCode) || 500;
+    if (status === 504) {
+      return res.status(504).json({
+        error: "Jane is taking longer than expected right now. Please try again in a few seconds."
+      });
+    }
     const safeStatus = status >= 400 && status < 600 ? status : 500;
     return res.status(safeStatus).json({
       error: error?.message || "Jane AI search is temporarily unavailable. Please try again shortly."

@@ -83,7 +83,7 @@ function isQuotaOrRateLimitError(error: any): boolean {
   if (!error) return false;
   const status = error.status || error.statusCode || error.code;
   if (status === 429 || status === 503) return true;
-  const str = `${error.message || ""} ${error.stack || ""} ${JSON.stringify(error)}`.toLowerCase();
+  const str = `${error.message || ""} ${error.stack || ""}`.toLowerCase();
   return (
     str.includes("429") ||
     str.includes("503") ||
@@ -183,10 +183,10 @@ async function startServer() {
     },
     customModels?: string[]
   ): Promise<any> => {
-    // Frugal, high-precision free-tier compatible chain:
-    // 1. gemini-4-hydrogen (Gemini 4 Flash): best semantic accuracy & multilingual reasoning
-    // 2. gemini-3.1-flash-lite: ultra-low-cost independent quota fallback
-    const models = customModels || ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
+    // Fast, high-quota free-tier compatible chain:
+    // 1. gemini-3.1-flash-lite (ThinkingLevel.MINIMAL): fastest (1-3s) & highest free-tier RPM/RPD quota
+    // 2. gemini-4-hydrogen (ThinkingLevel.LOW): deep semantic fallback when Flash Lite has a 503 demand spike
+    const models = customModels || ["gemini-3.1-flash-lite", "gemini-4-hydrogen"];
     let lastError: any = null;
 
     const buildConfigForModel = (modelName: string, rawConfig?: any) => {
@@ -197,50 +197,92 @@ async function startServer() {
         delete cfg.topP;
         delete cfg.topK;
         delete cfg.candidateCount;
+        // Gemini 4 does not support ThinkingLevel.MINIMAL (returns 400) — clamp to LOW
+        if (cfg.thinkingConfig?.thinkingLevel === ThinkingLevel.MINIMAL) {
+          cfg.thinkingConfig = { ...cfg.thinkingConfig, thinkingLevel: ThinkingLevel.LOW };
+        }
+      } else if (modelName === "gemini-3.1-flash-lite") {
+        // Flash Lite is fastest and cheapest with MINIMAL (no thinking overhead)
+        if (cfg.thinkingConfig) {
+          cfg.thinkingConfig = { ...cfg.thinkingConfig, thinkingLevel: ThinkingLevel.MINIMAL };
+        }
       }
       return cfg;
     };
 
-    // Pass 1: Try each model immediately without stalling on 429/503 spikes
-    for (let i = 0; i < models.length; i++) {
-      const modelName = models[i];
+    const callModelWithTimeout = async (modelName: string, timeoutMs: number) => {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          const timeoutErr: any = new Error(`Model ${modelName} timed out after ${timeoutMs}ms`);
+          timeoutErr.status = 504;
+          reject(timeoutErr);
+        }, timeoutMs);
+      });
       try {
-        const response = await getAiClient().models.generateContent({
-          ...params,
-          config: buildConfigForModel(modelName, params.config),
-          model: modelName,
-        });
-        if (response && response.text) {
-          return response;
-        }
-      } catch (err: any) {
-        lastError = err;
-        const nextModel = models[i + 1];
-        if (nextModel) {
-          console.log(`[ai] Model ${modelName} unavailable, seamlessly trying next fallback: ${nextModel}...`);
-        }
-      }
-    }
-
-    // Pass 2: Brief 800ms backoff retry only on transient quota/availability errors
-    if (isQuotaOrRateLimitError(lastError)) {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      for (const modelName of models) {
-        try {
-          const response = await getAiClient().models.generateContent({
+        return await Promise.race([
+          getAiClient().models.generateContent({
             ...params,
             config: buildConfigForModel(modelName, params.config),
             model: modelName,
-          });
+          }),
+          timeoutPromise,
+        ]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    };
+
+    const isTransient503 = (err: any) => {
+      const st = err?.status || err?.statusCode || err?.code;
+      if (st === 503) return true;
+      const msg = String(err?.message || "").toLowerCase();
+      return msg.includes("503") || msg.includes("unavailable") || msg.includes("high demand");
+    };
+
+    const attempts: { model: string; status: number | string; ms: number; message: string }[] = [];
+
+    // Single pass across configured models; if only one model is used and it hits a transient 503 spike, retry once after 700ms
+    for (let i = 0; i < models.length; i++) {
+      const modelName = models[i];
+      const maxTries = models.length === 1 ? 2 : 1;
+      const timeoutMs = models.length === 1 ? 14000 : (modelName === "gemini-3.1-flash-lite" ? 8000 : 14000);
+
+      for (let attempt = 1; attempt <= maxTries; attempt++) {
+        const t0 = Date.now();
+        try {
+          const response = await callModelWithTimeout(modelName, timeoutMs);
           if (response && response.text) {
+            console.log(`[ai] Model ${modelName} succeeded in ${Date.now() - t0}ms`);
             return response;
           }
         } catch (err: any) {
           lastError = err;
+          const elapsed = Date.now() - t0;
+          const errStatus = err?.status || err?.statusCode || err?.code || "ERR";
+          const errMsg = String(err?.message || err).slice(0, 240);
+          attempts.push({ model: modelName, status: errStatus, ms: elapsed, message: errMsg });
+
+          if (attempt < maxTries && isTransient503(err)) {
+            console.warn(`[ai] Model ${modelName} hit transient 503 in ${elapsed}ms, retrying once in 700ms...`);
+            await new Promise((resolve) => setTimeout(resolve, 700));
+            continue;
+          }
+
+          const nextModel = models[i + 1];
+          if (nextModel) {
+            console.warn(`[ai] Model ${modelName} failed in ${elapsed}ms (${errStatus}): ${errMsg} -> trying fallback: ${nextModel}`);
+          } else {
+            console.warn(`[ai] Model ${modelName} failed in ${elapsed}ms (${errStatus}): ${errMsg}`);
+          }
+          break;
         }
       }
     }
 
+    if (lastError && typeof lastError === "object") {
+      lastError.modelAttempts = attempts;
+    }
     throw lastError;
   };
 
@@ -342,7 +384,7 @@ async function startServer() {
       const qNormalized = qLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
       // Versioned cache key including directory size so newly added pros invalidate old results
-      const cacheKey = `v6_h4_${qNormalized}__${professionals.length}`;
+      const cacheKey = `v7_fl31_${qNormalized}__${professionals.length}`;
       const cached = getCachedSearch(cacheKey);
       if (cached) {
         console.log(`[ai] Returning cached Jane search result for: "${qLower}"`);
@@ -400,7 +442,7 @@ RULES:
           config: {
             systemInstruction: sysInstruction,
             responseMimeType: "application/json",
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
             responseSchema: {
               type: Type.OBJECT,
               properties: {
@@ -423,7 +465,7 @@ RULES:
             }
           }
         },
-        ["gemini-4-hydrogen", "gemini-3.1-flash-lite"]
+        ["gemini-3.1-flash-lite"]
       );
 
       const parsedData = extractJsonFromModelResponse(response.text || "{}");
@@ -504,6 +546,11 @@ RULES:
         });
       }
       const status = Number(error?.status || error?.statusCode) || 500;
+      if (status === 504) {
+        return res.status(504).json({
+          error: "Jane is taking longer than expected right now. Please try again in a few seconds."
+        });
+      }
       const safeStatus = status >= 400 && status < 600 ? status : 500;
       return res.status(safeStatus).json({
         error: error?.message || "Jane AI search is temporarily unavailable. Please try again shortly."
@@ -613,37 +660,41 @@ CRITICAL REASONING & EVALUATION CRITERIA:
    - summaryMessage: A warm, intelligent, 1-2 sentence response from Jane in ENGLISH explaining what she selected (or if no exact match, offering close alternatives).
    - results: Array of objects with "id", "score" (0-100), and "reason" (a 1-sentence personalized explanation in ENGLISH highlighting WHY Jane selected this event, explicitly referencing date, schedule, or key description details).`;
 
-      const response = await generateContentWithFallback({
-        contents: `User Query: "${query.trim()}"
+      const response = await generateContentWithFallback(
+        {
+          contents: `User Query: "${query.trim()}"
 
 Available Events:
 ${JSON.stringify(eventListBrief, null, 2)}`,
-        config: {
-          systemInstruction: sysInstruction,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              exactMatchFound: { type: Type.BOOLEAN },
-              summaryMessage: { type: Type.STRING },
-              results: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    score: { type: Type.INTEGER },
-                    reason: { type: Type.STRING }
-                  },
-                  required: ["id", "score", "reason"]
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: "application/json",
+            thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                exactMatchFound: { type: Type.BOOLEAN },
+                summaryMessage: { type: Type.STRING },
+                results: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      score: { type: Type.INTEGER },
+                      reason: { type: Type.STRING }
+                    },
+                    required: ["id", "score", "reason"]
+                  }
                 }
-              }
+              },
+              required: ["exactMatchFound", "results"]
             },
-            required: ["exactMatchFound", "results"]
-          },
-          temperature: 0.1
-        }
-      });
+            temperature: 0.1
+          }
+        },
+        ["gemini-3.1-flash-lite"]
+      );
 
       const parsed = JSON.parse(response.text || "{}");
       const rawResults = Array.isArray(parsed.results) ? parsed.results : [];

@@ -17601,21 +17601,21 @@ function computeProSearchScore(pro: any, searchStr: string): number {
     // Ensure all disciplines matched by Jane (physio, osteo, doctor, etc.) can be displayed
     setSelectedCategory('All');
 
-    // Warning timer if search takes more than 5s
+    // Warning timer if search takes more than 8s
     searchTimeoutRef.current = setTimeout(() => {
       setIsSearchTakingLonger(true);
-    }, 5000);
+    }, 8000);
 
-    // Hard timeout if search appears blocked after 18 seconds
+    // Hard timeout if search does not complete after 24 seconds
     const hardTimeoutId = setTimeout(() => {
       if (controller && !controller.signal.aborted) {
         controller.abort();
         setAiLoading(false);
         setIsSearching(false);
         setIsSearchTakingLonger(false);
-        setAiError("Jane search appears to be blocked or is taking too long. You can switch to search by category or try again later.");
+        setAiError("Jane is taking longer than expected right now. Please try again in a few seconds, or browse by category.");
       }
-    }, 18000);
+    }, 24000);
 
     // Create a compact payload to avoid sending large images/reviews over the wire and blowing Gemini token limits
     // Note: Reviews/ratings are deliberately excluded so they NEVER influence the Jane match score
@@ -18298,7 +18298,11 @@ function computeProSearchScore(pro: any, searchStr: string): number {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-bold text-slate-900 leading-snug">
-                      Jane search appears to be blocked or delayed
+                      {aiError.toLowerCase().includes("busy") || aiError.toLowerCase().includes("quota") || aiError.toLowerCase().includes("demand")
+                        ? "Jane is temporarily busy"
+                        : aiError.toLowerCase().includes("longer") || aiError.toLowerCase().includes("timed out")
+                        ? "Jane search is taking longer than expected"
+                        : "Jane search is temporarily unavailable"}
                     </h4>
                     <p className="text-xs text-slate-600 mt-1 leading-relaxed">
                       {aiError}
