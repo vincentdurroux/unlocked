@@ -18,12 +18,43 @@ function getOAuthRedirectTo(): string {
   const isLocalhostOrIP = origin.includes('localhost') || /http:\/\/\d+\.\d+\.\d+\.\d+/.test(origin);
 
   if (isCapacitor || isFile || (isIOS && isLocalhostOrIP)) {
-    // Return standard iOS deep link redirect for Capacitor
+    // Return standard iOS deep link redirect for native scheme wrappers
     return 'mycityunlocked://home';
   }
 
-  // Fallback to standard web origin
-  return origin;
+  // Dedicated callback route (SPA also handles root '/' if Supabase falls back to Site URL)
+  return `${origin}/auth/callback`;
+}
+
+export interface OAuthCallbackResult {
+  handled: boolean;
+  session: any | null;
+  error: string | null;
+  isRecovery?: boolean;
+}
+
+let inFlightOAuthKey: string | null = null;
+let inFlightOAuthPromise: Promise<OAuthCallbackResult> | null = null;
+const processedOAuthCodes = new Set<string>();
+
+function cleanAuthCallbackUrl() {
+  if (typeof window === 'undefined') return;
+  try {
+    const url = new URL(window.location.href);
+    const paramsToStrip = ['code', 'state', 'error', 'error_code', 'error_description', 'type'];
+    paramsToStrip.forEach((p) => url.searchParams.delete(p));
+    const cleanPath = url.pathname === '/auth/callback' ? '/' : url.pathname;
+    const cleanSearch = url.searchParams.toString() ? `?${url.searchParams.toString()}` : '';
+    const rawHash = url.hash || '';
+    const isAuthHash =
+      rawHash.includes('access_token=') ||
+      rawHash.includes('refresh_token=') ||
+      rawHash.includes('error=') ||
+      rawHash.includes('error_description=') ||
+      rawHash.includes('provider_token=');
+    const cleanHash = isAuthHash ? '' : rawHash;
+    window.history.replaceState(null, '', `${cleanPath}${cleanSearch}${cleanHash}`);
+  } catch (_) {}
 }
 
 export interface Profile {
@@ -88,6 +119,30 @@ export const authService = {
   async signInWithGoogle() {
     if (!isSupabaseConfigured) throw new Error('Supabase is not configured');
 
+    const nativeOAuthHandler =
+      typeof window !== 'undefined' ? (window as any).webkit?.messageHandlers?.oauth : null;
+
+    if (nativeOAuthHandler && typeof nativeOAuthHandler.postMessage === 'function') {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: 'mycityunlocked://auth/callback',
+          skipBrowserRedirect: true,
+          queryParams: {
+            prompt: 'select_account',
+          },
+        },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        nativeOAuthHandler.postMessage({
+          url: data.url,
+          callbackScheme: 'mycityunlocked',
+        });
+      }
+      return data;
+    }
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -104,6 +159,27 @@ export const authService = {
 
   async signInWithApple() {
     if (!isSupabaseConfigured) throw new Error('Supabase is not configured');
+
+    const nativeOAuthHandler =
+      typeof window !== 'undefined' ? (window as any).webkit?.messageHandlers?.oauth : null;
+
+    if (nativeOAuthHandler && typeof nativeOAuthHandler.postMessage === 'function') {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: 'mycityunlocked://auth/callback',
+          skipBrowserRedirect: true,
+        },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        nativeOAuthHandler.postMessage({
+          url: data.url,
+          callbackScheme: 'mycityunlocked',
+        });
+      }
+      return data;
+    }
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'apple',
@@ -130,6 +206,185 @@ export const authService = {
       console.error('Error in delete_own_user RPC:', error);
       throw error;
     }
+  },
+
+  hasPendingOAuthCallback(): boolean {
+    if (typeof window === 'undefined') return false;
+    const search = window.location.search || '';
+    const hash = window.location.hash || '';
+    const pathname = window.location.pathname || '';
+    const searchParams = new URLSearchParams(search);
+    return Boolean(
+      searchParams.has('code') ||
+      searchParams.has('error') ||
+      searchParams.has('error_description') ||
+      hash.includes('access_token=') ||
+      hash.includes('refresh_token=') ||
+      hash.includes('error=') ||
+      hash.includes('error_description=') ||
+      pathname === '/auth/callback'
+    );
+  },
+
+  async handleOAuthCallback(overrideUrl?: string): Promise<OAuthCallbackResult> {
+    if (!isSupabaseConfigured || typeof window === 'undefined') {
+      return { handled: false, session: null, error: null };
+    }
+
+    let searchStr = window.location.search || '';
+    let hashStr = window.location.hash || '';
+    let pathnameStr = window.location.pathname || '';
+
+    if (overrideUrl && typeof overrideUrl === 'string') {
+      try {
+        const parsed = new URL(overrideUrl);
+        searchStr = parsed.search || '';
+        hashStr = parsed.hash || '';
+        pathnameStr = parsed.pathname || '';
+      } catch (_) {
+        return { handled: false, session: null, error: null };
+      }
+    }
+
+    const searchParams = new URLSearchParams(searchStr);
+    const rawHash = hashStr ? hashStr.replace(/^#/, '') : '';
+    const hashParams = new URLSearchParams(rawHash.includes('=') ? rawHash : '');
+
+    const code = searchParams.get('code');
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    const urlError =
+      searchParams.get('error_description') ||
+      searchParams.get('error') ||
+      hashParams.get('error_description') ||
+      hashParams.get('error');
+    const isRecovery =
+      searchParams.get('type') === 'recovery' ||
+      hashParams.get('type') === 'recovery';
+    const isCallbackPath = pathnameStr === '/auth/callback';
+
+    if (!code && !accessToken && !urlError && !isCallbackPath) {
+      return { handled: false, session: null, error: null };
+    }
+
+    const callbackKey = code
+      ? `code:${code}`
+      : accessToken
+      ? `token:${accessToken.slice(0, 24)}`
+      : urlError
+      ? `err:${urlError}`
+      : 'path:callback';
+
+    if (inFlightOAuthPromise && inFlightOAuthKey === callbackKey) {
+      return inFlightOAuthPromise;
+    }
+
+    if (code && processedOAuthCodes.has(code)) {
+      const { data: { session } } = await supabase.auth.getSession();
+      cleanAuthCallbackUrl();
+      return { handled: true, session, error: null, isRecovery };
+    }
+
+    const run = (async (): Promise<OAuthCallbackResult> => {
+      try {
+        // 1. Handle explicit provider/Supabase error parameters
+        if (urlError) {
+          const decodedErr = decodeURIComponent(urlError.replace(/\+/g, ' '));
+          console.warn('[OAuth Callback] Provider/Supabase returned error:', decodedErr);
+          const { data: { session: existingSession } } = await supabase.auth.getSession();
+          cleanAuthCallbackUrl();
+          if (existingSession?.user) {
+            return { handled: true, session: existingSession, error: null, isRecovery };
+          }
+          return {
+            handled: true,
+            session: null,
+            error: decodedErr || 'Google sign-in could not be completed. Please try again.',
+            isRecovery
+          };
+        }
+
+        // 2. Handle PKCE authorization code exchange (?code=...)
+        if (code) {
+          processedOAuthCodes.add(code);
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error && data?.session) {
+            cleanAuthCallbackUrl();
+            return { handled: true, session: data.session, error: null, isRecovery };
+          }
+
+          console.warn('[OAuth Callback] exchangeCodeForSession failed:', error?.message || error);
+
+          // Recovery check: session may already be active (e.g. concurrent tab/resume)
+          const { data: { session: existingSession } } = await supabase.auth.getSession();
+          cleanAuthCallbackUrl();
+          if (existingSession?.user) {
+            return { handled: true, session: existingSession, error: null, isRecovery };
+          }
+
+          const errMsg = String(error?.message || '').toLowerCase();
+          const isPkceVerifierIssue =
+            errMsg.includes('code verifier') ||
+            errMsg.includes('pkce') ||
+            errMsg.includes('invalid_grant') ||
+            errMsg.includes('both auth code');
+
+          return {
+            handled: true,
+            session: null,
+            error: isPkceVerifierIssue
+              ? 'Your Google verification completed after switching apps. Please tap "Continue with Google" once more to finish signing in.'
+              : (error?.message || 'Sign-in could not be completed. Please try again.'),
+            isRecovery
+          };
+        }
+
+        // 3. Handle implicit / recovery hash tokens (#access_token=...&refresh_token=...)
+        if (accessToken && refreshToken) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          cleanAuthCallbackUrl();
+          if (!error && data?.session) {
+            return { handled: true, session: data.session, error: null, isRecovery };
+          }
+          return {
+            handled: true,
+            session: null,
+            error: error?.message || 'Unable to restore session. Please sign in again.',
+            isRecovery
+          };
+        }
+
+        // 4. Clean bare /auth/callback path
+        const { data: { session } } = await supabase.auth.getSession();
+        cleanAuthCallbackUrl();
+        return { handled: true, session, error: null, isRecovery };
+      } catch (err: any) {
+        console.error('[OAuth Callback] Unexpected error:', err);
+        cleanAuthCallbackUrl();
+        const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+        if (session?.user) {
+          return { handled: true, session, error: null, isRecovery };
+        }
+        return {
+          handled: true,
+          session: null,
+          error: err?.message || 'Sign-in was interrupted. Please tap "Continue with Google" to try again.',
+          isRecovery
+        };
+      } finally {
+        if (inFlightOAuthKey === callbackKey) {
+          inFlightOAuthKey = null;
+          inFlightOAuthPromise = null;
+        }
+      }
+    })();
+
+    inFlightOAuthKey = callbackKey;
+    inFlightOAuthPromise = run;
+    return run;
   },
 
   async getCurrentUser() {
@@ -256,80 +511,85 @@ export const authService = {
   async upsertProfile(profile: Partial<Profile>) {
     if (!profile.id) throw new Error('User ID is required');
 
-    // First check if profile exists
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', profile.id)
-      .maybeSingle();
+    // Atomic upsert on primary key 'id' avoids SELECT -> INSERT duplicate-key races
+    // with the Postgres handle_new_user trigger on first Google Sign-Up.
+    let currentPayload: Record<string, any> = {
+      ...profile,
+      updated_at: new Date().toISOString(),
+    };
 
-    if (existing) {
-      // Update
-      let currentPayload: Record<string, any> = {
-        ...profile,
-        updated_at: new Date().toISOString(),
-      };
-      
-      const maxRetries = 5;
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-          const res = await supabase
+    const maxRetries = 5;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const res = await supabase
+          .from('profiles')
+          .upsert(currentPayload, { onConflict: 'id' })
+          .select()
+          .single();
+
+        if (res.error) throw res.error;
+        return res.data;
+      } catch (err: any) {
+        const errMsg = err?.message || JSON.stringify(err);
+        const match = errMsg.match(/Could not find the '([^']+)' column/i);
+        if (match && match[1] && match[1] in currentPayload) {
+          delete currentPayload[match[1]];
+          continue;
+        }
+        if (err?.code === '42703' || err?.code === 'PGRST204') {
+          console.warn('[upsertProfile] Schema column mismatch, falling back to existing profile:', err);
+          const existing = await this.getProfile(profile.id);
+          return existing || profile;
+        }
+        // Handle unique conflict gracefully (e.g. concurrent insert or email constraint)
+        if (err?.code === '23505' || errMsg.includes('duplicate key')) {
+          console.warn('[upsertProfile] Duplicate key conflict, retrying as targeted update:', errMsg);
+          const updatePayload = { ...currentPayload };
+          delete updatePayload.id;
+          // If the conflict is specifically on profiles_email_key, omit email from the update
+          if (errMsg.toLowerCase().includes('email')) {
+            delete updatePayload.email;
+          }
+          const { data: updated } = await supabase
             .from('profiles')
-            .update(currentPayload)
+            .update(updatePayload)
             .eq('id', profile.id)
             .select()
-            .single();
-
-          if (res.error) throw res.error;
-          return res.data;
-        } catch (err: any) {
-          const errMsg = err?.message || JSON.stringify(err);
-          const match = errMsg.match(/Could not find the '([^']+)' column/i);
-          if (match && match[1] && match[1] in currentPayload) {
-            delete currentPayload[match[1]];
-            continue;
-          }
-          if (err?.code === '42703' || err?.code === 'PGRST204') {
-            console.warn('[upsertProfile] Schema column mismatch, returning existing record:', err);
-            return existing;
-          }
-          throw err;
+            .maybeSingle();
+          if (updated) return updated;
+          const existing = await this.getProfile(profile.id);
+          if (existing) return existing;
         }
+        throw err;
       }
-      return existing;
-    } else {
-      // Insert
-      let currentPayload: Record<string, any> = {
-        ...profile,
-        updated_at: new Date().toISOString(),
-      };
+    }
+    const fallback = await this.getProfile(profile.id);
+    return fallback || profile;
+  },
 
-      const maxRetries = 5;
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-          const res = await supabase
-            .from('profiles')
-            .insert(currentPayload)
-            .select()
-            .single();
+  async ensureProfileForUser(user: any): Promise<Profile | null> {
+    if (!isSupabaseConfigured || !user?.id) return null;
 
-          if (res.error) throw res.error;
-          return res.data;
-        } catch (err: any) {
-          const errMsg = err?.message || JSON.stringify(err);
-          const match = errMsg.match(/Could not find the '([^']+)' column/i);
-          if (match && match[1] && match[1] in currentPayload) {
-            delete currentPayload[match[1]];
-            continue;
-          }
-          if (err?.code === '42703' || err?.code === 'PGRST204') {
-            console.warn('[upsertProfile] Schema column mismatch, returning payload:', err);
-            return profile;
-          }
-          throw err;
-        }
-      }
-      return profile;
+    const existing = await this.getProfile(user.id);
+    if (existing) return existing;
+
+    // First-time OAuth signup safeguard: if the Postgres trigger hasn't created the row yet
+    // (or skipped on an edge case), create it idempotently from OAuth metadata.
+    const meta = user.user_metadata || {};
+    const inferredName = (meta.full_name || meta.name || meta.given_name || '').trim() || undefined;
+    const inferredAvatar = meta.avatar_url || meta.picture || undefined;
+
+    try {
+      const created = await this.upsertProfile({
+        id: user.id,
+        email: user.email || '',
+        full_name: inferredName,
+        avatar_url: inferredAvatar,
+      });
+      return created as Profile;
+    } catch (err) {
+      console.warn('[ensureProfileForUser] Non-fatal profile bootstrap error:', err);
+      return await this.getProfile(user.id);
     }
   },
 
@@ -470,16 +730,34 @@ export const authService = {
  *   on profiles for update
  *   using ( auth.uid() = id );
  * 
- * -- Create a trigger to handle new user signups
+ * -- Hardened trigger to handle new OAuth/email signups safely without ever blocking auth.users creation
  * create or replace function public.handle_new_user()
- * returns trigger as $$
+ * returns trigger
+ * language plpgsql
+ * security definer
+ * set search_path = public
+ * as $$
  * begin
  *   insert into public.profiles (id, email, full_name, avatar_url)
- *   values (new.id, new.email, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url');
+ *   values (
+ *     new.id,
+ *     coalesce(new.email, ''),
+ *     coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name'),
+ *     coalesce(new.raw_user_meta_data->>'avatar_url', new.raw_user_meta_data->>'picture')
+ *   )
+ *   on conflict (id) do update set
+ *     email = coalesce(excluded.email, public.profiles.email),
+ *     full_name = coalesce(public.profiles.full_name, excluded.full_name),
+ *     avatar_url = coalesce(public.profiles.avatar_url, excluded.avatar_url),
+ *     updated_at = timezone('utc'::text, now());
+ *   return new;
+ * exception when others then
+ *   raise warning 'handle_new_user non-fatal error for %: %', new.id, sqlerrm;
  *   return new;
  * end;
- * $$ language plpgsql security definer;
+ * $$;
  * 
+ * drop trigger if exists on_auth_user_created on auth.users;
  * create trigger on_auth_user_created
  *   after insert on auth.users
  *   for each row execute procedure public.handle_new_user();

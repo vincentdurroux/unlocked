@@ -2043,12 +2043,17 @@ export default function App() {
     const hasValidViewParam = Boolean(normalizedViewParam && validViews.includes(normalizedViewParam as View));
     const hasDeepLinkQuery = Boolean(cleanEventId || cleanProId || cleanGuideId || hasWeekendFocus || hasValidViewParam);
 
-    const isSupabaseHash = hash.includes('access_token=') || 
-                           hash.includes('refresh_token=') || 
-                           hash.includes('error=') ||
-                           hash.includes('error_description=');
+    const isSupabaseAuthCallback =
+      hash.includes('access_token=') ||
+      hash.includes('refresh_token=') ||
+      hash.includes('error=') ||
+      hash.includes('error_description=') ||
+      searchParams.has('code') ||
+      searchParams.has('error') ||
+      searchParams.has('error_description') ||
+      window.location.pathname === '/auth/callback';
 
-    if (isSupabaseHash) {
+    if (isSupabaseAuthCallback) {
       const saved = localStorage.getItem('unlocked_active_view');
       initial = (saved && !['login', 'complete-profile', 'update-password'].includes(saved)) ? (saved as View) : 'home';
     } else if (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
@@ -2928,15 +2933,22 @@ export default function App() {
       const targetHash = activeView === 'home' ? '' : `#${activeView}`;
       const targetUrl = activeView === 'home' ? (window.location.pathname + window.location.search) : `#${activeView}`;
 
-      const isSupabaseHash = currentHash.includes('access_token=') || 
-                             currentHash.includes('refresh_token=') || 
-                             currentHash.includes('error=') ||
-                             currentHash.includes('error_description=');
+      const currentSearch = window.location.search || '';
+      const currentPath = window.location.pathname || '';
+      const isSupabaseAuthUrl =
+        currentHash.includes('access_token=') ||
+        currentHash.includes('refresh_token=') ||
+        currentHash.includes('error=') ||
+        currentHash.includes('error_description=') ||
+        currentSearch.includes('code=') ||
+        currentSearch.includes('error=') ||
+        currentSearch.includes('error_description=') ||
+        currentPath === '/auth/callback';
 
-      // Replace Supabase hash once the user is logged in
-      const shouldReplaceSupabaseHash = isSupabaseHash && currentUser && !authLoading;
+      // Never overwrite an active Supabase OAuth callback URL while exchangeCodeForSession is still running
+      const shouldReplaceSupabaseHash = isSupabaseAuthUrl && currentUser && !authLoading && currentPath !== '/auth/callback' && !currentSearch.includes('code=');
 
-      if ((currentHash !== targetHash && !isSupabaseHash) || shouldReplaceSupabaseHash) {
+      if ((currentHash !== targetHash && !isSupabaseAuthUrl) || shouldReplaceSupabaseHash) {
         if (isAuthView || mainTabs.includes(activeView)) {
           // Don't push auth views or main tabs to history so back navigation/lateral swipe skips them/does not cycle tabs
           window.history.replaceState({ view: activeView }, '', targetUrl);
@@ -4743,12 +4755,32 @@ export default function App() {
     }
   };
 
+  const inFlightProfileLoadRef = useRef<string | null>(null);
+
+  const isUserEmailVerified = (user: any): boolean => {
+    if (!user) return false;
+    if (user.email_confirmed_at || user.confirmed_at) return true;
+    const provider = String(user.app_metadata?.provider || '').toLowerCase();
+    const providers: string[] = Array.isArray(user.app_metadata?.providers)
+      ? user.app_metadata.providers.map((p: any) => String(p).toLowerCase())
+      : [];
+    return (
+      provider === 'google' ||
+      provider === 'apple' ||
+      providers.includes('google') ||
+      providers.includes('apple')
+    );
+  };
+
   useEffect(() => {
+    let isMounted = true;
+
     // Listen for auth changes
     const { data: { subscription } } = authService.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
       console.log('Auth event:', event);
       if (session?.user) {
-        if (!session.user.email_confirmed_at) {
+        if (!isUserEmailVerified(session.user)) {
           authService.signOut().catch(() => {});
           setCurrentUser(null);
           setUserProfile(null);
@@ -4761,7 +4793,7 @@ export default function App() {
           return;
         }
         setCurrentUser(session.user);
-        loadProfile(session.user.id, event);
+        loadProfile(session.user.id, event, session.user);
         oneSignalService.loginUser(session.user.id).catch(() => {});
       } else {
         setCurrentUser(null);
@@ -4774,53 +4806,124 @@ export default function App() {
       }
     });
 
-    // Check current session
-    authService.getCurrentUser().then(user => {
-      if (user) {
-        if (!user.email_confirmed_at) {
-          authService.signOut().catch(() => {});
-          setCurrentUser(null);
-          setAuthLoading(false);
-          setActiveView('login');
-          setGlobalAlert({ 
-            type: 'error', 
-            text: 'Email is not verified yet. Please check your inbox and click the activation link.' 
-          });
+    const applyCallbackResult = (callbackResult: { handled: boolean; session: any | null; error: string | null; isRecovery?: boolean }) => {
+      if (!isMounted || !callbackResult.handled) return false;
+
+      if (callbackResult.error && !callbackResult.session?.user) {
+        setCurrentUser(null);
+        setUserProfile(null);
+        setAuthLoading(false);
+        setActiveView('login');
+        setGlobalAlert({
+          type: 'error',
+          text: callbackResult.error
+        });
+        return true;
+      }
+
+      if (callbackResult.session?.user) {
+        try {
+          localStorage.setItem('keep_me_signed_in', 'true');
+        } catch (_) {}
+        setCurrentUser(callbackResult.session.user);
+        loadProfile(
+          callbackResult.session.user.id,
+          callbackResult.isRecovery ? 'PASSWORD_RECOVERY' : 'SIGNED_IN',
+          callbackResult.session.user
+        );
+        oneSignalService.loginUser(callbackResult.session.user.id).catch(() => {});
+        return true;
+      }
+
+      return false;
+    };
+
+    // Bridge hook invoked by iOS Xcode ASWebAuthenticationSession when OAuth finishes
+    (window as any).__mcuHandleOAuthCallbackUrl = async (callbackUrl: string) => {
+      if (!callbackUrl || typeof callbackUrl !== 'string') return;
+      const result = await authService.handleOAuthCallback(callbackUrl);
+      applyCallbackResult(result);
+    };
+
+    // Recover pending OAuth callbacks if iOS WebKit restores the WebView from bfcache or background (e.g. after Gmail 2FA)
+    const handleResumeOAuthCheck = () => {
+      if (!isMounted || !authService.hasPendingOAuthCallback()) return;
+      authService.handleOAuthCallback().then((res) => applyCallbackResult(res)).catch(() => {});
+    };
+    const handleVisibilityResume = () => {
+      if (document.visibilityState === 'visible') {
+        handleResumeOAuthCheck();
+      }
+    };
+    window.addEventListener('pageshow', handleResumeOAuthCheck);
+    document.addEventListener('visibilitychange', handleVisibilityResume);
+
+    // Bootstrap OAuth callback (PKCE ?code=..., implicit #access_token=..., or OAuth errors) FIRST
+    // before checking the existing session so iOS 2FA returns complete in a single flight.
+    (async () => {
+      try {
+        const callbackResult = await authService.handleOAuthCallback();
+        if (!isMounted) return;
+
+        if (applyCallbackResult(callbackResult)) {
           return;
         }
-        
-        // Ensure they requested to remember the login
-        const keepSignedIn = localStorage.getItem('keep_me_signed_in') !== 'false';
-        if (keepSignedIn) {
-          setCurrentUser(user);
-          loadProfile(user.id);
-          oneSignalService.loginUser(user.id).catch(() => {});
+
+        const user = await authService.getCurrentUser();
+        if (!isMounted) return;
+
+        if (user) {
+          if (!isUserEmailVerified(user)) {
+            authService.signOut().catch(() => {});
+            setCurrentUser(null);
+            setAuthLoading(false);
+            setActiveView('login');
+            setGlobalAlert({ 
+              type: 'error', 
+              text: 'Email is not verified yet. Please check your inbox and click the activation link.' 
+            });
+            return;
+          }
+          
+          // Ensure they requested to remember the login
+          const keepSignedIn = localStorage.getItem('keep_me_signed_in') !== 'false';
+          if (keepSignedIn) {
+            setCurrentUser(user);
+            loadProfile(user.id, undefined, user);
+            oneSignalService.loginUser(user.id).catch(() => {});
+          } else {
+            authService.signOut().catch(() => {});
+            setCurrentUser(null);
+            setUserProfile(null);
+            setAuthLoading(false);
+            const protectedViews: View[] = ['profile', 'messages', 'complete-profile', 'admin'];
+            if (protectedViews.includes(activeViewRef.current)) {
+              setActiveView('login');
+            }
+          }
         } else {
-          authService.signOut().catch(() => {});
-          setCurrentUser(null);
-          setUserProfile(null);
           setAuthLoading(false);
           const protectedViews: View[] = ['profile', 'messages', 'complete-profile', 'admin'];
           if (protectedViews.includes(activeViewRef.current)) {
             setActiveView('login');
           }
         }
-      } else {
+      } catch (err) {
+        console.error('[Auth Bootstrap] Unexpected initialization error:', err);
+        if (!isMounted) return;
         setAuthLoading(false);
         const protectedViews: View[] = ['profile', 'messages', 'complete-profile', 'admin'];
         if (protectedViews.includes(activeViewRef.current)) {
           setActiveView('login');
         }
       }
-    }).catch(() => {
-      setAuthLoading(false);
-      const protectedViews: View[] = ['profile', 'messages', 'complete-profile', 'admin'];
-      if (protectedViews.includes(activeViewRef.current)) {
-        setActiveView('login');
-      }
-    });
+    })();
 
     return () => {
+      isMounted = false;
+      delete (window as any).__mcuHandleOAuthCallbackUrl;
+      window.removeEventListener('pageshow', handleResumeOAuthCheck);
+      document.removeEventListener('visibilitychange', handleVisibilityResume);
       subscription.unsubscribe();
     };
   }, []);
@@ -4895,7 +4998,14 @@ export default function App() {
     };
   }, []);
 
-  const loadProfile = async (userId: string, event?: string) => {
+  const loadProfile = async (userId: string, event?: string, authUser?: any) => {
+    if (!userId) return;
+    const loadKey = `${userId}:${event || 'init'}`;
+    if (inFlightProfileLoadRef.current === loadKey) {
+      return;
+    }
+    inFlightProfileLoadRef.current = loadKey;
+
     // 1. Instant local cache recovery to unblock UI immediately
     try {
       const cached = localStorage.getItem('unlocked_cached_profile_' + userId);
@@ -4909,7 +5019,13 @@ export default function App() {
     } catch (_) {}
 
     try {
-      const profile = await authService.getProfile(userId);
+      let profile = await authService.getProfile(userId);
+      // First-time OAuth signup safeguard: if the Postgres trigger was delayed or skipped,
+      // idempotently create the profile from OAuth metadata before deciding onboarding flow.
+      if (!profile && authUser) {
+        profile = await authService.ensureProfileForUser(authUser);
+      }
+
       if (profile) {
         setUserProfile(profile);
         try {
@@ -4976,6 +5092,9 @@ export default function App() {
     } catch (err) {
       console.error('Error loading profile:', err);
     } finally {
+      if (inFlightProfileLoadRef.current === loadKey) {
+        inFlightProfileLoadRef.current = null;
+      }
       setAuthLoading(false);
     }
   };
@@ -13324,9 +13443,18 @@ function EmailVerificationView({
 }
 
 function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onComplete: (profile: Profile) => void }) {
-  const [fullName, setFullName] = useState(currentUser?.user_metadata?.full_name || '');
+  const [fullName, setFullName] = useState(
+    currentUser?.user_metadata?.full_name ||
+    currentUser?.user_metadata?.name ||
+    currentUser?.user_metadata?.given_name ||
+    ''
+  );
   const [avatar, setAvatar] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(currentUser?.user_metadata?.avatar_url || null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(
+    currentUser?.user_metadata?.avatar_url ||
+    currentUser?.user_metadata?.picture ||
+    null
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -13398,7 +13526,7 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
         <div className="absolute top-[20%] -left-[5%] w-[30%] h-[30%] bg-brand-yellow/5 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative flex-1 flex flex-col items-center justify-center p-6 min-h-screen">
+      <div className="relative flex-1 flex flex-col items-center justify-center p-6 pt-[calc(env(safe-area-inset-top,0px)+24px)] pb-[calc(env(safe-area-inset-bottom,0px)+24px)] min-h-screen">
         <div className="w-full max-w-sm space-y-8">
           <div className="flex flex-col items-center text-center space-y-4">
             <Logo />
@@ -13663,12 +13791,12 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
         <div className="absolute bottom-[10%] right-[5%] w-[25%] h-[25%] bg-brand-blue/5 rounded-full blur-3xl animate-float" style={{ animationDelay: '-10s' }} />
       </div>
 
-      <div className="relative flex-1 flex flex-col items-center justify-center pt-16 px-5 pb-8 min-h-screen">
+      <div className="relative flex-1 flex flex-col items-center justify-center pt-[calc(env(safe-area-inset-top,0px)+4rem)] px-5 pb-[calc(env(safe-area-inset-bottom,0px)+2rem)] min-h-screen">
         {/* Back Button to choices when in email form */}
         {showEmailForm && (
           <button 
             onClick={() => { setShowEmailForm(false); setStep('email'); setMessage(null); }}
-            className="absolute top-6 left-6 md:top-8 md:left-8 text-slate-400 hover:text-slate-600 transition-all active:scale-95 group flex items-center gap-2 z-25 cursor-pointer"
+            className="absolute top-[calc(env(safe-area-inset-top,0px)+1.25rem)] left-6 md:top-8 md:left-8 text-slate-400 hover:text-slate-600 transition-all active:scale-95 group flex items-center gap-2 z-25 cursor-pointer"
             title="Back to choices"
             type="button"
           >
