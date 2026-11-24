@@ -48,9 +48,21 @@
         window.handleOneSignalNotificationOpened = function(p) { pushNative('push', p); };
         window.handleUniversalLink = function(u) { pushNative('deeplink', u); };
         window.handleDeepLink = function(u) { pushNative('deeplink', u); };
-        window.addEventListener('onesignal-notification-opened', function(e) { pushNative('push', e && e.detail !== undefined ? e.detail : e); });
-        window.addEventListener('push-notification-clicked', function(e) { pushNative('push', e && e.detail !== undefined ? e.detail : e); });
-        window.addEventListener('universal-link-opened', function(e) { pushNative('deeplink', e && e.detail !== undefined ? e.detail : e); });
+        var bindNativeEvent = function(eventName, kind) {
+          var handler = function(e) {
+            if (e && e.__mcuPushHandled) return;
+            if (e) {
+              try { e.__mcuPushHandled = true; } catch (_) {}
+            }
+            pushNative(kind, e && e.detail !== undefined ? e.detail : e);
+          };
+          window.addEventListener(eventName, handler);
+          document.addEventListener(eventName, handler);
+        };
+        bindNativeEvent('onesignal-notification-opened', 'push');
+        bindNativeEvent('push-notification-click', 'push');
+        bindNativeEvent('push-notification-clicked', 'push');
+        bindNativeEvent('universal-link-opened', 'deeplink');
       })();
     </script>
     <!-- OneSignal Web SDK v16 -->

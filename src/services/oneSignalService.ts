@@ -61,41 +61,100 @@ class OneSignalService {
       pollMedian();
       setTimeout(pollMedian, 1000);
 
-      // Native & Bridge Push Opened callbacks (Median/GoNative, Capacitor, Cordova, WKWebView, iOS SDK)
-      const handleNativePushOpened = (payload: any) => {
+      const parsePossibleJson = (val: any, depth = 0): any => {
+        if (typeof val !== 'string' || depth > 2) return val;
+        const trimmed = val.trim();
+        if (!trimmed) return val;
+        if (
+          (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+          (trimmed.startsWith('"') && trimmed.endsWith('"'))
+        ) {
+          try {
+            return parsePossibleJson(JSON.parse(trimmed), depth + 1);
+          } catch (_) {
+            return val;
+          }
+        }
+        return val;
+      };
+
+      // Native & Bridge Push Opened callbacks (Median/GoNative, Capacitor, Cordova, WKWebView, PWABuilder, iOS SDK)
+      const handleNativePushOpened = (rawPayload: any) => {
         try {
-          const notifObj = payload?.notification || payload;
-          const nestedPayload = notifObj?.payload || payload?.payload || {};
-          const data =
-            notifObj?.additionalData ||
-            nestedPayload?.additionalData ||
-            notifObj?.data?.custom?.a ||
-            notifObj?.data ||
-            payload?.additionalData ||
-            payload?.data?.custom?.a ||
-            payload?.data ||
-            payload?.custom?.a ||
-            payload?.rawPayload?.custom?.a ||
+          const parsed = parsePossibleJson(rawPayload);
+          if (typeof parsed === 'string') {
+            const trimmedUrl = parsed.trim();
+            if (trimmedUrl) {
+              this.emitNotificationClick({ launchUrl: trimmedUrl }, { url: trimmedUrl, launchUrl: trimmedUrl }, trimmedUrl);
+            }
+            return;
+          }
+
+          const payload = parsed && typeof parsed === 'object' ? parsed : {};
+          const userInfo = parsePossibleJson(payload?.userInfo || payload?.notification?.userInfo || payload?.request?.content?.userInfo) || {};
+          const notifObj = parsePossibleJson(payload?.notification || payload?.result?.notification) || payload;
+          const nestedPayload = parsePossibleJson(notifObj?.payload || payload?.payload) || {};
+          const rawOneSignalPayload = parsePossibleJson(notifObj?.rawPayload || payload?.rawPayload || userInfo?.rawPayload) || {};
+          const customObj =
+            parsePossibleJson(
+              notifObj?.custom ||
+              notifObj?.data?.custom ||
+              payload?.custom ||
+              payload?.data?.custom ||
+              userInfo?.custom ||
+              rawOneSignalPayload?.custom
+            ) || {};
+
+          const extractedData =
+            parsePossibleJson(notifObj?.additionalData) ||
+            parsePossibleJson(nestedPayload?.additionalData) ||
+            parsePossibleJson(customObj?.a) ||
+            parsePossibleJson(notifObj?.data) ||
+            parsePossibleJson(payload?.additionalData) ||
+            parsePossibleJson(payload?.data) ||
+            (userInfo && typeof userInfo === 'object' && Object.keys(userInfo).length > 0 ? userInfo : null) ||
             payload ||
             {};
-          const launchUrl =
+          const data = extractedData && typeof extractedData === 'object' ? extractedData : {};
+
+          const launchUrl = String(
             notifObj?.launchURL ||
             notifObj?.launchUrl ||
+            notifObj?.appUrl ||
             nestedPayload?.launchURL ||
             nestedPayload?.launchUrl ||
+            nestedPayload?.appUrl ||
             payload?.launchURL ||
             payload?.launchUrl ||
+            payload?.appUrl ||
             payload?.result?.url ||
             payload?.result?.action?.launchUrl ||
             payload?.result?.action?.launchURL ||
             payload?.url ||
-            payload?.custom?.u ||
-            payload?.rawPayload?.custom?.u ||
-            notifObj?.data?.custom?.u ||
+            customObj?.u ||
+            data?.launchURL ||
             data?.launchUrl ||
+            data?.appUrl ||
             data?.url ||
-            '';
-          this.emitNotificationClick(notifObj, data, launchUrl);
+            userInfo?.launchURL ||
+            userInfo?.launchUrl ||
+            userInfo?.appUrl ||
+            userInfo?.url ||
+            ''
+          ).trim();
+
+          const apsAlert = userInfo?.aps?.alert || payload?.aps?.alert;
+          const normalizedNotif =
+            notifObj && typeof notifObj === 'object'
+              ? {
+                  ...notifObj,
+                  title: notifObj.title || (typeof apsAlert === 'object' ? apsAlert?.title : undefined),
+                  body: notifObj.body || (typeof apsAlert === 'string' ? apsAlert : apsAlert?.body),
+                }
+              : notifObj;
+
+          this.emitNotificationClick(normalizedNotif, data, launchUrl);
         } catch (err) {
           console.warn('[OneSignal] Native push click dispatch error:', err);
         }
@@ -103,7 +162,11 @@ class OneSignalService {
 
       // Native iOS Universal Link & Custom URL Scheme (mycityunlocked://) deep link handlers
       const handleAppDeepLink = (raw: any) => {
-        const incomingUrl = typeof raw === 'string' ? raw : (raw?.url || raw?.launchUrl || raw?.launchURL || raw?.detail?.url || '');
+        const parsed = parsePossibleJson(raw);
+        const incomingUrl =
+          typeof parsed === 'string'
+            ? parsed
+            : (parsed?.url || parsed?.launchUrl || parsed?.launchURL || parsed?.appUrl || parsed?.detail?.url || '');
         if (!incomingUrl) return;
         this.emitNotificationClick({ launchUrl: incomingUrl }, { url: incomingUrl, launchUrl: incomingUrl }, incomingUrl);
       };
@@ -233,13 +296,17 @@ class OneSignalService {
         const launchUrl =
           notif?.launchURL ||
           notif?.launchUrl ||
+          notif?.appUrl ||
           nestedPayload?.launchURL ||
           nestedPayload?.launchUrl ||
+          nestedPayload?.appUrl ||
           event?.result?.url ||
           event?.result?.action?.launchUrl ||
           event?.result?.action?.launchURL ||
           notif?.data?.custom?.u ||
+          data?.launchURL ||
           data?.launchUrl ||
+          data?.appUrl ||
           data?.url ||
           '';
         this.emitNotificationClick(notif, data, launchUrl);

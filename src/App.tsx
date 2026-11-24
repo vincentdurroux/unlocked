@@ -2608,6 +2608,7 @@ export default function App() {
         const notif = detail?.notification || {};
         const rawLaunchUrl = String(
           detail?.launchUrl ||
+          data?.launchURL ||
           data?.launchUrl ||
           data?.appUrl ||
           data?.url ||
@@ -2620,7 +2621,7 @@ export default function App() {
         const notifTheme = String(data.theme || '').toLowerCase();
         const notifFocus = String(data.focus || '').toLowerCase();
         const viewMatch = rawLaunchUrl.match(/[?&]view=([^&#]+)/i);
-        const launchView = viewMatch?.[1] ? decodeURIComponent(viewMatch[1]).toLowerCase() : '';
+        const launchView = (viewMatch?.[1] ? decodeURIComponent(viewMatch[1]) : String(data.view || '')).toLowerCase();
         const headingText = String(notif?.title || notif?.heading || notif?.headings?.en || data?.title || '').toLowerCase();
         const bodyText = String(notif?.body || notif?.content || notif?.contents?.en || data?.body || '').toLowerCase();
         const combinedText = `${headingText} ${bodyText}`;
