@@ -1911,6 +1911,7 @@ class OneSignalService {
     if (windowAny) {
       try {
         const handlers = windowAny.webkit?.messageHandlers;
+        if (handlers?.['onesignal-logout']) handlers['onesignal-logout'].postMessage('logout');
         if (handlers?.oneSignalLogout) handlers.oneSignalLogout.postMessage({});
         if (handlers?.removeExternalUserId) handlers.removeExternalUserId.postMessage({});
         if (handlers?.logout) handlers.logout.postMessage({});
@@ -1922,6 +1923,12 @@ class OneSignalService {
         if (windowAny.Capacitor?.Plugins?.OneSignal?.logout) await windowAny.Capacitor.Plugins.OneSignal.logout();
         if (windowAny.plugins?.OneSignal?.logout) await windowAny.plugins.OneSignal.logout();
       } catch (_) {}
+    }
+
+    const dev = this.getDeviceInfo();
+    if (dev.isIOSWebView || dev.hasIOSPushBridge) {
+      this.addDiag('login', 'info', 'Forwarded logout to native iOS bridge.');
+      return;
     }
 
     if (!this.isInitialized) return;

@@ -3,16 +3,17 @@ import { cn } from '../lib/utils';
 
 interface LogoProps {
   className?: string;
+  imgClassName?: string;
   showTagline?: boolean;
 }
 
-export function Logo({ className, showTagline = false }: LogoProps) {
+export function Logo({ className, imgClassName, showTagline = false }: LogoProps) {
   return (
     <div className={cn("flex flex-col items-center flex-shrink-0", className)}>
       <img 
         src="/logo.png?v=3" 
         alt="Unlocked Logo" 
-        className="h-10 md:h-14 w-auto object-contain flex-shrink-0"
+        className={cn("h-10 md:h-14 w-auto object-contain flex-shrink-0", imgClassName)}
         referrerPolicy="no-referrer"
       />
 

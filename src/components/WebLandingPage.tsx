@@ -1,17 +1,27 @@
 import React, { useMemo, useState } from 'react';
 import {
   ArrowRight,
+  Award,
   BookOpen,
+  Briefcase,
   Calendar,
+  CheckCircle2,
+  Clock,
   FileText,
+  Globe,
+  Heart,
   HeartPulse,
   Home,
   Instagram,
   Lock,
   Mail,
   MapPin,
-  Plus,
+  MessageCircle,
+  MessageSquare,
+  Phone,
   Search,
+  Share2,
+  ShieldCheck,
   Shirt,
   Sparkles,
   Star,
@@ -19,15 +29,19 @@ import {
   Tag,
   Train,
   User,
+  UserPlus,
+  X,
+  Zap,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { RotatingCylinderWord } from './RotatingCylinderWord';
+import { RotatingPlaceholder } from './RotatingPlaceholder';
 import type { AppPartner } from '../services/partnerService';
 import heroCityImg from '../assets/images/valencia_hero_editorial_1795634116923.jpg';
 import socialEventsImg from '../assets/images/valencia_social_events_1795634120123.jpg';
 import cityGuideImg from '../assets/images/valencia_city_guide_1795634119504.jpg';
 import stuffCityBikeImg from '../assets/images/stuff_city_bike_1795643319057.jpg';
-import stuffOakDeskImg from '../assets/images/stuff_oak_desk_1795643318038.jpg';
+import mockProClaraImg from '../assets/images/mock_pro_clara_portrait_1795647753752.jpg';
 
 const APP_STORE_URL = 'https://apps.apple.com/es/app/mycityunlocked/id6780855463?l=en-GB';
 const GOOGLE_PLAY_URL = 'https://play.google.com/store/apps/details?id=app.mycityunlocked.twa';
@@ -64,35 +78,28 @@ const PHONE_NAV_ITEMS: Array<{
 ];
 
 // Curated city-agnostic mockup data for the public landing page app screens
-const MOCK_PROS = [
-  {
-    id: 'mock-pro-1',
-    name: 'Dr. Clara Moreau',
-    profession: 'Family Dentist',
-    rating: 5.0,
-    reviewsCount: 18,
-    languages: ['English', 'French'],
-    location: 'City Center',
+const MOCK_PRO_PROFILE = {
+  id: 'mock-pro-1',
+  name: 'Dr. Clara Moreau',
+  company: 'Central Family Dental',
+  category: 'Health & Dental',
+  rating: '5.0',
+  reviewsCount: 18,
+  qualities: ['Responsive', 'Trustworthy'],
+  phone: '+34 612 345 678',
+  whatsapp: '+34 612 345 678',
+  email: 'clara@centraldental.app',
+  languages: ['English', 'French', 'Spanish'],
+  location: 'City Center · 5 min from metro',
+  about:
+    'Multilingual family dentist offering gentle preventive care, check-ups, and pediatric visits in a calm studio.',
+  image: mockProClaraImg,
+  review: {
+    author: 'Sophie M.',
+    date: 'Oct 2026',
+    comment: 'Warm, thorough, and explained everything clearly in English. Great with kids too!',
   },
-  {
-    id: 'mock-pro-2',
-    name: 'Studio Kine & Osteo',
-    profession: 'Osteopath & Physiotherapist',
-    rating: 4.9,
-    reviewsCount: 14,
-    languages: ['English', 'Spanish'],
-    location: 'Park District',
-  },
-  {
-    id: 'mock-pro-3',
-    name: 'Harbor Legal Advisors',
-    profession: 'Immigration & Tax Specialist',
-    rating: 5.0,
-    reviewsCount: 22,
-    languages: ['English', 'French', 'German'],
-    location: 'Old Town',
-  },
-];
+};
 
 const MOCK_EVENTS = [
   {
@@ -121,34 +128,40 @@ const MOCK_EVENTS = [
   },
 ];
 
-const MOCK_STUFF_ADS = [
+const MOCK_STUFF_ITEM = {
+  id: 'mock-ad-1',
+  category: 'Bikes & Mobility',
+  title: 'Vintage City Bike + Basket',
+  price: '€120',
+  condition: 'Like New',
+  type: 'Sale',
+  delivery: 'Pick up',
+  postedAgo: '2h ago',
+  sellerName: 'Marc L.',
+  location: 'Midtown',
+  description:
+    'Lightweight mint city bicycle with front wicker basket and rear rack. Smooth 6-speed gears, barely ridden, ready to go.',
+  image: stuffCityBikeImg,
+};
+
+const FALLBACK_GUIDES = [
   {
-    id: 'mock-ad-1',
-    title: 'Vintage City Bike + Basket',
-    price: 120,
-    location: 'Midtown',
-    previewImage: stuffCityBikeImg,
+    id: 'g-1',
+    title: 'First-month paperwork checklist for newcomers',
+    category: 'Paperwork',
+    read_time: '5 min read',
   },
   {
-    id: 'mock-ad-2',
-    title: 'Solid Oak Writing Desk',
-    price: 95,
-    location: 'Park District',
-    previewImage: stuffOakDeskImg,
+    id: 'g-2',
+    title: 'Public & private healthcare registration guide',
+    category: 'Healthcare',
+    read_time: '4 min read',
   },
   {
-    id: 'mock-ad-3',
-    title: 'Foldable Travel Stroller',
-    price: 110,
-    location: 'Old Town',
-    previewImage: stuffCityBikeImg,
-  },
-  {
-    id: 'mock-ad-4',
-    title: 'Compact Espresso Machine',
-    price: 75,
-    location: 'Riverside',
-    previewImage: stuffOakDeskImg,
+    id: 'g-3',
+    title: 'Best neighborhoods for families & remote workers',
+    category: 'Finding a home',
+    read_time: '6 min read',
   },
 ];
 
@@ -204,11 +217,13 @@ function AppScreenFrame({
   idSuffix,
   activeTab,
   onTabClick,
+  disableScroll = false,
   children,
 }: {
   idSuffix: string;
   activeTab: PhoneTab;
   onTabClick: (tab: PhoneTab | 'profile') => void;
+  disableScroll?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -273,7 +288,11 @@ function AppScreenFrame({
         </div>
 
         {/* Screen Content */}
-        <div className="flex-1 overflow-y-auto no-scrollbar bg-white px-3.5 pt-3 pb-3">
+        <div
+          className={`flex-1 bg-white px-3.5 pt-2.5 pb-2.5 ${
+            disableScroll ? 'overflow-hidden' : 'overflow-y-auto no-scrollbar'
+          }`}
+        >
           {children}
         </div>
 
@@ -316,6 +335,7 @@ export function WebLandingPage({
   currentUser,
   userProfile,
   onNavigate,
+  onAddPro,
   onOpenAppMode,
 }: WebLandingPageProps) {
   const [heroPhoneTab, setHeroPhoneTab] = useState<PhoneTab>('home');
@@ -324,22 +344,11 @@ export function WebLandingPage({
   const displayGuides = useMemo(() => {
     const online = allArticles.filter((a) => a.isOnline !== false);
     const highlighted = online.filter((a) => a.is_highlighted === true || a.is_highlighted === 'true');
-    const pool = highlighted.length > 0 ? highlighted : online;
-    if (pool.length > 0) return pool.slice(0, 2);
-    return [
-      {
-        id: 'g-1',
-        title: 'Complete first-month paperwork checklist for newcomers',
-        category: 'Paperwork',
-        read_time: '5 min read',
-      },
-      {
-        id: 'g-2',
-        title: 'How to register for local public & private healthcare',
-        category: 'Healthcare',
-        read_time: '4 min read',
-      },
-    ];
+    const rest = online.filter((a) => !(a.is_highlighted === true || a.is_highlighted === 'true'));
+    const combined = [...highlighted, ...rest];
+    if (combined.length >= 3) return combined.slice(0, 3);
+    const needed = 3 - combined.length;
+    return [...combined, ...FALLBACK_GUIDES.slice(0, needed)];
   }, [allArticles]);
 
   const handleScreenNav = (target: PhoneTab | 'profile') => {
@@ -352,72 +361,178 @@ export function WebLandingPage({
     }
   };
 
-  // Real ExploreView screen layout with clean mockup pros
+  // Faithful replica of the real ProfessionalDetailView modal inside the app
   const renderFindProsScreenContent = () => (
-    <div className="space-y-2.5 text-left">
-      <div className="space-y-0.5">
-        <p className="text-[14px] font-bold font-display text-slate-800 tracking-tight leading-tight">
-          <span className="text-brand-blue">What</span> are you looking for?
-        </p>
-        <p className="text-[9.5px] text-slate-500 leading-snug">
-          Search for a pro or let Jane, your AI assistant, match you.
-        </p>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => onNavigate('explore')}
-        className="w-full bg-white rounded-2xl border-2 border-blue-200/90 px-2.5 py-2 flex items-center gap-2 text-left hover:border-brand-blue transition-colors cursor-pointer"
-      >
-        <Sparkles className="w-3.5 h-3.5 text-brand-blue shrink-0" />
-        <span className="text-[10px] text-slate-500 font-medium truncate">
-          English-speaking dentist nearby...
-        </span>
-      </button>
-
-      <button
-        type="button"
-        onClick={() => onNavigate('explore')}
-        className="w-full py-2 bg-brand-blue hover:bg-[#0958d9] text-white rounded-2xl font-bold text-[10.5px] shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-      >
-        <Sparkles className="w-3 h-3" />
-        <span>Find professionals</span>
-      </button>
-
-      <div className="flex items-center justify-center gap-1 text-slate-400 font-bold text-[8.5px]">
-        <Lock className="w-2.5 h-2.5 shrink-0" />
-        <span>100% secure. Jane is here to help.</span>
-      </div>
-
-      <div className="pt-1 border-t border-slate-100 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold text-brand-navy">Recommended pros</span>
-          <span className="text-[9.5px] font-semibold text-brand-blue">Verified</span>
+    <div className="-mx-3.5 -my-2.5 px-2.5 py-2.5 bg-slate-950/80 min-h-full text-left">
+      <div className="rounded-[22px] bg-white border-2 border-emerald-500 p-3 shadow-2xl space-y-2.5 relative overflow-hidden">
+        {/* Top-right modal action buttons matching ProfessionalDetailView (Heart, Share, Close X) */}
+        <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-10">
+          <span className="w-6 h-6 rounded-full bg-rose-50 border border-rose-200 text-rose-500 flex items-center justify-center shadow-2xs">
+            <Heart className="w-3 h-3 fill-rose-500" />
+          </span>
+          <span className="w-6 h-6 rounded-full bg-slate-100/90 border border-slate-200/80 text-slate-600 flex items-center justify-center shadow-2xs">
+            <Share2 className="w-3 h-3" />
+          </span>
+          <span className="w-6 h-6 rounded-full bg-slate-100/90 border border-slate-200/80 text-slate-600 flex items-center justify-center shadow-2xs">
+            <X className="w-3 h-3" />
+          </span>
         </div>
 
-        {MOCK_PROS.map((pro) => (
+        {/* Pro Header: Avatar + Name + Company */}
+        <div className="flex items-center gap-2.5 pr-20">
+          <div className="w-13 h-13 rounded-2xl bg-slate-50 p-0.5 overflow-hidden border border-slate-200 shadow-xs shrink-0">
+            <img
+              src={MOCK_PRO_PROFILE.image}
+              alt={MOCK_PRO_PROFILE.name}
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover rounded-[13px]"
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[13.5px] font-black text-slate-900 font-display tracking-tight leading-tight truncate">
+              {MOCK_PRO_PROFILE.name}
+            </p>
+            <p className="text-[10px] font-semibold text-slate-500 truncate mt-0.5">
+              {MOCK_PRO_PROFILE.company}
+            </p>
+          </div>
+        </div>
+
+        {/* Badges + Top Qualities matching ProfessionalDetailView */}
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-1 text-[9px]">
+            <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-blue/5 text-brand-blue rounded-lg font-bold border border-brand-blue/15 shadow-2xs">
+              <Briefcase className="w-2.5 h-2.5 shrink-0" />
+              <span>{MOCK_PRO_PROFILE.category}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-900 rounded-lg font-bold border border-amber-200 shadow-2xs tabular-nums">
+              <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500 shrink-0" />
+              <span>
+                {MOCK_PRO_PROFILE.rating} ({MOCK_PRO_PROFILE.reviewsCount})
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-800 rounded-lg font-bold border border-emerald-200/80 shadow-2xs w-full">
+              <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+              <span className="truncate">Recommended by MyCityUnlocked community</span>
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1 text-[8.5px]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-bold bg-cyan-500/10 text-cyan-800 border border-cyan-500/25">
+              <Zap className="w-2.5 h-2.5 text-cyan-600 shrink-0" />
+              <span>{MOCK_PRO_PROFILE.qualities[0]}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-bold bg-emerald-500/10 text-emerald-800 border border-emerald-500/25">
+              <Award className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+              <span>{MOCK_PRO_PROFILE.qualities[1]}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Direct Contact & Info Bar matching ProfessionalDetailView */}
+        <div className="bg-slate-50/80 rounded-2xl p-2.5 border border-slate-200/80 space-y-1.5 text-[9px] shadow-2xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-5.5 h-5.5 rounded-lg bg-cyan-50 border border-cyan-200/70 text-cyan-600 flex items-center justify-center shrink-0">
+              <Phone className="w-2.5 h-2.5" />
+            </span>
+            <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.phone}</span>
+          </div>
+
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-5.5 h-5.5 rounded-lg bg-emerald-50 border border-emerald-200/70 text-[#25D366] flex items-center justify-center shrink-0">
+              <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z" />
+              </svg>
+            </span>
+            <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.whatsapp}</span>
+          </div>
+
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-5.5 h-5.5 rounded-lg bg-blue-50 border border-blue-200/70 text-brand-blue flex items-center justify-center shrink-0">
+              <Mail className="w-2.5 h-2.5" />
+            </span>
+            <span className="text-slate-600 font-medium truncate">{MOCK_PRO_PROFILE.email}</span>
+          </div>
+
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-5.5 h-5.5 rounded-lg bg-indigo-50 border border-indigo-200/70 text-indigo-600 flex items-center justify-center shrink-0">
+              <Globe className="w-2.5 h-2.5" />
+            </span>
+            <div className="flex flex-wrap items-center gap-1 min-w-0">
+              {MOCK_PRO_PROFILE.languages.map((lang) => (
+                <span
+                  key={lang}
+                  className="text-[8px] bg-white text-slate-700 font-semibold px-1.5 py-0.5 rounded-md border border-slate-200/80 shadow-2xs"
+                >
+                  {lang}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-5.5 h-5.5 rounded-lg bg-rose-50 border border-rose-200/70 text-rose-500 flex items-center justify-center shrink-0">
+              <MapPin className="w-2.5 h-2.5" />
+            </span>
+            <span className="text-slate-600 font-medium truncate underline decoration-slate-300 underline-offset-2">
+              {MOCK_PRO_PROFILE.location}
+            </span>
+          </div>
+        </div>
+
+        {/* About Section matching ProfessionalDetailView */}
+        <div className="bg-slate-50/60 rounded-2xl p-2.5 border border-slate-200/70 space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0" />
+            <span className="text-[8.5px] font-bold text-slate-900 font-display uppercase tracking-wider">
+              About
+            </span>
+          </div>
+          <p className="text-[8.5px] text-slate-600 leading-relaxed line-clamp-2">
+            {MOCK_PRO_PROFILE.about}
+          </p>
+        </div>
+
+        {/* Testimonials Section matching ProfessionalDetailView */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+            <span className="text-[8.5px] font-bold text-slate-900 font-display uppercase tracking-wider">
+              Testimonials
+            </span>
+            <span className="text-[8px] bg-slate-100 border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold font-mono leading-none">
+              {MOCK_PRO_PROFILE.reviewsCount}
+            </span>
+          </div>
+
           <button
-            key={pro.id}
             type="button"
             onClick={() => onNavigate('explore')}
-            className="w-full text-left p-2.5 rounded-2xl border border-slate-100 hover:border-blue-200 bg-white transition-colors cursor-pointer"
+            className="w-full text-left bg-white hover:border-slate-300 rounded-xl p-2 border border-slate-200/80 shadow-2xs space-y-1 transition-colors cursor-pointer"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[11px] font-bold text-brand-navy truncate">{pro.name}</p>
-                <p className="text-[9.5px] text-slate-500 truncate mt-0.5">{pro.profession}</p>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[9.5px] font-bold text-slate-900 truncate">
+                  {MOCK_PRO_PROFILE.review.author}
+                </span>
+                <span className="w-4 h-4 rounded-md bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-2.5 h-2.5" />
+                </span>
               </div>
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-brand-navy tabular-nums shrink-0">
-                <Star className="w-3 h-3 text-brand-yellow fill-brand-yellow" />
-                {pro.rating.toFixed(1)}
+              <span className="text-[8px] font-semibold text-slate-400 font-mono shrink-0">
+                {MOCK_PRO_PROFILE.review.date}
               </span>
             </div>
-            <p className="text-[9px] text-slate-500 mt-1 truncate">
-              <span className="text-brand-blue font-semibold">{pro.languages.join(' · ')}</span>
-              {` · ${pro.location}`}
+            <div className="flex items-center gap-0.5">
+              {[0, 1, 2, 3, 4].map((idx) => (
+                <Star key={idx} className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+              ))}
+            </div>
+            <p className="text-[8.5px] text-slate-600 leading-snug italic line-clamp-2">
+              &ldquo;{MOCK_PRO_PROFILE.review.comment}&rdquo;
             </p>
           </button>
-        ))}
+        </div>
       </div>
     </div>
   );
@@ -501,14 +616,14 @@ export function WebLandingPage({
     </div>
   );
 
-  // Real GuidesView screen layout
+  // Real GuidesView screen layout with compact Start Here + 3 visible Latest Reads
   const renderGuidesScreenContent = () => (
-    <div className="space-y-2.5 text-left">
+    <div className="space-y-2 text-left">
       <div className="space-y-0.5">
-        <p className="text-[14px] font-bold font-display text-slate-800 tracking-tight leading-tight">
+        <p className="text-[13.5px] font-bold font-display text-slate-800 tracking-tight leading-tight">
           Ready to <span className="text-emerald-600">settle into</span> your City?
         </p>
-        <p className="text-[9.5px] text-slate-500 leading-snug">
+        <p className="text-[9px] text-slate-500 leading-snug">
           Practical guides, checklists, and local advice.
         </p>
       </div>
@@ -516,20 +631,20 @@ export function WebLandingPage({
       <button
         type="button"
         onClick={() => onNavigate('guides')}
-        className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200/90 rounded-xl flex items-center justify-between gap-2 text-left hover:border-emerald-400 transition-colors cursor-pointer"
+        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200/90 rounded-xl flex items-center justify-between gap-2 text-left hover:border-emerald-400 transition-colors cursor-pointer"
       >
-        <span className="flex items-center gap-2 min-w-0">
-          <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          <span className="text-[9.5px] text-slate-400 truncate">Search guides...</span>
+        <span className="flex items-center gap-1.5 min-w-0">
+          <Search className="w-3 h-3 text-slate-400 shrink-0" />
+          <span className="text-[9px] text-slate-400 truncate">Search guides...</span>
         </span>
-        <span className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[9px] font-semibold shrink-0">
+        <span className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[8.5px] font-semibold shrink-0">
           Search
         </span>
       </button>
 
-      <div className="space-y-1.5">
-        <p className="text-[10px] font-bold text-brand-navy">Start here</p>
-        <div className="grid grid-cols-2 gap-2">
+      <div className="space-y-1">
+        <p className="text-[9.5px] font-bold text-brand-navy">Start here</p>
+        <div className="grid grid-cols-2 gap-1.5">
           {[
             { title: 'Finding a home', icon: Home, tint: 'bg-emerald-50 text-emerald-600' },
             { title: 'Paperwork', icon: FileText, tint: 'bg-purple-50 text-purple-600' },
@@ -542,12 +657,12 @@ export function WebLandingPage({
                 key={topic.title}
                 type="button"
                 onClick={() => onNavigate('guides')}
-                className="p-2.5 rounded-2xl border border-slate-100 bg-slate-50/70 hover:bg-white hover:border-emerald-200 transition-colors text-left cursor-pointer space-y-1.5"
+                className="p-2 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-white hover:border-emerald-200 transition-colors text-left cursor-pointer flex items-center gap-1.5"
               >
-                <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${topic.tint}`}>
-                  <TopicIcon className="w-3.5 h-3.5" />
+                <div className={`w-5.5 h-5.5 rounded-lg flex items-center justify-center shrink-0 ${topic.tint}`}>
+                  <TopicIcon className="w-3 h-3" />
                 </div>
-                <p className="text-[10px] font-bold text-brand-navy leading-tight">{topic.title}</p>
+                <p className="text-[9.5px] font-bold text-brand-navy leading-tight truncate">{topic.title}</p>
               </button>
             );
           })}
@@ -555,7 +670,7 @@ export function WebLandingPage({
       </div>
 
       <div className="space-y-1.5 pt-1 border-t border-slate-100">
-        <p className="text-[10px] font-bold text-brand-navy">Latest reads</p>
+        <p className="text-[9.5px] font-bold text-brand-navy">Latest reads</p>
         {displayGuides.map((guide: any) => (
           <button
             key={guide.id}
@@ -566,13 +681,13 @@ export function WebLandingPage({
                 String(guide.id).startsWith('g-') ? undefined : { guideId: guide.id }
               )
             }
-            className="w-full text-left p-2.5 rounded-2xl border border-emerald-100/80 hover:border-emerald-300 bg-white transition-colors cursor-pointer"
+            className="w-full text-left px-2.5 py-2 rounded-xl border border-emerald-100/90 hover:border-emerald-300 bg-white transition-colors cursor-pointer"
           >
-            <p className="text-[9px] font-semibold text-emerald-600">
+            <p className="text-[8.5px] font-semibold text-emerald-600">
               {guide.category || 'City Guide'}
               {guide.read_time ? ` · ${guide.read_time}` : ''}
             </p>
-            <p className="text-[10.5px] font-bold text-brand-navy line-clamp-2 leading-snug mt-0.5">
+            <p className="text-[10px] font-bold text-brand-navy line-clamp-1 leading-snug mt-0.5">
               {guide.title}
             </p>
           </button>
@@ -581,175 +696,221 @@ export function WebLandingPage({
     </div>
   );
 
-  // Real MarketplaceView ("Unlocked Good Stuff") screen layout with clean mockup listings
+  // Real AdDetailModal ("Unlocked Good Stuff" single item sheet) layout with mockup article
   const renderStuffScreenContent = () => (
-    <div className="space-y-2.5 text-left">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-200/80 shrink-0">
-            <Shirt className="w-3.5 h-3.5" />
+    <div className="text-left">
+      <div className="rounded-[22px] bg-white border border-slate-200/90 overflow-hidden shadow-2xs">
+        {/* Photo Banner matching AdDetailModal */}
+        <div className="relative h-32 w-full bg-purple-50 overflow-hidden">
+          <img
+            src={MOCK_STUFF_ITEM.image}
+            alt={MOCK_STUFF_ITEM.title}
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute top-2 right-2 flex items-center gap-1">
+            <span className="w-6 h-6 rounded-full bg-white/90 backdrop-blur-xs text-rose-500 shadow-xs flex items-center justify-center">
+              <Heart className="w-3 h-3 fill-rose-500" />
+            </span>
+            <span className="w-6 h-6 rounded-full bg-white/90 backdrop-blur-xs text-slate-700 shadow-xs flex items-center justify-center">
+              <Share2 className="w-3 h-3" />
+            </span>
           </div>
-          <div className="min-w-0">
-            <p className="text-[13px] font-bold font-display text-slate-800 tracking-tight leading-tight truncate">
-              Unlocked <span className="text-purple-600">Good Stuff</span>
-            </p>
-            <p className="text-[8.5px] text-slate-500 truncate">Neighbor marketplace</p>
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-slate-950/40 backdrop-blur-xs px-2 py-0.5 rounded-full">
+            <span className="w-3 h-1 rounded-full bg-white" />
+            <span className="w-1 h-1 rounded-full bg-white/50" />
+            <span className="w-1 h-1 rounded-full bg-white/50" />
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => onNavigate('marketplace')}
-          className="px-2 py-1 bg-purple-600 text-white text-[8.5px] font-bold rounded-lg flex items-center gap-0.5 shrink-0 cursor-pointer"
-        >
-          <Plus className="w-2.5 h-2.5" />
-          <span>Post</span>
-        </button>
-      </div>
 
-      <div className="space-y-1.5">
-        <button
-          type="button"
-          onClick={() => onNavigate('marketplace')}
-          className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200/90 rounded-xl flex items-center gap-2 text-left hover:border-purple-400 transition-colors cursor-pointer"
-        >
-          <Search className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-          <span className="text-[9.5px] text-slate-400 truncate">
-            Search bikes, desks, uniforms, strollers...
-          </span>
-        </button>
-
-        <div className="grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            onClick={() => onNavigate('marketplace')}
-            className="px-2 py-1.5 bg-slate-50 border border-slate-200/80 rounded-lg text-[9px] font-semibold text-slate-700 flex items-center gap-1.5 truncate cursor-pointer hover:bg-white"
-          >
-            <Tag className="w-3 h-3 text-purple-600 shrink-0" />
-            <span className="truncate">All Categories</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate('marketplace')}
-            className="px-2 py-1.5 bg-slate-50 border border-slate-200/80 rounded-lg text-[9px] font-semibold text-slate-700 flex items-center gap-1.5 truncate cursor-pointer hover:bg-white"
-          >
-            <MapPin className="w-3 h-3 text-purple-600 shrink-0" />
-            <span className="truncate">All Areas</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 pt-0.5">
-        {MOCK_STUFF_ADS.map((ad) => (
-          <button
-            key={ad.id}
-            type="button"
-            onClick={() => onNavigate('marketplace')}
-            className="text-left rounded-2xl border border-slate-100 hover:border-purple-200 bg-white overflow-hidden transition-colors cursor-pointer flex flex-col"
-          >
-            <div className="aspect-[4/3] w-full overflow-hidden bg-purple-50/40">
-              <img
-                src={ad.previewImage}
-                alt={ad.title}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover"
-              />
+        {/* Item Details matching AdDetailModal */}
+        <div className="p-3 space-y-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[8.5px] font-bold text-purple-600 uppercase tracking-wider">
+                {MOCK_STUFF_ITEM.category}
+              </p>
+              <p className="text-[13px] font-bold text-slate-900 font-display leading-tight mt-0.5">
+                {MOCK_STUFF_ITEM.title}
+              </p>
             </div>
-            <div className="p-2 space-y-0.5">
-              <p className="text-[10px] font-bold text-brand-navy truncate">{ad.title}</p>
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-[9px] text-slate-500 truncate">{ad.location}</span>
-                <span className="text-[10px] font-bold text-purple-700 tabular-nums shrink-0">
-                  €{ad.price}
-                </span>
+            <span className="text-[15px] font-extrabold text-purple-700 tabular-nums shrink-0">
+              {MOCK_STUFF_ITEM.price}
+            </span>
+          </div>
+
+          {/* Item attributes row */}
+          <div className="flex flex-wrap items-center gap-1 text-[8.5px]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 rounded-lg font-medium text-slate-600">
+              <Tag className="w-2.5 h-2.5" />
+              {MOCK_STUFF_ITEM.condition}
+            </span>
+            <span className="px-2 py-0.5 bg-purple-50 rounded-lg font-bold text-purple-700">
+              For {MOCK_STUFF_ITEM.type}
+            </span>
+            <span className="px-2 py-0.5 bg-slate-100 rounded-lg font-medium text-slate-600">
+              {MOCK_STUFF_ITEM.delivery}
+            </span>
+            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-slate-100 rounded-lg font-medium text-slate-600">
+              <Clock className="w-2.5 h-2.5" />
+              {MOCK_STUFF_ITEM.postedAgo}
+            </span>
+          </div>
+
+          {/* Seller bar matching AdDetailModal */}
+          <div className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200/80">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-6.5 h-6.5 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-[10px] shrink-0">
+                M
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10.5px] font-bold text-slate-900 truncate">{MOCK_STUFF_ITEM.sellerName}</p>
+                <p className="text-[8.5px] text-slate-500 flex items-center gap-0.5 truncate">
+                  <MapPin className="w-2.5 h-2.5 text-purple-600 shrink-0" />
+                  <span>{MOCK_STUFF_ITEM.location}</span>
+                </p>
               </div>
             </div>
+            <span className="text-[8.5px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200 shrink-0">
+              Seller
+            </span>
+          </div>
+
+          {/* Description */}
+          <div className="space-y-0.5">
+            <p className="text-[9.5px] font-bold text-slate-900">Description</p>
+            <p className="text-[9px] text-slate-600 leading-snug line-clamp-2">
+              {MOCK_STUFF_ITEM.description}
+            </p>
+          </div>
+
+          {/* Purple Contact CTA matching AdDetailModal */}
+          <button
+            type="button"
+            onClick={() => onNavigate('marketplace')}
+            className="w-full py-2 px-3 bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <MessageCircle className="w-3 h-3" />
+            <span>Message Seller</span>
           </button>
-        ))}
+        </div>
       </div>
     </div>
   );
 
-  // Real HomeView screen layout
+  // Exact replica of the real mobile HomeView screen (fitted strictly with zero scroll)
   const renderHeroHomeScreenContent = () => (
-    <div className="space-y-2.5">
-      <div className="text-left px-0.5 space-y-0.5">
-        <p className="text-[15px] font-bold font-display text-brand-navy tracking-tight leading-tight">
+    <div className="h-full flex flex-col justify-start pt-0.5 text-left">
+      {/* Welcome & Tagline matching HomeView */}
+      <div className="px-0.5 space-y-0.5 pb-1">
+        <p className="text-[15.5px] font-bold font-display text-brand-navy tracking-tight leading-tight">
           {currentUser && userProfile?.full_name
             ? `Hello ${userProfile.full_name.split(' ')[0]}, 👋`
             : 'Hello Guest, 👋'}
         </p>
-        <p className="text-brand-blue font-bold italic text-[11px] leading-snug inline-flex flex-wrap items-center gap-x-0.5">
+        <p className="text-brand-blue font-bold italic text-[10.5px] leading-snug inline-flex flex-wrap items-center gap-x-0.5">
           <span>Discover</span>
           <RotatingCylinderWord />
           <span>better, belong faster.</span>
         </p>
       </div>
 
-      <div className="flex justify-center pt-1 -mb-2 pointer-events-none select-none">
+      {/* Community Illustration sitting right on top of the Jane card (exact HomeView overlap) */}
+      <div className="flex justify-center -mb-2 pointer-events-none select-none">
         <img
           src="/people.png"
           alt="Community illustration"
-          className="w-[178px] h-auto object-contain block"
+          className="w-[168px] h-auto object-contain block align-bottom"
           referrerPolicy="no-referrer"
         />
       </div>
 
-      <div className="relative z-10 rounded-2xl bg-gradient-to-br from-white to-[#f8fafc] p-3 border-2 border-blue-200/80 shadow-[0_4px_18px_rgba(22,119,255,0.06)] space-y-2.5 text-left">
+      {/* Hero Jane Search Assistant Widget matching HomeView 1-to-1 */}
+      <div className="relative z-10 rounded-[20px] bg-gradient-to-br from-white to-[#f8fafc] p-3 border-2 border-blue-200/80 shadow-[0_4px_20px_rgba(37,99,235,0.05)] space-y-2.5 text-left">
         <div className="space-y-0.5">
-          <p className="text-[12px] font-bold text-brand-navy tracking-tight flex items-center gap-1.5">
+          <p className="text-[11.5px] font-bold text-brand-navy tracking-tight flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-brand-blue shrink-0" />
             <span>
               <span className="text-brand-blue">Find</span> a recommended pro with Jane
             </span>
           </p>
-          <p className="text-[9.5px] text-slate-500 leading-snug">
-            Jane, your AI assistant, helps you find trusted local specialists.
+          <p className="text-[9px] text-slate-500 leading-snug">
+            Jane, your AI assistant, is here to help you find the right pro.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => onNavigate('explore')}
-          className="w-full bg-white rounded-xl border-2 border-blue-200/90 px-2.5 py-2 flex items-center gap-2 text-left hover:border-brand-blue transition-colors cursor-pointer"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-brand-blue shrink-0" />
-          <span className="text-[10px] text-slate-400 font-medium truncate">
-            English-speaking dentist nearby...
-          </span>
-        </button>
+        <div className="space-y-2">
+          {/* Blue Bordered Ask Jane Input matching HomeView */}
+          <button
+            type="button"
+            onClick={() => onNavigate('explore')}
+            className="w-full bg-white rounded-[14px] border-2 border-blue-200/90 shadow-2xs px-2.5 py-2 flex items-center gap-2 text-left hover:border-brand-blue/70 transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-brand-blue shrink-0" />
+            <div className="flex-1 min-w-0 relative h-3.5">
+              <RotatingPlaceholder
+                value=""
+                placeholders={[
+                  'e.g. French-speaking dentist nearby...',
+                  'e.g. help sorting out local paperwork...',
+                  'e.g. reliable electrician or plumber...',
+                  'e.g. tax advisor for expats & freelancers...',
+                ]}
+                className="text-slate-300 text-[9.5px] font-medium leading-normal truncate"
+              />
+            </div>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => onNavigate('explore')}
-          className="w-full py-2 bg-brand-blue hover:bg-[#0958d9] text-white rounded-xl font-bold text-[11px] shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-        >
-          <Sparkles className="w-3 h-3" />
-          <span>Find professionals</span>
-        </button>
+          {/* Large Blue Recommendations Action Button matching HomeView */}
+          <button
+            type="button"
+            onClick={() => onNavigate('explore')}
+            className="w-full py-2 bg-brand-blue hover:bg-[#0958d9] text-white rounded-[14px] font-bold text-[10.5px] shadow-sm shadow-blue-500/15 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-3 h-3 fill-white/10" />
+            <span>Find professionals</span>
+          </button>
 
-        <div className="flex items-center justify-center gap-1 text-slate-400 font-bold text-[8.5px]">
-          <Lock className="w-2.5 h-2.5 shrink-0" />
-          <span>100% secure. Jane is here to help.</span>
+          {/* Privacy Safeguard Note matching HomeView */}
+          <div className="flex items-center justify-center gap-1 text-slate-400 font-bold text-[8px] tracking-wide">
+            <Lock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+            <span>100% secure. Jane is here to help.</span>
+          </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-2 pt-1 text-left">
-        <button
-          type="button"
-          onClick={() => setHeroPhoneTab('events')}
-          className="p-2.5 rounded-2xl border border-orange-100 bg-orange-50/40 hover:bg-orange-50 transition-colors cursor-pointer"
+        {/* Exact amber "Know someone great?" box inside the Jane card matching HomeView */}
+        <div
+          onClick={onAddPro}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onAddPro();
+            }
+          }}
+          className="bg-amber-50/60 hover:bg-amber-50 rounded-xl p-2 border border-amber-200/70 space-y-2 transition-colors cursor-pointer group/rec"
         >
-          <p className="text-[9px] font-bold text-orange-600">This Weekend</p>
-          <p className="text-[10.5px] font-bold text-brand-navy truncate mt-0.5">Local Events →</p>
-        </button>
-        <button
-          type="button"
-          onClick={() => setHeroPhoneTab('guides')}
-          className="p-2.5 rounded-2xl border border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50 transition-colors cursor-pointer"
-        >
-          <p className="text-[9px] font-bold text-emerald-600">Newcomer Tips</p>
-          <p className="text-[10.5px] font-bold text-brand-navy truncate mt-0.5">City Guides →</p>
-        </button>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-6.5 h-6.5 rounded-lg bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+              <UserPlus className="w-3.5 h-3.5" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-slate-900 text-[10px] tracking-tight leading-tight flex items-center gap-1">
+                <span>Know someone great?</span>
+                <span className="text-amber-500">🌟</span>
+              </p>
+              <p className="text-slate-600 text-[8.5px] leading-tight mt-0.5 line-clamp-2">
+                Recommend a local pro in your City to help the community!
+              </p>
+            </div>
+          </div>
+
+          <div className="w-full py-1.5 px-2.5 bg-amber-500 group-hover/rec:bg-amber-600 text-slate-950 font-bold text-[9.5px] rounded-lg flex items-center justify-center gap-1 shadow-2xs transition-colors">
+            <span>Recommend a Pro</span>
+            <ArrowRight className="w-2.5 h-2.5 group-hover/rec:translate-x-0.5 transition-transform" />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -770,15 +931,11 @@ export function WebLandingPage({
               </div>
 
               <div className="space-y-5">
-                <p className="text-xs sm:text-sm font-medium text-slate-500">
-                  iOS &amp; Android <span aria-hidden="true" className="mx-2 text-brand-yellow font-bold">·</span> Free to join
-                </p>
-
                 <h1
                   className="font-display font-bold tracking-tight text-brand-navy leading-[1.08] [text-wrap:balance]"
                   style={{ fontSize: 'clamp(2.25rem, 4.2vw, 3.65rem)' }}
                 >
-                  Discover your new city, <span className="text-brand-blue">belong faster.</span>
+                  Discover better, <span className="text-brand-blue">belong faster.</span>
                 </h1>
 
                 <p className="text-base sm:text-lg text-slate-500 leading-[1.65] max-w-[42ch]">
@@ -819,6 +976,7 @@ export function WebLandingPage({
                   <AppScreenFrame
                     idSuffix="hero"
                     activeTab={heroPhoneTab}
+                    disableScroll={heroPhoneTab === 'home'}
                     onTabClick={(tab) => {
                       if (tab === 'profile') {
                         onNavigate(currentUser ? 'profile' : 'login');
@@ -846,9 +1004,8 @@ export function WebLandingPage({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
             <div className="lg:col-span-5 space-y-7">
               <div className="space-y-3.5">
-                <p className="text-sm font-bold text-brand-blue tabular-nums">01. Find Pros</p>
                 <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-brand-navy leading-[1.12] [text-wrap:balance]">
-                  Trusted pros, matched in seconds.
+                  <span className="text-brand-blue">Trusted pros</span>, matched in seconds.
                 </h2>
                 <p className="text-base text-slate-500 leading-[1.65]">
                   Ask Jane in your own words to find community-recommended specialists who speak your language.
@@ -906,9 +1063,8 @@ export function WebLandingPage({
 
             <div className="lg:col-span-5 order-1 lg:order-2 space-y-7">
               <div className="space-y-3.5">
-                <p className="text-sm font-bold text-orange-500 tabular-nums">02. Events</p>
                 <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-brand-navy leading-[1.12] [text-wrap:balance]">
-                  Curated weekly plans around you.
+                  Curated <span className="text-orange-500">weekly plans</span> around you.
                 </h2>
                 <p className="text-base text-slate-500 leading-[1.65]">
                   Discover local meetups, markets, concerts, and weekend outings in one clear calendar.
@@ -925,7 +1081,7 @@ export function WebLandingPage({
                 <button
                   type="button"
                   onClick={() => onNavigate('events')}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-brand-navy hover:bg-brand-blue text-white text-sm font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer group"
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer group"
                 >
                   <span>Explore Events</span>
                   <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
@@ -942,9 +1098,8 @@ export function WebLandingPage({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
             <div className="lg:col-span-5 space-y-7">
               <div className="space-y-3.5">
-                <p className="text-sm font-bold text-emerald-600 tabular-nums">03. Guides</p>
                 <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-brand-navy leading-[1.12] [text-wrap:balance]">
-                  Clear playbooks to settle in faster.
+                  <span className="text-emerald-600">Clear playbooks</span> to settle in faster.
                 </h2>
                 <p className="text-base text-slate-500 leading-[1.65]">
                   Step-by-step local guides written from real experience so nothing gets lost in translation.
@@ -970,14 +1125,95 @@ export function WebLandingPage({
             </div>
 
             <div className="lg:col-span-7">
-              <div className="rounded-[32px] bg-[#F2FAF6] border border-emerald-100 px-6 py-10 sm:px-10 sm:py-12">
-                <AppScreenFrame
-                  idSuffix="guides"
-                  activeTab="guides"
-                  onTabClick={handleScreenNav}
+              <div className="relative rounded-[32px] bg-[#F2FAF6] border border-emerald-100 px-5 py-9 sm:px-8 sm:py-12">
+                <div className="relative z-10 sm:-translate-x-10 lg:-translate-x-14">
+                  <AppScreenFrame
+                    idSuffix="guides"
+                    activeTab="guides"
+                    onTabClick={handleScreenNav}
+                  >
+                    {renderGuidesScreenContent()}
+                  </AppScreenFrame>
+                </div>
+
+                {/* Slightly overlapping mini Guide Article visual matching ExpertGuideModal */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const featured = displayGuides[0];
+                    onNavigate(
+                      'guides',
+                      featured && !String(featured.id).startsWith('g-')
+                        ? { guideId: featured.id }
+                        : undefined
+                    );
+                  }}
+                  className="relative z-20 -mt-12 ml-auto block sm:mt-0 sm:absolute sm:right-5 lg:right-6 sm:bottom-8 w-[228px] sm:w-[244px] rounded-[22px] bg-white border border-emerald-200/80 shadow-[0_22px_50px_rgba(10,15,44,0.18)] overflow-hidden text-left hover:-translate-y-0.5 transition-transform cursor-pointer group"
                 >
-                  {renderGuidesScreenContent()}
-                </AppScreenFrame>
+                  {/* Article Hero Banner matching ExpertGuideModal */}
+                  <div className="relative h-24 w-full bg-brand-navy overflow-hidden">
+                    <img
+                      src={displayGuides[0]?.imageUrl || cityGuideImg}
+                      alt={displayGuides[0]?.title || 'Newcomer guide preview'}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
+
+                    <div className="absolute top-2 right-2 flex items-center gap-1">
+                      <span className="w-5 h-5 rounded-full bg-white/15 backdrop-blur-xs text-white flex items-center justify-center">
+                        <Share2 className="w-2.5 h-2.5" />
+                      </span>
+                      <span className="w-5 h-5 rounded-full bg-white/15 backdrop-blur-xs text-white flex items-center justify-center">
+                        <X className="w-2.5 h-2.5" />
+                      </span>
+                    </div>
+
+                    <div className="absolute bottom-2.5 left-3 right-3">
+                      <span className="inline-block px-2 py-0.5 bg-brand-yellow text-slate-950 text-[7.5px] font-black uppercase tracking-widest rounded-full mb-1">
+                        {displayGuides[0]?.categoryTitle || displayGuides[0]?.category || 'Paperwork'}
+                      </span>
+                      <p className="text-[11.5px] font-black text-white font-display leading-tight line-clamp-2">
+                        {displayGuides[0]?.title || FALLBACK_GUIDES[0].title}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Article Body Preview */}
+                  <div className="p-3 space-y-2">
+                    <div className="pb-1.5 border-b border-slate-100 space-y-1">
+                      <p className="text-[9px] text-slate-600 italic leading-snug line-clamp-2">
+                        {displayGuides[0]?.excerpt ||
+                          'Everything you need to register smoothly during your first 30 days in your new city.'}
+                      </p>
+                      <p className="text-[7.5px] text-brand-blue font-bold uppercase tracking-wider">
+                        by MyCityUnlocked
+                      </p>
+                    </div>
+
+                    <div className="space-y-1 text-[8.5px] text-slate-700 font-medium">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span className="truncate">Step-by-step local checklist</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span className="truncate">Key offices, forms &amp; tips</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-1 flex items-center justify-between text-[8.5px] font-semibold">
+                      <span className="text-slate-400 inline-flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5" />
+                        <span>{displayGuides[0]?.read_time || '5 min read'}</span>
+                      </span>
+                      <span className="text-emerald-600 inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                        <span>Read guide</span>
+                        <ArrowRight className="w-2.5 h-2.5" />
+                      </span>
+                    </div>
+                  </div>
+                </button>
               </div>
             </div>
           </div>
@@ -1002,9 +1238,8 @@ export function WebLandingPage({
 
             <div className="lg:col-span-5 order-1 lg:order-2 space-y-7">
               <div className="space-y-3.5">
-                <p className="text-sm font-bold text-purple-600 tabular-nums">04. Stuff</p>
                 <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-brand-navy leading-[1.12] [text-wrap:balance]">
-                  Buy and sell locally with neighbors.
+                  <span className="text-purple-600">Buy and sell</span> locally with neighbors.
                 </h2>
                 <p className="text-base text-slate-500 leading-[1.65]">
                   Trade bikes, furniture, kids&apos; gear, and home essentials inside a trusted local community.
@@ -1240,7 +1475,7 @@ export function WebLandingPage({
 
           <div className="pt-7 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-brand-navy/60">
             <p>&copy; {new Date().getFullYear()} MyCityUnlocked. All rights reserved.</p>
-            <p>Made for international communities</p>
+            <p>Made for international communities ❤️</p>
           </div>
         </div>
       </footer>
