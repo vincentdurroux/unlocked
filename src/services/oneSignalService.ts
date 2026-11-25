@@ -256,6 +256,8 @@ class OneSignalService {
       };
       window.addEventListener('push-permission-state', onPushPermissionStateEvent);
       document.addEventListener('push-permission-state', onPushPermissionStateEvent);
+      window.addEventListener('push-permission-request', onPushPermissionStateEvent);
+      document.addEventListener('push-permission-request', onPushPermissionStateEvent);
 
       try {
         windowAny.OneSignalDeferred = windowAny.OneSignalDeferred || [];

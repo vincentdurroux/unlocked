@@ -76,6 +76,8 @@
         };
         window.addEventListener('push-permission-state', handlePermissionState);
         document.addEventListener('push-permission-state', handlePermissionState);
+        window.addEventListener('push-permission-request', handlePermissionState);
+        document.addEventListener('push-permission-request', handlePermissionState);
       })();
     </script>
     <!-- OneSignal Web SDK v16 -->
