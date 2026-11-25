@@ -63,6 +63,19 @@
         bindNativeEvent('push-notification-click', 'push');
         bindNativeEvent('push-notification-clicked', 'push');
         bindNativeEvent('universal-link-opened', 'deeplink');
+        var handlePermissionState = function(e) {
+          if (e && e.__mcuPushStateHandled) return;
+          if (e) {
+            try { e.__mcuPushStateHandled = true; } catch (_) {}
+          }
+          var detail = e && e.detail !== undefined ? e.detail : e;
+          window.__mcuLastPushPermissionState = detail;
+          if (typeof window.__mcuOnPushPermissionState === 'function') {
+            try { window.__mcuOnPushPermissionState(detail); } catch (_) {}
+          }
+        };
+        window.addEventListener('push-permission-state', handlePermissionState);
+        document.addEventListener('push-permission-state', handlePermissionState);
       })();
     </script>
     <!-- OneSignal Web SDK v16 -->

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Papa from 'papaparse';
 import { parseProfessionalCSV, rowToPro, detectColumnMappings, parseEventCSV, detectEventColumnMappings, rowToEvent } from './utils/csvParser';
@@ -168,6 +168,7 @@ import { PartnerHighlightCard } from './components/PartnerHighlightCard';
 import { ExpandedPartnerCard } from './components/ExpandedPartnerCard';
 import { PartnerAdminEditorModal } from './components/PartnerAdminEditorModal';
 import { AdminNotificationHub, getPushLogs } from './components/AdminNotificationHub';
+import { WebLandingPage } from './components/WebLandingPage';
 
 export const PHONE_COUNTRY_CODES = [
   { code: '+34', flag: '🇪🇸', label: 'ES (+34)' },
@@ -5151,6 +5152,59 @@ export default function App() {
     };
   }, [activeView]);
 
+  const isNativeOrStandaloneApp = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const detectedNow = Boolean(
+        window.matchMedia?.('(display-mode: standalone)')?.matches ||
+        window.matchMedia?.('(display-mode: fullscreen)')?.matches ||
+        (window.navigator as any)?.standalone === true ||
+        (window as any).webkit?.messageHandlers ||
+        document.referrer.startsWith('android-app://')
+      );
+      if (detectedNow) {
+        try { sessionStorage.setItem('mcu_native_app_detected', '1'); } catch (_) {}
+        return true;
+      }
+      return sessionStorage.getItem('mcu_native_app_detected') === '1';
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const [webSurfaceMode, setWebSurfaceMode] = useState<'presentation' | 'app'>(() => {
+    if (typeof window === 'undefined') return 'presentation';
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const modeParam = (params.get('mode') || '').toLowerCase();
+      if (modeParam === 'app' || params.get('app') === '1') {
+        sessionStorage.setItem('mcu_web_surface_mode', 'app');
+        return 'app';
+      }
+      if (modeParam === 'web' || modeParam === 'landing') {
+        sessionStorage.setItem('mcu_web_surface_mode', 'presentation');
+        return 'presentation';
+      }
+      const saved = sessionStorage.getItem('mcu_web_surface_mode');
+      if (saved === 'app') return 'app';
+    } catch (_) {}
+    return 'presentation';
+  });
+
+  const handleEnterWebAppMode = useCallback(() => {
+    try { sessionStorage.setItem('mcu_web_surface_mode', 'app'); } catch (_) {}
+    setWebSurfaceMode('app');
+    navigateTo('home');
+  }, [navigateTo]);
+
+  const handleReturnToWebPresentation = useCallback(() => {
+    try { sessionStorage.setItem('mcu_web_surface_mode', 'presentation'); } catch (_) {}
+    setWebSurfaceMode('presentation');
+    navigateTo('home');
+  }, [navigateTo]);
+
+  const showWebPresentation = activeView === 'home' && !isNativeOrStandaloneApp && webSurfaceMode === 'presentation';
+
   return (
     <APIProvider apiKey={GOOGLE_MAPS_KEY} version="weekly" libraries={['places', 'marker']}>
       <div className="flex flex-col h-screen h-[100dvh] bg-white w-full mx-auto shadow-2xl overflow-hidden relative">
@@ -5238,7 +5292,7 @@ export default function App() {
       ) : (
         <>
       {/* Header */}
-      {activeView !== 'login' && (
+      {activeView !== 'login' && !showWebPresentation && (
         <header 
           style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
           className="bg-white px-4 md:px-6 pb-2 md:pt-3 md:pb-3 flex justify-between items-center border-b border-slate-100 flex-shrink-0 z-30 relative"
@@ -5420,7 +5474,7 @@ export default function App() {
         ref={mainRef} 
         className={cn(
           "flex-1 overflow-y-auto overflow-x-hidden no-scrollbar relative",
-          activeView === 'login' ? "pb-0" : "pb-24 xl:pb-0"
+          (activeView === 'login' || showWebPresentation) ? "pb-0" : "pb-24 xl:pb-0"
         )}
       >
               <motion.div 
@@ -5429,41 +5483,66 @@ export default function App() {
                 transition={{ duration: 0.3, ease: 'easeOut' }}
                 className={activeView === 'home' ? 'block w-full' : 'hidden w-full'}
               >
-                <HomeView 
-                  allPros={allPros}
-                  prosLoading={prosLoading}
-                  events={events}
-                  eventsLoading={eventsLoading}
-                  guidesLoading={guidesLoading}
-                  onNavigate={handleNavigate}
-                  userProfile={userProfile}
-                  currentUser={currentUser}
-                  onAddPro={() => {
-                    if (!currentUser) {
-                      handleNavigate('login');
-                    } else {
-                      setShowAddPro(true);
-                    }
-                  }} 
-                  ads={ads} 
-                  onSelectAd={setSelectedAd} 
-                  onSelectPost={(post) => { setSelectedPost(post); navigateTo('community-thread'); }}
-                  scrollToTop={scrollToTop}
-                  onProUpdate={refetchPros}
-                  unreadConversations={unreadConversations}
-                  blockedUsers={blockedUsers}
-                  usersWhoBlockedMe={usersWhoBlockedMe}
-                  highlightedProIds={highlightedProIds}
-                  highlightedEventIds={highlightedEventIds}
-                  highlightedArticleIds={highlightedArticleIds}
-                  highlightedTestimoniesIds={highlightedTestimoniesIds}
-                  allArticles={allArticles}
-                  onContactAdmin={handleContactAdmin}
-                  favoriteProIds={favoriteProIds}
-                  onToggleFavoritePro={toggleFavoritePro}
-                  allPartners={allPartners}
-                  partnerMode={partnerMode}
-                />
+                {showWebPresentation ? (
+                  <WebLandingPage
+                    allPros={allPros}
+                    events={events}
+                    allArticles={allArticles}
+                    ads={ads}
+                    allPartners={allPartners}
+                    highlightedProIds={highlightedProIds}
+                    highlightedEventIds={highlightedEventIds}
+                    currentUser={currentUser}
+                    userProfile={userProfile}
+                    unreadConversationsCount={unreadConversations.length}
+                    onNavigate={handleNavigate}
+                    onOpenAppMode={handleEnterWebAppMode}
+                    onAddPro={() => {
+                      if (!currentUser) {
+                        handleNavigate('login');
+                      } else {
+                        setShowAddPro(true);
+                      }
+                    }}
+                  />
+                ) : (
+                  <HomeView 
+                    allPros={allPros}
+                    prosLoading={prosLoading}
+                    events={events}
+                    eventsLoading={eventsLoading}
+                    guidesLoading={guidesLoading}
+                    onNavigate={handleNavigate}
+                    userProfile={userProfile}
+                    currentUser={currentUser}
+                    onAddPro={() => {
+                      if (!currentUser) {
+                        handleNavigate('login');
+                      } else {
+                        setShowAddPro(true);
+                      }
+                    }} 
+                    ads={ads} 
+                    onSelectAd={setSelectedAd} 
+                    onSelectPost={(post) => { setSelectedPost(post); navigateTo('community-thread'); }}
+                    scrollToTop={scrollToTop}
+                    onProUpdate={refetchPros}
+                    unreadConversations={unreadConversations}
+                    blockedUsers={blockedUsers}
+                    usersWhoBlockedMe={usersWhoBlockedMe}
+                    highlightedProIds={highlightedProIds}
+                    highlightedEventIds={highlightedEventIds}
+                    highlightedArticleIds={highlightedArticleIds}
+                    highlightedTestimoniesIds={highlightedTestimoniesIds}
+                    allArticles={allArticles}
+                    onContactAdmin={handleContactAdmin}
+                    favoriteProIds={favoriteProIds}
+                    onToggleFavoritePro={toggleFavoritePro}
+                    allPartners={allPartners}
+                    partnerMode={partnerMode}
+                    onReturnToWebsite={!isNativeOrStandaloneApp && webSurfaceMode === 'app' ? handleReturnToWebPresentation : undefined}
+                  />
+                )}
               </motion.div>
               <motion.div 
                 animate={activeView === 'explore' ? { opacity: 1 } : { opacity: 0 }}
@@ -6699,11 +6778,16 @@ export default function App() {
           }}
         />
 
-        {activeView !== 'login' && <SEOFooter onNavigate={handleNavigate} />}
+        {activeView !== 'login' && !showWebPresentation && (
+          <SEOFooter
+            onNavigate={handleNavigate}
+            onReturnToWebsite={!isNativeOrStandaloneApp && webSurfaceMode === 'app' ? handleReturnToWebPresentation : undefined}
+          />
+        )}
       </main>
 
       {/* Bottom Navigation */}
-      {activeView !== 'login' && (
+      {activeView !== 'login' && !showWebPresentation && (
         <nav 
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2px)' }}
           className="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-slate-100 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] xl:hidden after:content-[''] after:absolute after:top-full after:left-0 after:right-0 after:h-24 after:bg-white after:pointer-events-none"
@@ -15014,7 +15098,8 @@ function HomeView({
   eventsLoading = false,
   guidesLoading = false,
   allPartners: propAllPartners = [],
-  partnerMode: propPartnerMode = 'partner'
+  partnerMode: propPartnerMode = 'partner',
+  onReturnToWebsite
 }: { 
   onNavigate: (view: View, params?: { eventId?: string, proId?: string, guideId?: string, searchQuery?: string, chat?: any }) => void, 
   allPros: Professional[], 
@@ -15048,7 +15133,8 @@ function HomeView({
   eventsLoading?: boolean,
   guidesLoading?: boolean,
   allPartners?: AppPartner[],
-  partnerMode?: 'partner' | 'pro' | 'both'
+  partnerMode?: 'partner' | 'pro' | 'both',
+  onReturnToWebsite?: () => void
 }) {
   const feedRef = useRef<HTMLDivElement>(null);
   const [localSearch, setLocalSearch] = useState('');
@@ -15815,6 +15901,18 @@ function HomeView({
           ))}
         </div>
       </div>
+
+      {onReturnToWebsite && (
+        <div className="xl:hidden pt-4 pb-2 flex justify-center">
+          <button
+            type="button"
+            onClick={onReturnToWebsite}
+            className="text-xs font-medium text-slate-400 hover:text-brand-blue underline underline-offset-4 transition-colors cursor-pointer"
+          >
+            Back to website presentation
+          </button>
+        </div>
+      )}
 
       <ExpertGuideModal
         isOpen={!!selectedArticle}
@@ -17846,17 +17944,26 @@ function computeProSearchScore(pro: any, searchStr: string): number {
       setIsSearchTakingLonger(false);
 
       if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
-        }
-        let errorMsg = "Sorry, an error occurred during AI search.";
+        let errorMsg = "Jane search is temporarily unavailable. Please try again in a few seconds, or browse by category.";
         try {
           const errJson = await response.json();
           if (errJson && errJson.error) {
             errorMsg = errJson.error;
           }
         } catch (_) {}
-        throw new Error(errorMsg);
+
+        if (response.status === 429 || response.status === 503) {
+          setAiError("Jane is very busy right now! Please wait a few seconds and try again, or use the category list in filters to find the pro you need.");
+        } else if (response.status === 504) {
+          setAiError("Jane is taking longer than expected right now. Please try again in a few seconds, or browse by category.");
+        } else {
+          setAiError(errorMsg);
+        }
+        console.warn(`[Search] Jane AI unavailable (HTTP ${response.status}): ${errorMsg}`);
+        setAiResults(null);
+        setAiExactMatch(true);
+        setAiSummaryMessage(null);
+        return;
       }
 
       const data = await response.json();
@@ -27163,7 +27270,7 @@ function LegalPageView({ docKey, onBack }: { docKey: string, onBack: () => void 
   );
 }
 
-function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
+function SEOFooter({ onNavigate, onReturnToWebsite }: { onNavigate: (view: View) => void, onReturnToWebsite?: () => void }) {
   return (
     <footer className="hidden xl:block bg-[#E9ECFF] text-[#0A0F2C] py-16 px-8 border-t border-[#0A0F2C]/5 mt-20 mb-0">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-12">
@@ -27271,6 +27378,12 @@ function SEOFooter({ onNavigate }: { onNavigate: (view: View) => void }) {
                <ChevronRight className="w-3 h-3" />
                Feedback
             </li>
+            {onReturnToWebsite && (
+              <li onClick={onReturnToWebsite} className="hover:opacity-60 transition-colors cursor-pointer flex items-center gap-3 text-brand-blue">
+                 <ChevronRight className="w-3 h-3" />
+                 Presentation Website
+              </li>
+            )}
           </ul>
         </div>
 

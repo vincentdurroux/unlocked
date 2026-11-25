@@ -185,8 +185,9 @@ RULES:
 6. COMPREHENSIVE SCORING: Return ALL matching pros (both Rec=1 community-recommended at 85-95 and Rec=0 Google-sourced at 70-80; adjacent alternatives 20-50). Omit unrelated pros (do NOT output score 0 entries).
 7. ENGLISH & CONCISE OUTPUT: ALWAYS write "summaryMessage" (1-2 friendly first-person English sentences, max 25 words) and each "reasonUrlExcerpt" (1 concise English sentence, max 16 words) in ENGLISH regardless of query language. Set exactMatchFound=true if any result has score >= 40.`;
 
-  // Exclusively use gemini-3.1-flash-lite with ThinkingLevel.MINIMAL for fastest latency & highest quota
-  const modelName = "gemini-3.1-flash-lite";
+  // Primary: gemini-3.1-flash-lite (ThinkingLevel.MINIMAL) for fastest latency & highest quota
+  // Fallback: gemini-4-hydrogen (ThinkingLevel.LOW) ONLY when Flash Lite hits a transient 503/429 spike
+  const models = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"];
   let lastError: any = null;
   let responseText = "";
 
@@ -197,7 +198,7 @@ RULES:
     return msg.includes("503") || msg.includes("unavailable") || msg.includes("high demand");
   };
 
-  const callWithTimeout = async (timeoutMs: number) => {
+  const callWithTimeout = async (modelName: string, timeoutMs: number) => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
@@ -206,6 +207,7 @@ RULES:
         reject(timeoutErr);
       }, timeoutMs);
     });
+    const thinkingLevel = modelName.startsWith("gemini-4") ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL;
     try {
       return await Promise.race([
         ai.models.generateContent({
@@ -214,7 +216,7 @@ RULES:
           config: {
             systemInstruction: sysInstruction,
             responseMimeType: "application/json",
-            thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+            thinkingConfig: { thinkingLevel },
             responseSchema: {
               type: Type.OBJECT,
               properties: {
@@ -244,21 +246,31 @@ RULES:
     }
   };
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const response = await callWithTimeout(14000);
-      if (response && response.text) {
-        responseText = response.text;
+  for (let i = 0; i < models.length && !responseText; i++) {
+    const modelName = models[i];
+    const maxTries = 2;
+    const timeoutMs = modelName === "gemini-3.1-flash-lite" ? 9000 : 14000;
+
+    for (let attempt = 1; attempt <= maxTries; attempt++) {
+      try {
+        const response = await callWithTimeout(modelName, timeoutMs);
+        if (response && response.text) {
+          responseText = response.text;
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        if (attempt < maxTries && isTransient503(err)) {
+          const backoffMs = i === 0 ? 800 : 1200;
+          console.warn(`[api/search] ${modelName} hit transient 503, retrying once in ${backoffMs}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+          continue;
+        }
+        if (models[i + 1]) {
+          console.warn(`[api/search] ${modelName} failed (${err?.status || err?.message}), falling back to ${models[i + 1]}...`);
+        }
         break;
       }
-    } catch (err: any) {
-      lastError = err;
-      if (attempt === 1 && isTransient503(err)) {
-        console.warn(`[api/search] ${modelName} hit transient 503, retrying once in 700ms...`);
-        await new Promise((resolve) => setTimeout(resolve, 700));
-        continue;
-      }
-      break;
     }
   }
 
@@ -374,12 +386,18 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json(result);
   } catch (error: any) {
     console.error("[api/search] Jane Gemini AI matching error:", error?.message || error);
+    const status = Number(error?.status || error?.statusCode) || 500;
+    const errLower = String(error?.message || "").toLowerCase();
+    if (status === 503 || errLower.includes("503") || errLower.includes("unavailable") || errLower.includes("high demand")) {
+      return res.status(503).json({
+        error: "Jane is experiencing high demand right now! Please wait a few seconds and try again."
+      });
+    }
     if (isQuotaOrRateLimitError(error)) {
       return res.status(429).json({
         error: "Jane is currently very busy! Please wait a few seconds and try again."
       });
     }
-    const status = Number(error?.status || error?.statusCode) || 500;
     if (status === 504) {
       return res.status(504).json({
         error: "Jane is taking longer than expected right now. Please try again in a few seconds."

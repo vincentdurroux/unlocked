@@ -8,6 +8,7 @@ export const ONESIGNAL_APP_ID =
   '10a14311-a42a-4681-9682-ce965d80ae75';
 
 export type PushSubscriptionObserver = (subscriptionId: string) => void;
+export type NativePushPermissionState = 'granted' | 'denied' | 'default' | 'unknown';
 
 class OneSignalService {
   private isInitialized = false;
@@ -16,6 +17,8 @@ class OneSignalService {
   private observerBound = false;
   private clickListenerBound = false;
   private nativeSubscriptionId: string | null = null;
+  private nativePushPermissionState: NativePushPermissionState = 'unknown';
+  private nativePermissionWaiters = new Set<(state: NativePushPermissionState) => void>();
 
   private currentUserId: string | null = null;
   private pendingNotificationClick: { notification: any; data: any; launchUrl: string; ts: number } | null = null;
@@ -237,6 +240,23 @@ class OneSignalService {
       setTimeout(() => { bindCapacitorPushAction(); this.bindClickListeners(); }, 1500);
       setTimeout(() => { bindCapacitorPushAction(); this.bindClickListeners(); }, 3000);
 
+      // Connect native iOS WKWebView push-permission-state listener (including any early event from index.html)
+      windowAny.__mcuOnPushPermissionState = (detail: any) => {
+        this.handleNativePermissionState(detail);
+      };
+      if (windowAny.__mcuLastPushPermissionState !== undefined) {
+        this.handleNativePermissionState(windowAny.__mcuLastPushPermissionState);
+      }
+      const onPushPermissionStateEvent = (e: any) => {
+        if (e && e.__mcuPushStateHandled) return;
+        if (e) {
+          try { e.__mcuPushStateHandled = true; } catch (_) {}
+        }
+        this.handleNativePermissionState(e && e.detail !== undefined ? e.detail : e);
+      };
+      window.addEventListener('push-permission-state', onPushPermissionStateEvent);
+      document.addEventListener('push-permission-state', onPushPermissionStateEvent);
+
       try {
         windowAny.OneSignalDeferred = windowAny.OneSignalDeferred || [];
         windowAny.OneSignalDeferred.push((OS: any) => {
@@ -244,6 +264,168 @@ class OneSignalService {
         });
       } catch (_) {}
     }
+  }
+
+  private normalizeNativePermissionState(raw: any, depth = 0): NativePushPermissionState {
+    if (raw === null || raw === undefined || depth > 3) return 'unknown';
+    if (typeof raw === 'boolean') return raw ? 'granted' : 'denied';
+    if (typeof raw === 'number') {
+      // UNAuthorizationStatus raw values: 0=notDetermined, 1=denied, 2=authorized, 3=provisional, 4=ephemeral
+      if (raw === 0) return 'default';
+      if (raw === 1) return 'denied';
+      if (raw === 2 || raw === 3 || raw === 4) return 'granted';
+      return 'unknown';
+    }
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (!trimmed) return 'unknown';
+      if (
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('"') && trimmed.endsWith('"'))
+      ) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed !== raw) {
+            return this.normalizeNativePermissionState(parsed, depth + 1);
+          }
+        } catch (_) {}
+      }
+      const cleaned = trimmed.replace(/^['"]+|['"]+$/g, '').trim().toLowerCase();
+      if (
+        cleaned === 'granted' ||
+        cleaned === 'authorized' ||
+        cleaned === 'provisional' ||
+        cleaned === 'ephemeral' ||
+        cleaned === 'allow' ||
+        cleaned === 'allowed' ||
+        cleaned === 'true'
+      ) {
+        return 'granted';
+      }
+      if (
+        cleaned === 'denied' ||
+        cleaned === 'declined' ||
+        cleaned === 'rejected' ||
+        cleaned === 'false'
+      ) {
+        return 'denied';
+      }
+      if (
+        cleaned === 'default' ||
+        cleaned === 'notdetermined' ||
+        cleaned === 'not_determined' ||
+        cleaned === 'not-determined' ||
+        cleaned === 'undetermined' ||
+        cleaned === 'prompt'
+      ) {
+        return 'default';
+      }
+      return 'unknown';
+    }
+    if (typeof raw === 'object') {
+      const candidate =
+        raw.state ??
+        raw.status ??
+        raw.permission ??
+        raw.authorizationStatus ??
+        raw.granted ??
+        raw.authorized ??
+        raw.detail;
+      if (candidate !== undefined) {
+        return this.normalizeNativePermissionState(candidate, depth + 1);
+      }
+    }
+    return 'unknown';
+  }
+
+  private handleNativePermissionState(rawDetail: any): void {
+    const normalized = this.normalizeNativePermissionState(rawDetail);
+    if (normalized === 'unknown') return;
+    this.nativePushPermissionState = normalized;
+    if (this.nativePermissionWaiters.size > 0) {
+      const waiters = Array.from(this.nativePermissionWaiters);
+      this.nativePermissionWaiters.clear();
+      waiters.forEach((resolve) => {
+        try { resolve(normalized); } catch (_) {}
+      });
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(
+          new CustomEvent('onesignal:permission-state-changed', {
+            detail: { state: normalized, raw: rawDetail }
+          })
+        );
+      } catch (_) {}
+    }
+  }
+
+  private waitForNativePermissionState(timeoutMs: number): Promise<NativePushPermissionState> {
+    return new Promise<NativePushPermissionState>((resolve) => {
+      let settled = false;
+      const onState = (state: NativePushPermissionState) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this.nativePermissionWaiters.delete(onState);
+        resolve(state);
+      };
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        this.nativePermissionWaiters.delete(onState);
+        resolve(this.nativePushPermissionState);
+      }, timeoutMs);
+      this.nativePermissionWaiters.add(onState);
+    });
+  }
+
+  getCachedNativePushPermissionState(): NativePushPermissionState {
+    return this.nativePushPermissionState;
+  }
+
+  async queryNativePushPermissionState(timeoutMs = 1500): Promise<NativePushPermissionState> {
+    if (typeof window === 'undefined') return 'unknown';
+    const windowAny = window as any;
+    const stateHandler = windowAny.webkit?.messageHandlers?.['push-permission-state'];
+    if (stateHandler && typeof stateHandler.postMessage === 'function') {
+      const waiter = this.waitForNativePermissionState(timeoutMs);
+      try {
+        stateHandler.postMessage('push-permission-state');
+      } catch (_) {
+        try { stateHandler.postMessage({}); } catch (_) {}
+      }
+      return await waiter;
+    }
+    return this.nativePushPermissionState;
+  }
+
+  private async requestNativeIOSPushPermission(
+    timeoutMs = 25000
+  ): Promise<{ handled: boolean; state: NativePushPermissionState }> {
+    if (typeof window === 'undefined') {
+      return { handled: false, state: 'unknown' };
+    }
+    const windowAny = window as any;
+    const reqHandler = windowAny.webkit?.messageHandlers?.['push-permission-request'];
+    if (!reqHandler || typeof reqHandler.postMessage !== 'function') {
+      return { handled: false, state: this.nativePushPermissionState };
+    }
+
+    const statePromise = this.waitForNativePermissionState(timeoutMs);
+    try {
+      reqHandler.postMessage('push-permission-request');
+    } catch (_) {
+      try {
+        reqHandler.postMessage({});
+      } catch (err) {
+        console.warn('[OneSignal] push-permission-request postMessage error:', err);
+        return { handled: false, state: this.nativePushPermissionState };
+      }
+    }
+
+    const state = await statePromise;
+    return { handled: true, state };
   }
 
   private emitNotificationClick(notification: any, data: any, launchUrl: string): void {
@@ -414,29 +596,66 @@ class OneSignalService {
    */
   getDeviceInfo() {
     if (typeof window === 'undefined') {
-      return { isMobile: false, isIOS: false, isAndroid: false, isStandalone: false, isNativeWrapper: false, platform: 'web' };
+      return {
+        isMobile: false,
+        isIOS: false,
+        isAndroid: false,
+        isStandalone: false,
+        isNativeWrapper: false,
+        isIOSWebView: false,
+        hasIOSPushBridge: false,
+        platform: 'web'
+      };
     }
     const windowAny = window as any;
     const ua = navigator.userAgent || '';
     const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const isAndroid = /Android/.test(ua);
     const isMobile = isIOS || isAndroid || /Mobi|Tablet/.test(ua);
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+    const isAndroidTWA = document.referrer.includes('android-app://');
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as any).standalone === true ||
-      document.referrer.includes('android-app://');
+      isAndroidTWA;
+
+    const hasWebKitHandlers = !!windowAny.webkit?.messageHandlers;
+    const hasIOSPushBridge = !!(
+      windowAny.webkit?.messageHandlers?.['push-permission-request'] &&
+      typeof windowAny.webkit.messageHandlers['push-permission-request'].postMessage === 'function'
+    );
+    const isIOSWebView = !!(
+      isIOS && (
+        hasWebKitHandlers ||
+        hasIOSPushBridge ||
+        windowAny.Capacitor ||
+        windowAny.OneSignalPlugin ||
+        windowAny.plugins?.OneSignal ||
+        ua.includes('WKWebView') ||
+        (!/Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua) && (window.navigator as any).standalone !== true)
+      )
+    );
 
     const isNativeWrapper = !!(
-      windowAny.webkit?.messageHandlers ||
+      isIOSWebView ||
+      hasWebKitHandlers ||
       windowAny.Capacitor ||
       windowAny.OneSignalPlugin ||
       windowAny.plugins?.OneSignal ||
       ua.includes('WKWebView') ||
-      windowAny.setNativeOneSignalSubscriptionId
+      isAndroidTWA
     );
 
     const platform = isIOS ? 'ios' : isAndroid ? 'android' : 'web';
 
-    return { isMobile, isIOS, isAndroid, isStandalone, isNativeWrapper, platform };
+    return {
+      isMobile,
+      isIOS,
+      isAndroid,
+      isStandalone,
+      isNativeWrapper,
+      isIOSWebView,
+      hasIOSPushBridge,
+      platform
+    };
   }
 
   /**
@@ -702,6 +921,15 @@ class OneSignalService {
    */
   async isSubscribed(): Promise<boolean> {
     if (typeof window === 'undefined') return false;
+    const dev = this.getDeviceInfo();
+    if (dev.isIOSWebView || dev.hasIOSPushBridge) {
+      if (this.nativeSubscriptionId) return true;
+      if (this.nativePushPermissionState === 'granted') return true;
+      if (this.nativePushPermissionState === 'denied') return false;
+      const state = await this.queryNativePushPermissionState(1200);
+      return state === 'granted';
+    }
+
     const subId = await this.getSubscriptionId();
     if (subId) return true;
 
@@ -711,8 +939,8 @@ class OneSignalService {
       }
       const windowOS = (window as any).OneSignal;
       const optIn = OneSignal.User?.PushSubscription?.optedIn ?? windowOS?.User?.PushSubscription?.optedIn;
-      const permission = (typeof Notification !== 'undefined' && Notification.permission === 'granted') || 
-                         OneSignal.Notifications?.permission || 
+      const permission = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ||
+                         OneSignal.Notifications?.permission ||
                          windowOS?.Notifications?.permission;
       return !!optIn && !!permission;
     } catch (err) {
@@ -779,7 +1007,73 @@ class OneSignalService {
     const windowAny = window as any;
     const dev = this.getDeviceInfo();
 
-    // 1. Check Native iOS Wrappers & Capacitor Plugins
+    // 1. Native iOS WKWebView path (Xcode / PWABuilder):
+    // Strictly use native message handlers (push-permission-request + push-permission-state)
+    // and NEVER fall through to Notification.requestPermission() or the OneSignal Web SDK.
+    if (dev.isIOSWebView || dev.hasIOSPushBridge) {
+      try {
+        const bridgeResult = await this.requestNativeIOSPushPermission();
+        if (bridgeResult.handled) {
+          if (bridgeResult.state === 'granted') {
+            if (userId) {
+              await this.loginUser(userId);
+            }
+            return true;
+          }
+          return false;
+        }
+
+        // Fallback for non-PWABuilder native iOS wrappers (Capacitor / Cordova / custom WKWebView)
+        let nativeHandled = false;
+        if (windowAny.Capacitor?.Plugins?.PushNotifications) {
+          const permRes = await windowAny.Capacitor.Plugins.PushNotifications.requestPermissions();
+          if (permRes.receive === 'granted') {
+            await windowAny.Capacitor.Plugins.PushNotifications.register();
+            nativeHandled = true;
+          }
+        } else if (windowAny.OneSignalPlugin?.promptForPushNotifications) {
+          windowAny.OneSignalPlugin.promptForPushNotifications();
+          nativeHandled = true;
+        } else if (windowAny.plugins?.OneSignal?.promptForPushNotificationsWithUserResponse) {
+          windowAny.plugins.OneSignal.promptForPushNotificationsWithUserResponse();
+          nativeHandled = true;
+        } else if (windowAny.webkit?.messageHandlers) {
+          const handlers = windowAny.webkit.messageHandlers;
+          const legacyHandlers = [
+            'requestNotificationPermission',
+            'requestPushPermission',
+            'registerForPush',
+            'promptForPush',
+            'oneSignalPrompt',
+            'oneSignal',
+            'pushNotification',
+            'push',
+            'nativeApp',
+            'ios'
+          ];
+          for (const h of legacyHandlers) {
+            if (handlers[h] && typeof handlers[h].postMessage === 'function') {
+              try {
+                handlers[h].postMessage({ action: 'subscribe', userId });
+                nativeHandled = true;
+              } catch (_) {
+                try { handlers[h].postMessage({}); nativeHandled = true; } catch (_) {}
+              }
+            }
+          }
+        }
+
+        if (nativeHandled && userId) {
+          await this.loginUser(userId);
+        }
+        return nativeHandled;
+      } catch (e) {
+        console.warn('[OneSignal] Native iOS WKWebView permission error:', e);
+        return false;
+      }
+    }
+
+    // 2. Non-iOS Native Wrappers (e.g. Android Capacitor / Cordova)
     try {
       let nativeHandled = false;
 
@@ -799,33 +1093,7 @@ class OneSignalService {
         nativeHandled = true;
       }
 
-      const handlers = windowAny.webkit?.messageHandlers;
-      if (handlers) {
-        const handlerList = [
-          'requestNotificationPermission',
-          'requestPushPermission',
-          'registerForPush',
-          'promptForPush',
-          'oneSignal',
-          'oneSignalPrompt',
-          'pushNotification',
-          'push',
-          'nativeApp',
-          'ios'
-        ];
-        for (const h of handlerList) {
-          if (handlers[h]) {
-            try {
-              handlers[h].postMessage({ action: 'subscribe', userId });
-              nativeHandled = true;
-            } catch (_) {
-              try { handlers[h].postMessage({}); nativeHandled = true; } catch (_) {}
-            }
-          }
-        }
-      }
-
-      if (nativeHandled || (dev.isNativeWrapper && dev.isIOS)) {
+      if (nativeHandled) {
         if (userId) {
           await this.loginUser(userId);
         }
@@ -835,12 +1103,8 @@ class OneSignalService {
       console.warn('[OneSignal] Native permission attempt:', e);
     }
 
-    // 2. Browser check
+    // 3. Browser / Web Push check (non-WKWebView)
     if (!('Notification' in window)) {
-      if (dev.isIOS) {
-        if (userId) await this.loginUser(userId);
-        return true;
-      }
       console.info('[OneSignal] Push notifications not supported in this browser.');
       return false;
     }
@@ -982,8 +1246,15 @@ class OneSignalService {
     const hasNotification = isBrowser && 'Notification' in window;
     const hasServiceWorker = isBrowser && 'serviceWorker' in navigator;
     const hasPushManager = isBrowser && 'PushManager' in window;
-    const permission = hasNotification ? Notification.permission : dev.isNativeWrapper ? 'granted' : 'unsupported';
-    const isSupported = (hasNotification && hasServiceWorker && hasPushManager) || dev.isNativeWrapper;
+    const permission =
+      dev.isIOSWebView || dev.hasIOSPushBridge
+        ? (this.nativePushPermissionState !== 'unknown' ? this.nativePushPermissionState : 'default')
+        : hasNotification
+          ? Notification.permission
+          : dev.isNativeWrapper
+            ? 'granted'
+            : 'unsupported';
+    const isSupported = (hasNotification && hasServiceWorker && hasPushManager) || dev.isNativeWrapper || dev.hasIOSPushBridge;
     const appId = this.getAppId();
     const isInit = this.isInitialized;
     const subscriptionId = await this.getSubscriptionId();

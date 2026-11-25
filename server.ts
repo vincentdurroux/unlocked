@@ -176,6 +176,9 @@ async function startServer() {
     aiSearchCache.set(key, { data, timestamp: Date.now() });
   };
 
+  // Deduplicate identical concurrent in-flight AI searches to prevent duplicate Gemini calls
+  const inFlightAiSearches = new Map<string, Promise<any>>();
+
   // Highly robust Gemini content generator with seamless multi-model fallback
   const generateContentWithFallback = async (
     params: {
@@ -243,11 +246,12 @@ async function startServer() {
 
     const attempts: { model: string; status: number | string; ms: number; message: string }[] = [];
 
-    // Single pass across configured models; if only one model is used and it hits a transient 503 spike, retry once after 700ms
+    // Try primary model first (with 1 fast backoff retry on transient 503 spikes),
+    // then seamlessly fall back to the next model in the chain if unavailable or rate-limited
     for (let i = 0; i < models.length; i++) {
       const modelName = models[i];
-      const maxTries = models.length === 1 ? 2 : 1;
-      const timeoutMs = models.length === 1 ? 14000 : (modelName === "gemini-3.1-flash-lite" ? 8000 : 14000);
+      const maxTries = 2;
+      const timeoutMs = modelName === "gemini-3.1-flash-lite" ? 9000 : 14000;
 
       for (let attempt = 1; attempt <= maxTries; attempt++) {
         const t0 = Date.now();
@@ -265,8 +269,9 @@ async function startServer() {
           attempts.push({ model: modelName, status: errStatus, ms: elapsed, message: errMsg });
 
           if (attempt < maxTries && isTransient503(err)) {
-            console.warn(`[ai] Model ${modelName} hit transient 503 in ${elapsed}ms, retrying once in 700ms...`);
-            await new Promise((resolve) => setTimeout(resolve, 700));
+            const backoffMs = i === 0 ? 800 : 1200;
+            console.warn(`[ai] Model ${modelName} hit transient 503 in ${elapsed}ms, retrying once in ${backoffMs}ms...`);
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
             continue;
           }
 
@@ -437,6 +442,13 @@ RULES:
 6. COMPREHENSIVE SCORING: Return ALL matching pros (both Rec=1 community-recommended at 85-95 and Rec=0 Google-sourced at 70-80; adjacent alternatives 20-50). Omit unrelated pros (do NOT output score 0 entries).
 7. ENGLISH & CONCISE OUTPUT: ALWAYS write "summaryMessage" (1-2 friendly first-person English sentences, max 25 words) and each "reasonUrlExcerpt" (1 concise English sentence, max 16 words) in ENGLISH regardless of query language. Set exactMatchFound=true if any result has score >= 40.`;
 
+      const existingInFlight = inFlightAiSearches.get(cacheKey);
+      if (existingInFlight) {
+        const sharedPayload = await existingInFlight;
+        return res.json(sharedPayload);
+      }
+
+      const searchPromise = (async () => {
       const response = await generateContentWithFallback(
         {
           contents: `Query: "${query}"\n\nID|Name|Company|Category|Languages|Location|Rec|Bio\n${directoryRows}`,
@@ -466,7 +478,7 @@ RULES:
             }
           }
         },
-        ["gemini-3.1-flash-lite"]
+        ["gemini-3.1-flash-lite", "gemini-4-hydrogen"]
       );
 
       const parsedData = extractJsonFromModelResponse(response.text || "{}");
@@ -537,16 +549,32 @@ RULES:
 
       const responsePayload = { exactMatchFound, summaryMessage, results };
       setCachedSearch(cacheKey, responsePayload);
+      return responsePayload;
+      })();
 
-      return res.json(responsePayload);
+      inFlightAiSearches.set(cacheKey, searchPromise);
+      try {
+        const finalPayload = await searchPromise;
+        return res.json(finalPayload);
+      } finally {
+        if (inFlightAiSearches.get(cacheKey) === searchPromise) {
+          inFlightAiSearches.delete(cacheKey);
+        }
+      }
     } catch (error: any) {
-      console.error("[api/search] Jane Gemini AI matching error:", error?.message || error);
+      console.error("[api/search] Jane Gemini AI matching error:", error?.message || error, error?.modelAttempts || "");
+      const status = Number(error?.status || error?.statusCode) || 500;
+      const errLower = String(error?.message || "").toLowerCase();
+      if (status === 503 || errLower.includes("503") || errLower.includes("unavailable") || errLower.includes("high demand")) {
+        return res.status(503).json({
+          error: "Jane is experiencing high demand right now! Please wait a few seconds and try again."
+        });
+      }
       if (isQuotaOrRateLimitError(error)) {
         return res.status(429).json({
           error: "Jane is currently very busy! Please wait a few seconds and try again."
         });
       }
-      const status = Number(error?.status || error?.statusCode) || 500;
       if (status === 504) {
         return res.status(504).json({
           error: "Jane is taking longer than expected right now. Please try again in a few seconds."
@@ -694,7 +722,7 @@ ${JSON.stringify(eventListBrief, null, 2)}`,
             temperature: 0.1
           }
         },
-        ["gemini-3.1-flash-lite"]
+        ["gemini-3.1-flash-lite", "gemini-4-hydrogen"]
       );
 
       const parsed = JSON.parse(response.text || "{}");
@@ -713,20 +741,25 @@ ${JSON.stringify(eventListBrief, null, 2)}`,
         results: validResults
       });
     } catch (error: any) {
-      console.error("[api] Jane AI Event matching error:", error);
-      const errorMsg = error.message || "";
+      console.error("[api] Jane AI Event matching error:", error?.message || error, error?.modelAttempts || "");
+      const status = Number(error?.status || error?.statusCode) || 500;
+      const errorMsg = error?.message || "";
       const errorLower = errorMsg.toLowerCase();
       if (
-        errorLower.includes("quota") ||
-        errorLower.includes("limit") ||
-        errorLower.includes("exhausted") ||
-        errorLower.includes("429") ||
-        errorLower.includes("too many requests") ||
-        errorLower.includes("rate limit")
+        status === 503 ||
+        errorLower.includes("503") ||
+        errorLower.includes("unavailable") ||
+        errorLower.includes("high demand")
       ) {
+        return res.status(503).json({ error: "Jane is experiencing high demand right now! Please wait a few seconds and try again." });
+      }
+      if (isQuotaOrRateLimitError(error)) {
         return res.status(429).json({ error: "Jane is currently very busy! Please wait a few seconds and try again." });
       }
-      return res.status(500).json({ error: error.message || "Failed to match events with Jane." });
+      if (status === 504) {
+        return res.status(504).json({ error: "Jane is taking longer than expected right now. Please try again in a few seconds." });
+      }
+      return res.status(500).json({ error: "Failed to match events with Jane. Please try again shortly." });
     }
   });
 

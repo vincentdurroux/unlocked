@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { oneSignalService } from '../services/oneSignalService';
-import { pushNotificationService } from '../services/pushNotificationService';
 
 interface PushNotificationPromptProps {
   currentUserId?: string;
@@ -10,9 +9,9 @@ interface PushNotificationPromptProps {
 
 /**
  * PushNotificationPrompt
- * 
- * Utilise uniquement le message générique du système (la demande d'autorisation native du navigateur/OS)
- * sans afficher de bannière personnalisée intrusive ni de message « il faut activer sur le téléphone ».
+ *
+ * Utilise uniquement le dialogue système natif (via push-permission-request dans la WKWebView iOS
+ * ou via l'autorisation système sur les autres wrappers natifs), sans afficher de bannière intrusive.
  */
 export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
   currentUserId,
@@ -26,12 +25,25 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
 
     // Do NOT request or prompt for Web Push in standard desktop/mobile web browsers
     const dev = oneSignalService.getDeviceInfo();
-    if (!dev.isNativeWrapper) {
+    const isIOSNative = dev.isIOSWebView || dev.hasIOSPushBridge;
+    if (!dev.isNativeWrapper && !isIOSNative) {
       return;
     }
 
-    if (!('Notification' in window)) return;
-    if (Notification.permission !== 'default') return;
+    if (isIOSNative) {
+      // In iOS WKWebView, window.Notification is absent — rely exclusively on native push-permission-state
+      const cachedState = oneSignalService.getCachedNativePushPermissionState();
+      if (cachedState === 'granted') {
+        onSubscribed?.();
+        return;
+      }
+      if (cachedState === 'denied') {
+        return;
+      }
+    } else {
+      if (!('Notification' in window)) return;
+      if (Notification.permission !== 'default') return;
+    }
 
     // Vérifier si l'utilisateur a déjà vu la demande système récemment
     const askedAt = localStorage.getItem('unlocked_native_prompt_requested');
@@ -40,20 +52,32 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
       if (diffHours < 24) return;
     }
 
+    let cancelled = false;
+
     // Déclencher directement la boîte de dialogue système sur l'app native
     const triggerSystemPrompt = async () => {
       window.removeEventListener('click', triggerSystemPrompt);
       window.removeEventListener('touchend', triggerSystemPrompt);
+      if (cancelled) return;
+
+      if (isIOSNative) {
+        const latestState = oneSignalService.getCachedNativePushPermissionState();
+        if (latestState === 'granted') {
+          onSubscribed?.();
+          return;
+        }
+        if (latestState === 'denied') {
+          return;
+        }
+      }
 
       try {
         localStorage.setItem('unlocked_native_prompt_requested', Date.now().toString());
 
-        const appId = oneSignalService.getAppId();
-        if (appId) {
-          await oneSignalService.subscribe(currentUserId);
-        }
+        const granted = await oneSignalService.subscribe(currentUserId);
+        if (cancelled) return;
 
-        if (Notification.permission === 'granted') {
+        if (granted || (!isIOSNative && 'Notification' in window && Notification.permission === 'granted')) {
           onSubscribed?.();
         }
       } catch (err) {
@@ -65,7 +89,23 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
     window.addEventListener('click', triggerSystemPrompt, { once: true });
     window.addEventListener('touchend', triggerSystemPrompt, { once: true });
 
+    // Interroger l'état natif en arrière-plan dès le montage si Xcode expose push-permission-state
+    if (isIOSNative) {
+      oneSignalService.queryNativePushPermissionState().then((state) => {
+        if (cancelled) return;
+        if (state === 'granted') {
+          window.removeEventListener('click', triggerSystemPrompt);
+          window.removeEventListener('touchend', triggerSystemPrompt);
+          onSubscribed?.();
+        } else if (state === 'denied') {
+          window.removeEventListener('click', triggerSystemPrompt);
+          window.removeEventListener('touchend', triggerSystemPrompt);
+        }
+      }).catch(() => {});
+    }
+
     return () => {
+      cancelled = true;
       window.removeEventListener('click', triggerSystemPrompt);
       window.removeEventListener('touchend', triggerSystemPrompt);
     };
