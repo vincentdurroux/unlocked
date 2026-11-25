@@ -143,6 +143,8 @@ import { chatService, Conversation, Message } from './services/chatService';
 import { searchService } from './services/searchService';
 import { pushNotificationService } from './services/pushNotificationService';
 import { oneSignalService } from './services/oneSignalService';
+import { biometricLockService, type BiometricLockStatus } from './services/biometricLockService';
+import { BiometricLockOverlay } from './components/BiometricLockOverlay';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
 import { OneSignalVerificationDialog } from './components/OneSignalVerificationDialog';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
@@ -6777,6 +6779,22 @@ export default function App() {
 
       {/* OneSignal SDK Verification Dialog (Mandatory AI Prompt Specification) */}
       <OneSignalVerificationDialog userId={currentUser?.id} />
+
+      {/* Local WebAuthn Biometric App Lock Overlay (Android PWABuilder TWA / mobile PWA) */}
+      <BiometricLockOverlay
+        currentUser={currentUser}
+        onSignOut={async () => {
+          try {
+            await oneSignalService.logoutUser();
+          } catch (_) {}
+          try {
+            await authService.signOut();
+          } catch (_) {}
+          setCurrentUser(null);
+          setUserProfile(null);
+          setActiveView('home');
+        }}
+      />
       </div>
     </APIProvider>
   );
@@ -24343,6 +24361,94 @@ function ProfileView({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // Unified Biometric App Lock (Native iOS Face ID / Touch ID + Native Android + WebAuthn for Android PWABuilder TWA)
+  const [biometricStatus, setBiometricStatus] = useState<BiometricLockStatus>(() =>
+    biometricLockService.getSyncStatus(currentUser?.id)
+  );
+  const [isUpdatingBiometric, setIsUpdatingBiometric] = useState(false);
+  const [biometricError, setBiometricError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let isMounted = true;
+    const win = window as any;
+
+    const refreshStatus = async (incoming?: any) => {
+      if (incoming && typeof incoming === 'object') {
+        win.__mcuBiometricAuth = { ...(win.__mcuBiometricAuth || {}), ...incoming };
+      }
+      const resolved = await biometricLockService.resolveStatus(currentUser?.id);
+      if (isMounted) {
+        setBiometricStatus(resolved);
+      }
+    };
+
+    const handleNativeEvent = (e: any) => {
+      refreshStatus(e?.detail);
+    };
+
+    win.__mcuSetBiometricAuthState = (incoming?: any) => {
+      refreshStatus(incoming);
+    };
+    window.addEventListener(biometricLockService.eventName, handleNativeEvent);
+    refreshStatus();
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener(biometricLockService.eventName, handleNativeEvent);
+      if (win.__mcuSetBiometricAuthState) {
+        delete win.__mcuSetBiometricAuthState;
+      }
+    };
+  }, [currentUser?.id]);
+
+  const handleToggleBiometricLock = async () => {
+    if (typeof window === 'undefined' || !biometricStatus.available || isUpdatingBiometric) return;
+    setBiometricError(null);
+    const nextEnabled = !biometricStatus.enabled;
+
+    if (biometricStatus.mode === 'native-ios') {
+      const bioType = biometricStatus.biometryType === 'touchId' ? 'touchId' : 'faceId';
+      biometricLockService.setNativeIosEnabled(nextEnabled, bioType);
+      setBiometricStatus((prev) => ({ ...prev, enabled: nextEnabled }));
+      return;
+    }
+
+    if (biometricStatus.mode === 'native-android') {
+      biometricLockService.setNativeAndroidEnabled(nextEnabled);
+      setBiometricStatus((prev) => ({ ...prev, enabled: nextEnabled }));
+      return;
+    }
+
+    if (biometricStatus.mode === 'webauthn') {
+      if (!nextEnabled) {
+        biometricLockService.disableWebAuthnLock();
+        setBiometricStatus((prev) => ({ ...prev, enabled: false }));
+        return;
+      }
+
+      if (!currentUser?.id) return;
+      setIsUpdatingBiometric(true);
+      try {
+        await biometricLockService.enableWebAuthnLock({
+          id: currentUser.id,
+          email: currentUser.email,
+          full_name: userProfile?.full_name,
+        });
+        setBiometricStatus((prev) => ({ ...prev, enabled: true }));
+      } catch (err: any) {
+        const name = String(err?.name || '');
+        if (name === 'NotAllowedError' || name === 'AbortError') {
+          setBiometricError('Setup cancelled. Verify with your fingerprint, face, or PIN to enable.');
+        } else {
+          setBiometricError(err?.message || 'Could not enable biometric lock on this device.');
+        }
+      } finally {
+        setIsUpdatingBiometric(false);
+      }
+    }
+  };
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -26266,6 +26372,42 @@ function ProfileView({
                   </div>
                 ))}
               </div>
+
+              {/* Biometric App Lock Section (iOS Face ID / Touch ID + Android PWABuilder Biometric Lock) */}
+              {biometricStatus.available && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                  <div className="p-6 space-y-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <p className="font-bold text-slate-900">{biometricStatus.label}</p>
+                        <p className="text-xs text-slate-500">{biometricStatus.description}</p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={biometricStatus.enabled}
+                        aria-label={`Toggle ${biometricStatus.label}`}
+                        disabled={isUpdatingBiometric}
+                        onClick={handleToggleBiometricLock}
+                        className={cn(
+                          "w-12 h-6 rounded-full relative transition-colors cursor-pointer shrink-0 disabled:opacity-50",
+                          biometricStatus.enabled ? "bg-brand-blue" : "bg-slate-200"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all",
+                          biometricStatus.enabled ? "right-1" : "left-1"
+                        )} />
+                      </button>
+                    </div>
+                    {biometricError && (
+                      <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200/80 rounded-xl px-3 py-2">
+                        {biometricError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Change Password Section */}
               <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
