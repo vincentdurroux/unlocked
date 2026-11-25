@@ -223,14 +223,14 @@ export function HeaderWeatherWidget() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16, ease: 'easeOut' }}
-            className="absolute left-1/2 -translate-x-1/2 lg:left-auto lg:translate-x-0 lg:right-0 top-full mt-2 z-50"
+            className="absolute left-1/2 -translate-x-[60%] sm:-translate-x-1/2 lg:left-auto lg:translate-x-0 lg:right-0 top-full mt-2 z-50"
           >
             <motion.div
               initial={{ y: 6, scale: 0.97 }}
               animate={{ y: 0, scale: 1 }}
               exit={{ y: 4, scale: 0.97 }}
               transition={{ duration: 0.16, ease: 'easeOut' }}
-              className="w-[296px] max-w-[calc(100vw-2rem)] sm:w-[316px] rounded-2xl bg-white border border-slate-100 shadow-xl p-4.5 sm:p-5 text-slate-800 space-y-4"
+              className="w-[280px] max-w-[calc(100vw-2rem)] sm:w-[316px] rounded-2xl bg-white border border-slate-100 shadow-xl p-4.5 sm:p-5 text-slate-800 space-y-4"
             >
             {/* Header: Location & Current Temperature */}
             <div className="flex items-center justify-between gap-3">

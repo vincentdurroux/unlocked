@@ -28,6 +28,32 @@ function getActiveOneSignalConfig() {
   return { appId, restApiKey };
 }
 
+function detectPlatform(p: any): 'ios' | 'android' | 'web' {
+  const modelLower = String(p?.device_model || '').toLowerCase();
+  const tagPlatform = String(p?.tags?.platform || '').toLowerCase();
+  if (
+    p?.device_type === 0 ||
+    tagPlatform === 'ios' ||
+    modelLower.includes('iphone') ||
+    modelLower.includes('ipad') ||
+    modelLower.includes('ipod')
+  ) {
+    return 'ios';
+  }
+  if (
+    p?.device_type === 1 ||
+    tagPlatform === 'android' ||
+    modelLower.includes('android') ||
+    modelLower.includes('linux') ||
+    modelLower.includes('pixel') ||
+    modelLower.includes('samsung') ||
+    modelLower.startsWith('sm-')
+  ) {
+    return 'android';
+  }
+  return 'web';
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader("Cache-Control", "no-store");
 
@@ -38,29 +64,53 @@ export default async function handler(req: any, res: any) {
     }
 
     const auth = config.restApiKey.startsWith("os_v2_") ? `Bearer ${config.restApiKey}` : `Basic ${config.restApiKey}`;
-    const response = await fetch(`https://onesignal.com/api/v1/players?app_id=${config.appId}&limit=50`, {
-      headers: { "Authorization": auth }
-    });
+    const PAGE_SIZE = 300;
+    const MAX_PAGES = 10; // Up to 3,000 subscribers
+    const allPlayers: any[] = [];
+    const seenIds = new Set<string>();
+    let totalCount = 0;
 
-    if (!response.ok) {
-      return res.status(response.status).json({ error: "Could not fetch devices from OneSignal." });
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const offset = page * PAGE_SIZE;
+      const response = await fetch(
+        `https://onesignal.com/api/v1/players?app_id=${encodeURIComponent(config.appId)}&limit=${PAGE_SIZE}&offset=${offset}`,
+        { headers: { "Authorization": auth } }
+      );
+
+      if (!response.ok) {
+        if (page === 0) {
+          return res.status(response.status).json({ error: "Could not fetch devices from OneSignal." });
+        }
+        break;
+      }
+
+      const data = await response.json();
+      if (typeof data?.total_count === 'number') {
+        totalCount = data.total_count;
+      }
+      const batch = Array.isArray(data?.players) ? data.players : [];
+      for (const p of batch) {
+        if (p?.id && !seenIds.has(p.id)) {
+          seenIds.add(p.id);
+          allPlayers.push(p);
+        }
+      }
+
+      if (batch.length < PAGE_SIZE) {
+        break;
+      }
+      if (totalCount > 0 && offset + batch.length >= totalCount) {
+        break;
+      }
     }
 
-    const data = await response.json();
-    const rawPlayers = Array.isArray(data?.players) ? data.players : [];
-
-    // Filter for messageable active devices (valid push token & not unregistered)
-    const activeDevices = rawPlayers
-      .filter((p: any) => !p.invalid_identifier && (p.identifier || p.device_type === 0))
+    // Keep all non-invalid devices (and flag push-messageable status) sorted by most recently active first
+    const devices = allPlayers
+      .filter((p: any) => Boolean(p?.id) && !p.invalid_identifier)
       .map((p: any) => {
-        let platform = 'web';
-        if (p.device_type === 0 || (p.device_model && p.device_model.toLowerCase().includes('iphone'))) {
-          platform = 'ios';
-        } else if (p.device_type === 5 && p.tags?.platform === 'android') {
-          platform = 'android';
-        } else if (p.device_model && p.device_model.toLowerCase().includes('linux')) {
-          platform = 'android';
-        }
+        const platform = detectPlatform(p);
+        const notificationTypes = typeof p.notification_types === 'number' ? p.notification_types : 1;
+        const isMessageable = Boolean(p.identifier) && notificationTypes > 0;
         return {
           id: p.id,
           model: p.device_model || (platform === 'ios' ? 'iPhone / iOS' : platform === 'android' ? 'Android' : 'Web Browser'),
@@ -68,11 +118,23 @@ export default async function handler(req: any, res: any) {
           os: p.device_os || '',
           sessionCount: p.session_count || 0,
           lastActive: p.last_active || 0,
-          externalUserId: p.external_user_id || null
+          createdAt: p.created_at || 0,
+          externalUserId: p.external_user_id || null,
+          isMessageable,
         };
+      })
+      .sort((a: any, b: any) => {
+        if ((b.lastActive || 0) !== (a.lastActive || 0)) {
+          return (b.lastActive || 0) - (a.lastActive || 0);
+        }
+        return (b.createdAt || 0) - (a.createdAt || 0);
       });
 
-    return res.status(200).json({ devices: activeDevices });
+    return res.status(200).json({
+      devices,
+      totalCount: totalCount || allPlayers.length,
+      fetchedCount: allPlayers.length,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || "Error fetching devices from OneSignal." });
   }

@@ -318,20 +318,33 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     userName: string;
   } | null>(null);
   const [activeDevicesList, setActiveDevicesList] = useState<any[]>([]);
+  const [activeDevicesError, setActiveDevicesError] = useState<string | null>(null);
+  const [deviceSearchQuery, setDeviceSearchQuery] = useState('');
+  const [devicePlatformFilter, setDevicePlatformFilter] = useState<'all' | 'ios' | 'android' | 'web'>('all');
+  const [showUnsubscribedDevices, setShowUnsubscribedDevices] = useState(false);
+  const [manualOneSignalId, setManualOneSignalId] = useState('');
   const [loadingActiveDevices, setLoadingActiveDevices] = useState(false);
   const [isLinkingDevice, setIsLinkingDevice] = useState(false);
 
   const openDeviceLinkModal = async (userId: string, userName: string) => {
     setDeviceLinkModal({ isOpen: true, userId, userName });
+    setActiveDevicesError(null);
+    setDeviceSearchQuery('');
+    setDevicePlatformFilter('all');
+    setManualOneSignalId('');
     setLoadingActiveDevices(true);
     try {
       const res = await fetch('/api/onesignal-active-devices');
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
         setActiveDevicesList(Array.isArray(data?.devices) ? data.devices : []);
+      } else {
+        setActiveDevicesList([]);
+        setActiveDevicesError(data?.error || `Failed to load OneSignal devices (HTTP ${res.status}).`);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Could not load OneSignal devices:', e);
+      setActiveDevicesError(e?.message || 'Could not load OneSignal devices.');
     } finally {
       setLoadingActiveDevices(false);
     }
@@ -3215,19 +3228,21 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                   </div>
                 </div>
 
-                {/* Option 2: Select from Active OneSignal Devices */}
-                <div className="space-y-2 pt-1">
-                  <div className="flex items-center justify-between">
+                {/* Option 2: Select from All OneSignal Devices */}
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center justify-between gap-2">
                     <div>
-                      <span className="font-extrabold text-slate-800 text-xs block">Option B: Select Active Device</span>
+                      <span className="font-extrabold text-slate-800 text-xs block">
+                        Option B: Select OneSignal Subscription ID
+                      </span>
                       <p className="text-[11px] text-slate-500">
-                        Choose from registered active devices in your OneSignal app.
+                        Sorted by most recently active ({activeDevicesList.length} total loaded from OneSignal).
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => openDeviceLinkModal(deviceLinkModal.userId, deviceLinkModal.userName)}
-                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer shrink-0"
                       title="Reload devices list"
                     >
                       <RefreshCw className={cn("w-3 h-3", loadingActiveDevices && "animate-spin")} />
@@ -3235,74 +3250,223 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                     </button>
                   </div>
 
+                  {/* Search + Platform filter */}
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={deviceSearchQuery}
+                        onChange={(e) => setDeviceSearchQuery(e.target.value)}
+                        placeholder="Filter by Subscription ID, model, OS, or linked member..."
+                        className="w-full pl-8 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-400 focus:bg-white transition-colors"
+                      />
+                      {deviceSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setDeviceSearchQuery('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          aria-label="Clear filter"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
+                        {(['all', 'ios', 'android', 'web'] as const).map((plat) => {
+                          const count = activeDevicesList.filter((d: any) => {
+                            if (!showUnsubscribedDevices && d.isMessageable === false) return false;
+                            return plat === 'all' ? true : d.platform === plat;
+                          }).length;
+                          return (
+                            <button
+                              key={plat}
+                              type="button"
+                              onClick={() => setDevicePlatformFilter(plat)}
+                              className={cn(
+                                "px-2 py-1 rounded-md text-[10px] font-bold transition-colors cursor-pointer uppercase",
+                                devicePlatformFilter === plat
+                                  ? "bg-white text-blue-700 shadow-2xs"
+                                  : "text-slate-600 hover:text-slate-900"
+                              )}
+                            >
+                              {plat} ({count})
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <label className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={showUnsubscribedDevices}
+                          onChange={(e) => setShowUnsubscribedDevices(e.target.checked)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span>Include unsubscribed</span>
+                      </label>
+                    </div>
+                  </div>
+
                   {loadingActiveDevices ? (
                     <div className="py-8 flex flex-col items-center justify-center gap-2 text-slate-400">
                       <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                      <span className="text-[11px]">Loading active devices from OneSignal...</span>
+                      <span className="text-[11px]">Loading all devices from OneSignal...</span>
                     </div>
-                  ) : activeDevicesList.length === 0 ? (
-                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-500 text-[11px]">
-                      No messageable devices found in OneSignal. Make sure you opened the app and allowed notifications.
+                  ) : activeDevicesError ? (
+                    <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-[11px]">
+                      {activeDevicesError}
                     </div>
-                  ) : (
-                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                      {activeDevicesList.map((dev: any) => {
-                        const targetUser = activeUsersList.find(u => u.id === deviceLinkModal.userId);
-                        const isCurrent = targetUser?.onesignal_player_id?.includes(dev.id);
+                  ) : (() => {
+                    const q = deviceSearchQuery.trim().toLowerCase();
+                    const filteredDevices = activeDevicesList.filter((dev: any) => {
+                      if (!showUnsubscribedDevices && dev.isMessageable === false) return false;
+                      if (devicePlatformFilter !== 'all' && dev.platform !== devicePlatformFilter) return false;
+                      if (!q) return true;
+                      const linkedMember = dev.externalUserId
+                        ? activeUsersList.find((u) => u.id === dev.externalUserId)
+                        : null;
+                      const haystack = [
+                        dev.id,
+                        dev.model,
+                        dev.platform,
+                        dev.os,
+                        dev.externalUserId,
+                        linkedMember?.full_name,
+                        linkedMember?.email,
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
+                        .toLowerCase();
+                      return haystack.includes(q);
+                    });
 
-                        return (
-                          <div
-                            key={dev.id}
-                            className={cn(
-                              "p-3 rounded-xl border flex items-center justify-between gap-3 transition-all",
-                              isCurrent 
-                                ? "bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-500/20" 
-                                : "bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50/70"
-                            )}
-                          >
-                            <div className="min-w-0 space-y-0.5">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-slate-800 text-xs truncate">
-                                  {dev.platform === 'ios' ? ' ' : dev.platform === 'android' ? '🤖 ' : '🌐 '}
-                                  {dev.model}
-                                </span>
-                                <span className={cn(
-                                  "px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider",
-                                  dev.platform === 'ios' ? "bg-slate-100 text-slate-700" :
-                                  dev.platform === 'android' ? "bg-emerald-100 text-emerald-800" :
-                                  "bg-blue-100 text-blue-800"
-                                )}>
-                                  {dev.platform}
-                                </span>
-                                {isCurrent && (
-                                  <span className="px-1.5 py-0.2 bg-emerald-600 text-white rounded text-[9px] font-bold">
-                                    Current
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[10px] text-slate-500 font-mono truncate">
-                                ID: {dev.id} • {dev.sessionCount} sessions {dev.os ? `• OS ${dev.os}` : ''}
-                              </p>
-                            </div>
+                    if (filteredDevices.length === 0) {
+                      return (
+                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-500 text-[11px]">
+                          {activeDevicesList.length === 0
+                            ? 'No devices found in OneSignal. Make sure you opened the app and allowed notifications.'
+                            : 'No devices match your current filter. Try clearing search or enabling "Include unsubscribed".'}
+                        </div>
+                      );
+                    }
 
-                            <button
-                              type="button"
-                              disabled={isLinkingDevice}
-                              onClick={() => handleLinkDeviceToUser(deviceLinkModal.userId, dev.id)}
+                    const formatLastActive = (ts?: number) => {
+                      if (!ts) return '';
+                      const diffSec = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+                      if (diffSec < 60) return 'Active now';
+                      if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+                      if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+                      if (diffSec < 86400 * 30) return `${Math.floor(diffSec / 86400)}d ago`;
+                      return new Date(ts * 1000).toLocaleDateString();
+                    };
+
+                    return (
+                      <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                        {filteredDevices.map((dev: any) => {
+                          const targetUser = activeUsersList.find(u => u.id === deviceLinkModal.userId);
+                          const isCurrent = targetUser?.onesignal_player_id?.includes(dev.id);
+                          const linkedMember = dev.externalUserId
+                            ? activeUsersList.find((u) => u.id === dev.externalUserId)
+                            : null;
+                          const lastActiveLabel = formatLastActive(dev.lastActive);
+
+                          return (
+                            <div
+                              key={dev.id}
                               className={cn(
-                                "px-3 py-1.5 rounded-lg font-bold text-[11px] shrink-0 transition-all cursor-pointer",
+                                "p-3 rounded-xl border flex items-center justify-between gap-3 transition-all",
                                 isCurrent
-                                  ? "bg-emerald-600 text-white cursor-default"
-                                  : "bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700"
+                                  ? "bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-500/20"
+                                  : "bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50/70"
                               )}
                             >
-                              {isCurrent ? 'Paired ✓' : 'Pair to Member'}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                              <div className="min-w-0 space-y-0.5">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="font-bold text-slate-800 text-xs truncate">
+                                    {dev.platform === 'ios' ? ' ' : dev.platform === 'android' ? '🤖 ' : '🌐 '}
+                                    {dev.model}
+                                  </span>
+                                  <span className={cn(
+                                    "px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider",
+                                    dev.platform === 'ios' ? "bg-slate-100 text-slate-700" :
+                                    dev.platform === 'android' ? "bg-emerald-100 text-emerald-800" :
+                                    "bg-blue-100 text-blue-800"
+                                  )}>
+                                    {dev.platform}
+                                  </span>
+                                  {dev.isMessageable === false && (
+                                    <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded text-[9px] font-bold">
+                                      Unsubscribed
+                                    </span>
+                                  )}
+                                  {isCurrent && (
+                                    <span className="px-1.5 py-0.2 bg-emerald-600 text-white rounded text-[9px] font-bold">
+                                      Current
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-slate-500 font-mono truncate" title={dev.id}>
+                                  {dev.id}
+                                </p>
+                                <p className="text-[10px] text-slate-400 truncate">
+                                  {lastActiveLabel ? `${lastActiveLabel} · ` : ''}
+                                  {dev.sessionCount} sessions
+                                  {dev.os ? ` · OS ${dev.os}` : ''}
+                                  {linkedMember ? ` · Linked: ${linkedMember.full_name || linkedMember.email}` : ''}
+                                </p>
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={isLinkingDevice}
+                                onClick={() => handleLinkDeviceToUser(deviceLinkModal.userId, dev.id)}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-lg font-bold text-[11px] shrink-0 transition-all cursor-pointer",
+                                  isCurrent
+                                    ? "bg-emerald-600 text-white cursor-default"
+                                    : "bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700"
+                                )}
+                              >
+                                {isCurrent ? 'Paired ✓' : 'Pair to Member'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Option 3: Paste OneSignal Subscription ID Manually */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <div>
+                    <span className="font-extrabold text-slate-800 text-xs block">
+                      Option C: Paste a OneSignal Subscription ID Manually
+                    </span>
+                    <p className="text-[11px] text-slate-500">
+                      Copy a Subscription ID from OneSignal Dashboard → Audience → Subscriptions and pair it directly.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={manualOneSignalId}
+                      onChange={(e) => setManualOneSignalId(e.target.value)}
+                      placeholder="e.g. 9f2c8d1a-4b7e-4c12-9a10-123456789abc"
+                      className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-mono text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-400"
+                    />
+                    <button
+                      type="button"
+                      disabled={isLinkingDevice || !manualOneSignalId.trim()}
+                      onClick={() => handleLinkDeviceToUser(deviceLinkModal.userId, manualOneSignalId.trim())}
+                      className="px-3 py-2 bg-slate-800 hover:bg-blue-600 text-white font-bold text-[11px] rounded-lg transition-colors cursor-pointer disabled:opacity-40 shrink-0"
+                    >
+                      Pair ID
+                    </button>
+                  </div>
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1">

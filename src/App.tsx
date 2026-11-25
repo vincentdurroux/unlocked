@@ -5297,7 +5297,7 @@ export default function App() {
           style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
           className="bg-white px-4 md:px-6 pb-2 md:pt-3 md:pb-3 flex justify-between items-center border-b border-slate-100 flex-shrink-0 z-30 relative"
         >
-          <div className="flex items-center flex-1 min-w-0">
+          <div className="flex items-center shrink-0 lg:flex-1 lg:min-w-0">
             <div 
               onClick={() => navigateTo('home')}
               className="hover:opacity-80 transition-opacity cursor-pointer flex flex-col items-center md:items-start"
@@ -5333,8 +5333,8 @@ export default function App() {
           </nav>
           
           <div className="contents lg:flex lg:items-center lg:justify-end lg:gap-4 lg:flex-1">
-            {/* Header Weather Widget — centered on mobile, right-aligned on desktop */}
-            <div className="flex items-center justify-center shrink-0">
+            {/* Header Weather Widget — centered between logo and bell on mobile/tablet, right-aligned on desktop */}
+            <div className="flex items-center justify-center flex-1 min-w-0 px-2 lg:flex-initial lg:px-0">
               <HeaderWeatherWidget />
             </div>
 
@@ -5371,7 +5371,7 @@ export default function App() {
                </button>
             </div>
             {/* Notification Bell Button */}
-            <div className="flex items-center justify-end flex-1 lg:flex-initial">
+            <div className="flex items-center justify-end shrink-0">
               <div className="relative">
               <button 
                 onClick={() => {
@@ -5390,7 +5390,7 @@ export default function App() {
                   }
                 }}
                 aria-label="Notifications"
-                className="relative w-12 h-12 bg-transparent active:scale-95 transition-all flex items-center justify-center shrink-0 ml-2 group cursor-pointer border-0 p-0 outline-none overflow-visible"
+                className="relative w-12 h-12 bg-transparent active:scale-95 transition-all flex items-center justify-center shrink-0 lg:ml-2 group cursor-pointer border-0 p-0 outline-none overflow-visible"
               >
                 {/* Custom-designed golden bell with hardware-accelerated ringing animation */}
                 <div className={cn(
