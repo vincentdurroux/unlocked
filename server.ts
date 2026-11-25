@@ -7,6 +7,7 @@ import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import { Resend } from "resend";
 import dotenv from "dotenv";
 import { tavily } from "@tavily/core";
+import passkeyHandler from "./api/passkey";
 
 dotenv.config();
 
@@ -1339,6 +1340,14 @@ Ensure each event contains:
       keyPreview: restApiKey ? `${restApiKey.slice(0, 4)}...${restApiKey.slice(-4)}` : null
     };
   }
+
+  // Server-verified WebAuthn Passkey authentication endpoint
+  app.post("/api/passkey", (req, res) => {
+    passkeyHandler(req, res);
+  });
+  app.options("/api/passkey", (req, res) => {
+    passkeyHandler(req, res);
+  });
 
   // Secure OneSignal configuration endpoint (Server-side secrets protection)
   app.get("/api/onesignal-config", (req, res) => {

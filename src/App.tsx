@@ -125,7 +125,8 @@ import {
   Ghost,
   ArrowLeftRight,
   Archive,
-  ArchiveRestore
+  ArchiveRestore,
+  Fingerprint
 } from 'lucide-react';
 import { storageService } from './lib/storage';
 import { marketplaceService, Ad, AdDraft } from './services/marketplaceService';
@@ -143,8 +144,7 @@ import { chatService, Conversation, Message } from './services/chatService';
 import { searchService } from './services/searchService';
 import { pushNotificationService } from './services/pushNotificationService';
 import { oneSignalService } from './services/oneSignalService';
-import { biometricLockService, type BiometricLockStatus } from './services/biometricLockService';
-import { BiometricLockOverlay } from './components/BiometricLockOverlay';
+import { biometricLockService, type NativeIosFaceIdStatus, type PasskeyServerStatus } from './services/biometricLockService';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
 import { OneSignalVerificationDialog } from './components/OneSignalVerificationDialog';
 import { ForgotPasswordOTP } from './components/ForgotPasswordOTP';
@@ -6779,22 +6779,6 @@ export default function App() {
 
       {/* OneSignal SDK Verification Dialog (Mandatory AI Prompt Specification) */}
       <OneSignalVerificationDialog userId={currentUser?.id} />
-
-      {/* Local WebAuthn Biometric App Lock Overlay (Android PWABuilder TWA / mobile PWA) */}
-      <BiometricLockOverlay
-        currentUser={currentUser}
-        onSignOut={async () => {
-          try {
-            await oneSignalService.logoutUser();
-          } catch (_) {}
-          try {
-            await authService.signOut();
-          } catch (_) {}
-          setCurrentUser(null);
-          setUserProfile(null);
-          setActiveView('home');
-        }}
-      />
       </div>
     </APIProvider>
   );
@@ -13799,6 +13783,58 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
     }
   };
 
+  const [canUseBiometricSignIn, setCanUseBiometricSignIn] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    biometricLockService.isPasskeySupported().then((supported) => {
+      if (active) setCanUseBiometricSignIn(supported);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleBiometricLogin = async () => {
+    setIsLoading(true);
+    setMessage(null);
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('keep_me_signed_in', 'true');
+    }
+
+    try {
+      const { user } = await biometricLockService.signInWithPasskey();
+      if (user) {
+        onSetUser(user);
+        onLoginSuccess();
+      }
+    } catch (error: any) {
+      const errName = String(error?.name || '');
+      const errCode = String(error?.code || '');
+      if (errName === 'NotAllowedError' || errName === 'AbortError') {
+        setMessage({
+          type: 'error',
+          text: biometricLockService.hasLocalPasskeyHint()
+            ? 'Biometric sign-in was cancelled. Tap "Sign in with Biometrics" to try again.'
+            : 'No biometric passkey found on this device yet. Sign in once with Google, Apple, or Email, then enable Biometric Sign-In in Profile → Settings.',
+        });
+      } else if (errCode === 'PASSKEY_NOT_CONFIGURED' || errCode === 'PASSKEY_TABLE_MISSING') {
+        setMessage({
+          type: 'error',
+          text: 'Biometric Sign-In is almost ready—server setup is still pending.',
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: error?.message || 'Biometric sign-in failed. Please try another sign-in option.',
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const [showEmailForm, setShowEmailForm] = useState(false);
 
   return (
@@ -13939,6 +13975,21 @@ function LoginView({ onBack, onLoginSuccess, onSetUser, currentUser }: { onBack:
                     {isNewUser ? 'Sign up with Email' : 'Sign in with Email'}
                   </span>
                 </button>
+
+                {/* 3.5. Sign in with Biometrics (Passkey — Android PWABuilder TWA / supported devices) */}
+                {!isNewUser && canUseBiometricSignIn && (
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={handleBiometricLogin}
+                    className="w-full h-14 bg-white hover:bg-slate-50/60 border border-slate-200/90 hover:border-slate-300 text-slate-850 rounded-[24px] font-normal text-sm sm:text-base hover:shadow-xs transition-all disabled:opacity-50 flex items-center justify-center gap-3.5 overflow-hidden active:scale-[0.985] cursor-pointer"
+                  >
+                    <Fingerprint className="w-5 h-5 text-brand-blue flex-shrink-0" />
+                    <span className="font-semibold text-slate-700">
+                      Sign in with Biometrics
+                    </span>
+                  </button>
+                )}
 
                 {/* 4. Continue as Guest */}
                 <div className="pt-2 text-center">
@@ -24362,92 +24413,95 @@ function ProfileView({
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  // Unified Biometric App Lock (Native iOS Face ID / Touch ID + Native Android + WebAuthn for Android PWABuilder TWA)
-  const [biometricStatus, setBiometricStatus] = useState<BiometricLockStatus>(() =>
-    biometricLockService.getSyncStatus(currentUser?.id)
+  // Biometric Sign-In (Server-verified Passkey) + Optional Native iOS Face ID Lock
+  const [passkeyStatus, setPasskeyStatus] = useState<PasskeyServerStatus>({
+    supported: false,
+    configured: false,
+    enabled: false,
+    count: 0,
+  });
+  const [isUpdatingPasskey, setIsUpdatingPasskey] = useState(false);
+  const [passkeyMessage, setPasskeyMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [nativeIosFaceId, setNativeIosFaceId] = useState<NativeIosFaceIdStatus>(() =>
+    biometricLockService.getNativeIosFaceIdStatus()
   );
-  const [isUpdatingBiometric, setIsUpdatingBiometric] = useState(false);
-  const [biometricError, setBiometricError] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     let isMounted = true;
     const win = window as any;
 
-    const refreshStatus = async (incoming?: any) => {
+    const refreshNativeIos = (incoming?: any) => {
       if (incoming && typeof incoming === 'object') {
         win.__mcuBiometricAuth = { ...(win.__mcuBiometricAuth || {}), ...incoming };
       }
-      const resolved = await biometricLockService.resolveStatus(currentUser?.id);
       if (isMounted) {
-        setBiometricStatus(resolved);
+        setNativeIosFaceId(biometricLockService.getNativeIosFaceIdStatus());
       }
     };
 
-    const handleNativeEvent = (e: any) => {
-      refreshStatus(e?.detail);
-    };
-
-    win.__mcuSetBiometricAuthState = (incoming?: any) => {
-      refreshStatus(incoming);
-    };
+    const handleNativeEvent = (e: any) => refreshNativeIos(e?.detail);
+    win.__mcuSetBiometricAuthState = refreshNativeIos;
     window.addEventListener(biometricLockService.eventName, handleNativeEvent);
-    refreshStatus();
+    refreshNativeIos();
+
+    if (currentUser?.id) {
+      biometricLockService.getPasskeyStatus().then((status) => {
+        if (isMounted) setPasskeyStatus(status);
+      });
+    }
 
     return () => {
       isMounted = false;
       window.removeEventListener(biometricLockService.eventName, handleNativeEvent);
-      if (win.__mcuSetBiometricAuthState) {
+      if (win.__mcuSetBiometricAuthState === refreshNativeIos) {
         delete win.__mcuSetBiometricAuthState;
       }
     };
   }, [currentUser?.id]);
 
-  const handleToggleBiometricLock = async () => {
-    if (typeof window === 'undefined' || !biometricStatus.available || isUpdatingBiometric) return;
-    setBiometricError(null);
-    const nextEnabled = !biometricStatus.enabled;
+  const handleTogglePasskeySignIn = async () => {
+    if (!passkeyStatus.supported || isUpdatingPasskey || !currentUser?.id) return;
+    setPasskeyMessage(null);
+    setIsUpdatingPasskey(true);
 
-    if (biometricStatus.mode === 'native-ios') {
-      const bioType = biometricStatus.biometryType === 'touchId' ? 'touchId' : 'faceId';
-      biometricLockService.setNativeIosEnabled(nextEnabled, bioType);
-      setBiometricStatus((prev) => ({ ...prev, enabled: nextEnabled }));
-      return;
-    }
-
-    if (biometricStatus.mode === 'native-android') {
-      biometricLockService.setNativeAndroidEnabled(nextEnabled);
-      setBiometricStatus((prev) => ({ ...prev, enabled: nextEnabled }));
-      return;
-    }
-
-    if (biometricStatus.mode === 'webauthn') {
-      if (!nextEnabled) {
-        biometricLockService.disableWebAuthnLock();
-        setBiometricStatus((prev) => ({ ...prev, enabled: false }));
-        return;
-      }
-
-      if (!currentUser?.id) return;
-      setIsUpdatingBiometric(true);
-      try {
-        await biometricLockService.enableWebAuthnLock({
-          id: currentUser.id,
-          email: currentUser.email,
-          full_name: userProfile?.full_name,
+    try {
+      if (passkeyStatus.enabled) {
+        await biometricLockService.removePasskeys();
+        setPasskeyStatus((prev) => ({ ...prev, enabled: false, count: 0 }));
+        setPasskeyMessage({ type: 'success', text: 'Biometric Sign-In disabled for your account.' });
+      } else {
+        await biometricLockService.registerPasskey();
+        setPasskeyStatus((prev) => ({ ...prev, configured: true, enabled: true, count: prev.count + 1 }));
+        setPasskeyMessage({
+          type: 'success',
+          text: 'Biometric Sign-In enabled! Next time, tap "Sign in with Biometrics" on the login screen.',
         });
-        setBiometricStatus((prev) => ({ ...prev, enabled: true }));
-      } catch (err: any) {
-        const name = String(err?.name || '');
-        if (name === 'NotAllowedError' || name === 'AbortError') {
-          setBiometricError('Setup cancelled. Verify with your fingerprint, face, or PIN to enable.');
-        } else {
-          setBiometricError(err?.message || 'Could not enable biometric lock on this device.');
-        }
-      } finally {
-        setIsUpdatingBiometric(false);
       }
+    } catch (err: any) {
+      const name = String(err?.name || '');
+      if (name === 'NotAllowedError' || name === 'AbortError') {
+        setPasskeyMessage({
+          type: 'error',
+          text: 'Biometric setup cancelled. Verify with your fingerprint, face, or PIN to enable.',
+        });
+      } else {
+        setPasskeyMessage({
+          type: 'error',
+          text: err?.message || 'Could not update Biometric Sign-In on this device.',
+        });
+      }
+    } finally {
+      setIsUpdatingPasskey(false);
     }
+  };
+
+  const handleToggleNativeIosFaceId = () => {
+    if (!nativeIosFaceId.available) return;
+    const nextEnabled = !nativeIosFaceId.enabled;
+    biometricLockService.setNativeIosEnabled(nextEnabled, nativeIosFaceId.type);
+    setNativeIosFaceId((prev) => ({ ...prev, enabled: nextEnabled }));
   };
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -26373,38 +26427,73 @@ function ProfileView({
                 ))}
               </div>
 
-              {/* Biometric App Lock Section (iOS Face ID / Touch ID + Android PWABuilder Biometric Lock) */}
-              {biometricStatus.available && (
+              {/* Biometric Sign-In (Passkey) Section */}
+              {passkeyStatus.supported && (
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                   <div className="p-6 space-y-3">
                     <div className="flex items-center justify-between gap-4">
                       <div className="space-y-1">
-                        <p className="font-bold text-slate-900">{biometricStatus.label}</p>
-                        <p className="text-xs text-slate-500">{biometricStatus.description}</p>
+                        <p className="font-bold text-slate-900">Biometric Sign-In</p>
+                        <p className="text-xs text-slate-500">
+                          Sign in faster on this device using your fingerprint, face, or passkey
+                        </p>
                       </div>
                       <button
                         type="button"
                         role="switch"
-                        aria-checked={biometricStatus.enabled}
-                        aria-label={`Toggle ${biometricStatus.label}`}
-                        disabled={isUpdatingBiometric}
-                        onClick={handleToggleBiometricLock}
+                        aria-checked={passkeyStatus.enabled}
+                        aria-label="Toggle Biometric Sign-In"
+                        disabled={isUpdatingPasskey}
+                        onClick={handleTogglePasskeySignIn}
                         className={cn(
                           "w-12 h-6 rounded-full relative transition-colors cursor-pointer shrink-0 disabled:opacity-50",
-                          biometricStatus.enabled ? "bg-brand-blue" : "bg-slate-200"
+                          passkeyStatus.enabled ? "bg-brand-blue" : "bg-slate-200"
                         )}
                       >
                         <div className={cn(
                           "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all",
-                          biometricStatus.enabled ? "right-1" : "left-1"
+                          passkeyStatus.enabled ? "right-1" : "left-1"
                         )} />
                       </button>
                     </div>
-                    {biometricError && (
-                      <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200/80 rounded-xl px-3 py-2">
-                        {biometricError}
+                    {passkeyMessage && (
+                      <p className={cn(
+                        "text-xs font-medium rounded-xl px-3 py-2 border",
+                        passkeyMessage.type === 'success'
+                          ? "text-emerald-700 bg-emerald-50 border-emerald-200/80"
+                          : "text-amber-700 bg-amber-50 border-amber-200/80"
+                      )}>
+                        {passkeyMessage.text}
                       </p>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Optional Native iOS Face ID App Lock (only shown when Xcode faceIdSettings bridge is present) */}
+              {nativeIosFaceId.available && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                  <div className="p-6 flex items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <p className="font-bold text-slate-900">{nativeIosFaceId.label}</p>
+                      <p className="text-xs text-slate-500">{nativeIosFaceId.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={nativeIosFaceId.enabled}
+                      aria-label={`Toggle ${nativeIosFaceId.label}`}
+                      onClick={handleToggleNativeIosFaceId}
+                      className={cn(
+                        "w-12 h-6 rounded-full relative transition-colors cursor-pointer shrink-0",
+                        nativeIosFaceId.enabled ? "bg-brand-blue" : "bg-slate-200"
+                      )}
+                    >
+                      <div className={cn(
+                        "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all",
+                        nativeIosFaceId.enabled ? "right-1" : "left-1"
+                      )} />
+                    </button>
                   </div>
                 </div>
               )}
