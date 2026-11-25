@@ -23,12 +23,8 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
 
     if (typeof window === 'undefined') return;
 
-    // Do NOT request or prompt for Web Push in standard desktop/mobile web browsers
     const dev = oneSignalService.getDeviceInfo();
     const isIOSNative = dev.isIOSWebView || dev.hasIOSPushBridge;
-    if (!dev.isNativeWrapper && !isIOSNative) {
-      return;
-    }
 
     if (isIOSNative) {
       // In iOS WKWebView, window.Notification is absent — rely exclusively on native push-permission-state
