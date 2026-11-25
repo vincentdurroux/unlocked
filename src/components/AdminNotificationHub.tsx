@@ -326,6 +326,61 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
   const [loadingActiveDevices, setLoadingActiveDevices] = useState(false);
   const [isLinkingDevice, setIsLinkingDevice] = useState(false);
 
+  // Admin-only iOS / OneSignal Push Diagnostics Modal state
+  const [diagModalOpen, setDiagModalOpen] = useState(false);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagClientData, setDiagClientData] = useState<any | null>(null);
+  const [diagServerData, setDiagServerData] = useState<any | null>(null);
+  const [diagServerError, setDiagServerError] = useState<string | null>(null);
+  const [diagCopied, setDiagCopied] = useState(false);
+
+  const runPushDiagnostics = async (retriggerLogin = false) => {
+    setDiagLoading(true);
+    setDiagServerError(null);
+    try {
+      let currentUid: string | undefined;
+      if (isSupabaseConfigured) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        currentUid = sessionData?.session?.user?.id;
+      }
+
+      if (retriggerLogin && currentUid) {
+        oneSignalService.requestNativeSubscriptionState();
+        await oneSignalService.loginUser(currentUid);
+        await new Promise((r) => setTimeout(r, 400));
+      }
+
+      const clientDiag = await oneSignalService.getFullDiagnostics(currentUid);
+      setDiagClientData(clientDiag);
+
+      const effectiveUid = currentUid || clientDiag.currentUserId;
+      if (effectiveUid) {
+        try {
+          const serverStatus = await oneSignalService.fetchServerUserStatus(effectiveUid);
+          setDiagServerData(serverStatus);
+        } catch (err: any) {
+          setDiagServerData(null);
+          setDiagServerError(err?.message || 'Could not reach OneSignal server status endpoint.');
+        }
+      } else {
+        setDiagServerData(null);
+        setDiagServerError('No authenticated Supabase user session detected.');
+      }
+
+      const refreshedClient = await oneSignalService.getFullDiagnostics(effectiveUid);
+      setDiagClientData(refreshedClient);
+    } catch (e: any) {
+      setDiagServerError(e?.message || 'Diagnostics error');
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
+  const openDiagnosticsModal = () => {
+    setDiagModalOpen(true);
+    runPushDiagnostics(false);
+  };
+
   const openDeviceLinkModal = async (userId: string, userName: string) => {
     setDeviceLinkModal({ isOpen: true, userId, userName });
     setActiveDevicesError(null);
@@ -946,6 +1001,14 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
               </p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={openDiagnosticsModal}
+            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-2 self-start sm:self-auto cursor-pointer transition-colors shrink-0"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+            <span>Push Diagnostics</span>
+          </button>
         </div>
 
         {/* Navigation Sub-Tabs */}
@@ -3482,6 +3545,307 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                   disabled={isLinkingDevice}
                   onClick={() => setDeviceLinkModal(null)}
                   className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl cursor-pointer transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>,
+      document.body
+    )}
+
+    {/* Admin-Only Push & iOS OneSignal Diagnostics Modal */}
+    {typeof document !== 'undefined' && createPortal(
+      <AnimatePresence>
+        {diagModalOpen && (
+          <div className="fixed inset-0 z-[100001] flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              {/* Header */}
+              <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center shrink-0">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-bold text-sm leading-tight truncate">OneSignal Push Diagnostics</h4>
+                    <p className="text-[11px] text-slate-400 truncate">SDK Init · Permission · Subscription Token · External ID</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDiagModalOpen(false)}
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Action Bar */}
+              <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={diagLoading}
+                  onClick={() => runPushDiagnostics(false)}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={cn("w-3.5 h-3.5", diagLoading && "animate-spin")} />
+                  <span>Refresh Check</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={diagLoading}
+                  onClick={() => runPushDiagnostics(true)}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Re-sync Login & State</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const report = JSON.stringify({ client: diagClientData, server: diagServerData, serverError: diagServerError }, null, 2);
+                    navigator.clipboard?.writeText(report).then(() => {
+                      setDiagCopied(true);
+                      setTimeout(() => setDiagCopied(false), 2000);
+                    }).catch(() => {});
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer ml-auto"
+                >
+                  {diagCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <ExternalLink className="w-3.5 h-3.5" />}
+                  <span>{diagCopied ? 'Copied JSON' : 'Copy JSON'}</span>
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 overflow-y-auto space-y-4 text-xs text-slate-700">
+                {diagLoading && !diagClientData ? (
+                  <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Running OneSignal & server diagnostics...</span>
+                  </div>
+                ) : diagClientData ? (
+                  <>
+                    {/* 4-Step Checklist Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* 1. SDK & Environment */}
+                      <div className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-slate-900">1. SDK & Environment</span>
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase",
+                            diagClientData.isInit ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                          )}>
+                            {diagClientData.isInit ? 'Initialized' : 'Not Init'}
+                          </span>
+                        </div>
+                        <p><span className="text-slate-400">Mode:</span> <strong className="font-mono">{diagClientData.environment}</strong></p>
+                        <p className="truncate"><span className="text-slate-400">App ID:</span> <strong className="font-mono text-[11px]">{diagClientData.appId}</strong></p>
+                        <p><span className="text-slate-400">Host:</span> <span className="font-mono">{diagClientData.host || 'n/a'}</span></p>
+                        {diagClientData.environment === 'ios-wkwebview' && (
+                          <div className="pt-1 border-t border-slate-200/70">
+                            <span className="text-[10px] font-bold text-slate-500 block">Xcode WebKit Handlers detected:</span>
+                            <span className="font-mono text-[10px] text-slate-800 break-all">
+                              {diagClientData.registeredWebKitHandlers?.length > 0
+                                ? diagClientData.registeredWebKitHandlers.join(', ')
+                                : 'None detected'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 2. Push Permission */}
+                      <div className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-slate-900">2. Push Permission</span>
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase",
+                            diagClientData.permission === 'granted' ? "bg-emerald-100 text-emerald-700" :
+                            diagClientData.permission === 'denied' ? "bg-rose-100 text-rose-700" :
+                            "bg-amber-100 text-amber-700"
+                          )}>
+                            {diagClientData.permission}
+                          </span>
+                        </div>
+                        <p><span className="text-slate-400">Native state:</span> <strong className="font-mono">{diagClientData.nativePushPermissionState}</strong></p>
+                        <p><span className="text-slate-400">Raw Xcode detail:</span> <span className="font-mono text-[10px] break-all">{diagClientData.nativeRawPermissionDetail !== null ? JSON.stringify(diagClientData.nativeRawPermissionDetail) : 'none yet'}</span></p>
+                        <p><span className="text-slate-400">Native optedIn:</span> <strong className="font-mono">{diagClientData.nativeOptedIn === null ? 'not reported by Xcode' : String(diagClientData.nativeOptedIn)}</strong></p>
+                      </div>
+
+                      {/* 3. Subscription ID & Token */}
+                      <div className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-slate-900">3. Subscription & Token</span>
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase",
+                            (diagClientData.subscriptionId || diagServerData?.hasPushSubscribedIOS)
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          )}>
+                            {diagServerData?.hasPushSubscribedIOS ? 'Push Subscribed' : diagClientData.subscriptionId ? 'ID Present' : 'Missing'}
+                          </span>
+                        </div>
+                        <p className="break-all"><span className="text-slate-400">Local Sub ID:</span> <strong className="font-mono text-[10px]">{diagClientData.subscriptionId || 'null (not sent by Xcode)'}</strong></p>
+                        <p><span className="text-slate-400">APNs Token:</span> <span className="font-mono text-[10px]">{diagClientData.nativePushTokenPreview || 'not reported to JS'}</span></p>
+                        <p className="break-all"><span className="text-slate-400">Supabase saved ID:</span> <span className="font-mono text-[10px]">{diagClientData.supabaseSavedPlayerId || 'empty'}</span></p>
+                      </div>
+
+                      {/* 4. External ID Association */}
+                      <div className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-slate-900">4. External ID Link</span>
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase",
+                            diagServerData?.hasPushSubscribedIOS
+                              ? "bg-emerald-100 text-emerald-700"
+                              : diagClientData.hasNativeLoginHandler || diagClientData.environment !== 'ios-wkwebview'
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-rose-100 text-rose-700"
+                          )}>
+                            {diagServerData?.hasPushSubscribedIOS ? 'Linked & Subscribed' : diagClientData.environment === 'ios-wkwebview' && !diagClientData.hasNativeLoginHandler ? 'Bridge Missing' : 'Unverified'}
+                          </span>
+                        </div>
+                        <p className="break-all"><span className="text-slate-400">Supabase UID:</span> <strong className="font-mono text-[10px]">{diagClientData.currentUserId || 'not logged in'}</strong></p>
+                        <p><span className="text-slate-400">Native login handlers called:</span> <span className="font-mono text-[10px]">{diagClientData.lastLoginHandlersCalled?.length > 0 ? diagClientData.lastLoginHandlersCalled.join(', ') : 'NONE'}</span></p>
+                        {diagClientData.environment === 'ios-wkwebview' && !diagClientData.hasNativeLoginHandler && (
+                          <p className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-2">
+                            Xcode has no login messageHandler registered (e.g. "onesignal-login"). Swift never receives the Supabase user ID to call OneSignal.login(userId).
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* OneSignal Server Verification */}
+                    <div className="p-4 rounded-2xl border border-slate-200 bg-white space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-slate-900 text-xs">OneSignal Server Verification (Live API)</span>
+                        {diagServerData && (
+                          <span className="text-[10px] font-mono text-slate-500">
+                            Total iOS devices in app: {diagServerData.totalIOSDevices}
+                          </span>
+                        )}
+                      </div>
+
+                      {diagServerError && (
+                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-semibold">
+                          {diagServerError}
+                        </div>
+                      )}
+
+                      {diagServerData && (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap gap-2 text-[11px]">
+                            <span className={cn("px-2.5 py-1 rounded-lg font-bold", diagServerData.userFound ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200")}>
+                              User found by external_id: {diagServerData.userFound ? 'YES' : `NO (HTTP ${diagServerData.lookupStatus})`}
+                            </span>
+                            <span className={cn("px-2.5 py-1 rounded-lg font-bold", diagServerData.hasPushSubscribedIOS ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200")}>
+                              iOS Push Subscribed: {diagServerData.hasPushSubscribedIOS ? 'YES' : 'NO'}
+                            </span>
+                          </div>
+
+                          {diagServerData.subscriptions?.length > 0 ? (
+                            <div className="space-y-1.5">
+                              <span className="text-[11px] font-bold text-slate-600 block">Subscriptions attached to your external_id:</span>
+                              {diagServerData.subscriptions.map((s: any) => (
+                                <div key={s.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-mono text-[10px] space-y-0.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-bold text-slate-900">{s.type} · {s.deviceModel || 'Device'} ({s.deviceOs || 'OS'})</span>
+                                    <span className={cn("px-1.5 py-0.5 rounded font-bold", s.isPushSubscribed ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>
+                                      {s.isPushSubscribed ? 'PUSH SUBSCRIBED' : 'NOT SUBSCRIBED'}
+                                    </span>
+                                  </div>
+                                  <div className="text-slate-600 break-all">Sub ID: {s.id}</div>
+                                  <div className="text-slate-500">Token: {s.tokenPresent ? s.tokenPreview : 'MISSING (no APNs/push token!)'} · enabled={String(s.enabled)} · notifTypes={String(s.notificationTypes ?? 'n/a')}</div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-slate-500">
+                              No subscriptions are currently attached to your external_id on OneSignal.
+                            </p>
+                          )}
+
+                          {/* Recent Anonymous iOS Devices */}
+                          {diagServerData.recentAnonymousIOS?.length > 0 && (
+                            <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                              <span className="text-[11px] font-bold text-amber-700 block">
+                                ⚠️ Recent Anonymous iOS Devices in OneSignal (no external_id yet):
+                              </span>
+                              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                                {diagServerData.recentAnonymousIOS.map((dev: any) => (
+                                  <div key={dev.id} className="p-2.5 rounded-xl bg-amber-50/60 border border-amber-200 flex items-center justify-between gap-2">
+                                    <div className="min-w-0 font-mono text-[10px]">
+                                      <div className="font-bold text-slate-900 truncate">
+                                        {dev.deviceModel} (iOS {dev.deviceOs || '?'}) · {dev.isPushSubscribed ? '✅ Subscribed' : '❌ No Token / Opted Out'}
+                                      </div>
+                                      <div className="text-slate-600 truncate">ID: {dev.id}</div>
+                                      <div className="text-slate-500">
+                                        Token: {dev.tokenPresent ? dev.tokenPreview : 'NONE'} · Active: {dev.lastActive ? new Date(dev.lastActive * 1000).toLocaleString() : 'n/a'}
+                                      </div>
+                                    </div>
+                                    {diagClientData.currentUserId && (
+                                      <button
+                                        type="button"
+                                        disabled={isLinkingDevice}
+                                        onClick={async () => {
+                                          await handleLinkDeviceToUser(diagClientData.currentUserId, dev.id);
+                                          await runPushDiagnostics(false);
+                                        }}
+                                        className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-blue-600 text-white text-[10px] font-bold shrink-0 cursor-pointer disabled:opacity-50"
+                                      >
+                                        Link to My ID
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Live Diagnostic Log Timeline */}
+                    <div className="p-3.5 rounded-2xl border border-slate-200 bg-slate-950 text-slate-100 space-y-2">
+                      <span className="font-bold text-[11px] text-amber-300 block">Diagnostic Event Timeline ({diagClientData.logs?.length || 0})</span>
+                      <div className="max-h-44 overflow-y-auto space-y-1 font-mono text-[10px]">
+                        {(diagClientData.logs || []).length === 0 ? (
+                          <div className="text-slate-400">No events logged yet.</div>
+                        ) : (
+                          [...(diagClientData.logs || [])].reverse().map((log: any, idx: number) => (
+                            <div key={idx} className="border-b border-slate-800/80 pb-1">
+                              <span className="text-slate-500">{String(log.ts).slice(11, 19)}</span>{' '}
+                              <span className={cn(
+                                "font-bold uppercase",
+                                log.level === 'ok' ? 'text-emerald-400' :
+                                log.level === 'warn' ? 'text-amber-400' :
+                                log.level === 'error' ? 'text-rose-400' : 'text-sky-400'
+                              )}>[{log.step}]</span>{' '}
+                              <span>{log.message}</span>
+                              {log.data && (
+                                <div className="text-slate-400 pl-3 break-all">{JSON.stringify(log.data)}</div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDiagModalOpen(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
                 >
                   Close
                 </button>

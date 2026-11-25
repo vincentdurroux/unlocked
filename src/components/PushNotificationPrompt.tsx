@@ -30,6 +30,7 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
       // In iOS WKWebView, window.Notification is absent — rely exclusively on native push-permission-state
       const cachedState = oneSignalService.getCachedNativePushPermissionState();
       if (cachedState === 'granted') {
+        oneSignalService.loginUser(currentUserId).catch(() => {});
         onSubscribed?.();
         return;
       }
@@ -59,6 +60,7 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
       if (isIOSNative) {
         const latestState = oneSignalService.getCachedNativePushPermissionState();
         if (latestState === 'granted') {
+          oneSignalService.loginUser(currentUserId).catch(() => {});
           onSubscribed?.();
           return;
         }
@@ -92,6 +94,7 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
         if (state === 'granted') {
           window.removeEventListener('click', triggerSystemPrompt);
           window.removeEventListener('touchend', triggerSystemPrompt);
+          oneSignalService.loginUser(currentUserId).catch(() => {});
           onSubscribed?.();
         } else if (state === 'denied') {
           window.removeEventListener('click', triggerSystemPrompt);

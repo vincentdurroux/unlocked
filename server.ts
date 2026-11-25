@@ -1541,7 +1541,7 @@ Ensure each event contains:
     }
   });
 
-  // Endpoint to link a member to a OneSignal player
+  // Endpoint to link a member to a OneSignal subscription (v2 User Model + v1 fallback)
   app.post("/api/onesignal-link-device", async (req, res) => {
     try {
       const { userId, playerId } = req.body || {};
@@ -1554,12 +1554,45 @@ Ensure each event contains:
         return res.status(400).json({ error: "OneSignal is not configured yet." });
       }
 
-      const auth = config.restApiKey.startsWith("os_v2_") ? `Bearer ${config.restApiKey}` : `Basic ${config.restApiKey}`;
+      const v2Auth = config.restApiKey.startsWith("os_v2_") ? `Key ${config.restApiKey}` : `Basic ${config.restApiKey}`;
+      const v1Auth = config.restApiKey.startsWith("os_v2_") ? `Bearer ${config.restApiKey}` : `Basic ${config.restApiKey}`;
+
+      let v2Success = false;
+      let v2Error: any = null;
+      try {
+        const v2Res = await fetch(
+          `https://api.onesignal.com/apps/${encodeURIComponent(config.appId)}/subscriptions/${encodeURIComponent(playerId)}/owner`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": v2Auth
+            },
+            body: JSON.stringify({
+              identity: {
+                external_id: userId
+              }
+            })
+          }
+        );
+        if (v2Res.ok) {
+          v2Success = true;
+        } else {
+          v2Error = await v2Res.json().catch(() => ({ status: v2Res.status }));
+        }
+      } catch (e: any) {
+        v2Error = e?.message || 'v2 transfer error';
+      }
+
+      if (v2Success) {
+        return res.json({ success: true, playerId, userId, apiVersion: 'v2' });
+      }
+
       const response = await fetch(`https://onesignal.com/api/v1/players/${encodeURIComponent(playerId)}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": auth
+          "Authorization": v1Auth
         },
         body: JSON.stringify({
           app_id: config.appId,
@@ -1567,14 +1600,144 @@ Ensure each event contains:
         })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        return res.status(response.status).json({ error: data?.errors || "Could not link device in OneSignal." });
+        return res.status(response.status).json({
+          error: data?.errors || v2Error?.errors || "Could not link device in OneSignal.",
+          v2Error
+        });
       }
 
-      return res.json({ success: true, playerId, userId });
+      return res.json({ success: true, playerId, userId, apiVersion: 'v1' });
     } catch (err: any) {
       return res.status(500).json({ error: err.message || "Error linking device." });
+    }
+  });
+
+  // Diagnostic endpoint: verify OneSignal external_id, Push subscribed state, token, and recent anonymous iOS devices
+  app.get("/api/onesignal-user-status", async (req, res) => {
+    try {
+      const userId = typeof req.query?.userId === 'string' ? req.query.userId.trim() : '';
+      if (!userId) {
+        return res.status(400).json({ error: 'userId query parameter is required.' });
+      }
+
+      const config = getActiveOneSignalConfig();
+      if (!config.restApiKey || !config.appId) {
+        return res.status(400).json({ error: 'OneSignal is not configured on the server.' });
+      }
+
+      const v2Auth = config.restApiKey.startsWith("os_v2_") ? `Key ${config.restApiKey}` : `Basic ${config.restApiKey}`;
+      const v1Auth = config.restApiKey.startsWith("os_v2_") ? `Bearer ${config.restApiKey}` : `Basic ${config.restApiKey}`;
+
+      let userFound = false;
+      let onesignalId: string | null = null;
+      let subscriptions: any[] = [];
+      let lookupStatus = 0;
+      let lookupError: string | null = null;
+
+      try {
+        const userRes = await fetch(
+          `https://api.onesignal.com/apps/${encodeURIComponent(config.appId)}/users/by/external_id/${encodeURIComponent(userId)}`,
+          {
+            headers: {
+              "Authorization": v2Auth,
+              "Accept": "application/json"
+            }
+          }
+        );
+        lookupStatus = userRes.status;
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          userFound = true;
+          onesignalId = userData?.identity?.onesignal_id || null;
+          subscriptions = Array.isArray(userData?.subscriptions)
+            ? userData.subscriptions.map((sub: any) => ({
+                id: sub.id,
+                type: sub.type || 'Unknown',
+                enabled: Boolean(sub.enabled),
+                notificationTypes: sub.notification_types,
+                tokenPresent: Boolean(sub.token),
+                tokenPreview: sub.token ? `${String(sub.token).slice(0, 10)}…${String(sub.token).slice(-6)}` : null,
+                isPushSubscribed: Boolean(sub.enabled) && Boolean(sub.token) && (sub.notification_types === undefined || Number(sub.notification_types) > 0),
+                sdk: sub.sdk || null,
+                deviceModel: sub.device_model || null,
+                deviceOs: sub.device_os || null,
+                appVersion: sub.app_version || null,
+                lastActive: sub.last_active || null
+              }))
+            : [];
+        } else if (userRes.status !== 404) {
+          const errJson = await userRes.json().catch(() => ({}));
+          lookupError = JSON.stringify(errJson?.errors || errJson || `HTTP ${userRes.status}`);
+        }
+      } catch (e: any) {
+        lookupError = e?.message || 'Failed to query OneSignal v2 user endpoint';
+      }
+
+      let recentAnonymousIOS: any[] = [];
+      let recentLinkedIOSFromPlayers: any[] = [];
+      let totalIOSDevices = 0;
+
+      try {
+        const playersRes = await fetch(
+          `https://onesignal.com/api/v1/players?app_id=${encodeURIComponent(config.appId)}&limit=300&offset=0`,
+          { headers: { "Authorization": v1Auth } }
+        );
+        if (playersRes.ok) {
+          const playersData = await playersRes.json();
+          const players = Array.isArray(playersData?.players) ? playersData.players : [];
+          const iosPlayers = players
+            .filter((p: any) => p.device_type === 0 && !p.invalid_identifier)
+            .sort((a: any, b: any) => (b.last_active || 0) - (a.last_active || 0));
+
+          totalIOSDevices = iosPlayers.length;
+
+          const mapPlayer = (p: any) => ({
+            id: p.id,
+            externalUserId: p.external_user_id || null,
+            tokenPresent: Boolean(p.identifier),
+            tokenPreview: p.identifier ? `${String(p.identifier).slice(0, 10)}…${String(p.identifier).slice(-6)}` : null,
+            notificationTypes: p.notification_types,
+            isPushSubscribed: Boolean(p.identifier) && Number(p.notification_types ?? 1) > 0,
+            deviceModel: p.device_model || 'iPhone',
+            deviceOs: p.device_os || '',
+            sdk: p.sdk || '',
+            appVersion: p.game_version || '',
+            lastActive: p.last_active || null,
+            createdAt: p.created_at || null
+          });
+
+          recentAnonymousIOS = iosPlayers
+            .filter((p: any) => !p.external_user_id)
+            .slice(0, 8)
+            .map(mapPlayer);
+
+          recentLinkedIOSFromPlayers = iosPlayers
+            .filter((p: any) => p.external_user_id === userId)
+            .map(mapPlayer);
+        }
+      } catch (_) {}
+
+      const hasPushSubscribedIOS =
+        subscriptions.some((s) => /ios/i.test(String(s.type)) && s.isPushSubscribed) ||
+        recentLinkedIOSFromPlayers.some((p) => p.isPushSubscribed);
+
+      return res.json({
+        appId: config.appId,
+        externalId: userId,
+        userFound,
+        lookupStatus,
+        lookupError,
+        onesignalId,
+        subscriptions,
+        hasPushSubscribedIOS,
+        totalIOSDevices,
+        recentAnonymousIOS,
+        recentLinkedIOSFromPlayers
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Error checking OneSignal user status.' });
     }
   });
 

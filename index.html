@@ -78,6 +78,22 @@
         document.addEventListener('push-permission-state', handlePermissionState);
         window.addEventListener('push-permission-request', handlePermissionState);
         document.addEventListener('push-permission-request', handlePermissionState);
+
+        var handleNativePushInfo = function(e) {
+          if (e && e.__mcuPushInfoHandled) return;
+          if (e) {
+            try { e.__mcuPushInfoHandled = true; } catch (_) {}
+          }
+          var detail = e && e.detail !== undefined ? e.detail : e;
+          window.__mcuLastNativePushInfo = detail;
+          if (typeof window.__mcuOnNativePushInfo === 'function') {
+            try { window.__mcuOnNativePushInfo(detail); } catch (_) {}
+          }
+        };
+        ['OneSignalSubscriptionReady', 'native-onesignal-subscription', 'onesignal-subscription-id', 'onesignal-state', 'push-subscription', 'push-token', 'push-notification-token'].forEach(function(evtName) {
+          window.addEventListener(evtName, handleNativePushInfo);
+          document.addEventListener(evtName, handleNativePushInfo);
+        });
       })();
     </script>
     <!-- OneSignal Web SDK v16 -->
@@ -86,6 +102,18 @@
       window.OneSignalDeferred = window.OneSignalDeferred || [];
       OneSignalDeferred.push(async function(OneSignal) {
         try {
+          var ua = navigator.userAgent || '';
+          var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+          var isIOSWKWebView = !!(isIOS && (
+            (window.webkit && window.webkit.messageHandlers) ||
+            ua.indexOf('WKWebView') !== -1 ||
+            (!/Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua) && window.navigator.standalone !== true)
+          ));
+          if (isIOSWKWebView) {
+            console.info('[OneSignal:Diag][init] iOS WKWebView detected in index.html — skipping Web SDK init (native iOS SDK / APNs bridge required).');
+            return;
+          }
+
           var configuredAppId = "%NEXT_PUBLIC_ONESIGNAL_APP_ID%";
           if (!configuredAppId || configuredAppId.indexOf("%") !== -1) {
             configuredAppId = "10a14311-a42a-4681-9682-ce965d80ae75";
@@ -118,7 +146,7 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      if ('serviceWorker' in navigator) {
+      if ('serviceWorker' in navigator && !(window.webkit && window.webkit.messageHandlers)) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/OneSignalSDKWorker.js', { scope: '/' })
             .then((reg) => console.log('[Service Worker] Registered successfully:', reg.scope))
