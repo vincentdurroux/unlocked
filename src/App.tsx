@@ -15858,50 +15858,6 @@ function HomeView({
         </div>
       </div>
 
-
-
-      {/* Why people love Unlocked Section (visible only on tablet & desktop) */}
-      <div className="hidden md:block space-y-8 md:space-y-12 py-4">
-        <h3 className="font-semibold text-2xl font-display text-brand-navy flex items-center gap-2">
-          <Heart className="w-6 h-6 text-brand-blue" />
-          Why people love Unlocked
-        </h3>
-        
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 max-w-5xl mx-auto">
-          {[
-            {
-              title: "Community powered",
-              desc: "Real recommendations from real people like you.",
-              icon: <Users className="w-6 h-6 md:w-8 md:h-8 text-emerald-500" />,
-              bg: "bg-emerald-50/50",
-              className: ""
-            },
-            {
-              title: "Trust-based recommendations",
-              desc: "Reviewed by members.",
-              icon: <ShieldCheck className="w-6 h-6 md:w-8 md:h-8 text-blue-500" />,
-              bg: "bg-blue-50/50",
-              className: ""
-            },
-            {
-              title: "Local first",
-              desc: "Focused on what matters in your city and neighborhood.",
-              icon: <MapPin className="w-6 h-6 md:w-8 md:h-8 text-amber-500" />,
-              bg: "bg-amber-50/50",
-              className: "col-span-2 justify-self-center w-[calc(50%-0.375rem)] md:col-span-1 md:w-full md:justify-self-stretch"
-            }
-          ].map((item, idx) => (
-            <div key={idx} className={`bg-white p-4 md:p-8 lg:p-10 rounded-3xl border border-slate-100 flex flex-col items-center text-center space-y-3 md:space-y-5 shadow-sm hover:shadow-md transition-shadow ${item.className}`}>
-              <div className={`w-12 h-12 md:w-16 md:h-16 rounded-full ${item.bg} flex items-center justify-center`}>
-                {item.icon}
-              </div>
-              <h4 className="font-bold text-slate-900 text-xs md:text-base leading-tight">{item.title}</h4>
-              <p className="text-[10px] md:text-sm text-slate-500 leading-relaxed">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {onReturnToWebsite && (
         <div className="xl:hidden pt-4 pb-2 flex justify-center">
           <button

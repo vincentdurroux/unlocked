@@ -626,12 +626,24 @@ const HERO_AMBIENT_PINS: Array<{
   left: string;
   color: string;
   rating?: string;
+  label?: string;
 }> = [
-  { id: 'amb-1', top: '19%', left: '62%', color: '#0038FF', rating: '4.9' },
-  { id: 'amb-2', top: '24%', left: '84%', color: '#F97316' },
-  { id: 'amb-3', top: '54%', left: '15%', color: '#0038FF', rating: '5.0' },
-  { id: 'amb-4', top: '76%', left: '16%', color: '#9333EA' },
-  { id: 'amb-5', top: '81%', left: '82%', color: '#0038FF', rating: '4.8' },
+  { id: 'amb-1', top: '15%', left: '11%', color: '#0038FF', label: 'Physio' },
+  { id: 'amb-2', top: '12%', left: '72%', color: '#9333EA', label: '€45' },
+  { id: 'amb-3', top: '19%', left: '61%', color: '#0038FF', rating: '4.9' },
+  { id: 'amb-4', top: '24%', left: '84%', color: '#F97316', label: 'Jazz' },
+  { id: 'amb-5', top: '33%', left: '90%', color: '#0038FF' },
+  { id: 'amb-6', top: '39%', left: '10%', color: '#F97316' },
+  { id: 'amb-7', top: '46%', left: '26%', color: '#9333EA' },
+  { id: 'amb-8', top: '55%', left: '14%', color: '#0038FF', rating: '5.0' },
+  { id: 'amb-9', top: '58%', left: '27%', color: '#F97316', label: 'Run' },
+  { id: 'amb-10', top: '51%', left: '90%', color: '#9333EA', label: '€80' },
+  { id: 'amb-11', top: '66%', left: '85%', color: '#0038FF', label: 'Lawyer' },
+  { id: 'amb-12', top: '74%', left: '14%', color: '#9333EA' },
+  { id: 'amb-13', top: '72%', left: '71%', color: '#F97316' },
+  { id: 'amb-14', top: '81%', left: '84%', color: '#0038FF', rating: '4.8' },
+  { id: 'amb-15', top: '88%', left: '19%', color: '#0038FF', rating: '4.9' },
+  { id: 'amb-16', top: '91%', left: '68%', color: '#9333EA', label: '€30' },
 ];
 
 /**
@@ -787,11 +799,11 @@ const HeroCityMapVisual = React.memo(function HeroCityMapVisual() {
           </g>
         </svg>
 
-        {/* Percentage-aligned animated route line tracing from GPS dot to active pin */}
+        {/* Percentage-aligned animated route line (tablet/desktop only — keeps narrow mobile view clean) */}
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
-          className="absolute inset-0 w-full h-full pointer-events-none z-10"
+          className="hidden sm:block absolute inset-0 w-full h-full pointer-events-none z-10"
           aria-hidden="true"
         >
           <AnimatePresence mode="wait">
@@ -802,7 +814,6 @@ const HeroCityMapVisual = React.memo(function HeroCityMapVisual() {
               stroke={activeSpot.accentHex}
               strokeWidth="2.4"
               strokeLinecap="round"
-              strokeDasharray="1 0"
               vectorEffect="non-scaling-stroke"
               initial={prefersReducedMotion ? { pathLength: 1, opacity: 0.65 } : { pathLength: 0, opacity: 0.15 }}
               animate={{ pathLength: 1, opacity: 0.72 }}
@@ -854,28 +865,34 @@ const HeroCityMapVisual = React.memo(function HeroCityMapVisual() {
                 prefersReducedMotion
                   ? { duration: 0.4 }
                   : {
-                      duration: 4.2 + idx * 0.45,
-                      delay: idx * 0.55,
+                      duration: 4.0 + (idx % 5) * 0.45,
+                      delay: (idx % 6) * 0.45,
                       repeat: Infinity,
                       ease: 'easeInOut',
                     }
               }
               className="will-change-transform"
             >
-              {pin.rating ? (
-                <div className="bg-white/95 border border-slate-200/90 shadow-[0_4px_12px_rgba(10,15,44,0.12)] rounded-full px-1.5 py-0.5 flex items-center gap-0.5 text-[9px] font-bold text-brand-navy tabular-nums relative">
+              {pin.rating || pin.label ? (
+                <div className="bg-white/95 border border-slate-200/90 shadow-[0_4px_12px_rgba(10,15,44,0.12)] rounded-full px-1.5 py-0.5 flex items-center gap-1 text-[8.5px] font-bold text-brand-navy tabular-nums whitespace-nowrap relative">
                   <span
                     style={{ backgroundColor: pin.color }}
                     className="w-1.5 h-1.5 rounded-full shrink-0"
                   />
-                  <span>{pin.rating}</span>
-                  <span className="text-amber-500">★</span>
+                  {pin.rating ? (
+                    <>
+                      <span>{pin.rating}</span>
+                      <span className="text-amber-500 -ml-0.5">★</span>
+                    </>
+                  ) : (
+                    <span>{pin.label}</span>
+                  )}
                   <span className="absolute -bottom-[4px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[4px] border-l-transparent border-r-transparent border-t-white" />
                 </div>
               ) : (
                 <div
                   style={{ backgroundColor: pin.color }}
-                  className="w-4.5 h-4.5 rounded-full border-2 border-white shadow-[0_4px_10px_rgba(10,15,44,0.22)] relative flex items-center justify-center"
+                  className="w-4 h-4 rounded-full border-2 border-white shadow-[0_4px_10px_rgba(10,15,44,0.22)] relative flex items-center justify-center"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-white" />
                   <span
@@ -2070,10 +2087,17 @@ export function WebLandingPage({
         <div className="max-w-[1200px] mx-auto px-6 sm:px-8 xl:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-14 items-center">
             <div className="lg:col-span-6 space-y-8">
-              <div className="space-y-5">
+              <div className="space-y-4">
+                <div className="pb-1">
+                  <Logo
+                    className="items-start"
+                    imgClassName="h-16 sm:h-20 md:h-[92px] lg:h-[104px] max-w-full"
+                  />
+                </div>
+
                 <h1
-                  className="font-display font-bold tracking-tight text-brand-navy leading-[1.08] [text-wrap:balance]"
-                  style={{ fontSize: 'clamp(2.25rem, 4.2vw, 3.65rem)' }}
+                  className="font-display font-semibold tracking-tight text-brand-navy/90 leading-[1.18] [text-wrap:balance]"
+                  style={{ fontSize: 'clamp(1.45rem, 2.35vw, 2.05rem)' }}
                 >
                   <LetterReveal
                     immediate
@@ -2085,31 +2109,14 @@ export function WebLandingPage({
                   />
                 </h1>
 
-                <div className="py-1">
-                  <Logo className="items-start" imgClassName="h-12 sm:h-14 md:h-[68px]" />
-                </div>
-
-                <p className="text-base sm:text-lg text-slate-500 leading-[1.65] max-w-[42ch]">
+                <p className="text-base sm:text-lg text-slate-500 leading-[1.65] max-w-[42ch] pt-1">
                   Trusted local pros, curated events, practical guides, and neighbor essentials — all in one app.
                 </p>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center gap-3.5">
-                  <StoreBadge store="ios" variant="dark" />
-                  <StoreBadge store="android" variant="dark" />
-                </div>
-
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={onOpenAppMode}
-                    className="inline-flex items-center gap-2 text-sm font-semibold text-brand-blue hover:text-brand-navy transition-colors whitespace-nowrap shrink-0 cursor-pointer group"
-                  >
-                    <span>Open web app</span>
-                    <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-                  </button>
-                </div>
+              <div className="flex flex-wrap items-center gap-3.5">
+                <StoreBadge store="ios" variant="dark" />
+                <StoreBadge store="android" variant="dark" />
               </div>
             </div>
 
