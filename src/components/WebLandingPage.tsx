@@ -815,7 +815,6 @@ export function WebLandingPage({
           >
             <p className="text-[8.5px] font-semibold text-emerald-600">
               {guide.category || 'City Guide'}
-              {guide.read_time ? ` · ${guide.read_time}` : ''}
             </p>
             <p className="text-[10px] font-bold text-brand-navy line-clamp-1 leading-snug mt-0.5">
               {guide.title}
@@ -1054,10 +1053,6 @@ export function WebLandingPage({
         <div className="max-w-[1200px] mx-auto px-6 sm:px-8 xl:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-14 items-center">
             <div className="lg:col-span-6 space-y-8">
-              <div>
-                <Logo className="items-start" imgClassName="h-12 sm:h-14 md:h-[68px]" />
-              </div>
-
               <div className="space-y-5">
                 <h1
                   className="font-display font-bold tracking-tight text-brand-navy leading-[1.08] [text-wrap:balance]"
@@ -1065,6 +1060,10 @@ export function WebLandingPage({
                 >
                   Discover better, <span className="text-brand-blue">belong faster.</span>
                 </h1>
+
+                <div className="py-1">
+                  <Logo className="items-start" imgClassName="h-12 sm:h-14 md:h-[68px]" />
+                </div>
 
                 <p className="text-base sm:text-lg text-slate-500 leading-[1.65] max-w-[42ch]">
                   Trusted local pros, curated events, practical guides, and neighbor essentials — all in one app.
@@ -1141,9 +1140,18 @@ export function WebLandingPage({
               </div>
 
               <ul className="divide-y divide-slate-100 border-y border-slate-100 text-sm font-medium text-brand-navy">
-                <li className="py-3.5">AI matching with Jane in plain language</li>
-                <li className="py-3.5">Verified resident reviews &amp; spoken languages</li>
-                <li className="py-3.5">Direct contact with zero middlemen</li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0" aria-hidden="true" />
+                  <span>AI matching with Jane in plain language</span>
+                </li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0" aria-hidden="true" />
+                  <span>Verified resident reviews &amp; spoken languages</span>
+                </li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0" aria-hidden="true" />
+                  <span>Direct contact with zero middlemen</span>
+                </li>
               </ul>
 
               <div>
@@ -1206,9 +1214,18 @@ export function WebLandingPage({
               </div>
 
               <ul className="divide-y divide-slate-100 border-y border-slate-100 text-sm font-medium text-brand-navy">
-                <li className="py-3.5">Filter by today, tomorrow, or this weekend</li>
-                <li className="py-3.5">Schedules, venues &amp; highlights at a glance</li>
-                <li className="py-3.5">Weekly community picks &amp; alerts</li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" aria-hidden="true" />
+                  <span>Filter by today, tomorrow, or this weekend</span>
+                </li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" aria-hidden="true" />
+                  <span>Schedules, venues &amp; highlights at a glance</span>
+                </li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" aria-hidden="true" />
+                  <span>Weekly community picks &amp; alerts</span>
+                </li>
               </ul>
 
               <div>
@@ -1241,9 +1258,18 @@ export function WebLandingPage({
               </div>
 
               <ul className="divide-y divide-slate-100 border-y border-slate-100 text-sm font-medium text-brand-navy">
-                <li className="py-3.5">Housing, paperwork, transport &amp; healthcare</li>
-                <li className="py-3.5">Practical checklists with zero fluff</li>
-                <li className="py-3.5">Instant keyword search</li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" aria-hidden="true" />
+                  <span>Housing, paperwork, transport &amp; healthcare</span>
+                </li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" aria-hidden="true" />
+                  <span>Practical checklists with zero fluff</span>
+                </li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" aria-hidden="true" />
+                  <span>Instant keyword search</span>
+                </li>
               </ul>
 
               <div>
@@ -1353,11 +1379,7 @@ export function WebLandingPage({
                           ))}
                         </div>
 
-                        <div className="pt-1 flex items-center justify-between text-[9.5px] font-semibold">
-                          <span className="text-slate-400 inline-flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            <span>{secondary?.read_time || '4 min read'}</span>
-                          </span>
+                        <div className="pt-1 flex items-center justify-end text-[9.5px] font-semibold">
                           <span className="text-emerald-600 inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
                             <span>Read guide</span>
                             <ArrowRight className="w-3 h-3" />
@@ -1437,11 +1459,7 @@ export function WebLandingPage({
                           ))}
                         </div>
 
-                        <div className="pt-1 flex items-center justify-between text-[9.5px] font-semibold">
-                          <span className="text-slate-400 inline-flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            <span>{featured?.read_time || '5 min read'}</span>
-                          </span>
+                        <div className="pt-1 flex items-center justify-end text-[9.5px] font-semibold">
                           <span className="text-emerald-600 inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
                             <span>Read guide</span>
                             <ArrowRight className="w-3 h-3" />
@@ -1482,9 +1500,18 @@ export function WebLandingPage({
               </div>
 
               <ul className="divide-y divide-slate-100 border-y border-slate-100 text-sm font-medium text-brand-navy">
-                <li className="py-3.5">Filter by category, area &amp; budget</li>
-                <li className="py-3.5">Private in-app chat with members</li>
-                <li className="py-3.5">Post an item in under a minute</li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0" aria-hidden="true" />
+                  <span>Filter by category, area &amp; budget</span>
+                </li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0" aria-hidden="true" />
+                  <span>Private in-app chat with members</span>
+                </li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0" aria-hidden="true" />
+                  <span>Post an item in under a minute</span>
+                </li>
               </ul>
 
               <div>
@@ -1502,7 +1529,115 @@ export function WebLandingPage({
         </div>
       </section>
 
-      {/* 6. Why Unlocked (Concise Trust Principles — No Featured Partner) */}
+      {/* 6. Section 05: Smart Alerts & Notifications (Copy Left, Floating iOS Notification Stack Right) */}
+      <section id="section-notifications" className="py-20 sm:py-24">
+        <div className="max-w-[1200px] mx-auto px-6 sm:px-8 xl:px-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
+            <div className="lg:col-span-5 space-y-7">
+              <div className="space-y-3.5">
+                <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-brand-navy leading-[1.12] [text-wrap:balance]">
+                  Stay in the loop with <span className="text-amber-500">smart alerts</span>.
+                </h2>
+                <p className="text-base text-slate-500 leading-[1.65]">
+                  Get timely, zero-spam push notifications whenever new events, fresh local guides, or newly recommended pros arrive in your city.
+                </p>
+              </div>
+
+              <ul className="divide-y divide-slate-100 border-y border-slate-100 text-sm font-medium text-brand-navy">
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" aria-hidden="true" />
+                  <span>Upcoming meetups &amp; weekend plans before they fill up</span>
+                </li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" aria-hidden="true" />
+                  <span>New practical guides &amp; local living updates</span>
+                </li>
+                <li className="py-3.5 flex items-center gap-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" aria-hidden="true" />
+                  <span>Newly added pros recommended by members</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="lg:col-span-7">
+              <div className="mx-auto max-w-[540px] space-y-4">
+                {[
+                  {
+                    id: 'notif-event',
+                    category: 'Events',
+                    time: 'Just now',
+                    title: 'This Friday: International Rooftop Aperitivo',
+                    body: 'Meet fellow internationals at 19:30 at Old Town Terrace. Tap to see the full weekend lineup.',
+                    accentBorder: 'border-orange-200/80',
+                    accentText: 'text-orange-600',
+                    offsetClass: 'sm:mr-auto',
+                    icon: Calendar,
+                  },
+                  {
+                    id: 'notif-pro',
+                    category: 'New Pro Added',
+                    time: 'Yesterday',
+                    title: 'Dr. Clara Moreau just joined Find Pros',
+                    body: 'English & French-speaking family dentist in City Center — newly recommended by the community.',
+                    accentBorder: 'border-blue-200/80',
+                    accentText: 'text-brand-blue',
+                    offsetClass: 'sm:ml-auto',
+                    icon: UserPlus,
+                  },
+                ].map((notif) => {
+                  const CategoryIcon = notif.icon;
+                  return (
+                    <div
+                      key={notif.id}
+                      className={`w-full sm:max-w-[468px] text-left rounded-[22px] bg-white border ${notif.accentBorder} p-4 sm:p-5 shadow-[0_14px_38px_rgba(10,15,44,0.08)] ${notif.offsetClass}`}
+                    >
+                      <div className="flex items-start gap-3.5">
+                        {/* iOS-style App Icon Squircle */}
+                        <div className="w-11 h-11 rounded-[13px] bg-white border border-slate-200/90 shadow-2xs p-1.5 flex items-center justify-center shrink-0 mt-0.5">
+                          <img
+                            src="/logo2.png"
+                            alt="MyCityUnlocked"
+                            className="w-full h-full object-contain"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-[11px] font-bold text-brand-navy tracking-tight truncate">
+                                MyCityUnlocked
+                              </span>
+                              <span className="text-slate-300" aria-hidden="true">·</span>
+                              <span className={`inline-flex items-center gap-1 text-[10.5px] font-bold ${notif.accentText} whitespace-nowrap`}>
+                                <CategoryIcon className="w-3 h-3 shrink-0" />
+                                <span>{notif.category}</span>
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-medium text-slate-400 whitespace-nowrap shrink-0 tabular-nums">
+                              {notif.time}
+                            </span>
+                          </div>
+
+                          <p className="text-[14px] sm:text-[15px] font-bold font-display text-brand-navy leading-snug">
+                            {notif.title}
+                          </p>
+
+                          <p className="text-[12.5px] sm:text-[13px] text-slate-500 leading-relaxed line-clamp-2">
+                            {notif.body}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. Why Unlocked (Concise Trust Principles — No Featured Partner) */}
       <section className="py-20 sm:py-24 bg-white">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-8 xl:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
