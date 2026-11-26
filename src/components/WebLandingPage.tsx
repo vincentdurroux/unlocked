@@ -20,6 +20,7 @@ import {
   MapPin,
   MessageCircle,
   MessageSquare,
+  Navigation,
   Phone,
   Search,
   Share2,
@@ -398,25 +399,25 @@ export function WebLandingPage({
     }
   };
 
-  // Real ExploreView (Ask Jane search screen) layout inside the Find Pros phone
+  // Real ExploreView (Ask Jane search screen + filters + map) layout inside the Find Pros phone
   const renderFindProsScreenContent = () => (
-    <div className="space-y-3 text-left pt-0.5">
+    <div className="space-y-2.5 text-left pt-0.5">
       {/* Header matching ExploreView */}
       <div className="space-y-0.5">
-        <p className="text-[14.5px] font-bold font-display text-slate-800 tracking-tight leading-tight">
+        <p className="text-[14px] font-bold font-display text-slate-800 tracking-tight leading-tight">
           <span className="text-brand-blue font-bold">What</span> are you looking for?
         </p>
-        <p className="text-[9px] text-slate-500 leading-snug">
+        <p className="text-[8.5px] text-slate-500 leading-snug">
           Search for a professional or let Jane, your AI assistant, find the best match for you.
         </p>
       </div>
 
       {/* Blue Bordered Ask Jane Search Block */}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <button
           type="button"
           onClick={() => onNavigate('explore')}
-          className="w-full bg-white rounded-[16px] border-2 border-blue-200/90 shadow-2xs px-2.5 py-2 flex items-center gap-2 text-left hover:border-brand-blue/70 transition-colors cursor-pointer"
+          className="w-full bg-white rounded-[14px] border-2 border-blue-200/90 shadow-2xs px-2.5 py-1.5 flex items-center gap-2 text-left hover:border-brand-blue/70 transition-colors cursor-pointer"
         >
           <Sparkles className="w-3.5 h-3.5 text-brand-blue shrink-0" />
           <div className="flex-1 min-w-0 relative h-3.5">
@@ -428,7 +429,7 @@ export function WebLandingPage({
                 'e.g. help sorting out local paperwork...',
                 'e.g. tax advisor for expats & freelancers...',
               ]}
-              className="text-slate-300 text-[9.5px] font-medium leading-normal truncate"
+              className="text-slate-300 text-[9px] font-medium leading-normal truncate"
             />
           </div>
         </button>
@@ -436,80 +437,202 @@ export function WebLandingPage({
         <button
           type="button"
           onClick={() => onNavigate('explore')}
-          className="w-full py-2.5 bg-brand-blue hover:bg-[#0958d9] text-white rounded-[16px] font-bold text-[10.5px] shadow-sm shadow-blue-500/15 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          className="w-full py-2 bg-brand-blue hover:bg-[#0958d9] text-white rounded-[14px] font-bold text-[10px] shadow-sm shadow-blue-500/15 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
         >
-          <Sparkles className="w-3.5 h-3.5 fill-white/10" />
+          <Sparkles className="w-3 h-3 fill-white/10" />
           <span>Find professionals</span>
         </button>
 
-        <div className="flex items-center justify-center gap-1 text-slate-400 font-bold text-[8px] tracking-wide">
+        <div className="flex items-center justify-center gap-1 text-slate-400 font-bold text-[7.5px] tracking-wide">
           <Lock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
           <span>100% secure. Jane is here to help.</span>
         </div>
       </div>
 
       {/* Refine your search section matching ExploreView */}
-      <div className="space-y-2 pt-2.5 border-t border-slate-100">
-        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+      <div className="space-y-1.5 pt-2 border-t border-slate-100">
+        <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-widest">
           Refine your search
         </p>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           {/* Category Dropdown */}
-          <div className="space-y-1">
-            <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+          <div className="space-y-0.5">
+            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
               <Filter className="w-2.5 h-2.5 text-brand-blue shrink-0" />
               <span>Category</span>
             </p>
-            <div className="px-2.5 py-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[9px] font-bold text-slate-700">
+            <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[8.5px] font-bold text-slate-700">
               <span className="truncate">Health &amp; Dental</span>
-              <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+              <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0" />
             </div>
           </div>
 
           {/* Language Dropdown */}
-          <div className="space-y-1">
-            <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+          <div className="space-y-0.5">
+            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
               <Globe className="w-2.5 h-2.5 text-brand-blue shrink-0" />
               <span>Language</span>
             </p>
-            <div className="px-2.5 py-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[9px] font-bold text-slate-700">
+            <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[8.5px] font-bold text-slate-700">
               <span className="truncate">English</span>
-              <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+              <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0" />
             </div>
           </div>
 
-          {/* Distance Slider */}
-          <div className="space-y-1">
-            <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+          {/* Distance from me Slider matching ExploreView */}
+          <div className="space-y-0.5">
+            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
               <MapPin className="w-2.5 h-2.5 text-rose-500 shrink-0" />
-              <span>Distance</span>
+              <span className="truncate">Distance from me</span>
             </p>
-            <div className="px-2.5 py-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
-              <div className="h-1 w-full rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full w-2/3 rounded-full bg-rose-500" />
+            <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+              <div className="relative flex items-center h-2">
+                <div className="h-1 w-full rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full w-3/5 rounded-full bg-rose-500" />
+                </div>
+                <span className="absolute left-[60%] -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-rose-500 border border-white shadow-xs" />
               </div>
-              <p className="text-[8px] font-bold text-slate-600">Within 5 km</p>
+              <div className="flex justify-center">
+                <span className="text-[7.5px] font-extrabold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 leading-none">
+                  5km
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Min Rating */}
-          <div className="space-y-1">
-            <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500 shrink-0" />
+          {/* Rating Star Selection matching ExploreView */}
+          <div className="space-y-0.5">
+            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <Star className="w-2.5 h-2.5 text-brand-yellow fill-brand-yellow shrink-0" />
               <span>Rating</span>
             </p>
-            <div className="px-2.5 py-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[9px] font-bold text-slate-700">
-              <span className="truncate">4.5+ Stars</span>
-              <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+            <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex flex-col justify-between gap-1">
+              <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star
+                    key={s}
+                    className={`w-2.5 h-2.5 ${
+                      s <= 4 ? 'text-brand-yellow fill-brand-yellow' : 'text-slate-200'
+                    }`}
+                  />
+                ))}
+              </div>
+              <span className="text-[7.5px] font-bold text-slate-400 leading-none">4.0+</span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ProMap preview right below filters (matching ExploreView #results-section) */}
+      <div className="space-y-1.5 pt-1">
+        <div className="flex justify-end">
+          <span className="inline-flex items-center gap-1 text-[7.5px] font-bold text-brand-blue bg-blue-50/80 px-2 py-0.5 rounded-full border border-blue-100/80 shadow-2xs">
+            <Navigation className="w-2.5 h-2.5 text-brand-blue" />
+            <span>Use my location</span>
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onNavigate('explore')}
+          className="w-full h-[132px] rounded-[20px] overflow-hidden border border-slate-200/80 shadow-md relative bg-[#ECEEF0] block text-left cursor-pointer group/map"
+          aria-label="Open interactive professionals map"
+        >
+          {/* Crisp Google-Maps-style city street grid */}
+          <svg
+            viewBox="0 0 320 150"
+            className="w-full h-full object-cover"
+            preserveAspectRatio="xMidYMid slice"
+            aria-hidden="true"
+          >
+            {/* Base urban map ground */}
+            <rect width="320" height="150" fill="#F1F3F4" />
+            {/* Park / river greenbelt */}
+            <path
+              d="M-10 38 C 65 24, 130 56, 200 44 C 255 34, 295 18, 335 28 L 335 56 C 292 48, 252 62, 198 70 C 128 80, 62 50, -10 62 Z"
+              fill="#CBEAC5"
+            />
+            <rect x="24" y="88" width="46" height="32" rx="6" fill="#D5EED0" />
+            <rect x="228" y="86" width="54" height="34" rx="8" fill="#D5EED0" />
+            {/* Subtle city blocks */}
+            <rect x="86" y="76" width="38" height="22" rx="3" fill="#E6EAEF" />
+            <rect x="134" y="78" width="42" height="26" rx="3" fill="#E6EAEF" />
+            <rect x="184" y="76" width="34" height="22" rx="3" fill="#E6EAEF" />
+            <rect x="86" y="108" width="44" height="26" rx="3" fill="#E6EAEF" />
+            <rect x="140" y="112" width="48" height="24" rx="3" fill="#E6EAEF" />
+            <rect x="34" y="8" width="54" height="18" rx="3" fill="#E6EAEF" />
+            <rect x="102" y="10" width="48" height="20" rx="3" fill="#E6EAEF" />
+            <rect x="172" y="8" width="56" height="22" rx="3" fill="#E6EAEF" />
+            {/* Secondary white streets */}
+            <g stroke="#FFFFFF" strokeWidth="4.5" strokeLinecap="round" fill="none">
+              <path d="M0 72 L320 68" />
+              <path d="M0 104 L320 108" />
+              <path d="M0 134 L320 132" />
+              <path d="M78 0 L74 150" />
+              <path d="M128 0 L132 150" />
+              <path d="M180 0 L176 150" />
+              <path d="M236 0 L242 150" />
+              <path d="M286 0 L282 150" />
+            </g>
+            {/* Primary warm-yellow arterial avenues */}
+            <g stroke="#FDE68A" strokeWidth="6" strokeLinecap="round" fill="none">
+              <path d="M-5 24 Q 110 18, 220 34 T 325 20" />
+              <path d="M46 0 Q 62 72, 118 150" />
+              <path d="M210 0 Q 204 75, 255 150" />
+            </g>
+            <g stroke="#FCD34D" strokeWidth="1" strokeLinecap="round" fill="none" opacity="0.65">
+              <path d="M-5 24 Q 110 18, 220 34 T 325 20" />
+              <path d="M46 0 Q 62 72, 118 150" />
+              <path d="M210 0 Q 204 75, 255 150" />
+            </g>
+            {/* Subtle neighborhood labels */}
+            <text x="16" y="79" fill="#94A3B8" fontSize="6.5" fontWeight="700" fontFamily="sans-serif" letterSpacing="0.8">
+              OLD TOWN
+            </text>
+            <text x="132" y="143" fill="#94A3B8" fontSize="6.5" fontWeight="700" fontFamily="sans-serif" letterSpacing="0.8">
+              CITY CENTER
+            </text>
+          </svg>
+
+          {/* Numbered ProMap Pins matching real #0038FF recommended & #94a3b8 markers */}
+          {[
+            { num: '1', top: '26%', left: '22%', color: '#0038FF' },
+            { num: '2', top: '48%', left: '42%', color: '#0038FF' },
+            { num: '3', top: '22%', left: '58%', color: '#0038FF' },
+            { num: '4', top: '66%', left: '26%', color: '#0038FF' },
+            { num: '5', top: '38%', left: '78%', color: '#94a3b8' },
+          ].map((pin) => (
+            <div
+              key={pin.num}
+              style={{ top: pin.top, left: pin.left }}
+              className="absolute -translate-x-1/2 -translate-y-full drop-shadow-[0_3px_5px_rgba(10,15,44,0.3)]"
+            >
+              <div
+                style={{ backgroundColor: pin.color }}
+                className="w-5 h-5 rounded-full border-[1.5px] border-white flex items-center justify-center text-[8px] font-black text-white relative"
+              >
+                {pin.num}
+                <span
+                  style={{ borderTopColor: pin.color }}
+                  className="absolute -bottom-[5px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[5px] border-l-transparent border-r-transparent"
+                />
+              </div>
+            </div>
+          ))}
+
+          {/* Blue user location dot */}
+          <div className="absolute top-[58%] left-[14%] -translate-x-1/2 -translate-y-1/2">
+            <span className="block w-4 h-4 rounded-full bg-brand-blue/20 flex items-center justify-center">
+              <span className="block w-2 h-2 rounded-full bg-brand-blue border border-white shadow-2xs" />
+            </span>
+          </div>
+        </button>
+      </div>
     </div>
   );
 
-  // Floating Pro Modal mockup faithfully replicating ProfessionalDetailView
+  // Floating Pro Modal mockup faithfully replicating ProfessionalDetailView 1-to-1
   const renderProModalOverlayCard = () => (
     <div
       onClick={() => onNavigate('explore')}
@@ -521,10 +644,10 @@ export function WebLandingPage({
           onNavigate('explore');
         }
       }}
-      className="rounded-[22px] bg-white border-2 border-emerald-500 p-3 shadow-[0_24px_60px_rgba(10,15,44,0.20)] space-y-2 relative overflow-hidden text-left hover:-translate-y-0.5 transition-transform cursor-pointer"
+      className="rounded-[24px] bg-white border-2 border-emerald-500 p-3.5 shadow-[0_26px_65px_rgba(10,15,44,0.22)] space-y-2.5 relative overflow-hidden text-left hover:-translate-y-0.5 transition-transform cursor-pointer"
     >
       {/* Top-right modal action buttons matching ProfessionalDetailView (Heart, Share, Close X) */}
-      <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-10">
+      <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
         <span className="w-5.5 h-5.5 rounded-full bg-rose-50 border border-rose-200 text-rose-500 flex items-center justify-center shadow-2xs">
           <Heart className="w-2.5 h-2.5 fill-rose-500" />
         </span>
@@ -536,127 +659,181 @@ export function WebLandingPage({
         </span>
       </div>
 
-      {/* Pro Header: Avatar + Name + Company */}
-      <div className="flex items-center gap-2.5 pr-18">
-        <div className="w-12 h-12 rounded-2xl bg-slate-50 p-0.5 overflow-hidden border border-slate-200 shadow-xs shrink-0">
-          <img
-            src={MOCK_PRO_PROFILE.image}
-            alt={MOCK_PRO_PROFILE.name}
-            referrerPolicy="no-referrer"
-            className="w-full h-full object-cover rounded-[12px]"
-          />
+      {/* Pro Header: Avatar + Name + Company + Badges + Top Qualities */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2.5 pr-18">
+          <div className="w-12 h-12 rounded-2xl bg-slate-50 p-0.5 overflow-hidden border border-slate-200 shadow-xs shrink-0">
+            <img
+              src={MOCK_PRO_PROFILE.image}
+              alt={MOCK_PRO_PROFILE.name}
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover rounded-[12px]"
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[13px] font-black text-slate-900 font-display tracking-tight leading-tight truncate">
+              {MOCK_PRO_PROFILE.name}
+            </p>
+            <p className="text-[9.5px] font-semibold text-slate-500 truncate mt-0.5">
+              {MOCK_PRO_PROFILE.company}
+            </p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <p className="text-[12.5px] font-black text-slate-900 font-display tracking-tight leading-tight truncate">
-            {MOCK_PRO_PROFILE.name}
-          </p>
-          <p className="text-[9.5px] font-semibold text-slate-500 truncate mt-0.5">
-            {MOCK_PRO_PROFILE.company}
-          </p>
-        </div>
-      </div>
 
-      {/* Badges + Top Qualities matching ProfessionalDetailView */}
-      <div className="space-y-1.5">
-        <div className="flex flex-wrap items-center gap-1 text-[8.5px]">
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-brand-blue/5 text-brand-blue rounded-lg font-bold border border-brand-blue/15">
+        {/* Category, Rating & Community Recommended Badges matching ProfessionalDetailView */}
+        <div className="flex flex-wrap items-center gap-1 text-[8px]">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-brand-blue/5 text-brand-blue rounded-lg font-bold border border-brand-blue/15 shadow-2xs">
             <Briefcase className="w-2.5 h-2.5 shrink-0" />
             <span>{MOCK_PRO_PROFILE.category}</span>
           </span>
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-900 rounded-lg font-bold border border-amber-200 tabular-nums">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-900 rounded-lg font-bold border border-amber-200 shadow-2xs tabular-nums">
             <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500 shrink-0" />
             <span>
               {MOCK_PRO_PROFILE.rating} ({MOCK_PRO_PROFILE.reviewsCount})
             </span>
           </span>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-800 rounded-lg font-bold border border-emerald-200/80 w-full">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-800 rounded-lg font-bold border border-emerald-200/80 shadow-2xs">
             <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-            <span className="truncate">Recommended by MyCityUnlocked</span>
+            <span className="truncate">Recommended by MyCityUnlocked community</span>
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1 text-[8px]">
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-bold bg-cyan-500/10 text-cyan-800 border border-cyan-500/25">
+        {/* Top Qualities matching ProfessionalDetailView */}
+        <div className="flex flex-wrap items-center gap-1 text-[7.5px]">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-bold bg-cyan-500/10 text-cyan-800 border border-cyan-500/25 shadow-2xs">
             <Zap className="w-2.5 h-2.5 text-cyan-600 shrink-0" />
             <span>{MOCK_PRO_PROFILE.qualities[0]}</span>
           </span>
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-bold bg-emerald-500/10 text-emerald-800 border border-emerald-500/25">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-bold bg-emerald-500/10 text-emerald-800 border border-emerald-500/25 shadow-2xs">
             <Award className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
             <span>{MOCK_PRO_PROFILE.qualities[1]}</span>
           </span>
         </div>
       </div>
 
-      {/* Direct Contact & Info Bar matching ProfessionalDetailView */}
-      <div className="bg-slate-50/80 rounded-2xl p-2 border border-slate-200/80 space-y-1.5 text-[8.5px]">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="w-5 h-5 rounded-md bg-cyan-50 border border-cyan-200/70 text-cyan-600 flex items-center justify-center shrink-0">
-            <Phone className="w-2.5 h-2.5" />
-          </span>
-          <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.phone}</span>
-        </div>
+      {/* Direct Contact & Info Bar (2-column grid with Phone/WhatsApp/Email/Languages + Location & Mini Map) */}
+      <div className="bg-slate-50/70 rounded-2xl p-2.5 border border-slate-200/80 shadow-2xs grid grid-cols-2 gap-2.5 text-[8px]">
+        {/* Left: Phone, WhatsApp, Email, Languages */}
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="w-4.5 h-4.5 rounded-md bg-cyan-50 border border-cyan-200/70 text-cyan-600 flex items-center justify-center shrink-0">
+              <Phone className="w-2.5 h-2.5" />
+            </span>
+            <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.phone}</span>
+          </div>
 
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="w-5 h-5 rounded-md bg-emerald-50 border border-emerald-200/70 text-[#25D366] flex items-center justify-center shrink-0">
-            <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z" />
-            </svg>
-          </span>
-          <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.whatsapp}</span>
-        </div>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="w-4.5 h-4.5 rounded-md bg-emerald-50 border border-emerald-200/70 text-[#25D366] flex items-center justify-center shrink-0">
+              <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z" />
+              </svg>
+            </span>
+            <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.whatsapp}</span>
+          </div>
 
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="w-5 h-5 rounded-md bg-indigo-50 border border-indigo-200/70 text-indigo-600 flex items-center justify-center shrink-0">
-            <Globe className="w-2.5 h-2.5" />
-          </span>
-          <div className="flex flex-wrap items-center gap-1 min-w-0">
-            {MOCK_PRO_PROFILE.languages.map((lang) => (
-              <span
-                key={lang}
-                className="text-[7.5px] bg-white text-slate-700 font-semibold px-1.5 py-0.5 rounded-md border border-slate-200/80"
-              >
-                {lang}
-              </span>
-            ))}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="w-4.5 h-4.5 rounded-md bg-blue-50 border border-blue-200/70 text-brand-blue flex items-center justify-center shrink-0">
+              <Mail className="w-2.5 h-2.5" />
+            </span>
+            <span className="text-slate-600 font-medium truncate">{MOCK_PRO_PROFILE.email}</span>
+          </div>
+
+          <div className="flex items-start gap-1.5 min-w-0 pt-0.5">
+            <span className="w-4.5 h-4.5 rounded-md bg-indigo-50 border border-indigo-200/70 text-indigo-600 flex items-center justify-center shrink-0">
+              <Globe className="w-2.5 h-2.5" />
+            </span>
+            <div className="flex flex-wrap items-center gap-0.5 min-w-0">
+              {MOCK_PRO_PROFILE.languages.map((lang) => (
+                <span
+                  key={lang}
+                  className="text-[7px] bg-white text-slate-700 font-semibold px-1 py-0.5 rounded border border-slate-200/80 shadow-2xs leading-none"
+                >
+                  {lang}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="w-5 h-5 rounded-md bg-rose-50 border border-rose-200/70 text-rose-500 flex items-center justify-center shrink-0">
-            <MapPin className="w-2.5 h-2.5" />
-          </span>
-          <span className="text-slate-600 font-medium truncate underline decoration-slate-300 underline-offset-2">
-            {MOCK_PRO_PROFILE.location}
-          </span>
+        {/* Right: Location + Mini Map with Rose Pin matching ProfessionalDetailView */}
+        <div className="space-y-1.5 min-w-0 flex flex-col justify-between">
+          <div className="flex items-start gap-1.5 min-w-0">
+            <span className="w-4.5 h-4.5 rounded-md bg-rose-50 border border-rose-200/70 text-rose-500 flex items-center justify-center shrink-0 mt-0.5">
+              <MapPin className="w-2.5 h-2.5" />
+            </span>
+            <span className="text-[7.5px] text-slate-600 font-medium leading-tight underline decoration-slate-300 underline-offset-2 line-clamp-2">
+              {MOCK_PRO_PROFILE.location}
+            </span>
+          </div>
+
+          {/* Mini Map matching ProfessionalDetailView (rose #E11D48 pin) */}
+          <div className="w-full h-[58px] rounded-xl overflow-hidden border border-slate-200/80 shadow-2xs relative bg-[#EEF2F5]">
+            <svg viewBox="0 0 140 65" className="w-full h-full object-cover" aria-hidden="true">
+              <rect width="140" height="65" fill="#F1F3F4" />
+              <rect x="8" y="8" width="32" height="18" rx="3" fill="#D5EED0" />
+              <rect x="96" y="38" width="36" height="20" rx="4" fill="#E6EAEF" />
+              <rect x="48" y="36" width="38" height="20" rx="3" fill="#E6EAEF" />
+              <g stroke="#FFFFFF" strokeWidth="4" fill="none">
+                <path d="M0 30 L140 32" />
+                <path d="M44 0 L42 65" />
+                <path d="M90 0 L92 65" />
+              </g>
+              <path d="M0 14 Q 70 10, 140 20" stroke="#FDE68A" strokeWidth="4.5" fill="none" />
+            </svg>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full drop-shadow-[0_2px_4px_rgba(190,18,61,0.35)]">
+              <div className="w-4 h-4 rounded-full bg-[#E11D48] border-[1.5px] border-[#BE123D] flex items-center justify-center relative">
+                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                <span className="absolute -bottom-[4px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[3.5px] border-r-[3.5px] border-t-[4.5px] border-l-transparent border-r-transparent border-t-[#E11D48]" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Testimonials Snippet matching ProfessionalDetailView */}
-      <div className="space-y-1">
+      {/* About Section matching ProfessionalDetailView */}
+      <div className="bg-slate-50/60 rounded-2xl p-2.5 border border-slate-200/70 space-y-1">
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0" />
+          <span className="text-[7.5px] font-bold text-slate-900 font-display uppercase tracking-wider">
+            About
+          </span>
+        </div>
+        <p className="text-[8px] text-slate-700 leading-relaxed line-clamp-2">
+          {MOCK_PRO_PROFILE.about}
+        </p>
+      </div>
+
+      {/* Testimonials Section matching ProfessionalDetailView */}
+      <div className="space-y-1.5">
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-          <span className="text-[8px] font-bold text-slate-900 font-display uppercase tracking-wider">
+          <span className="text-[7.5px] font-bold text-slate-900 font-display uppercase tracking-wider">
             Testimonials
           </span>
-          <span className="text-[7.5px] bg-slate-100 border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold font-mono leading-none">
+          <span className="text-[7px] bg-slate-100 border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold font-mono leading-none">
             {MOCK_PRO_PROFILE.reviewsCount}
           </span>
         </div>
 
-        <div className="bg-slate-50/70 rounded-xl p-2 border border-slate-200/80 space-y-1">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1 min-w-0">
-              <span className="text-[9px] font-bold text-slate-900 truncate">
-                {MOCK_PRO_PROFILE.review.author}
-              </span>
-              <span className="w-3.5 h-3.5 rounded bg-white border border-slate-200/80 text-slate-500 flex items-center justify-center shrink-0">
-                <MessageSquare className="w-2 h-2" />
-              </span>
+        <div className="bg-white rounded-xl p-2 border border-slate-200/80 shadow-2xs space-y-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-0.5 min-w-0">
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="text-[8.5px] font-bold text-slate-900 truncate">
+                  {MOCK_PRO_PROFILE.review.author}
+                </span>
+                <span className="w-3.5 h-3.5 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-2 h-2" />
+                </span>
+              </div>
+              <div className="flex items-center gap-0.5">
+                {[0, 1, 2, 3, 4].map((idx) => (
+                  <Star key={idx} className="w-2 h-2 text-amber-400 fill-amber-400" />
+                ))}
+              </div>
             </div>
-            <span className="inline-flex items-center gap-0.5 shrink-0">
-              {[0, 1, 2, 3, 4].map((idx) => (
-                <Star key={idx} className="w-2 h-2 text-amber-400 fill-amber-400" />
-              ))}
+            <span className="text-[7px] font-semibold text-slate-400 font-mono tracking-tight shrink-0">
+              {MOCK_PRO_PROFILE.review.date}
             </span>
           </div>
           <p className="text-[8px] text-slate-600 leading-snug italic line-clamp-2">
@@ -1167,9 +1344,9 @@ export function WebLandingPage({
             </div>
 
             <div className="lg:col-span-7">
-              <div className="relative mx-auto max-w-[540px] py-2">
-                {/* Real Jane Search phone screen */}
-                <div className="relative z-10 sm:-translate-x-10 lg:-translate-x-14">
+              <div className="relative mx-auto max-w-[590px] py-2">
+                {/* Real Jane Search phone screen with filters & map */}
+                <div className="relative z-10 sm:-translate-x-16 lg:-translate-x-20">
                   <AppScreenFrame
                     idSuffix="find-pros"
                     activeTab="explore"
@@ -1180,7 +1357,7 @@ export function WebLandingPage({
                 </div>
 
                 {/* Slightly overlapping Pro detail modal mockup */}
-                <div className="relative z-20 -mt-20 ml-auto sm:mt-0 sm:absolute sm:right-0 sm:bottom-5 w-[252px] sm:w-[272px]">
+                <div className="relative z-20 -mt-16 ml-auto sm:mt-0 sm:absolute sm:right-0 sm:bottom-3 w-[290px] sm:w-[322px]">
                   {renderProModalOverlayCard()}
                 </div>
               </div>
