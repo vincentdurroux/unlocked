@@ -335,7 +335,6 @@ function AppScreenFrame({
 export function WebLandingPage({
   allArticles,
   currentUser,
-  userProfile,
   onNavigate,
   onAddPro,
   onOpenAppMode,
@@ -935,9 +934,7 @@ export function WebLandingPage({
       {/* Welcome & Tagline matching HomeView */}
       <div className="px-0.5 space-y-0.5 pb-1">
         <p className="text-[15.5px] font-bold font-display text-brand-navy tracking-tight leading-tight">
-          {currentUser && userProfile?.full_name
-            ? `Hello ${userProfile.full_name.split(' ')[0]}, 👋`
-            : 'Hello Guest, 👋'}
+          Hello Alex, 👋
         </p>
         <p className="text-brand-blue font-bold italic text-[10.5px] leading-snug inline-flex flex-wrap items-center gap-x-0.5">
           <span>Discover</span>
@@ -1527,8 +1524,8 @@ export function WebLandingPage({
                 },
                 {
                   index: '02.',
-                  title: 'Reviewed by members',
-                  body: 'Honest feedback and languages, never paid rankings.',
+                  title: 'All in one place',
+                  body: 'Pros, events, guides, and classifieds without juggling endless group chats.',
                   color: 'text-brand-blue',
                 },
                 {
