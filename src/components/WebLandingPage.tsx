@@ -6,8 +6,10 @@ import {
   Briefcase,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   Clock,
   FileText,
+  Filter,
   Globe,
   Heart,
   HeartPulse,
@@ -351,6 +353,42 @@ export function WebLandingPage({
     return [...combined, ...FALLBACK_GUIDES.slice(0, needed)];
   }, [allArticles]);
 
+  const getGuideArticlePreview = (
+    article: any,
+    fallback: { heading: string; body: string; bullets: [string, string] }
+  ) => {
+    const rawContent = typeof article?.content === 'string' ? article.content : '';
+    const cleanText = (str: string) =>
+      str
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+        .replace(/[*_`>#]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!rawContent.trim()) return fallback;
+
+    const lines = rawContent.split('\n').map((l) => l.trim()).filter(Boolean);
+    const headingLine = lines.find((l) => /^#{1,3}\s+/.test(l));
+    const bulletLines = lines
+      .filter((l) => /^[-*•]\s+/.test(l) || /^\d+\.\s+/.test(l))
+      .map((l) => cleanText(l.replace(/^([-*•]|\d+\.)\s+/, '')))
+      .filter((l) => l.length > 6);
+    const paragraphLines = lines
+      .filter((l) => !/^#{1,4}\s+/.test(l) && !/^[-*•]\s+/.test(l) && !/^\d+\.\s+/.test(l) && !/^!\[/.test(l))
+      .map(cleanText)
+      .filter((l) => l.length > 24);
+
+    return {
+      heading: headingLine ? cleanText(headingLine) : fallback.heading,
+      body: paragraphLines[0] || fallback.body,
+      bullets: [
+        bulletLines[0] || fallback.bullets[0],
+        bulletLines[1] || fallback.bullets[1],
+      ] as [string, string],
+    };
+  };
+
   const handleScreenNav = (target: PhoneTab | 'profile') => {
     if (target === 'profile') {
       onNavigate(currentUser ? 'profile' : 'login');
@@ -361,177 +399,270 @@ export function WebLandingPage({
     }
   };
 
-  // Faithful replica of the real ProfessionalDetailView modal inside the app
+  // Real ExploreView (Ask Jane search screen) layout inside the Find Pros phone
   const renderFindProsScreenContent = () => (
-    <div className="-mx-3.5 -my-2.5 px-2.5 py-2.5 bg-slate-950/80 min-h-full text-left">
-      <div className="rounded-[22px] bg-white border-2 border-emerald-500 p-3 shadow-2xl space-y-2.5 relative overflow-hidden">
-        {/* Top-right modal action buttons matching ProfessionalDetailView (Heart, Share, Close X) */}
-        <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-10">
-          <span className="w-6 h-6 rounded-full bg-rose-50 border border-rose-200 text-rose-500 flex items-center justify-center shadow-2xs">
-            <Heart className="w-3 h-3 fill-rose-500" />
-          </span>
-          <span className="w-6 h-6 rounded-full bg-slate-100/90 border border-slate-200/80 text-slate-600 flex items-center justify-center shadow-2xs">
-            <Share2 className="w-3 h-3" />
-          </span>
-          <span className="w-6 h-6 rounded-full bg-slate-100/90 border border-slate-200/80 text-slate-600 flex items-center justify-center shadow-2xs">
-            <X className="w-3 h-3" />
-          </span>
-        </div>
+    <div className="space-y-3 text-left pt-0.5">
+      {/* Header matching ExploreView */}
+      <div className="space-y-0.5">
+        <p className="text-[14.5px] font-bold font-display text-slate-800 tracking-tight leading-tight">
+          <span className="text-brand-blue font-bold">What</span> are you looking for?
+        </p>
+        <p className="text-[9px] text-slate-500 leading-snug">
+          Search for a professional or let Jane, your AI assistant, find the best match for you.
+        </p>
+      </div>
 
-        {/* Pro Header: Avatar + Name + Company */}
-        <div className="flex items-center gap-2.5 pr-20">
-          <div className="w-13 h-13 rounded-2xl bg-slate-50 p-0.5 overflow-hidden border border-slate-200 shadow-xs shrink-0">
-            <img
-              src={MOCK_PRO_PROFILE.image}
-              alt={MOCK_PRO_PROFILE.name}
-              referrerPolicy="no-referrer"
-              className="w-full h-full object-cover rounded-[13px]"
+      {/* Blue Bordered Ask Jane Search Block */}
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => onNavigate('explore')}
+          className="w-full bg-white rounded-[16px] border-2 border-blue-200/90 shadow-2xs px-2.5 py-2 flex items-center gap-2 text-left hover:border-brand-blue/70 transition-colors cursor-pointer"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-brand-blue shrink-0" />
+          <div className="flex-1 min-w-0 relative h-3.5">
+            <RotatingPlaceholder
+              value=""
+              placeholders={[
+                'e.g. French-speaking dentist nearby...',
+                'e.g. reliable electrician or plumber...',
+                'e.g. help sorting out local paperwork...',
+                'e.g. tax advisor for expats & freelancers...',
+              ]}
+              className="text-slate-300 text-[9.5px] font-medium leading-normal truncate"
             />
           </div>
-          <div className="min-w-0">
-            <p className="text-[13.5px] font-black text-slate-900 font-display tracking-tight leading-tight truncate">
-              {MOCK_PRO_PROFILE.name}
-            </p>
-            <p className="text-[10px] font-semibold text-slate-500 truncate mt-0.5">
-              {MOCK_PRO_PROFILE.company}
-            </p>
-          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onNavigate('explore')}
+          className="w-full py-2.5 bg-brand-blue hover:bg-[#0958d9] text-white rounded-[16px] font-bold text-[10.5px] shadow-sm shadow-blue-500/15 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+        >
+          <Sparkles className="w-3.5 h-3.5 fill-white/10" />
+          <span>Find professionals</span>
+        </button>
+
+        <div className="flex items-center justify-center gap-1 text-slate-400 font-bold text-[8px] tracking-wide">
+          <Lock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+          <span>100% secure. Jane is here to help.</span>
         </div>
+      </div>
 
-        {/* Badges + Top Qualities matching ProfessionalDetailView */}
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center gap-1 text-[9px]">
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-blue/5 text-brand-blue rounded-lg font-bold border border-brand-blue/15 shadow-2xs">
-              <Briefcase className="w-2.5 h-2.5 shrink-0" />
-              <span>{MOCK_PRO_PROFILE.category}</span>
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-900 rounded-lg font-bold border border-amber-200 shadow-2xs tabular-nums">
-              <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500 shrink-0" />
-              <span>
-                {MOCK_PRO_PROFILE.rating} ({MOCK_PRO_PROFILE.reviewsCount})
-              </span>
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-800 rounded-lg font-bold border border-emerald-200/80 shadow-2xs w-full">
-              <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
-              <span className="truncate">Recommended by MyCityUnlocked community</span>
-            </span>
-          </div>
+      {/* Refine your search section matching ExploreView */}
+      <div className="space-y-2 pt-2.5 border-t border-slate-100">
+        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+          Refine your search
+        </p>
 
-          <div className="flex flex-wrap items-center gap-1 text-[8.5px]">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-bold bg-cyan-500/10 text-cyan-800 border border-cyan-500/25">
-              <Zap className="w-2.5 h-2.5 text-cyan-600 shrink-0" />
-              <span>{MOCK_PRO_PROFILE.qualities[0]}</span>
-            </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-bold bg-emerald-500/10 text-emerald-800 border border-emerald-500/25">
-              <Award className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-              <span>{MOCK_PRO_PROFILE.qualities[1]}</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Direct Contact & Info Bar matching ProfessionalDetailView */}
-        <div className="bg-slate-50/80 rounded-2xl p-2.5 border border-slate-200/80 space-y-1.5 text-[9px] shadow-2xs">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-5.5 h-5.5 rounded-lg bg-cyan-50 border border-cyan-200/70 text-cyan-600 flex items-center justify-center shrink-0">
-              <Phone className="w-2.5 h-2.5" />
-            </span>
-            <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.phone}</span>
-          </div>
-
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-5.5 h-5.5 rounded-lg bg-emerald-50 border border-emerald-200/70 text-[#25D366] flex items-center justify-center shrink-0">
-              <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z" />
-              </svg>
-            </span>
-            <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.whatsapp}</span>
-          </div>
-
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-5.5 h-5.5 rounded-lg bg-blue-50 border border-blue-200/70 text-brand-blue flex items-center justify-center shrink-0">
-              <Mail className="w-2.5 h-2.5" />
-            </span>
-            <span className="text-slate-600 font-medium truncate">{MOCK_PRO_PROFILE.email}</span>
-          </div>
-
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-5.5 h-5.5 rounded-lg bg-indigo-50 border border-indigo-200/70 text-indigo-600 flex items-center justify-center shrink-0">
-              <Globe className="w-2.5 h-2.5" />
-            </span>
-            <div className="flex flex-wrap items-center gap-1 min-w-0">
-              {MOCK_PRO_PROFILE.languages.map((lang) => (
-                <span
-                  key={lang}
-                  className="text-[8px] bg-white text-slate-700 font-semibold px-1.5 py-0.5 rounded-md border border-slate-200/80 shadow-2xs"
-                >
-                  {lang}
-                </span>
-              ))}
+        <div className="grid grid-cols-2 gap-2">
+          {/* Category Dropdown */}
+          <div className="space-y-1">
+            <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <Filter className="w-2.5 h-2.5 text-brand-blue shrink-0" />
+              <span>Category</span>
+            </p>
+            <div className="px-2.5 py-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[9px] font-bold text-slate-700">
+              <span className="truncate">Health &amp; Dental</span>
+              <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
             </div>
           </div>
 
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-5.5 h-5.5 rounded-lg bg-rose-50 border border-rose-200/70 text-rose-500 flex items-center justify-center shrink-0">
-              <MapPin className="w-2.5 h-2.5" />
-            </span>
-            <span className="text-slate-600 font-medium truncate underline decoration-slate-300 underline-offset-2">
-              {MOCK_PRO_PROFILE.location}
-            </span>
+          {/* Language Dropdown */}
+          <div className="space-y-1">
+            <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <Globe className="w-2.5 h-2.5 text-brand-blue shrink-0" />
+              <span>Language</span>
+            </p>
+            <div className="px-2.5 py-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[9px] font-bold text-slate-700">
+              <span className="truncate">English</span>
+              <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+            </div>
+          </div>
+
+          {/* Distance Slider */}
+          <div className="space-y-1">
+            <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <MapPin className="w-2.5 h-2.5 text-rose-500 shrink-0" />
+              <span>Distance</span>
+            </p>
+            <div className="px-2.5 py-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+              <div className="h-1 w-full rounded-full bg-slate-100 overflow-hidden">
+                <div className="h-full w-2/3 rounded-full bg-rose-500" />
+              </div>
+              <p className="text-[8px] font-bold text-slate-600">Within 5 km</p>
+            </div>
+          </div>
+
+          {/* Min Rating */}
+          <div className="space-y-1">
+            <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500 shrink-0" />
+              <span>Rating</span>
+            </p>
+            <div className="px-2.5 py-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[9px] font-bold text-slate-700">
+              <span className="truncate">4.5+ Stars</span>
+              <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+            </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
 
-        {/* About Section matching ProfessionalDetailView */}
-        <div className="bg-slate-50/60 rounded-2xl p-2.5 border border-slate-200/70 space-y-1">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0" />
-            <span className="text-[8.5px] font-bold text-slate-900 font-display uppercase tracking-wider">
-              About
-            </span>
-          </div>
-          <p className="text-[8.5px] text-slate-600 leading-relaxed line-clamp-2">
-            {MOCK_PRO_PROFILE.about}
+  // Floating Pro Modal mockup faithfully replicating ProfessionalDetailView
+  const renderProModalOverlayCard = () => (
+    <div
+      onClick={() => onNavigate('explore')}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onNavigate('explore');
+        }
+      }}
+      className="rounded-[22px] bg-white border-2 border-emerald-500 p-3 shadow-[0_24px_60px_rgba(10,15,44,0.20)] space-y-2 relative overflow-hidden text-left hover:-translate-y-0.5 transition-transform cursor-pointer"
+    >
+      {/* Top-right modal action buttons matching ProfessionalDetailView (Heart, Share, Close X) */}
+      <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-10">
+        <span className="w-5.5 h-5.5 rounded-full bg-rose-50 border border-rose-200 text-rose-500 flex items-center justify-center shadow-2xs">
+          <Heart className="w-2.5 h-2.5 fill-rose-500" />
+        </span>
+        <span className="w-5.5 h-5.5 rounded-full bg-slate-100/90 border border-slate-200/80 text-slate-600 flex items-center justify-center shadow-2xs">
+          <Share2 className="w-2.5 h-2.5" />
+        </span>
+        <span className="w-5.5 h-5.5 rounded-full bg-slate-100/90 border border-slate-200/80 text-slate-600 flex items-center justify-center shadow-2xs">
+          <X className="w-2.5 h-2.5" />
+        </span>
+      </div>
+
+      {/* Pro Header: Avatar + Name + Company */}
+      <div className="flex items-center gap-2.5 pr-18">
+        <div className="w-12 h-12 rounded-2xl bg-slate-50 p-0.5 overflow-hidden border border-slate-200 shadow-xs shrink-0">
+          <img
+            src={MOCK_PRO_PROFILE.image}
+            alt={MOCK_PRO_PROFILE.name}
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover rounded-[12px]"
+          />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[12.5px] font-black text-slate-900 font-display tracking-tight leading-tight truncate">
+            {MOCK_PRO_PROFILE.name}
+          </p>
+          <p className="text-[9.5px] font-semibold text-slate-500 truncate mt-0.5">
+            {MOCK_PRO_PROFILE.company}
           </p>
         </div>
+      </div>
 
-        {/* Testimonials Section matching ProfessionalDetailView */}
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-            <span className="text-[8.5px] font-bold text-slate-900 font-display uppercase tracking-wider">
-              Testimonials
+      {/* Badges + Top Qualities matching ProfessionalDetailView */}
+      <div className="space-y-1.5">
+        <div className="flex flex-wrap items-center gap-1 text-[8.5px]">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-brand-blue/5 text-brand-blue rounded-lg font-bold border border-brand-blue/15">
+            <Briefcase className="w-2.5 h-2.5 shrink-0" />
+            <span>{MOCK_PRO_PROFILE.category}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-900 rounded-lg font-bold border border-amber-200 tabular-nums">
+            <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500 shrink-0" />
+            <span>
+              {MOCK_PRO_PROFILE.rating} ({MOCK_PRO_PROFILE.reviewsCount})
             </span>
-            <span className="text-[8px] bg-slate-100 border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold font-mono leading-none">
-              {MOCK_PRO_PROFILE.reviewsCount}
-            </span>
+          </span>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-800 rounded-lg font-bold border border-emerald-200/80 w-full">
+            <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+            <span className="truncate">Recommended by MyCityUnlocked</span>
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1 text-[8px]">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-bold bg-cyan-500/10 text-cyan-800 border border-cyan-500/25">
+            <Zap className="w-2.5 h-2.5 text-cyan-600 shrink-0" />
+            <span>{MOCK_PRO_PROFILE.qualities[0]}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-bold bg-emerald-500/10 text-emerald-800 border border-emerald-500/25">
+            <Award className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+            <span>{MOCK_PRO_PROFILE.qualities[1]}</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Direct Contact & Info Bar matching ProfessionalDetailView */}
+      <div className="bg-slate-50/80 rounded-2xl p-2 border border-slate-200/80 space-y-1.5 text-[8.5px]">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="w-5 h-5 rounded-md bg-cyan-50 border border-cyan-200/70 text-cyan-600 flex items-center justify-center shrink-0">
+            <Phone className="w-2.5 h-2.5" />
+          </span>
+          <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.phone}</span>
+        </div>
+
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="w-5 h-5 rounded-md bg-emerald-50 border border-emerald-200/70 text-[#25D366] flex items-center justify-center shrink-0">
+            <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z" />
+            </svg>
+          </span>
+          <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.whatsapp}</span>
+        </div>
+
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="w-5 h-5 rounded-md bg-indigo-50 border border-indigo-200/70 text-indigo-600 flex items-center justify-center shrink-0">
+            <Globe className="w-2.5 h-2.5" />
+          </span>
+          <div className="flex flex-wrap items-center gap-1 min-w-0">
+            {MOCK_PRO_PROFILE.languages.map((lang) => (
+              <span
+                key={lang}
+                className="text-[7.5px] bg-white text-slate-700 font-semibold px-1.5 py-0.5 rounded-md border border-slate-200/80"
+              >
+                {lang}
+              </span>
+            ))}
           </div>
+        </div>
 
-          <button
-            type="button"
-            onClick={() => onNavigate('explore')}
-            className="w-full text-left bg-white hover:border-slate-300 rounded-xl p-2 border border-slate-200/80 shadow-2xs space-y-1 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[9.5px] font-bold text-slate-900 truncate">
-                  {MOCK_PRO_PROFILE.review.author}
-                </span>
-                <span className="w-4 h-4 rounded-md bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                  <MessageSquare className="w-2.5 h-2.5" />
-                </span>
-              </div>
-              <span className="text-[8px] font-semibold text-slate-400 font-mono shrink-0">
-                {MOCK_PRO_PROFILE.review.date}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="w-5 h-5 rounded-md bg-rose-50 border border-rose-200/70 text-rose-500 flex items-center justify-center shrink-0">
+            <MapPin className="w-2.5 h-2.5" />
+          </span>
+          <span className="text-slate-600 font-medium truncate underline decoration-slate-300 underline-offset-2">
+            {MOCK_PRO_PROFILE.location}
+          </span>
+        </div>
+      </div>
+
+      {/* Testimonials Snippet matching ProfessionalDetailView */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+          <span className="text-[8px] font-bold text-slate-900 font-display uppercase tracking-wider">
+            Testimonials
+          </span>
+          <span className="text-[7.5px] bg-slate-100 border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold font-mono leading-none">
+            {MOCK_PRO_PROFILE.reviewsCount}
+          </span>
+        </div>
+
+        <div className="bg-slate-50/70 rounded-xl p-2 border border-slate-200/80 space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 min-w-0">
+              <span className="text-[9px] font-bold text-slate-900 truncate">
+                {MOCK_PRO_PROFILE.review.author}
+              </span>
+              <span className="w-3.5 h-3.5 rounded bg-white border border-slate-200/80 text-slate-500 flex items-center justify-center shrink-0">
+                <MessageSquare className="w-2 h-2" />
               </span>
             </div>
-            <div className="flex items-center gap-0.5">
+            <span className="inline-flex items-center gap-0.5 shrink-0">
               {[0, 1, 2, 3, 4].map((idx) => (
-                <Star key={idx} className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+                <Star key={idx} className="w-2 h-2 text-amber-400 fill-amber-400" />
               ))}
-            </div>
-            <p className="text-[8.5px] text-slate-600 leading-snug italic line-clamp-2">
-              &ldquo;{MOCK_PRO_PROFILE.review.comment}&rdquo;
-            </p>
-          </button>
+            </span>
+          </div>
+          <p className="text-[8px] text-slate-600 leading-snug italic line-clamp-2">
+            &ldquo;{MOCK_PRO_PROFILE.review.comment}&rdquo;
+          </p>
         </div>
       </div>
     </div>
@@ -927,7 +1058,7 @@ export function WebLandingPage({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-14 items-center">
             <div className="lg:col-span-6 space-y-8">
               <div>
-                <Logo className="items-start" />
+                <Logo className="items-start" imgClassName="h-12 sm:h-14 md:h-[68px]" />
               </div>
 
               <div className="space-y-5">
@@ -999,7 +1130,7 @@ export function WebLandingPage({
       </section>
 
       {/* 2. Section 01: Find Pros (Concise Copy Left, Real App Screen w/ Mockup Data Right) */}
-      <section id="section-find-pros" className="py-20 sm:py-24 border-t border-slate-100">
+      <section id="section-find-pros" className="py-20 sm:py-24">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-8 xl:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
             <div className="lg:col-span-5 space-y-7">
@@ -1031,14 +1162,22 @@ export function WebLandingPage({
             </div>
 
             <div className="lg:col-span-7">
-              <div className="rounded-[32px] bg-[#F4F7FF] border border-blue-100 px-6 py-10 sm:px-10 sm:py-12">
-                <AppScreenFrame
-                  idSuffix="find-pros"
-                  activeTab="explore"
-                  onTabClick={handleScreenNav}
-                >
-                  {renderFindProsScreenContent()}
-                </AppScreenFrame>
+              <div className="relative mx-auto max-w-[540px] py-2">
+                {/* Real Jane Search phone screen */}
+                <div className="relative z-10 sm:-translate-x-10 lg:-translate-x-14">
+                  <AppScreenFrame
+                    idSuffix="find-pros"
+                    activeTab="explore"
+                    onTabClick={handleScreenNav}
+                  >
+                    {renderFindProsScreenContent()}
+                  </AppScreenFrame>
+                </div>
+
+                {/* Slightly overlapping Pro detail modal mockup */}
+                <div className="relative z-20 -mt-20 ml-auto sm:mt-0 sm:absolute sm:right-0 sm:bottom-5 w-[252px] sm:w-[272px]">
+                  {renderProModalOverlayCard()}
+                </div>
               </div>
             </div>
           </div>
@@ -1046,19 +1185,17 @@ export function WebLandingPage({
       </section>
 
       {/* 3. Section 02: Events (Real App Screen w/ Mockup Data Left, Concise Copy Right) */}
-      <section id="section-events" className="py-20 sm:py-24 bg-[#F8FAFF] border-t border-slate-100">
+      <section id="section-events" className="py-20 sm:py-24">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-8 xl:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
-            <div className="lg:col-span-7 order-2 lg:order-1">
-              <div className="rounded-[32px] bg-[#FFF8F3] border border-orange-100 px-6 py-10 sm:px-10 sm:py-12">
-                <AppScreenFrame
-                  idSuffix="events"
-                  activeTab="events"
-                  onTabClick={handleScreenNav}
-                >
-                  {renderEventsScreenContent()}
-                </AppScreenFrame>
-              </div>
+            <div className="lg:col-span-7 order-2 lg:order-1 flex justify-center">
+              <AppScreenFrame
+                idSuffix="events"
+                activeTab="events"
+                onTabClick={handleScreenNav}
+              >
+                {renderEventsScreenContent()}
+              </AppScreenFrame>
             </div>
 
             <div className="lg:col-span-5 order-1 lg:order-2 space-y-7">
@@ -1071,7 +1208,7 @@ export function WebLandingPage({
                 </p>
               </div>
 
-              <ul className="divide-y divide-slate-200/70 border-y border-slate-200/70 text-sm font-medium text-brand-navy">
+              <ul className="divide-y divide-slate-100 border-y border-slate-100 text-sm font-medium text-brand-navy">
                 <li className="py-3.5">Filter by today, tomorrow, or this weekend</li>
                 <li className="py-3.5">Schedules, venues &amp; highlights at a glance</li>
                 <li className="py-3.5">Weekly community picks &amp; alerts</li>
@@ -1093,7 +1230,7 @@ export function WebLandingPage({
       </section>
 
       {/* 4. Section 03: Guides (Concise Copy Left, Real App Screen Right) */}
-      <section id="section-guides" className="py-20 sm:py-24 border-t border-slate-100">
+      <section id="section-guides" className="py-20 sm:py-24">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-8 xl:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
             <div className="lg:col-span-5 space-y-7">
@@ -1125,128 +1262,229 @@ export function WebLandingPage({
             </div>
 
             <div className="lg:col-span-7">
-              <div className="relative rounded-[32px] bg-[#F2FAF6] border border-emerald-100 px-5 py-9 sm:px-8 sm:py-12">
-                <div className="relative z-10 sm:-translate-x-10 lg:-translate-x-14">
-                  <AppScreenFrame
-                    idSuffix="guides"
-                    activeTab="guides"
-                    onTabClick={handleScreenNav}
-                  >
-                    {renderGuidesScreenContent()}
-                  </AppScreenFrame>
-                </div>
+              {/* Two slightly overlapping floating Guide Article Modal windows (ExpertGuideModal design) */}
+              {(() => {
+                const secondary = displayGuides[1];
+                const featured = displayGuides[0];
+                const secondaryPreview = getGuideArticlePreview(secondary, {
+                  heading: 'How to register with a local clinic',
+                  body: 'Once your local address is registered, visit your neighborhood health center with your ID and proof of residency to receive your public card and assigned GP.',
+                  bullets: [
+                    'Public card & local clinic registration steps',
+                    'Private coverage & English-speaking doctors',
+                  ],
+                });
+                const featuredPreview = getGuideArticlePreview(featured, {
+                  heading: 'Your first 30 days checklist',
+                  body: 'Start by booking your town hall address registration and ID appointment early—slots fill fast, and these two documents unlock banking, healthcare, and utilities.',
+                  bullets: [
+                    'Address registration & required original documents',
+                    'Opening a local account, SIM card & transit pass',
+                  ],
+                });
 
-                {/* Slightly overlapping mini Guide Article visual matching ExpertGuideModal */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const featured = displayGuides[0];
-                    onNavigate(
-                      'guides',
-                      featured && !String(featured.id).startsWith('g-')
-                        ? { guideId: featured.id }
-                        : undefined
-                    );
-                  }}
-                  className="relative z-20 -mt-12 ml-auto block sm:mt-0 sm:absolute sm:right-5 lg:right-6 sm:bottom-8 w-[228px] sm:w-[244px] rounded-[22px] bg-white border border-emerald-200/80 shadow-[0_22px_50px_rgba(10,15,44,0.18)] overflow-hidden text-left hover:-translate-y-0.5 transition-transform cursor-pointer group"
-                >
-                  {/* Article Hero Banner matching ExpertGuideModal */}
-                  <div className="relative h-24 w-full bg-brand-navy overflow-hidden">
-                    <img
-                      src={displayGuides[0]?.imageUrl || cityGuideImg}
-                      alt={displayGuides[0]?.title || 'Newcomer guide preview'}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
+                return (
+                  <div className="relative mx-auto max-w-[600px] py-2">
+                    {/* Back / Upper-Left Floating Article Modal */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onNavigate(
+                          'guides',
+                          secondary && !String(secondary.id).startsWith('g-')
+                            ? { guideId: secondary.id }
+                            : undefined
+                        )
+                      }
+                      className="relative z-10 mr-auto block w-[308px] sm:w-[376px] rounded-[26px] bg-white border border-slate-200/90 shadow-[0_18px_45px_rgba(10,15,44,0.12)] overflow-hidden text-left hover:-translate-y-0.5 transition-transform cursor-pointer group"
+                    >
+                      <div className="relative h-32 sm:h-36 w-full bg-brand-navy overflow-hidden">
+                        <img
+                          src={secondary?.imageUrl || heroCityImg}
+                          alt={secondary?.title || FALLBACK_GUIDES[1].title}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
 
-                    <div className="absolute top-2 right-2 flex items-center gap-1">
-                      <span className="w-5 h-5 rounded-full bg-white/15 backdrop-blur-xs text-white flex items-center justify-center">
-                        <Share2 className="w-2.5 h-2.5" />
-                      </span>
-                      <span className="w-5 h-5 rounded-full bg-white/15 backdrop-blur-xs text-white flex items-center justify-center">
-                        <X className="w-2.5 h-2.5" />
-                      </span>
-                    </div>
+                        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                          <span className="w-6.5 h-6.5 rounded-full bg-white/15 backdrop-blur-xs text-white flex items-center justify-center">
+                            <Share2 className="w-3 h-3" />
+                          </span>
+                          <span className="w-6.5 h-6.5 rounded-full bg-white/15 backdrop-blur-xs text-white flex items-center justify-center">
+                            <X className="w-3 h-3" />
+                          </span>
+                        </div>
 
-                    <div className="absolute bottom-2.5 left-3 right-3">
-                      <span className="inline-block px-2 py-0.5 bg-brand-yellow text-slate-950 text-[7.5px] font-black uppercase tracking-widest rounded-full mb-1">
-                        {displayGuides[0]?.categoryTitle || displayGuides[0]?.category || 'Paperwork'}
-                      </span>
-                      <p className="text-[11.5px] font-black text-white font-display leading-tight line-clamp-2">
-                        {displayGuides[0]?.title || FALLBACK_GUIDES[0].title}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Article Body Preview */}
-                  <div className="p-3 space-y-2">
-                    <div className="pb-1.5 border-b border-slate-100 space-y-1">
-                      <p className="text-[9px] text-slate-600 italic leading-snug line-clamp-2">
-                        {displayGuides[0]?.excerpt ||
-                          'Everything you need to register smoothly during your first 30 days in your new city.'}
-                      </p>
-                      <p className="text-[7.5px] text-brand-blue font-bold uppercase tracking-wider">
-                        by MyCityUnlocked
-                      </p>
-                    </div>
-
-                    <div className="space-y-1 text-[8.5px] text-slate-700 font-medium">
-                      <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                        <span className="truncate">Step-by-step local checklist</span>
+                        <div className="absolute bottom-3.5 left-4 right-4">
+                          <span className="inline-block px-2.5 py-0.5 bg-brand-yellow text-slate-950 text-[8px] font-black uppercase tracking-widest rounded-full mb-1.5">
+                            {secondary?.categoryTitle || secondary?.category || 'Healthcare'}
+                          </span>
+                          <p className="text-[14px] sm:text-[15.5px] font-black text-white font-display leading-tight line-clamp-2">
+                            {secondary?.title || FALLBACK_GUIDES[1].title}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                        <span className="truncate">Key offices, forms &amp; tips</span>
-                      </div>
-                    </div>
 
-                    <div className="pt-1 flex items-center justify-between text-[8.5px] font-semibold">
-                      <span className="text-slate-400 inline-flex items-center gap-1">
-                        <Clock className="w-2.5 h-2.5" />
-                        <span>{displayGuides[0]?.read_time || '5 min read'}</span>
-                      </span>
-                      <span className="text-emerald-600 inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                        <span>Read guide</span>
-                        <ArrowRight className="w-2.5 h-2.5" />
-                      </span>
-                    </div>
+                      <div className="p-4 sm:p-5 space-y-3">
+                        <div className="pb-2.5 border-b border-slate-100 space-y-1">
+                          <p className="text-[10.5px] text-slate-600 italic leading-snug line-clamp-2">
+                            {secondary?.excerpt ||
+                              'A clear overview of public health registration, private plans, and English-speaking clinics.'}
+                          </p>
+                          <p className="text-[8.5px] text-brand-blue font-bold uppercase tracking-wider">
+                            by {secondary?.author?.name || 'MyCityUnlocked'}
+                          </p>
+                        </div>
+
+                        {/* Article Content Snippet */}
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-bold text-brand-navy font-display leading-snug line-clamp-1">
+                            {secondaryPreview.heading}
+                          </p>
+                          <p className="text-[10px] text-slate-600 leading-relaxed line-clamp-3">
+                            {secondaryPreview.body}
+                          </p>
+                        </div>
+
+                        <div className="space-y-1.5 text-[10px] text-slate-700 font-medium">
+                          {secondaryPreview.bullets.map((bullet, idx) => (
+                            <div key={idx} className="flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span className="truncate">{bullet}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="pt-1 flex items-center justify-between text-[9.5px] font-semibold">
+                          <span className="text-slate-400 inline-flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            <span>{secondary?.read_time || '4 min read'}</span>
+                          </span>
+                          <span className="text-emerald-600 inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                            <span>Read guide</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Front / Lower-Right Slightly Overlapping Article Modal */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onNavigate(
+                          'guides',
+                          featured && !String(featured.id).startsWith('g-')
+                            ? { guideId: featured.id }
+                            : undefined
+                        )
+                      }
+                      className="relative z-20 -mt-16 sm:-mt-28 ml-auto block w-[316px] sm:w-[392px] rounded-[26px] bg-white border border-emerald-200/90 shadow-[0_26px_65px_rgba(10,15,44,0.20)] overflow-hidden text-left hover:-translate-y-0.5 transition-transform cursor-pointer group"
+                    >
+                      <div className="relative h-32 sm:h-36 w-full bg-brand-navy overflow-hidden">
+                        <img
+                          src={featured?.imageUrl || cityGuideImg}
+                          alt={featured?.title || FALLBACK_GUIDES[0].title}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
+
+                        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                          <span className="w-6.5 h-6.5 rounded-full bg-white/15 backdrop-blur-xs text-white flex items-center justify-center">
+                            <Share2 className="w-3 h-3" />
+                          </span>
+                          <span className="w-6.5 h-6.5 rounded-full bg-white/15 backdrop-blur-xs text-white flex items-center justify-center">
+                            <X className="w-3 h-3" />
+                          </span>
+                        </div>
+
+                        <div className="absolute bottom-3.5 left-4 right-4">
+                          <span className="inline-block px-2.5 py-0.5 bg-brand-yellow text-slate-950 text-[8px] font-black uppercase tracking-widest rounded-full mb-1.5">
+                            {featured?.categoryTitle || featured?.category || 'Paperwork'}
+                          </span>
+                          <p className="text-[14px] sm:text-[15.5px] font-black text-white font-display leading-tight line-clamp-2">
+                            {featured?.title || FALLBACK_GUIDES[0].title}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="p-4 sm:p-5 space-y-3">
+                        <div className="pb-2.5 border-b border-slate-100 space-y-1">
+                          <p className="text-[10.5px] text-slate-600 italic leading-snug line-clamp-2">
+                            {featured?.excerpt ||
+                              'Everything you need to register smoothly during your first 30 days in your new city.'}
+                          </p>
+                          <p className="text-[8.5px] text-brand-blue font-bold uppercase tracking-wider">
+                            by {featured?.author?.name || 'MyCityUnlocked'}
+                          </p>
+                        </div>
+
+                        {/* Article Content Snippet */}
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-bold text-brand-navy font-display leading-snug line-clamp-1">
+                            {featuredPreview.heading}
+                          </p>
+                          <p className="text-[10px] text-slate-600 leading-relaxed line-clamp-3">
+                            {featuredPreview.body}
+                          </p>
+                        </div>
+
+                        <div className="space-y-1.5 text-[10px] text-slate-700 font-medium">
+                          {featuredPreview.bullets.map((bullet, idx) => (
+                            <div key={idx} className="flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span className="truncate">{bullet}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="pt-1 flex items-center justify-between text-[9.5px] font-semibold">
+                          <span className="text-slate-400 inline-flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            <span>{featured?.read_time || '5 min read'}</span>
+                          </span>
+                          <span className="text-emerald-600 inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                            <span>Read guide</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </span>
+                        </div>
+                      </div>
+                    </button>
                   </div>
-                </button>
-              </div>
+                );
+              })()}
             </div>
           </div>
         </div>
       </section>
 
       {/* 5. Section 04: Stuff (Real App Screen w/ Mockup Data Left, Concise Copy Right) */}
-      <section id="section-stuff" className="py-20 sm:py-24 bg-[#F8FAFF] border-t border-slate-100">
+      <section id="section-stuff" className="py-20 sm:py-24">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-8 xl:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
-            <div className="lg:col-span-7 order-2 lg:order-1">
-              <div className="rounded-[32px] bg-[#F8F5FF] border border-purple-100 px-6 py-10 sm:px-10 sm:py-12">
-                <AppScreenFrame
-                  idSuffix="stuff"
-                  activeTab="marketplace"
-                  onTabClick={handleScreenNav}
-                >
-                  {renderStuffScreenContent()}
-                </AppScreenFrame>
-              </div>
+            <div className="lg:col-span-7 order-2 lg:order-1 flex justify-center">
+              <AppScreenFrame
+                idSuffix="stuff"
+                activeTab="marketplace"
+                onTabClick={handleScreenNav}
+              >
+                {renderStuffScreenContent()}
+              </AppScreenFrame>
             </div>
 
             <div className="lg:col-span-5 order-1 lg:order-2 space-y-7">
               <div className="space-y-3.5">
                 <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-brand-navy leading-[1.12] [text-wrap:balance]">
-                  <span className="text-purple-600">Buy and sell</span> locally with neighbors.
+                  <span className="text-purple-600">Buy and Sell</span> locally within your community.
                 </h2>
                 <p className="text-base text-slate-500 leading-[1.65]">
                   Trade bikes, furniture, kids&apos; gear, and home essentials inside a trusted local community.
                 </p>
               </div>
 
-              <ul className="divide-y divide-slate-200/70 border-y border-slate-200/70 text-sm font-medium text-brand-navy">
+              <ul className="divide-y divide-slate-100 border-y border-slate-100 text-sm font-medium text-brand-navy">
                 <li className="py-3.5">Filter by category, area &amp; budget</li>
                 <li className="py-3.5">Private in-app chat with members</li>
                 <li className="py-3.5">Post an item in under a minute</li>
@@ -1268,7 +1506,7 @@ export function WebLandingPage({
       </section>
 
       {/* 6. Why Unlocked (Concise Trust Principles — No Featured Partner) */}
-      <section className="py-20 sm:py-24 bg-white border-t border-slate-100">
+      <section className="py-20 sm:py-24 bg-white">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-8 xl:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
             <div className="lg:col-span-5 space-y-3.5">
@@ -1279,7 +1517,7 @@ export function WebLandingPage({
               <div className="h-1 w-12 bg-brand-yellow rounded-full" aria-hidden="true" />
             </div>
 
-            <div className="lg:col-span-7 divide-y divide-slate-100 bg-[#F8FAFF] rounded-3xl border border-blue-100 px-7 sm:px-10">
+            <div className="lg:col-span-7 divide-y divide-slate-100 border-y border-slate-100">
               {[
                 {
                   index: '01.',

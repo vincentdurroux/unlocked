@@ -5208,7 +5208,7 @@ export default function App() {
   return (
     <APIProvider apiKey={GOOGLE_MAPS_KEY} version="weekly" libraries={['places', 'marker']}>
       <div className="flex flex-col h-screen h-[100dvh] bg-white w-full mx-auto shadow-2xl overflow-hidden relative">
-        <OrientationLock />
+        {!showWebPresentation && <OrientationLock />}
       
         <AnimatePresence>
           {globalAlert && (
