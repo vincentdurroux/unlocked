@@ -24,7 +24,7 @@ export const OneSignalVerificationDialog: React.FC<OneSignalVerificationDialogPr
     observerRef.current = (id: string) => {
       if (oneSignalService.isRealServerAssignedId(id)) {
         if (userId) {
-          oneSignalService.loginUser(userId).catch(() => {});
+          oneSignalService.syncSubscriptionForUser(userId, id).catch(() => {});
         }
       }
     };

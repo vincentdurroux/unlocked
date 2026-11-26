@@ -35,6 +35,17 @@ class OneSignalService {
 
   private currentUserId: string | null = null;
   private lastLoginAttemptUserId: string | null = null;
+  private lastNativeLoginUserId: string | null = null;
+  private lastWebLoginUserId: string | null = null;
+  private inFlightLoginUserId: string | null = null;
+  private lastStateRequestTs = 0;
+  private lastPermissionQueryTs = 0;
+  private inFlightPermissionQuery: Promise<NativePushPermissionState> | null = null;
+  private syncedServerLinkKeys = new Set<string>();
+  private inFlightServerLinkKeys = new Set<string>();
+  private lastFailedServerLinkAt = new Map<string, number>();
+  private persistedSupabaseKeys = new Set<string>();
+  private inFlightPersistKeys = new Set<string>();
   private lastLoginHandlersCalled: string[] = [];
   private lastServerLinkResult: { ok: boolean; userId: string; subscriptionId: string; apiVersion?: string; error?: string; ts: string } | null = null;
   private diagnosticLogs: OneSignalDiagnosticLog[] = [];
@@ -114,10 +125,14 @@ class OneSignalService {
       if (typeof optedIn === 'boolean') this.nativeOptedIn = optedIn;
       if (typeof extId === 'string' && extId.trim()) this.nativeExternalId = extId.trim();
       if (typeof token === 'string' && token.trim()) {
-        this.nativePushToken = token.trim();
-        this.addDiag('subscription', 'ok', 'Native push token received from iOS state payload.', {
-          tokenPreview: `${this.nativePushToken.slice(0, 10)}…${this.nativePushToken.slice(-6)}`
-        });
+        const cleanToken = token.trim();
+        const tokenChanged = cleanToken !== this.nativePushToken;
+        this.nativePushToken = cleanToken;
+        if (tokenChanged) {
+          this.addDiag('subscription', 'ok', 'Native push token received from iOS state payload.', {
+            tokenPreview: `${this.nativePushToken.slice(0, 10)}…${this.nativePushToken.slice(-6)}`
+          });
+        }
       }
       if (perm !== undefined) {
         this.handleNativePermissionState(perm);
@@ -165,26 +180,29 @@ class OneSignalService {
         this.handleNativePushInfoPayload(windowAny.__mcuLastNativePushInfo);
       }
 
-      const onNativePushInfoEvent = (e: any) => {
-        if (e && e.__mcuPushInfoHandled) return;
-        if (e) {
-          try { e.__mcuPushInfoHandled = true; } catch (_) {}
-        }
-        this.handleNativePushInfoPayload(e && e.detail !== undefined ? e.detail : e);
-      };
+      // Only attach fallback DOM listeners if index.html's early bridge script did not already bind them
+      if (!Array.isArray(windowAny.__mcuEarlyPushQueue)) {
+        const onNativePushInfoEvent = (e: any) => {
+          if (e && e.__mcuPushInfoHandled) return;
+          if (e) {
+            try { e.__mcuPushInfoHandled = true; } catch (_) {}
+          }
+          this.handleNativePushInfoPayload(e && e.detail !== undefined ? e.detail : e);
+        };
 
-      [
-        'OneSignalSubscriptionReady',
-        'native-onesignal-subscription',
-        'onesignal-subscription-id',
-        'onesignal-state',
-        'push-subscription',
-        'push-token',
-        'push-notification-token'
-      ].forEach((evtName) => {
-        window.addEventListener(evtName, onNativePushInfoEvent);
-        document.addEventListener(evtName, onNativePushInfoEvent);
-      });
+        [
+          'OneSignalSubscriptionReady',
+          'native-onesignal-subscription',
+          'onesignal-subscription-id',
+          'onesignal-state',
+          'push-subscription',
+          'push-token',
+          'push-notification-token'
+        ].forEach((evtName) => {
+          window.addEventListener(evtName, onNativePushInfoEvent);
+          document.addEventListener(evtName, onNativePushInfoEvent);
+        });
+      }
 
       // Median.co (GoNative) info callback
       const pollMedian = () => {
@@ -387,17 +405,19 @@ class OneSignalService {
       if (windowAny.__mcuLastPushPermissionState !== undefined) {
         this.handleNativePermissionState(windowAny.__mcuLastPushPermissionState);
       }
-      const onPushPermissionStateEvent = (e: any) => {
-        if (e && e.__mcuPushStateHandled) return;
-        if (e) {
-          try { e.__mcuPushStateHandled = true; } catch (_) {}
-        }
-        this.handleNativePermissionState(e && e.detail !== undefined ? e.detail : e);
-      };
-      window.addEventListener('push-permission-state', onPushPermissionStateEvent);
-      document.addEventListener('push-permission-state', onPushPermissionStateEvent);
-      window.addEventListener('push-permission-request', onPushPermissionStateEvent);
-      document.addEventListener('push-permission-request', onPushPermissionStateEvent);
+      if (!Array.isArray(windowAny.__mcuEarlyPushQueue)) {
+        const onPushPermissionStateEvent = (e: any) => {
+          if (e && e.__mcuPushStateHandled) return;
+          if (e) {
+            try { e.__mcuPushStateHandled = true; } catch (_) {}
+          }
+          this.handleNativePermissionState(e && e.detail !== undefined ? e.detail : e);
+        };
+        window.addEventListener('push-permission-state', onPushPermissionStateEvent);
+        document.addEventListener('push-permission-state', onPushPermissionStateEvent);
+        window.addEventListener('push-permission-request', onPushPermissionStateEvent);
+        document.addEventListener('push-permission-request', onPushPermissionStateEvent);
+      }
 
       try {
         windowAny.OneSignalDeferred = windowAny.OneSignalDeferred || [];
@@ -483,12 +503,16 @@ class OneSignalService {
   private handleNativePermissionState(rawDetail: any): void {
     this.nativeRawPermissionDetail = rawDetail;
     const normalized = this.normalizeNativePermissionState(rawDetail);
-    this.addDiag(
-      'permission',
-      normalized === 'granted' ? 'ok' : normalized === 'denied' ? 'warn' : 'info',
-      `Native push permission event received -> "${normalized}"`,
-      { raw: rawDetail }
-    );
+    const prevState = this.nativePushPermissionState;
+    const stateChanged = normalized !== prevState;
+    if (stateChanged) {
+      this.addDiag(
+        'permission',
+        normalized === 'granted' ? 'ok' : normalized === 'denied' ? 'warn' : 'info',
+        `Native push permission event received -> "${normalized}"`,
+        { raw: rawDetail }
+      );
+    }
     if (normalized === 'unknown') return;
     this.nativePushPermissionState = normalized;
     if (this.nativePermissionWaiters.size > 0) {
@@ -498,7 +522,7 @@ class OneSignalService {
         try { resolve(normalized); } catch (_) {}
       });
     }
-    if (typeof window !== 'undefined') {
+    if (stateChanged && typeof window !== 'undefined') {
       try {
         window.dispatchEvent(
           new CustomEvent('onesignal:permission-state-changed', {
@@ -506,22 +530,6 @@ class OneSignalService {
           })
         );
       } catch (_) {}
-    }
-
-    // When iOS permission becomes granted, ask Xcode for the Subscription ID / APNs token
-    // and re-sync the Supabase user ID after APNs has a moment to register.
-    if (normalized === 'granted') {
-      this.requestNativeSubscriptionState();
-      if (this.currentUserId) {
-        const uid = this.currentUserId;
-        this.loginUser(uid).catch(() => {});
-        setTimeout(() => {
-          this.requestNativeSubscriptionState();
-          if (this.currentUserId === uid) {
-            this.loginUser(uid).catch(() => {});
-          }
-        }, 1800);
-      }
     }
   }
 
@@ -589,6 +597,11 @@ class OneSignalService {
     if (typeof window === 'undefined') return [];
     const handlers = (window as any).webkit?.messageHandlers;
     if (!handlers) return [];
+    const now = Date.now();
+    if (now - this.lastStateRequestTs < 2000) {
+      return [];
+    }
+    this.lastStateRequestTs = now;
     const candidates = [
       'onesignal-state',
       'oneSignalState',
@@ -603,10 +616,12 @@ class OneSignalService {
         try {
           handlers[name].postMessage(name);
           invoked.push(name);
+          break;
         } catch (_) {
           try {
             handlers[name].postMessage({});
             invoked.push(name);
+            break;
           } catch (_) {}
         }
       }
@@ -619,16 +634,27 @@ class OneSignalService {
 
   async queryNativePushPermissionState(timeoutMs = 1500): Promise<NativePushPermissionState> {
     if (typeof window === 'undefined') return 'unknown';
+    if (this.inFlightPermissionQuery) {
+      return await this.inFlightPermissionQuery;
+    }
+    const now = Date.now();
+    if (this.nativePushPermissionState !== 'unknown' && now - this.lastPermissionQueryTs < 2000) {
+      return this.nativePushPermissionState;
+    }
     const windowAny = window as any;
     const stateHandler = windowAny.webkit?.messageHandlers?.['push-permission-state'];
     if (stateHandler && typeof stateHandler.postMessage === 'function') {
+      this.lastPermissionQueryTs = now;
       const waiter = this.waitForNativePermissionState(timeoutMs);
+      this.inFlightPermissionQuery = waiter.finally(() => {
+        this.inFlightPermissionQuery = null;
+      });
       try {
         stateHandler.postMessage('push-permission-state');
       } catch (_) {
         try { stateHandler.postMessage({}); } catch (_) {}
       }
-      return await waiter;
+      return await this.inFlightPermissionQuery;
     }
     return this.nativePushPermissionState;
   }
@@ -791,36 +817,42 @@ class OneSignalService {
     if (!id) return;
     const cleanId = id.trim();
     if (!cleanId || cleanId.startsWith('local-')) return;
+
+    const isNewSubId = cleanId !== this.nativeSubscriptionId;
     this.nativeSubscriptionId = cleanId;
-    this.addDiag('subscription', 'ok', 'Native OneSignal Subscription ID received.', { subscriptionId: cleanId });
-    this.notifyObservers(cleanId);
 
-    const dev = this.getDeviceInfo();
-    const nativeTags: Record<string, string> = {
-      platform: dev.isIOS ? 'ios' : dev.isAndroid ? 'android' : 'mobile',
-      is_mobile: 'true',
-      app_channel: dev.isIOS ? 'pushApp_ios' : 'pushApp_android',
-      is_standalone: 'true'
-    };
+    if (isNewSubId) {
+      this.addDiag('subscription', 'ok', 'Native OneSignal Subscription ID received.', { subscriptionId: cleanId });
+      this.notifyObservers(cleanId);
 
-    // Apply tags to native wrapper (and Web SDK only when NOT in iOS WKWebView)
-    try {
-      const windowAny = typeof window !== 'undefined' ? (window as any) : null;
-      if (!dev.isIOSWebView && !dev.hasIOSPushBridge) {
-        if (OneSignal?.User?.addTags) {
-          await OneSignal.User.addTags(nativeTags);
-        } else if (windowAny?.OneSignal?.sendTags) {
-          await windowAny.OneSignal.sendTags(nativeTags);
+      const dev = this.getDeviceInfo();
+      const nativeTags: Record<string, string> = {
+        platform: dev.isIOS ? 'ios' : dev.isAndroid ? 'android' : 'mobile',
+        is_mobile: 'true',
+        app_channel: dev.isIOS ? 'pushApp_ios' : 'pushApp_android',
+        is_standalone: 'true'
+      };
+
+      // Apply tags to native wrapper (and Web SDK only when NOT in iOS WKWebView)
+      try {
+        const windowAny = typeof window !== 'undefined' ? (window as any) : null;
+        if (!dev.isIOSWebView && !dev.hasIOSPushBridge) {
+          if (OneSignal?.User?.addTags) {
+            await OneSignal.User.addTags(nativeTags);
+          } else if (windowAny?.OneSignal?.sendTags) {
+            await windowAny.OneSignal.sendTags(nativeTags);
+          }
         }
+        if (windowAny?.webkit?.messageHandlers?.oneSignal) {
+          windowAny.webkit.messageHandlers.oneSignal.postMessage({ action: 'setTags', tags: nativeTags });
+        }
+      } catch (e) {
+        console.warn('[OneSignal] Tagging native subscription warning:', e);
       }
-      if (windowAny?.webkit?.messageHandlers?.oneSignal) {
-        windowAny.webkit.messageHandlers.oneSignal.postMessage({ action: 'setTags', tags: nativeTags });
-      }
-    } catch (e) {
-      console.warn('[OneSignal] Tagging native subscription warning:', e);
     }
 
-    // If an authenticated user is known, link external ID (native + server REST API) & persist to Supabase
+    // If an authenticated user is known, persist to Supabase & link via backend API once per (userId, subscriptionId).
+    // Only invoke loginUser if this user has not yet been logged in on the native bridge (prevents ping-pong loop).
     try {
       let uid = this.currentUserId;
       if (!uid && isSupabaseConfigured) {
@@ -828,9 +860,11 @@ class OneSignalService {
         uid = sessionData?.session?.user?.id || null;
       }
       if (uid) {
-        await this.loginUser(uid, nativeTags);
-        await this.linkDeviceOnServer(uid, cleanId);
-      } else {
+        if (this.lastNativeLoginUserId !== uid && this.inFlightLoginUserId !== uid) {
+          await this.loginUser(uid);
+        }
+        await this.syncSubscriptionForUser(uid, cleanId);
+      } else if (isNewSubId) {
         this.addDiag('login', 'warn', 'Subscription ID received before Supabase session was ready — will auto-link once user logs in.', {
           subscriptionId: cleanId
         });
@@ -841,10 +875,34 @@ class OneSignalService {
   }
 
   /**
+   * Persist subscription ID to Supabase and link it on the OneSignal backend once per (userId, subscriptionId) pair.
+   * Does not send any messages to WKWebView.
+   */
+  async syncSubscriptionForUser(userId: string, subscriptionId: string): Promise<void> {
+    if (!userId || !subscriptionId || !this.isRealServerAssignedId(subscriptionId)) return;
+    const cleanUserId = userId.trim();
+    const cleanSubId = subscriptionId.trim();
+    if (!cleanUserId || !cleanSubId) return;
+    if (isSupabaseConfigured) {
+      await this.persistUserSubscriptionId(cleanUserId, cleanSubId);
+    }
+    await this.linkDeviceOnServer(cleanUserId, cleanSubId);
+  }
+
+  /**
    * Server-side fallback: link a known Subscription ID to the user's Supabase external_id in OneSignal
    */
   async linkDeviceOnServer(userId: string, subscriptionId: string): Promise<boolean> {
     if (!userId || !subscriptionId || !this.isRealServerAssignedId(subscriptionId)) return false;
+    const key = `${userId.trim()}:${subscriptionId.trim()}`;
+    if (this.syncedServerLinkKeys.has(key) || this.inFlightServerLinkKeys.has(key)) {
+      return true;
+    }
+    const lastFailed = this.lastFailedServerLinkAt.get(key);
+    if (lastFailed && Date.now() - lastFailed < 30000) {
+      return false;
+    }
+    this.inFlightServerLinkKeys.add(key);
     try {
       const res = await fetch('/api/onesignal-link-device', {
         method: 'POST',
@@ -853,6 +911,8 @@ class OneSignalService {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data?.success) {
+        this.syncedServerLinkKeys.add(key);
+        this.lastFailedServerLinkAt.delete(key);
         this.lastServerLinkResult = {
           ok: true,
           userId,
@@ -866,6 +926,7 @@ class OneSignalService {
         });
         return true;
       }
+      this.lastFailedServerLinkAt.set(key, Date.now());
       this.lastServerLinkResult = {
         ok: false,
         userId,
@@ -876,6 +937,7 @@ class OneSignalService {
       this.addDiag('server', 'warn', 'Server-side OneSignal link returned error.', this.lastServerLinkResult);
       return false;
     } catch (err: any) {
+      this.lastFailedServerLinkAt.set(key, Date.now());
       this.lastServerLinkResult = {
         ok: false,
         userId,
@@ -885,6 +947,8 @@ class OneSignalService {
       };
       this.addDiag('server', 'error', 'Server-side OneSignal link network error.', this.lastServerLinkResult);
       return false;
+    } finally {
+      this.inFlightServerLinkKeys.delete(key);
     }
   }
 
@@ -1113,19 +1177,22 @@ class OneSignalService {
     // Native iOS WKWebView (TestFlight / App Store): NEVER initialize the OneSignal Web SDK.
     // Push registration & APNs tokens MUST come from the native iOS OneSignal SDK in Xcode.
     if (dev.isIOSWebView || dev.hasIOSPushBridge) {
-      const registeredHandlers = this.getRegisteredWebKitHandlers();
+      const alreadyInit = this.isInitialized;
       this.isInitialized = true;
       this.bindClickListeners();
-      this.addDiag('init', 'ok', 'iOS WKWebView mode active (Web SDK skipped; using native Xcode bridge).', {
-        appId,
-        host: window.location.hostname,
-        registeredHandlers,
-        cachedPermission: this.nativePushPermissionState,
-        nativeSubscriptionId: this.nativeSubscriptionId
-      });
+      if (!alreadyInit) {
+        const registeredHandlers = this.getRegisteredWebKitHandlers();
+        this.addDiag('init', 'ok', 'iOS WKWebView mode active (Web SDK skipped; using native Xcode bridge).', {
+          appId,
+          host: window.location.hostname,
+          registeredHandlers,
+          cachedPermission: this.nativePushPermissionState,
+          nativeSubscriptionId: this.nativeSubscriptionId
+        });
 
-      this.queryNativePushPermissionState(1200).catch(() => {});
-      this.requestNativeSubscriptionState();
+        this.queryNativePushPermissionState(1200).catch(() => {});
+        this.requestNativeSubscriptionState();
+      }
 
       if (userId) {
         await this.loginUser(userId);
@@ -1340,6 +1407,9 @@ class OneSignalService {
             if (userId) {
               await this.loginUser(userId);
             }
+            if (!this.nativeSubscriptionId) {
+              this.requestNativeSubscriptionState();
+            }
             return true;
           }
           return false;
@@ -1531,8 +1601,11 @@ class OneSignalService {
    */
   private async persistUserSubscriptionId(userId: string, newSubId: string): Promise<void> {
     if (!userId || !newSubId || !this.isRealServerAssignedId(newSubId) || !isSupabaseConfigured) return;
+    const cleanNew = newSubId.trim();
+    const key = `${userId.trim()}:${cleanNew}`;
+    if (this.persistedSupabaseKeys.has(key) || this.inFlightPersistKeys.has(key)) return;
+    this.inFlightPersistKeys.add(key);
     try {
-      const cleanNew = newSubId.trim();
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('onesignal_player_id')
@@ -1554,8 +1627,11 @@ class OneSignalService {
           updated_at: new Date().toISOString()
         } as any).eq('id', userId);
       }
+      this.persistedSupabaseKeys.add(key);
     } catch (_) {
       // Column might not exist yet, safe fallback
+    } finally {
+      this.inFlightPersistKeys.delete(key);
     }
   }
 
@@ -1718,6 +1794,27 @@ class OneSignalService {
 
     const dev = this.getDeviceInfo();
     const isIOSNative = dev.isIOSWebView || dev.hasIOSPushBridge;
+
+    // Strict deduplication on iOS WKWebView: send onesignal-login at most ONCE per authenticated user
+    // (resets on logoutUser() or when switching to a different userId).
+    if (isIOSNative) {
+      if (this.lastNativeLoginUserId === cleanUserId || this.inFlightLoginUserId === cleanUserId) {
+        if (this.nativeSubscriptionId) {
+          await this.syncSubscriptionForUser(cleanUserId, this.nativeSubscriptionId);
+        }
+        return;
+      }
+    } else if (this.lastWebLoginUserId === cleanUserId || this.inFlightLoginUserId === cleanUserId) {
+      const windowAny = typeof window !== 'undefined' ? (window as any) : null;
+      const subId = this.nativeSubscriptionId || this.getCurrentSubscriptionId() || windowAny?.OneSignal?.User?.PushSubscription?.id;
+      if (subId && isSupabaseConfigured) {
+        await this.persistUserSubscriptionId(cleanUserId, subId);
+      }
+      return;
+    }
+
+    this.inFlightLoginUserId = cleanUserId;
+
     const combinedTags: Record<string, string> = {
       platform: dev.platform,
       is_mobile: dev.isMobile ? 'true' : 'false',
@@ -1728,177 +1825,182 @@ class OneSignalService {
     const windowAny = typeof window !== 'undefined' ? (window as any) : null;
     const invokedNativeHandlers: string[] = [];
 
-    // 1. Forward to native iOS WKWebView if running inside an Xcode Swift / Obj-C wrapper
-    if (windowAny) {
-      try {
-        const handlers = windowAny.webkit?.messageHandlers;
-        if (handlers) {
-          const stringHandlers = [
-            'oneSignalLogin',
-            'onesignalLogin',
-            'onesignal-login',
-            'oneSignal-login',
-            'push-login',
-            'setExternalUserId',
-            'setExternalId',
-            'external-id',
-            'login'
-          ];
-          for (const hName of stringHandlers) {
-            if (handlers[hName] && typeof handlers[hName].postMessage === 'function') {
-              handlers[hName].postMessage(cleanUserId);
-              invokedNativeHandlers.push(hName);
-            }
-          }
-          if (handlers.oneSignal && typeof handlers.oneSignal.postMessage === 'function') {
-            handlers.oneSignal.postMessage({ action: 'login', userId: cleanUserId, tags: combinedTags });
-            invokedNativeHandlers.push('oneSignal');
-          }
-          if (handlers.setUser && typeof handlers.setUser.postMessage === 'function') {
-            handlers.setUser.postMessage({ id: cleanUserId });
-            invokedNativeHandlers.push('setUser');
-          }
-        }
-      } catch (e) {
-        this.addDiag('login', 'error', 'Native iOS WKWebView login postMessage failed.', String(e));
-      }
-
-      // 2. Median.co (GoNative) native bridge for iOS & Android
-      try {
-        if (windowAny.median?.onesignal?.login) {
-          windowAny.median.onesignal.login(cleanUserId);
-          invokedNativeHandlers.push('median.onesignal.login');
-        } else if (windowAny.median?.onesignal?.externalUserId?.set) {
-          windowAny.median.onesignal.externalUserId.set({ externalId: cleanUserId });
-          invokedNativeHandlers.push('median.onesignal.externalUserId.set');
-        }
-        if (windowAny.median?.onesignal?.tags?.set) {
-          windowAny.median.onesignal.tags.set({ tags: combinedTags });
-        }
-        if (windowAny.gonative?.onesignal?.login) {
-          windowAny.gonative.onesignal.login(cleanUserId);
-          invokedNativeHandlers.push('gonative.onesignal.login');
-        } else if (windowAny.gonative?.onesignal?.externalUserId?.set) {
-          windowAny.gonative.onesignal.externalUserId.set({ externalId: cleanUserId });
-          invokedNativeHandlers.push('gonative.onesignal.externalUserId.set');
-        }
-        if (windowAny.gonative?.onesignal?.tags?.set) {
-          windowAny.gonative.onesignal.tags.set({ tags: combinedTags });
-        }
-      } catch (medErr) {
-        console.warn('[OneSignal] Median/GoNative bridge login warning:', medErr);
-      }
-
-      // 3. Capacitor / Cordova native plugins
-      try {
-        if (windowAny.OneSignalPlugin?.login) {
-          await windowAny.OneSignalPlugin.login(cleanUserId);
-          invokedNativeHandlers.push('OneSignalPlugin.login');
-        } else if (windowAny.OneSignalPlugin?.setExternalUserId) {
-          await windowAny.OneSignalPlugin.setExternalUserId(cleanUserId);
-          invokedNativeHandlers.push('OneSignalPlugin.setExternalUserId');
-        }
-        if (windowAny.Capacitor?.Plugins?.OneSignal?.login) {
-          await windowAny.Capacitor.Plugins.OneSignal.login(cleanUserId);
-          invokedNativeHandlers.push('Capacitor.OneSignal.login');
-        } else if (windowAny.Capacitor?.Plugins?.OneSignalPlugin?.login) {
-          await windowAny.Capacitor.Plugins.OneSignalPlugin.login(cleanUserId);
-          invokedNativeHandlers.push('Capacitor.OneSignalPlugin.login');
-        }
-        if (windowAny.plugins?.OneSignal?.login) {
-          await windowAny.plugins.OneSignal.login(cleanUserId);
-          invokedNativeHandlers.push('plugins.OneSignal.login');
-        } else if (windowAny.plugins?.OneSignal?.setExternalUserId) {
-          await windowAny.plugins.OneSignal.setExternalUserId(cleanUserId);
-          invokedNativeHandlers.push('plugins.OneSignal.setExternalUserId');
-        }
-      } catch (capErr) {
-        console.warn('[OneSignal] Capacitor plugin login error:', capErr);
-      }
-    }
-
-    this.lastLoginHandlersCalled = invokedNativeHandlers;
-
-    // On iOS WKWebView, NEVER fall through to the Web SDK (it cannot bind an APNs iOS subscription).
-    if (isIOSNative) {
-      if (invokedNativeHandlers.length > 0) {
-        this.addDiag('login', 'ok', `Forwarded external_id to native iOS bridge via [${invokedNativeHandlers.join(', ')}].`, {
-          userId: cleanUserId
-        });
-      } else {
-        const available = this.getRegisteredWebKitHandlers();
-        this.addDiag(
-          'login',
-          'warn',
-          'No native OneSignal login handler found in WKWebView! Xcode must register "onesignal-login" (or "oneSignalLogin") to call OneSignal.login(userId).',
-          { userId: cleanUserId, availableHandlers: available }
-        );
-      }
-
-      // Also ask Xcode for current Subscription ID / state if supported
-      this.requestNativeSubscriptionState();
-
-      // If we already have a native Subscription ID, persist to Supabase & link directly via backend API
-      if (this.nativeSubscriptionId) {
-        if (isSupabaseConfigured) {
-          await this.persistUserSubscriptionId(cleanUserId, this.nativeSubscriptionId);
-        }
-        await this.linkDeviceOnServer(cleanUserId, this.nativeSubscriptionId);
-      }
-      return;
-    }
-
-    // 4. Web / PWA path: Ensure OneSignal Web SDK is initialized (without recursing back into loginUser)
-    if (!this.isInitialized) {
-      await this.init();
-    }
-
-    // 5. Web SDK login & tagging (both via OneSignalDeferred queue and direct SDK call)
     try {
+      // 1. Forward to native iOS WKWebView if running inside an Xcode Swift / Obj-C wrapper
       if (windowAny) {
-        windowAny.OneSignalDeferred = windowAny.OneSignalDeferred || [];
-        windowAny.OneSignalDeferred.push(async (OS: any) => {
-          try {
-            if (OS?.login) {
-              await OS.login(cleanUserId);
-            } else if (OS?.setExternalUserId) {
-              await OS.setExternalUserId(cleanUserId);
+        try {
+          const handlers = windowAny.webkit?.messageHandlers;
+          if (handlers) {
+            const stringHandlers = [
+              'onesignal-login',
+              'oneSignalLogin',
+              'onesignalLogin',
+              'oneSignal-login',
+              'push-login',
+              'setExternalUserId',
+              'setExternalId',
+              'external-id',
+              'login'
+            ];
+            for (const hName of stringHandlers) {
+              if (handlers[hName] && typeof handlers[hName].postMessage === 'function') {
+                handlers[hName].postMessage(cleanUserId);
+                invokedNativeHandlers.push(hName);
+                break;
+              }
             }
-            if (OS?.User?.addTags) {
-              await OS.User.addTags(combinedTags);
-            } else if (OS?.sendTags) {
-              await OS.sendTags(combinedTags);
+            if (invokedNativeHandlers.length === 0) {
+              if (handlers.oneSignal && typeof handlers.oneSignal.postMessage === 'function') {
+                handlers.oneSignal.postMessage({ action: 'login', userId: cleanUserId, tags: combinedTags });
+                invokedNativeHandlers.push('oneSignal');
+              } else if (handlers.setUser && typeof handlers.setUser.postMessage === 'function') {
+                handlers.setUser.postMessage({ id: cleanUserId });
+                invokedNativeHandlers.push('setUser');
+              }
             }
-          } catch (defErr) {
-            console.warn('[OneSignal] Deferred login/tags warning:', defErr);
           }
-        });
+        } catch (e) {
+          this.addDiag('login', 'error', 'Native iOS WKWebView login postMessage failed.', String(e));
+        }
+
+        // 2. Median.co (GoNative) native bridge for iOS & Android
+        try {
+          if (windowAny.median?.onesignal?.login) {
+            windowAny.median.onesignal.login(cleanUserId);
+            invokedNativeHandlers.push('median.onesignal.login');
+          } else if (windowAny.median?.onesignal?.externalUserId?.set) {
+            windowAny.median.onesignal.externalUserId.set({ externalId: cleanUserId });
+            invokedNativeHandlers.push('median.onesignal.externalUserId.set');
+          }
+          if (windowAny.median?.onesignal?.tags?.set) {
+            windowAny.median.onesignal.tags.set({ tags: combinedTags });
+          }
+          if (windowAny.gonative?.onesignal?.login) {
+            windowAny.gonative.onesignal.login(cleanUserId);
+            invokedNativeHandlers.push('gonative.onesignal.login');
+          } else if (windowAny.gonative?.onesignal?.externalUserId?.set) {
+            windowAny.gonative.onesignal.externalUserId.set({ externalId: cleanUserId });
+            invokedNativeHandlers.push('gonative.onesignal.externalUserId.set');
+          }
+          if (windowAny.gonative?.onesignal?.tags?.set) {
+            windowAny.gonative.onesignal.tags.set({ tags: combinedTags });
+          }
+        } catch (medErr) {
+          console.warn('[OneSignal] Median/GoNative bridge login warning:', medErr);
+        }
+
+        // 3. Capacitor / Cordova native plugins
+        try {
+          if (windowAny.OneSignalPlugin?.login) {
+            await windowAny.OneSignalPlugin.login(cleanUserId);
+            invokedNativeHandlers.push('OneSignalPlugin.login');
+          } else if (windowAny.OneSignalPlugin?.setExternalUserId) {
+            await windowAny.OneSignalPlugin.setExternalUserId(cleanUserId);
+            invokedNativeHandlers.push('OneSignalPlugin.setExternalUserId');
+          }
+          if (windowAny.Capacitor?.Plugins?.OneSignal?.login) {
+            await windowAny.Capacitor.Plugins.OneSignal.login(cleanUserId);
+            invokedNativeHandlers.push('Capacitor.OneSignal.login');
+          } else if (windowAny.Capacitor?.Plugins?.OneSignalPlugin?.login) {
+            await windowAny.Capacitor.Plugins.OneSignalPlugin.login(cleanUserId);
+            invokedNativeHandlers.push('Capacitor.OneSignalPlugin.login');
+          }
+          if (windowAny.plugins?.OneSignal?.login) {
+            await windowAny.plugins.OneSignal.login(cleanUserId);
+            invokedNativeHandlers.push('plugins.OneSignal.login');
+          } else if (windowAny.plugins?.OneSignal?.setExternalUserId) {
+            await windowAny.plugins.OneSignal.setExternalUserId(cleanUserId);
+            invokedNativeHandlers.push('plugins.OneSignal.setExternalUserId');
+          }
+        } catch (capErr) {
+          console.warn('[OneSignal] Capacitor plugin login error:', capErr);
+        }
       }
 
-      if (OneSignal?.login) {
-        await OneSignal.login(cleanUserId);
-      } else if (windowAny?.OneSignal?.login) {
-        await windowAny.OneSignal.login(cleanUserId);
-      } else if (windowAny?.OneSignal?.setExternalUserId) {
-        await windowAny.OneSignal.setExternalUserId(cleanUserId);
+      this.lastLoginHandlersCalled = invokedNativeHandlers;
+
+      // On iOS WKWebView, NEVER fall through to the Web SDK (it cannot bind an APNs iOS subscription).
+      // Do NOT call requestNativeSubscriptionState() here — Xcode pushes state changes and init() already queries once.
+      if (isIOSNative) {
+        this.lastNativeLoginUserId = cleanUserId;
+        if (invokedNativeHandlers.length > 0) {
+          this.addDiag('login', 'ok', `Forwarded external_id to native iOS bridge via [${invokedNativeHandlers.join(', ')}].`, {
+            userId: cleanUserId
+          });
+        } else {
+          const available = this.getRegisteredWebKitHandlers();
+          this.addDiag(
+            'login',
+            'warn',
+            'No native OneSignal login handler found in WKWebView! Xcode must register "onesignal-login" (or "oneSignalLogin") to call OneSignal.login(userId).',
+            { userId: cleanUserId, availableHandlers: available }
+          );
+        }
+
+        // If we already have a native Subscription ID, persist to Supabase & link directly via backend API (deduplicated)
+        if (this.nativeSubscriptionId) {
+          await this.syncSubscriptionForUser(cleanUserId, this.nativeSubscriptionId);
+        }
+        return;
       }
 
-      if (OneSignal?.User?.addTags) {
-        await OneSignal.User.addTags(combinedTags);
-      } else if (windowAny?.OneSignal?.User?.addTags) {
-        await windowAny.OneSignal.User.addTags(combinedTags);
-      } else if (windowAny?.OneSignal?.sendTags) {
-        await windowAny.OneSignal.sendTags(combinedTags);
+      // 4. Web / PWA path: Ensure OneSignal Web SDK is initialized (without recursing back into loginUser)
+      if (!this.isInitialized) {
+        await this.init();
       }
-      this.addDiag('login', 'ok', 'Set External ID in OneSignal Web SDK.', { userId: cleanUserId });
-    } catch (err) {
-      this.addDiag('login', 'warn', 'Error setting External ID in OneSignal Web SDK.', String(err));
-    }
 
-    // 6. Sync subscription ID to Supabase profiles (preserving all devices of the user)
-    const subId = this.nativeSubscriptionId || this.getCurrentSubscriptionId() || windowAny?.OneSignal?.User?.PushSubscription?.id;
-    if (subId && cleanUserId && isSupabaseConfigured) {
-      await this.persistUserSubscriptionId(cleanUserId, subId);
+      // 5. Web SDK login & tagging (both via OneSignalDeferred queue and direct SDK call)
+      try {
+        if (windowAny) {
+          windowAny.OneSignalDeferred = windowAny.OneSignalDeferred || [];
+          windowAny.OneSignalDeferred.push(async (OS: any) => {
+            try {
+              if (OS?.login) {
+                await OS.login(cleanUserId);
+              } else if (OS?.setExternalUserId) {
+                await OS.setExternalUserId(cleanUserId);
+              }
+              if (OS?.User?.addTags) {
+                await OS.User.addTags(combinedTags);
+              } else if (OS?.sendTags) {
+                await OS.sendTags(combinedTags);
+              }
+            } catch (defErr) {
+              console.warn('[OneSignal] Deferred login/tags warning:', defErr);
+            }
+          });
+        }
+
+        if (OneSignal?.login) {
+          await OneSignal.login(cleanUserId);
+        } else if (windowAny?.OneSignal?.login) {
+          await windowAny.OneSignal.login(cleanUserId);
+        } else if (windowAny?.OneSignal?.setExternalUserId) {
+          await windowAny.OneSignal.setExternalUserId(cleanUserId);
+        }
+
+        if (OneSignal?.User?.addTags) {
+          await OneSignal.User.addTags(combinedTags);
+        } else if (windowAny?.OneSignal?.User?.addTags) {
+          await windowAny.OneSignal.User.addTags(combinedTags);
+        } else if (windowAny?.OneSignal?.sendTags) {
+          await windowAny.OneSignal.sendTags(combinedTags);
+        }
+        this.lastWebLoginUserId = cleanUserId;
+        this.addDiag('login', 'ok', 'Set External ID in OneSignal Web SDK.', { userId: cleanUserId });
+      } catch (err) {
+        this.addDiag('login', 'warn', 'Error setting External ID in OneSignal Web SDK.', String(err));
+      }
+
+      // 6. Sync subscription ID to Supabase profiles (preserving all devices of the user)
+      const subId = this.nativeSubscriptionId || this.getCurrentSubscriptionId() || windowAny?.OneSignal?.User?.PushSubscription?.id;
+      if (subId && cleanUserId && isSupabaseConfigured) {
+        await this.persistUserSubscriptionId(cleanUserId, subId);
+      }
+    } finally {
+      if (this.inFlightLoginUserId === cleanUserId) {
+        this.inFlightLoginUserId = null;
+      }
     }
   }
 
@@ -1907,15 +2009,29 @@ class OneSignalService {
    */
   async logoutUser(): Promise<void> {
     this.currentUserId = null;
+    this.lastNativeLoginUserId = null;
+    this.lastWebLoginUserId = null;
+    this.inFlightLoginUserId = null;
+    this.nativeExternalId = null;
+    this.syncedServerLinkKeys.clear();
+    this.persistedSupabaseKeys.clear();
+    this.lastFailedServerLinkAt.clear();
+
     const windowAny = typeof window !== 'undefined' ? (window as any) : null;
     if (windowAny) {
       try {
         const handlers = windowAny.webkit?.messageHandlers;
-        if (handlers?.['onesignal-logout']) handlers['onesignal-logout'].postMessage('logout');
-        if (handlers?.oneSignalLogout) handlers.oneSignalLogout.postMessage({});
-        if (handlers?.removeExternalUserId) handlers.removeExternalUserId.postMessage({});
-        if (handlers?.logout) handlers.logout.postMessage({});
-        if (handlers?.oneSignal) handlers.oneSignal.postMessage({ action: 'logout' });
+        if (handlers?.['onesignal-logout']) {
+          handlers['onesignal-logout'].postMessage('logout');
+        } else if (handlers?.oneSignalLogout) {
+          handlers.oneSignalLogout.postMessage({});
+        } else if (handlers?.removeExternalUserId) {
+          handlers.removeExternalUserId.postMessage({});
+        } else if (handlers?.logout) {
+          handlers.logout.postMessage({});
+        } else if (handlers?.oneSignal) {
+          handlers.oneSignal.postMessage({ action: 'logout' });
+        }
       } catch (_) {}
 
       try {

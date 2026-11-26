@@ -9,11 +9,9 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
-  FileText,
   Filter,
   Globe,
   Heart,
-  HeartPulse,
   Home,
   Instagram,
   Lock,
@@ -31,15 +29,12 @@ import {
   Star,
   Sun,
   Tag,
-  Train,
   User,
   UserPlus,
   X,
   Zap,
 } from 'lucide-react';
 import { Logo } from './Logo';
-import { RotatingCylinderWord } from './RotatingCylinderWord';
-import { RotatingPlaceholder } from './RotatingPlaceholder';
 import type { AppPartner } from '../services/partnerService';
 import heroCityImg from '../assets/images/valencia_hero_editorial_1795634116923.jpg';
 import socialEventsImg from '../assets/images/valencia_social_events_1795634120123.jpg';
@@ -562,6 +557,440 @@ const MODAL_SPRING = {
   damping: 25,
   mass: 0.95,
 };
+
+interface HeroMapSpot {
+  id: string;
+  kindLabel: string;
+  title: string;
+  meta: string;
+  accentHex: string;
+  labelClass: string;
+  activeBorderClass: string;
+  pinPos: { top: string; left: string };
+  routePath: string;
+  cameraOffset: { x: number; y: number };
+  widthClass: string;
+  thumb: string;
+  showVerified?: boolean;
+}
+
+const HERO_MAP_SPOTS: HeroMapSpot[] = [
+  {
+    id: 'pro',
+    kindLabel: 'Recommended Pro',
+    title: 'Dr. Clara Moreau',
+    meta: 'Dentist · 5.0 ★ · 0.6 km',
+    accentHex: '#0038FF',
+    labelClass: 'text-brand-blue',
+    activeBorderClass: 'border-brand-blue/60 shadow-[0_20px_42px_rgba(0,56,255,0.18)]',
+    pinPos: { top: '32%', left: '35%' },
+    routePath: 'M 46 52 Q 39 43, 35 32',
+    cameraOffset: { x: 8, y: 7 },
+    widthClass: 'w-[196px] sm:w-[224px]',
+    thumb: mockProClaraImg,
+    showVerified: true,
+  },
+  {
+    id: 'event',
+    kindLabel: 'This Friday',
+    title: 'Rooftop Aperitivo',
+    meta: '19:30 · Old Town Terrace',
+    accentHex: '#F97316',
+    labelClass: 'text-orange-600',
+    activeBorderClass: 'border-orange-400/70 shadow-[0_20px_42px_rgba(249,115,22,0.18)]',
+    pinPos: { top: '57%', left: '65%' },
+    routePath: 'M 46 52 Q 56 49, 65 57',
+    cameraOffset: { x: -8, y: 0 },
+    widthClass: 'w-[192px] sm:w-[218px]',
+    thumb: socialEventsImg,
+  },
+  {
+    id: 'stuff',
+    kindLabel: 'Good Stuff',
+    title: 'Vintage City Bike',
+    meta: '€120 · Pick up · 400m',
+    accentHex: '#9333EA',
+    labelClass: 'text-purple-600',
+    activeBorderClass: 'border-purple-400/70 shadow-[0_20px_42px_rgba(147,51,234,0.18)]',
+    pinPos: { top: '86%', left: '41%' },
+    routePath: 'M 46 52 Q 46 70, 41 86',
+    cameraOffset: { x: 3, y: -7 },
+    widthClass: 'w-[186px] sm:w-[212px]',
+    thumb: stuffCityBikeImg,
+  },
+];
+
+const HERO_AMBIENT_PINS: Array<{
+  id: string;
+  top: string;
+  left: string;
+  color: string;
+  rating?: string;
+}> = [
+  { id: 'amb-1', top: '19%', left: '62%', color: '#0038FF', rating: '4.9' },
+  { id: 'amb-2', top: '24%', left: '84%', color: '#F97316' },
+  { id: 'amb-3', top: '54%', left: '15%', color: '#0038FF', rating: '5.0' },
+  { id: 'amb-4', top: '76%', left: '16%', color: '#9333EA' },
+  { id: 'amb-5', top: '81%', left: '82%', color: '#0038FF', rating: '4.8' },
+];
+
+/**
+ * Organic, realistic living city map hero showcase with smooth camera panning,
+ * self-drawing routes from the user's location, and genuinely geolocated spots.
+ */
+const HeroCityMapVisual = React.memo(function HeroCityMapVisual() {
+  const prefersReducedMotion = useReducedMotion();
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const isInView = useInView(mapRef, { amount: 0.2 });
+  const [activeIndex, setActiveIndex] = useState<number>(0);
+
+  useEffect(() => {
+    if (prefersReducedMotion || !isInView) return;
+    const interval = window.setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % HERO_MAP_SPOTS.length);
+    }, 3200);
+    return () => window.clearInterval(interval);
+  }, [prefersReducedMotion, isInView]);
+
+  const activeSpot = HERO_MAP_SPOTS[activeIndex] || HERO_MAP_SPOTS[0];
+
+  return (
+    <motion.div
+      ref={mapRef}
+      initial={prefersReducedMotion ? false : { opacity: 0, y: 18, scale: 0.985 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.8, delay: 0.08, ease: APPLE_EASE }}
+      className="relative h-[460px] sm:h-[520px] rounded-[32px] overflow-hidden border border-slate-200/90 bg-[#F2F4F7] shadow-[0_24px_60px_rgba(10,15,44,0.09)] pointer-events-none select-none will-change-transform"
+    >
+      {/* Living camera container: subtly pans & glides toward the active spot */}
+      <motion.div
+        animate={
+          prefersReducedMotion
+            ? { x: 0, y: 0, scale: 1 }
+            : {
+                x: activeSpot.cameraOffset.x,
+                y: activeSpot.cameraOffset.y,
+                scale: 1.045,
+              }
+        }
+        transition={{ duration: 1.35, ease: APPLE_EASE }}
+        className="absolute inset-0 will-change-transform"
+      >
+        {/* Authentic cartographic European street map */}
+        <svg
+          viewBox="0 0 640 560"
+          className="absolute inset-0 w-full h-full object-cover"
+          preserveAspectRatio="xMidYMid slice"
+          aria-hidden="true"
+        >
+          {/* Warm-neutral map land base */}
+          <rect width="640" height="560" fill="#F2F4F7" />
+
+          {/* Organic sweeping park belt & winding river channel */}
+          <path
+            d="M -30 430 C 90 365, 195 315, 290 255 C 390 192, 475 110, 670 60 L 670 132 C 495 178, 412 252, 315 312 C 218 372, 118 428, -30 498 Z"
+            fill="#D7EED0"
+          />
+          <path
+            d="M -30 458 C 96 392, 202 340, 298 280 C 398 218, 486 138, 670 88 L 670 104 C 492 154, 405 232, 306 294 C 210 354, 105 408, -30 474 Z"
+            fill="#CFE4FF"
+          />
+          {/* Park footpath */}
+          <path
+            d="M -10 444 C 105 380, 205 328, 302 268 C 402 206, 488 124, 650 74"
+            fill="none"
+            stroke="#F8FAF5"
+            strokeWidth="2"
+            strokeDasharray="4 6"
+            opacity="0.8"
+          />
+
+          {/* Irregular neighborhood parks & plazas */}
+          <path
+            d="M 42 54 L 156 38 L 172 118 L 58 134 Z"
+            fill="#DCF1D6"
+          />
+          <path
+            d="M 464 368 Q 528 348, 578 394 Q 564 468, 486 456 Z"
+            fill="#DCF1D6"
+          />
+
+          {/* Irregular realistic urban building footprints (old town + angled blocks) */}
+          <g fill="#E6EBF1">
+            <polygon points="196,24 274,18 286,78 206,86" />
+            <polygon points="302,16 392,26 382,84 298,74" />
+            <polygon points="414,22 496,12 508,68 422,78" />
+
+            <polygon points="38,156 124,142 134,202 46,214" />
+            <polygon points="150,144 232,130 246,192 162,208" />
+            <polygon points="264,116 346,102 356,158 274,174" />
+
+            <polygon points="24,242 108,230 116,294 34,306" />
+            <polygon points="134,232 212,220 222,272 146,288" />
+
+            <polygon points="402,248 486,232 504,296 420,312" />
+            <polygon points="514,218 604,198 618,266 530,286" />
+
+            <polygon points="292,354 378,334 396,398 310,418" />
+            <polygon points="396,328 456,316 468,368 410,382" />
+            <polygon points="164,432 254,404 276,472 186,498" />
+            <polygon points="296,446 398,424 414,492 312,512" />
+            <polygon points="434,474 542,458 556,522 448,536" />
+            <polygon points="34,498 138,472 156,536 52,554" />
+          </g>
+
+          {/* Secondary fine residential streets */}
+          <g stroke="#FFFFFF" strokeWidth="5.5" strokeLinecap="round" fill="none">
+            <path d="M 184 0 L 242 292" />
+            <path d="M 288 0 L 318 232" />
+            <path d="M 404 0 L 382 210" />
+            <path d="M 516 0 L 496 142" />
+            <path d="M 0 138 L 368 88" />
+            <path d="M 0 226 L 266 196" />
+            <path d="M 0 320 L 210 296" />
+            <path d="M 358 256 L 640 194" />
+            <path d="M 270 344 L 640 278" />
+            <path d="M 232 418 L 598 346" />
+            <path d="M 126 560 L 298 324" />
+            <path d="M 378 560 L 486 240" />
+            <path d="M 538 560 L 604 294" />
+          </g>
+
+          {/* Primary city avenues (subtle warm ivory-amber like Google/Apple Maps) */}
+          <g stroke="#FDE79E" strokeWidth="10.5" strokeLinecap="round" fill="none">
+            <path d="M -12 104 Q 190 92, 368 118 T 652 174" />
+            <path d="M 118 -10 Q 146 184, 244 338 T 356 572" />
+            <path d="M 498 -10 Q 464 176, 412 346 T 274 572" />
+            <path d="M -12 366 Q 214 394, 422 442 T 652 496" />
+          </g>
+          <g stroke="#F5D36A" strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.55">
+            <path d="M -12 104 Q 190 92, 368 118 T 652 174" />
+            <path d="M 118 -10 Q 146 184, 244 338 T 356 572" />
+            <path d="M 498 -10 Q 464 176, 412 346 T 274 572" />
+            <path d="M -12 366 Q 214 394, 422 442 T 652 496" />
+          </g>
+
+          {/* Small authentic plaza roundabouts at avenue intersections */}
+          <circle cx="152" cy="108" r="11" fill="#FFFFFF" stroke="#E2E8F0" strokeWidth="1.5" />
+          <circle cx="442" cy="242" r="14" fill="#FFFFFF" stroke="#E2E8F0" strokeWidth="1.5" />
+          <circle cx="442" cy="242" r="7" fill="#DCF1D6" />
+
+          {/* Quiet cartographic district & avenue labels */}
+          <g fill="#94A3B8" fontFamily="sans-serif" fontWeight="700">
+            <text x="64" y="92" fontSize="9.5" letterSpacing="1.6">NORTH PARK</text>
+            <text x="488" y="168" fontSize="9.5" letterSpacing="1.6">OLD TOWN</text>
+            <text x="208" y="346" fontSize="9" letterSpacing="1.4" transform="rotate(-28 208 346)">
+              RIVER WALK
+            </text>
+            <text x="466" y="424" fontSize="9.5" letterSpacing="1.6">MIDTOWN</text>
+            <text x="68" y="468" fontSize="8.5" letterSpacing="1.4">SOUTH QUARTER</text>
+          </g>
+        </svg>
+
+        {/* Percentage-aligned animated route line tracing from GPS dot to active pin */}
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="absolute inset-0 w-full h-full pointer-events-none z-10"
+          aria-hidden="true"
+        >
+          <AnimatePresence mode="wait">
+            <motion.path
+              key={activeSpot.id}
+              d={activeSpot.routePath}
+              fill="none"
+              stroke={activeSpot.accentHex}
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeDasharray="1 0"
+              vectorEffect="non-scaling-stroke"
+              initial={prefersReducedMotion ? { pathLength: 1, opacity: 0.65 } : { pathLength: 0, opacity: 0.15 }}
+              animate={{ pathLength: 1, opacity: 0.72 }}
+              exit={{ opacity: 0, transition: { duration: 0.35, ease: APPLE_EASE } }}
+              transition={{ duration: 0.85, ease: APPLE_EASE }}
+            />
+          </AnimatePresence>
+        </svg>
+
+        {/* Realistic "You are here" blue GPS dot with gentle concentric pulse */}
+        <div className="absolute top-[52%] left-[46%] -translate-x-1/2 -translate-y-1/2 z-10 flex items-center justify-center">
+          {!prefersReducedMotion && (
+            <>
+              <motion.span
+                animate={{ scale: [1, 3.1], opacity: [0.36, 0] }}
+                transition={{ duration: 3.2, repeat: Infinity, ease: 'easeOut' }}
+                className="absolute w-8 h-8 rounded-full bg-brand-blue/35 will-change-transform"
+              />
+              <motion.span
+                animate={{ scale: [1, 2.3], opacity: [0.28, 0] }}
+                transition={{ duration: 3.2, delay: 1.1, repeat: Infinity, ease: 'easeOut' }}
+                className="absolute w-8 h-8 rounded-full bg-brand-blue/30 will-change-transform"
+              />
+            </>
+          )}
+          <span className="w-6.5 h-6.5 rounded-full bg-brand-blue/15 flex items-center justify-center">
+            <span className="w-3.5 h-3.5 rounded-full bg-brand-blue border-[2.5px] border-white shadow-[0_3px_10px_rgba(0,56,255,0.45)]" />
+          </span>
+        </div>
+
+        {/* Living ambient neighborhood pins gently breathing across districts */}
+        {HERO_AMBIENT_PINS.map((pin, idx) => (
+          <div
+            key={pin.id}
+            style={{ top: pin.top, left: pin.left }}
+            className="absolute -translate-x-1/2 -translate-y-full z-10"
+          >
+            <motion.div
+              initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.6 }}
+              animate={
+                prefersReducedMotion
+                  ? { opacity: 0.9, scale: 1 }
+                  : {
+                      opacity: [0.78, 0.96, 0.78],
+                      scale: [0.97, 1.05, 0.97],
+                    }
+              }
+              transition={
+                prefersReducedMotion
+                  ? { duration: 0.4 }
+                  : {
+                      duration: 4.2 + idx * 0.45,
+                      delay: idx * 0.55,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                    }
+              }
+              className="will-change-transform"
+            >
+              {pin.rating ? (
+                <div className="bg-white/95 border border-slate-200/90 shadow-[0_4px_12px_rgba(10,15,44,0.12)] rounded-full px-1.5 py-0.5 flex items-center gap-0.5 text-[9px] font-bold text-brand-navy tabular-nums relative">
+                  <span
+                    style={{ backgroundColor: pin.color }}
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                  />
+                  <span>{pin.rating}</span>
+                  <span className="text-amber-500">★</span>
+                  <span className="absolute -bottom-[4px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[4px] border-l-transparent border-r-transparent border-t-white" />
+                </div>
+              ) : (
+                <div
+                  style={{ backgroundColor: pin.color }}
+                  className="w-4.5 h-4.5 rounded-full border-2 border-white shadow-[0_4px_10px_rgba(10,15,44,0.22)] relative flex items-center justify-center"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                  <span
+                    style={{ borderTopColor: pin.color }}
+                    className="absolute -bottom-[4px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[3.5px] border-r-[3.5px] border-t-[4.5px] border-l-transparent border-r-transparent"
+                  />
+                </div>
+              )}
+            </motion.div>
+          </div>
+        ))}
+
+        {/* 3 Geolocated Spotlight Pins with Directly-Anchored Organic Callout Popovers */}
+        {HERO_MAP_SPOTS.map((spot, idx) => {
+          const isActive = idx === activeIndex;
+
+          return (
+            <div
+              key={spot.id}
+              style={{ top: spot.pinPos.top, left: spot.pinPos.left }}
+              className={`absolute -translate-x-1/2 -translate-y-full ${isActive ? 'z-30' : 'z-20'}`}
+            >
+              <motion.div
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 12, scale: 0.94 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ ...PRO_SPRING, delay: 0.14 + idx * 0.09 }}
+                className="relative flex flex-col items-center will-change-transform"
+              >
+                {/* Anchored Map Popover Card sitting directly above its street pin */}
+                <motion.div
+                  animate={{
+                    y: isActive ? -6 : 2,
+                    scale: isActive ? 1.045 : 0.94,
+                    opacity: isActive ? 1 : 0.78,
+                  }}
+                  transition={PRO_SPRING}
+                  className={`mb-2.5 ${spot.widthClass} rounded-2xl bg-white/96 backdrop-blur-md border p-2.5 flex items-center gap-2.5 text-left relative transition-colors duration-300 will-change-transform ${
+                    isActive
+                      ? spot.activeBorderClass
+                      : 'border-slate-200/90 shadow-[0_8px_20px_rgba(10,15,44,0.08)]'
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-xl overflow-hidden border border-slate-200/80 shrink-0 bg-slate-50">
+                    <img
+                      src={spot.thumb}
+                      alt={spot.title}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-[9.5px] font-bold leading-none ${spot.labelClass}`}>
+                      {spot.kindLabel}
+                    </p>
+                    <p className="text-[11.5px] sm:text-[12.5px] font-bold text-brand-navy truncate leading-snug mt-0.5 flex items-center gap-1">
+                      <span className="truncate">{spot.title}</span>
+                      {spot.showVerified && (
+                        <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                      )}
+                    </p>
+                    <p className="text-[9.5px] sm:text-[10px] text-slate-500 truncate leading-tight tabular-nums mt-0.5">
+                      {spot.meta}
+                    </p>
+                  </div>
+
+                  {/* Crisp speech-bubble pointer anchoring card directly to pin */}
+                  <span
+                    aria-hidden="true"
+                    className="absolute -bottom-[6px] left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white border-r border-b border-slate-200/90"
+                  />
+                </motion.div>
+
+                {/* Street Map Pin with dual soft active ripples */}
+                <div className="relative flex items-center justify-center">
+                  {!prefersReducedMotion && isActive && (
+                    <motion.span
+                      key={`ripple-${spot.id}-${activeIndex}`}
+                      initial={{ scale: 0.7, opacity: 0.55 }}
+                      animate={{ scale: 2.6, opacity: 0 }}
+                      transition={{ duration: 1.5, ease: 'easeOut' }}
+                      style={{ backgroundColor: spot.accentHex }}
+                      className="absolute w-6 h-6 rounded-full will-change-transform"
+                    />
+                  )}
+                  <motion.div
+                    animate={{ scale: isActive ? 1.24 : 0.96 }}
+                    transition={PIN_SPRING}
+                    style={{ backgroundColor: spot.accentHex }}
+                    className="w-6.5 h-6.5 rounded-full border-2 border-white shadow-[0_6px_16px_rgba(10,15,44,0.26)] flex items-center justify-center relative will-change-transform"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-white" />
+                    <span
+                      style={{ borderTopColor: spot.accentHex }}
+                      className="absolute -bottom-[5px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4.5px] border-r-[4.5px] border-t-[5.5px] border-l-transparent border-r-transparent"
+                    />
+                  </motion.div>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })}
+      </motion.div>
+
+      {/* Subtle realistic edge softening pinned to outer viewport frame */}
+      <div
+        className="absolute inset-0 pointer-events-none z-40"
+        style={{
+          background:
+            'radial-gradient(circle at 50% 50%, transparent 64%, rgba(242,244,247,0.68) 100%)',
+        }}
+      />
+    </motion.div>
+  );
+});
 
 type FindProsDemoPhase =
   | 'idle'
@@ -1177,7 +1606,6 @@ export function WebLandingPage({
   onAddPro,
   onOpenAppMode,
 }: WebLandingPageProps) {
-  const [heroPhoneTab, setHeroPhoneTab] = useState<PhoneTab>('home');
   const [eventsPreviewFilter, setEventsPreviewFilter] = useState<'all' | 'today' | 'weekend'>('all');
 
   const displayGuides = useMemo(() => {
@@ -1236,238 +1664,7 @@ export function WebLandingPage({
     }
   };
 
-  // Real ExploreView (Ask Jane search screen + filters + map) layout inside the Find Pros phone
-  const renderFindProsScreenContent = () => (
-    <div className="space-y-2.5 text-left pt-0.5">
-      {/* Header matching ExploreView */}
-      <div className="space-y-0.5">
-        <p className="text-[14px] font-bold font-display text-slate-800 tracking-tight leading-tight">
-          <span className="text-brand-blue font-bold">What</span> are you looking for?
-        </p>
-        <p className="text-[8.5px] text-slate-500 leading-snug">
-          Search for a professional or let Jane, your AI assistant, find the best match for you.
-        </p>
-      </div>
 
-      {/* Blue Bordered Ask Jane Search Block */}
-      <div className="space-y-1.5">
-        <button
-          type="button"
-          onClick={() => onNavigate('explore')}
-          className="w-full bg-white rounded-[14px] border-2 border-blue-200/90 shadow-2xs px-2.5 py-1.5 flex items-center gap-2 text-left hover:border-brand-blue/70 transition-colors cursor-pointer"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-brand-blue shrink-0" />
-          <div className="flex-1 min-w-0 relative h-3.5">
-            <RotatingPlaceholder
-              value=""
-              placeholders={[
-                'e.g. French-speaking dentist nearby...',
-                'e.g. reliable electrician or plumber...',
-                'e.g. help sorting out local paperwork...',
-                'e.g. tax advisor for expats & freelancers...',
-              ]}
-              className="text-slate-300 text-[9px] font-medium leading-normal truncate"
-            />
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onNavigate('explore')}
-          className="w-full py-2 bg-brand-blue hover:bg-[#0958d9] text-white rounded-[14px] font-bold text-[10px] shadow-sm shadow-blue-500/15 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-        >
-          <Sparkles className="w-3 h-3 fill-white/10" />
-          <span>Find professionals</span>
-        </button>
-
-        <div className="flex items-center justify-center gap-1 text-slate-400 font-bold text-[7.5px] tracking-wide">
-          <Lock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-          <span>100% secure. Jane is here to help.</span>
-        </div>
-      </div>
-
-      {/* Refine your search section matching ExploreView */}
-      <div className="space-y-1.5 pt-2 border-t border-slate-100">
-        <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-widest">
-          Refine your search
-        </p>
-
-        <div className="grid grid-cols-2 gap-1.5">
-          {/* Category Dropdown */}
-          <div className="space-y-0.5">
-            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <Filter className="w-2.5 h-2.5 text-brand-blue shrink-0" />
-              <span>Category</span>
-            </p>
-            <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[8.5px] font-bold text-slate-700">
-              <span className="truncate">Health &amp; Dental</span>
-              <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-            </div>
-          </div>
-
-          {/* Language Dropdown */}
-          <div className="space-y-0.5">
-            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <Globe className="w-2.5 h-2.5 text-brand-blue shrink-0" />
-              <span>Language</span>
-            </p>
-            <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[8.5px] font-bold text-slate-700">
-              <span className="truncate">English</span>
-              <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-            </div>
-          </div>
-
-          {/* Distance from me Slider matching ExploreView */}
-          <div className="space-y-0.5">
-            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <MapPin className="w-2.5 h-2.5 text-rose-500 shrink-0" />
-              <span className="truncate">Distance from me</span>
-            </p>
-            <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
-              <div className="relative flex items-center h-2">
-                <div className="h-1 w-full rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full w-3/5 rounded-full bg-rose-500" />
-                </div>
-                <span className="absolute left-[60%] -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-rose-500 border border-white shadow-xs" />
-              </div>
-              <div className="flex justify-center">
-                <span className="text-[7.5px] font-extrabold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 leading-none">
-                  5km
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Rating Star Selection matching ExploreView */}
-          <div className="space-y-0.5">
-            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <Star className="w-2.5 h-2.5 text-brand-yellow fill-brand-yellow shrink-0" />
-              <span>Rating</span>
-            </p>
-            <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex flex-col justify-between gap-1">
-              <div className="flex items-center gap-0.5">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Star
-                    key={s}
-                    className={`w-2.5 h-2.5 ${
-                      s <= 4 ? 'text-brand-yellow fill-brand-yellow' : 'text-slate-200'
-                    }`}
-                  />
-                ))}
-              </div>
-              <span className="text-[7.5px] font-bold text-slate-400 leading-none">4.0+</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ProMap preview right below filters (matching ExploreView #results-section) */}
-      <div className="space-y-1.5 pt-1">
-        <div className="flex justify-end">
-          <span className="inline-flex items-center gap-1 text-[7.5px] font-bold text-brand-blue bg-blue-50/80 px-2 py-0.5 rounded-full border border-blue-100/80 shadow-2xs">
-            <Navigation className="w-2.5 h-2.5 text-brand-blue" />
-            <span>Use my location</span>
-          </span>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => onNavigate('explore')}
-          className="w-full h-[132px] rounded-[20px] overflow-hidden border border-slate-200/80 shadow-md relative bg-[#ECEEF0] block text-left cursor-pointer group/map"
-          aria-label="Open interactive professionals map"
-        >
-          {/* Crisp Google-Maps-style city street grid */}
-          <svg
-            viewBox="0 0 320 150"
-            className="w-full h-full object-cover"
-            preserveAspectRatio="xMidYMid slice"
-            aria-hidden="true"
-          >
-            {/* Base urban map ground */}
-            <rect width="320" height="150" fill="#F1F3F4" />
-            {/* Park / river greenbelt */}
-            <path
-              d="M-10 38 C 65 24, 130 56, 200 44 C 255 34, 295 18, 335 28 L 335 56 C 292 48, 252 62, 198 70 C 128 80, 62 50, -10 62 Z"
-              fill="#CBEAC5"
-            />
-            <rect x="24" y="88" width="46" height="32" rx="6" fill="#D5EED0" />
-            <rect x="228" y="86" width="54" height="34" rx="8" fill="#D5EED0" />
-            {/* Subtle city blocks */}
-            <rect x="86" y="76" width="38" height="22" rx="3" fill="#E6EAEF" />
-            <rect x="134" y="78" width="42" height="26" rx="3" fill="#E6EAEF" />
-            <rect x="184" y="76" width="34" height="22" rx="3" fill="#E6EAEF" />
-            <rect x="86" y="108" width="44" height="26" rx="3" fill="#E6EAEF" />
-            <rect x="140" y="112" width="48" height="24" rx="3" fill="#E6EAEF" />
-            <rect x="34" y="8" width="54" height="18" rx="3" fill="#E6EAEF" />
-            <rect x="102" y="10" width="48" height="20" rx="3" fill="#E6EAEF" />
-            <rect x="172" y="8" width="56" height="22" rx="3" fill="#E6EAEF" />
-            {/* Secondary white streets */}
-            <g stroke="#FFFFFF" strokeWidth="4.5" strokeLinecap="round" fill="none">
-              <path d="M0 72 L320 68" />
-              <path d="M0 104 L320 108" />
-              <path d="M0 134 L320 132" />
-              <path d="M78 0 L74 150" />
-              <path d="M128 0 L132 150" />
-              <path d="M180 0 L176 150" />
-              <path d="M236 0 L242 150" />
-              <path d="M286 0 L282 150" />
-            </g>
-            {/* Primary warm-yellow arterial avenues */}
-            <g stroke="#FDE68A" strokeWidth="6" strokeLinecap="round" fill="none">
-              <path d="M-5 24 Q 110 18, 220 34 T 325 20" />
-              <path d="M46 0 Q 62 72, 118 150" />
-              <path d="M210 0 Q 204 75, 255 150" />
-            </g>
-            <g stroke="#FCD34D" strokeWidth="1" strokeLinecap="round" fill="none" opacity="0.65">
-              <path d="M-5 24 Q 110 18, 220 34 T 325 20" />
-              <path d="M46 0 Q 62 72, 118 150" />
-              <path d="M210 0 Q 204 75, 255 150" />
-            </g>
-            {/* Subtle neighborhood labels */}
-            <text x="16" y="79" fill="#94A3B8" fontSize="6.5" fontWeight="700" fontFamily="sans-serif" letterSpacing="0.8">
-              OLD TOWN
-            </text>
-            <text x="132" y="143" fill="#94A3B8" fontSize="6.5" fontWeight="700" fontFamily="sans-serif" letterSpacing="0.8">
-              CITY CENTER
-            </text>
-          </svg>
-
-          {/* Numbered ProMap Pins matching real #0038FF recommended & #94a3b8 markers */}
-          {[
-            { num: '1', top: '26%', left: '22%', color: '#0038FF' },
-            { num: '2', top: '48%', left: '42%', color: '#0038FF' },
-            { num: '3', top: '22%', left: '58%', color: '#0038FF' },
-            { num: '4', top: '66%', left: '26%', color: '#0038FF' },
-            { num: '5', top: '38%', left: '78%', color: '#94a3b8' },
-          ].map((pin) => (
-            <div
-              key={pin.num}
-              style={{ top: pin.top, left: pin.left }}
-              className="absolute -translate-x-1/2 -translate-y-full drop-shadow-[0_3px_5px_rgba(10,15,44,0.3)]"
-            >
-              <div
-                style={{ backgroundColor: pin.color }}
-                className="w-5 h-5 rounded-full border-[1.5px] border-white flex items-center justify-center text-[8px] font-black text-white relative"
-              >
-                {pin.num}
-                <span
-                  style={{ borderTopColor: pin.color }}
-                  className="absolute -bottom-[5px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[5px] border-l-transparent border-r-transparent"
-                />
-              </div>
-            </div>
-          ))}
-
-          {/* Blue user location dot */}
-          <div className="absolute top-[58%] left-[14%] -translate-x-1/2 -translate-y-1/2">
-            <span className="block w-4 h-4 rounded-full bg-brand-blue/20 flex items-center justify-center">
-              <span className="block w-2 h-2 rounded-full bg-brand-blue border border-white shadow-2xs" />
-            </span>
-          </div>
-        </button>
-      </div>
-    </div>
-  );
 
 
   // Floating Pro Modal mockup faithfully replicating ProfessionalDetailView 1-to-1 (non-clickable)
@@ -1756,84 +1953,7 @@ export function WebLandingPage({
     </div>
   );
 
-  // Real GuidesView screen layout with compact Start Here + 3 visible Latest Reads
-  const renderGuidesScreenContent = () => (
-    <div className="space-y-2 text-left">
-      <div className="space-y-0.5">
-        <p className="text-[13.5px] font-bold font-display text-slate-800 tracking-tight leading-tight">
-          Ready to <span className="text-emerald-600">settle into</span> your City?
-        </p>
-        <p className="text-[9px] text-slate-500 leading-snug">
-          Practical guides, checklists, and local advice.
-        </p>
-      </div>
 
-      <button
-        type="button"
-        onClick={() => onNavigate('guides')}
-        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200/90 rounded-xl flex items-center justify-between gap-2 text-left hover:border-emerald-400 transition-colors cursor-pointer"
-      >
-        <span className="flex items-center gap-1.5 min-w-0">
-          <Search className="w-3 h-3 text-slate-400 shrink-0" />
-          <span className="text-[9px] text-slate-400 truncate">Search guides...</span>
-        </span>
-        <span className="px-2 py-0.5 rounded-lg bg-emerald-600 text-white text-[8.5px] font-semibold shrink-0">
-          Search
-        </span>
-      </button>
-
-      <div className="space-y-1">
-        <p className="text-[9.5px] font-bold text-brand-navy">Start here</p>
-        <div className="grid grid-cols-2 gap-1.5">
-          {[
-            { title: 'Finding a home', icon: Home, tint: 'bg-emerald-50 text-emerald-600' },
-            { title: 'Paperwork', icon: FileText, tint: 'bg-purple-50 text-purple-600' },
-            { title: 'Getting around', icon: Train, tint: 'bg-blue-50 text-brand-blue' },
-            { title: 'Healthcare', icon: HeartPulse, tint: 'bg-orange-50 text-orange-600' },
-          ].map((topic) => {
-            const TopicIcon = topic.icon;
-            return (
-              <button
-                key={topic.title}
-                type="button"
-                onClick={() => onNavigate('guides')}
-                className="p-2 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-white hover:border-emerald-200 transition-colors text-left cursor-pointer flex items-center gap-1.5"
-              >
-                <div className={`w-5.5 h-5.5 rounded-lg flex items-center justify-center shrink-0 ${topic.tint}`}>
-                  <TopicIcon className="w-3 h-3" />
-                </div>
-                <p className="text-[9.5px] font-bold text-brand-navy leading-tight truncate">{topic.title}</p>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="space-y-1.5 pt-1 border-t border-slate-100">
-        <p className="text-[9.5px] font-bold text-brand-navy">Latest reads</p>
-        {displayGuides.map((guide: any) => (
-          <button
-            key={guide.id}
-            type="button"
-            onClick={() =>
-              onNavigate(
-                'guides',
-                String(guide.id).startsWith('g-') ? undefined : { guideId: guide.id }
-              )
-            }
-            className="w-full text-left px-2.5 py-2 rounded-xl border border-emerald-100/90 hover:border-emerald-300 bg-white transition-colors cursor-pointer"
-          >
-            <p className="text-[8.5px] font-semibold text-emerald-600">
-              {guide.category || 'City Guide'}
-            </p>
-            <p className="text-[10px] font-bold text-brand-navy line-clamp-1 leading-snug mt-0.5">
-              {guide.title}
-            </p>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 
   // Real AdDetailModal ("Unlocked Good Stuff" single item sheet) layout with mockup article
   const renderStuffScreenContent = () => (
@@ -1937,120 +2057,7 @@ export function WebLandingPage({
     </div>
   );
 
-  // Exact replica of the real mobile HomeView screen (fitted strictly with zero scroll)
-  const renderHeroHomeScreenContent = () => (
-    <div className="h-full flex flex-col justify-start pt-0.5 text-left">
-      {/* Welcome & Tagline matching HomeView */}
-      <div className="px-0.5 space-y-0.5 pb-1">
-        <p className="text-[15.5px] font-bold font-display text-brand-navy tracking-tight leading-tight">
-          Hello Alex, 👋
-        </p>
-        <p className="text-brand-blue font-bold italic text-[10.5px] leading-snug inline-flex flex-wrap items-center gap-x-0.5">
-          <span>Discover</span>
-          <RotatingCylinderWord />
-          <span>better, belong faster.</span>
-        </p>
-      </div>
 
-      {/* Community Illustration sitting right on top of the Jane card (exact HomeView overlap) */}
-      <div className="flex justify-center -mb-2 pointer-events-none select-none">
-        <img
-          src="/people.png"
-          alt="Community illustration"
-          className="w-[168px] h-auto object-contain block align-bottom"
-          referrerPolicy="no-referrer"
-        />
-      </div>
-
-      {/* Hero Jane Search Assistant Widget matching HomeView 1-to-1 */}
-      <div className="relative z-10 rounded-[20px] bg-gradient-to-br from-white to-[#f8fafc] p-3 border-2 border-blue-200/80 shadow-[0_4px_20px_rgba(37,99,235,0.05)] space-y-2.5 text-left">
-        <div className="space-y-0.5">
-          <p className="text-[11.5px] font-bold text-brand-navy tracking-tight flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-brand-blue shrink-0" />
-            <span>
-              <span className="text-brand-blue">Find</span> a recommended pro with Jane
-            </span>
-          </p>
-          <p className="text-[9px] text-slate-500 leading-snug">
-            Jane, your AI assistant, is here to help you find the right pro.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          {/* Blue Bordered Ask Jane Input matching HomeView */}
-          <button
-            type="button"
-            onClick={() => onNavigate('explore')}
-            className="w-full bg-white rounded-[14px] border-2 border-blue-200/90 shadow-2xs px-2.5 py-2 flex items-center gap-2 text-left hover:border-brand-blue/70 transition-colors cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-brand-blue shrink-0" />
-            <div className="flex-1 min-w-0 relative h-3.5">
-              <RotatingPlaceholder
-                value=""
-                placeholders={[
-                  'e.g. French-speaking dentist nearby...',
-                  'e.g. help sorting out local paperwork...',
-                  'e.g. reliable electrician or plumber...',
-                  'e.g. tax advisor for expats & freelancers...',
-                ]}
-                className="text-slate-300 text-[9.5px] font-medium leading-normal truncate"
-              />
-            </div>
-          </button>
-
-          {/* Large Blue Recommendations Action Button matching HomeView */}
-          <button
-            type="button"
-            onClick={() => onNavigate('explore')}
-            className="w-full py-2 bg-brand-blue hover:bg-[#0958d9] text-white rounded-[14px] font-bold text-[10.5px] shadow-sm shadow-blue-500/15 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Sparkles className="w-3 h-3 fill-white/10" />
-            <span>Find professionals</span>
-          </button>
-
-          {/* Privacy Safeguard Note matching HomeView */}
-          <div className="flex items-center justify-center gap-1 text-slate-400 font-bold text-[8px] tracking-wide">
-            <Lock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-            <span>100% secure. Jane is here to help.</span>
-          </div>
-        </div>
-
-        {/* Exact amber "Know someone great?" box inside the Jane card matching HomeView */}
-        <div
-          onClick={onAddPro}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onAddPro();
-            }
-          }}
-          className="bg-amber-50/60 hover:bg-amber-50 rounded-xl p-2 border border-amber-200/70 space-y-2 transition-colors cursor-pointer group/rec"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6.5 h-6.5 rounded-lg bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
-              <UserPlus className="w-3.5 h-3.5" />
-            </div>
-            <div className="min-w-0">
-              <p className="font-bold text-slate-900 text-[10px] tracking-tight leading-tight flex items-center gap-1">
-                <span>Know someone great?</span>
-                <span className="text-amber-500">🌟</span>
-              </p>
-              <p className="text-slate-600 text-[8.5px] leading-tight mt-0.5 line-clamp-2">
-                Recommend a local pro in your City to help the community!
-              </p>
-            </div>
-          </div>
-
-          <div className="w-full py-1.5 px-2.5 bg-amber-500 group-hover/rec:bg-amber-600 text-slate-950 font-bold text-[9.5px] rounded-lg flex items-center justify-center gap-1 shadow-2xs transition-colors">
-            <span>Recommend a Pro</span>
-            <ArrowRight className="w-2.5 h-2.5 group-hover/rec:translate-x-0.5 transition-transform" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-full w-full bg-white text-brand-navy font-sans select-text selection:bg-brand-blue/15 selection:text-brand-navy">
@@ -2107,41 +2114,7 @@ export function WebLandingPage({
             </div>
 
             <div className="lg:col-span-6">
-              <div className="relative min-h-[590px] sm:min-h-[620px] rounded-[32px] overflow-hidden border border-blue-100 bg-[#E9ECFF]">
-                <img
-                  src={heroCityImg}
-                  alt="Sunlit city street and outdoor terrace"
-                  referrerPolicy="no-referrer"
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/80 via-brand-navy/30 to-brand-blue/15" />
-
-                <motion.div
-                  initial={{ opacity: 0, y: 26, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.85, delay: 0.14, ease: APPLE_EASE }}
-                  className="relative z-10 h-full flex flex-col items-center justify-center p-5 sm:p-8"
-                >
-                  <AppScreenFrame
-                    idSuffix="hero"
-                    activeTab={heroPhoneTab}
-                    disableScroll={heroPhoneTab === 'home'}
-                    onTabClick={(tab) => {
-                      if (tab === 'profile') {
-                        onNavigate(currentUser ? 'profile' : 'login');
-                      } else {
-                        setHeroPhoneTab(tab);
-                      }
-                    }}
-                  >
-                    {heroPhoneTab === 'home' && renderHeroHomeScreenContent()}
-                    {heroPhoneTab === 'explore' && renderFindProsScreenContent()}
-                    {heroPhoneTab === 'events' && renderEventsScreenContent()}
-                    {heroPhoneTab === 'guides' && renderGuidesScreenContent()}
-                    {heroPhoneTab === 'marketplace' && renderStuffScreenContent()}
-                  </AppScreenFrame>
-                </motion.div>
-              </div>
+              <HeroCityMapVisual />
             </div>
           </div>
         </div>
@@ -2199,6 +2172,49 @@ export function WebLandingPage({
               />
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* 2b. Compact Community Callout: Recommend a Pro */}
+      <section id="section-recommend-pro" className="py-6 sm:py-10">
+        <div className="max-w-[1200px] mx-auto px-6 sm:px-8 xl:px-10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ duration: 0.6, ease: APPLE_EASE }}
+            className="rounded-[28px] bg-gradient-to-br from-amber-50/80 via-white to-blue-50/40 border border-amber-200/75 px-6 py-6 sm:px-9 sm:py-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6"
+          >
+            <div className="flex items-start gap-4 max-w-2xl">
+              <div className="w-11 h-11 rounded-2xl bg-amber-100/90 border border-amber-200/80 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                <UserPlus className="w-5 h-5" />
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-brand-navy leading-snug [text-wrap:balance]">
+                  Know a great local pro?{' '}
+                  <span className="text-amber-600">Share them with the community.</span>
+                </h3>
+                <p className="text-sm sm:text-[15px] text-slate-600 leading-relaxed">
+                  Your recommendation helps newcomers and neighbors find doctors, tradespeople, and specialists they can truly count on.
+                </p>
+                <p className="text-xs font-medium text-slate-500 pt-0.5">
+                  Takes under 60 seconds <span aria-hidden="true">·</span> Reviewed before publishing <span aria-hidden="true">·</span> Free for everyone
+                </p>
+              </div>
+            </div>
+
+            <div className="shrink-0">
+              <button
+                type="button"
+                onClick={onAddPro}
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-sm font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+              >
+                <span>Recommend a Pro</span>
+                <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+              </button>
+            </div>
+          </motion.div>
         </div>
       </section>
 
