@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useInView, useReducedMotion } from 'motion/react';
 import {
   ArrowRight,
   Award,
@@ -81,28 +82,117 @@ const PHONE_NAV_ITEMS: Array<{
 ];
 
 // Curated city-agnostic mockup data for the public landing page app screens
-const MOCK_PRO_PROFILE = {
-  id: 'mock-pro-1',
-  name: 'Dr. Clara Moreau',
-  company: 'Central Family Dental',
-  category: 'Health & Dental',
-  rating: '5.0',
-  reviewsCount: 18,
-  qualities: ['Responsive', 'Trustworthy'],
-  phone: '+34 612 345 678',
-  whatsapp: '+34 612 345 678',
-  email: 'clara@centraldental.app',
-  languages: ['English', 'French', 'Spanish'],
-  location: 'City Center · 5 min from metro',
-  about:
-    'Multilingual family dentist offering gentle preventive care, check-ups, and pediatric visits in a calm studio.',
-  image: mockProClaraImg,
+interface MockProItem {
+  id: string;
+  pinNumber: string;
+  name: string;
+  company: string;
+  category: string;
+  rating: string;
+  reviewsCount: number;
+  distance: string;
+  qualities: [string, string];
+  phone: string;
+  whatsapp: string;
+  email: string;
+  languages: string[];
+  location: string;
+  about: string;
+  image?: string;
+  initials: string;
+  avatarTint: string;
+  pinPos: { top: string; left: string };
   review: {
-    author: 'Sophie M.',
-    date: 'Oct 2026',
-    comment: 'Warm, thorough, and explained everything clearly in English. Great with kids too!',
+    author: string;
+    date: string;
+    comment: string;
+  };
+}
+
+const MOCK_PRO_RESULTS: MockProItem[] = [
+  {
+    id: 'mock-pro-1',
+    pinNumber: '1',
+    name: 'Dr. Clara Moreau',
+    company: 'Central Family Dental',
+    category: 'Health & Dental',
+    rating: '5.0',
+    reviewsCount: 18,
+    distance: '0.6 km',
+    qualities: ['Responsive', 'Trustworthy'],
+    phone: '+34 612 345 678',
+    whatsapp: '+34 612 345 678',
+    email: 'clara@centraldental.app',
+    languages: ['English', 'French', 'Spanish'],
+    location: 'City Center · 5 min from metro',
+    about:
+      'Multilingual family dentist offering gentle preventive care, check-ups, and pediatric visits in a calm studio.',
+    image: mockProClaraImg,
+    initials: 'CM',
+    avatarTint: 'bg-emerald-50 text-emerald-700',
+    pinPos: { top: '34%', left: '28%' },
+    review: {
+      author: 'Sophie M.',
+      date: 'Oct 2026',
+      comment: 'Warm, thorough, and explained everything clearly in English. Great with kids too!',
+    },
   },
-};
+  {
+    id: 'mock-pro-2',
+    pinNumber: '2',
+    name: 'Dr. Julien Laurent',
+    company: 'Clinique Sourire',
+    category: 'Health & Dental',
+    rating: '4.9',
+    reviewsCount: 14,
+    distance: '1.2 km',
+    qualities: ['Gentle Care', 'Punctual'],
+    phone: '+34 622 410 912',
+    whatsapp: '+34 622 410 912',
+    email: 'julien@cliniquesourire.app',
+    languages: ['French', 'English'],
+    location: 'Midtown Square · 3 min walk',
+    about:
+      'French-trained dentist focused on cosmetic care, implants, and stress-free appointments for newcomers.',
+    initials: 'JL',
+    avatarTint: 'bg-blue-50 text-brand-blue',
+    pinPos: { top: '58%', left: '54%' },
+    review: {
+      author: 'Lucas B.',
+      date: 'Sep 2026',
+      comment: 'Super reassuring and spoke fluent French from the first call. Transparent pricing.',
+    },
+  },
+  {
+    id: 'mock-pro-3',
+    pinNumber: '3',
+    name: 'Dr. Elena Vidal',
+    company: 'Studio Dentaire Nord',
+    category: 'Health & Dental',
+    rating: '4.8',
+    reviewsCount: 9,
+    distance: '1.9 km',
+    qualities: ['Modern Clinic', 'Kind'],
+    phone: '+34 644 892 103',
+    whatsapp: '+34 644 892 103',
+    email: 'elena@studiodentaire.app',
+    languages: ['French', 'Spanish', 'English'],
+    location: 'North Avenue · Near central park',
+    about:
+      'Bright modern clinic specializing in preventive check-ups, orthodontics, and urgent same-week visits.',
+    initials: 'EV',
+    avatarTint: 'bg-amber-50 text-amber-700',
+    pinPos: { top: '28%', left: '74%' },
+    review: {
+      author: 'Camille R.',
+      date: 'Aug 2026',
+      comment: 'Got an appointment the next morning and felt completely at ease throughout.',
+    },
+  },
+];
+
+const MOCK_PRO_PROFILE = MOCK_PRO_RESULTS[0];
+const DEMO_SEARCH_QUERY = 'French-speaking dentist nearby';
 
 const MOCK_EVENTS = [
   {
@@ -168,6 +258,108 @@ const FALLBACK_GUIDES = [
   },
 ];
 
+const APPLE_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+interface LetterRevealSegment {
+  text: string;
+  className?: string;
+}
+
+/**
+ * Apple-style letter-by-letter reveal triggered smoothly on scroll (or immediately in the hero).
+ * Preserves natural word wrapping and full screen-reader accessibility.
+ */
+function LetterReveal({
+  segments,
+  immediate = false,
+  delay = 0,
+  stagger = 0.02,
+}: {
+  segments: LetterRevealSegment[];
+  immediate?: boolean;
+  delay?: number;
+  stagger?: number;
+}) {
+  const prefersReducedMotion = useReducedMotion();
+  const fullText = segments.map((s) => s.text).join('');
+
+  if (prefersReducedMotion) {
+    return (
+      <>
+        {segments.map((seg, idx) => (
+          <span key={idx} className={seg.className}>
+            {seg.text}
+          </span>
+        ))}
+      </>
+    );
+  }
+
+  const containerVariants = {
+    hidden: {},
+    visible: {
+      transition: {
+        staggerChildren: stagger,
+        delayChildren: delay,
+      },
+    },
+  };
+
+  const letterVariants = {
+    hidden: {
+      opacity: 0,
+      y: 12,
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.52,
+        ease: APPLE_EASE,
+      },
+    },
+  };
+
+  return (
+    <motion.span
+      aria-label={fullText}
+      className="block"
+      variants={containerVariants}
+      initial="hidden"
+      {...(immediate
+        ? { animate: 'visible' }
+        : { whileInView: 'visible', viewport: { once: true, amount: 0.25 } })}
+    >
+      {segments.map((seg, segIdx) => {
+        const tokens = seg.text.split(/(\s+)/);
+        return (
+          <span key={segIdx} className={seg.className} aria-hidden="true">
+            {tokens.map((token, tokenIdx) => {
+              if (!token) return null;
+              if (/^\s+$/.test(token)) {
+                return <React.Fragment key={tokenIdx}>{token}</React.Fragment>;
+              }
+              return (
+                <span key={tokenIdx} className="inline-block whitespace-nowrap">
+                  {Array.from(token).map((char, charIdx) => (
+                    <motion.span
+                      key={charIdx}
+                      variants={letterVariants}
+                      className="inline-block will-change-transform"
+                    >
+                      {char}
+                    </motion.span>
+                  ))}
+                </span>
+              );
+            })}
+          </span>
+        );
+      })}
+    </motion.span>
+  );
+}
+
 function StoreBadge({
   store,
   variant = 'dark',
@@ -221,12 +413,14 @@ function AppScreenFrame({
   activeTab,
   onTabClick,
   disableScroll = false,
+  nonInteractive = false,
   children,
 }: {
   idSuffix: string;
   activeTab: PhoneTab;
-  onTabClick: (tab: PhoneTab | 'profile') => void;
+  onTabClick?: (tab: PhoneTab | 'profile') => void;
   disableScroll?: boolean;
+  nonInteractive?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -304,6 +498,21 @@ function AppScreenFrame({
           {PHONE_NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = item.id === activeTab;
+            if (nonInteractive || !onTabClick) {
+              return (
+                <div
+                  key={item.id}
+                  className={`flex flex-col items-center justify-center py-1 rounded-xl ${
+                    isActive ? 'text-brand-blue bg-brand-blue/8' : 'text-slate-400'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="text-[8px] font-semibold mt-0.5 leading-none whitespace-nowrap">
+                    {item.label}
+                  </span>
+                </div>
+              );
+            }
             return (
               <button
                 key={item.id}
@@ -332,6 +541,634 @@ function AppScreenFrame({
     </div>
   );
 }
+
+const PRO_SPRING = {
+  type: 'spring' as const,
+  stiffness: 240,
+  damping: 26,
+  mass: 0.9,
+};
+
+const PIN_SPRING = {
+  type: 'spring' as const,
+  stiffness: 340,
+  damping: 24,
+  mass: 0.75,
+};
+
+const MODAL_SPRING = {
+  type: 'spring' as const,
+  stiffness: 220,
+  damping: 25,
+  mass: 0.95,
+};
+
+type FindProsDemoPhase =
+  | 'idle'
+  | 'typing'
+  | 'searching'
+  | 'results'
+  | 'selecting'
+  | 'modal'
+  | 'closing';
+
+interface AnimatedFindProsShowcaseProps {
+  renderModalCard: (pro: MockProItem) => React.ReactNode;
+}
+
+/**
+ * Isolated memoized showcase so typing and phase animations run at 60/120fps
+ * without re-rendering the rest of WebLandingPage. Purely visual (non-clickable)
+ * and exclusively showcases Dr. Clara Moreau's profile modal.
+ */
+const AnimatedFindProsShowcase = React.memo(function AnimatedFindProsShowcase({
+  renderModalCard,
+}: AnimatedFindProsShowcaseProps) {
+  const prefersReducedMotion = useReducedMotion();
+  const showcaseRef = useRef<HTMLDivElement | null>(null);
+  const isInView = useInView(showcaseRef, { amount: 0.25 });
+
+  const [phase, setPhase] = useState<FindProsDemoPhase>(
+    prefersReducedMotion ? 'modal' : 'idle'
+  );
+  const [typedLength, setTypedLength] = useState<number>(
+    prefersReducedMotion ? DEMO_SEARCH_QUERY.length : 0
+  );
+  const typedLengthRef = useRef<number>(typedLength);
+  typedLengthRef.current = typedLength;
+
+  // Single uninterrupted requestAnimationFrame loop for buttery typing rhythm
+  useEffect(() => {
+    if (prefersReducedMotion || !isInView || phase !== 'typing') return;
+
+    let rafId = 0;
+    let doneTimer = 0;
+    let lastTime = performance.now();
+    let acc = 0;
+    let currentLen = typedLengthRef.current;
+
+    const scheduleSearch = () => {
+      doneTimer = window.setTimeout(() => setPhase('searching'), 340);
+    };
+
+    if (currentLen >= DEMO_SEARCH_QUERY.length) {
+      scheduleSearch();
+      return () => window.clearTimeout(doneTimer);
+    }
+
+    const step = (now: number) => {
+      const dt = Math.min(now - lastTime, 48);
+      lastTime = now;
+      acc += dt;
+
+      const nextChar = DEMO_SEARCH_QUERY[currentLen];
+      const charInterval = nextChar === ' ' ? 52 : 34;
+
+      if (acc >= charInterval) {
+        acc -= charInterval;
+        currentLen += 1;
+        setTypedLength(currentLen);
+        if (currentLen >= DEMO_SEARCH_QUERY.length) {
+          scheduleSearch();
+          return;
+        }
+      }
+      rafId = window.requestAnimationFrame(step);
+    };
+
+    rafId = window.requestAnimationFrame(step);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(doneTimer);
+    };
+  }, [phase, isInView, prefersReducedMotion]);
+
+  // Choreographed phase sequencing with graceful closing beat before looping
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setPhase('modal');
+      setTypedLength(DEMO_SEARCH_QUERY.length);
+      return;
+    }
+    if (!isInView) return;
+
+    if (phase === 'idle') {
+      const t = window.setTimeout(() => setPhase('typing'), 420);
+      return () => window.clearTimeout(t);
+    }
+
+    if (phase === 'searching') {
+      const t = window.setTimeout(() => setPhase('results'), 760);
+      return () => window.clearTimeout(t);
+    }
+
+    if (phase === 'results') {
+      const t = window.setTimeout(() => setPhase('selecting'), 1550);
+      return () => window.clearTimeout(t);
+    }
+
+    if (phase === 'selecting') {
+      const t = window.setTimeout(() => setPhase('modal'), 680);
+      return () => window.clearTimeout(t);
+    }
+
+    if (phase === 'modal') {
+      const t = window.setTimeout(() => setPhase('closing'), 4400);
+      return () => window.clearTimeout(t);
+    }
+
+    if (phase === 'closing') {
+      const t = window.setTimeout(() => {
+        setTypedLength(0);
+        setPhase('idle');
+      }, 540);
+      return () => window.clearTimeout(t);
+    }
+  }, [phase, isInView, prefersReducedMotion]);
+
+  const showResultsLayer =
+    phase === 'results' || phase === 'selecting' || phase === 'modal' || phase === 'closing';
+  const showModal = phase === 'modal';
+  const typedText = DEMO_SEARCH_QUERY.slice(0, typedLength);
+
+  return (
+    <div
+      ref={showcaseRef}
+      className="relative mx-auto max-w-[590px] py-2 pointer-events-none select-none"
+    >
+      {/* Animated Jane Search -> Results -> Selection phone screen */}
+      <div className="relative z-10 sm:-translate-x-16 lg:-translate-x-20">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.72, ease: APPLE_EASE }}
+        >
+          <motion.div
+            animate={{ scale: showModal ? 0.986 : 1 }}
+            transition={MODAL_SPRING}
+            className="will-change-transform"
+          >
+            <AppScreenFrame
+              idSuffix="find-pros"
+              activeTab="explore"
+              disableScroll
+              nonInteractive
+            >
+              {/* Dual-layer viewport for simultaneous silky crossfade with zero blank gap */}
+              <div className="relative h-full w-full overflow-hidden">
+                {/* Layer 1: Ask Jane Search + Filters + Map */}
+                <motion.div
+                  initial={false}
+                  animate={{
+                    opacity: showResultsLayer ? 0 : 1,
+                    y: showResultsLayer ? -16 : 0,
+                    scale: showResultsLayer ? 0.975 : 1,
+                  }}
+                  transition={{ duration: 0.46, ease: APPLE_EASE }}
+                  className="absolute inset-0 space-y-2.5 text-left pt-0.5 will-change-transform"
+                >
+                  {/* Header matching ExploreView */}
+                  <div className="space-y-0.5">
+                    <p className="text-[14px] font-bold font-display text-slate-800 tracking-tight leading-tight">
+                      <span className="text-brand-blue font-bold">What</span> are you looking for?
+                    </p>
+                    <p className="text-[8.5px] text-slate-500 leading-snug">
+                      Search for a professional or let Jane, your AI assistant, find the best match for you.
+                    </p>
+                  </div>
+
+                  {/* Active Typing Ask Jane Input */}
+                  <div className="space-y-1.5">
+                    <div
+                      className={`w-full bg-white rounded-[14px] border-2 px-2.5 py-1.5 flex items-center gap-2 text-left transition-colors duration-300 ${
+                        phase === 'typing' || phase === 'searching'
+                          ? 'border-brand-blue shadow-[0_0_0_3px_rgba(0,56,255,0.09)]'
+                          : 'border-blue-200/90 shadow-2xs'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-brand-blue shrink-0" />
+                      <div className="flex-1 min-w-0 h-3.5 flex items-center overflow-hidden">
+                        {typedText ? (
+                          <span className="text-[9.5px] font-semibold text-brand-navy truncate flex items-center">
+                            <span>{typedText}</span>
+                            {phase === 'typing' && (
+                              <motion.span
+                                animate={{ opacity: [1, 1, 0.15, 1] }}
+                                transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+                                className="inline-block w-[1.5px] h-3 bg-brand-blue ml-0.5 shrink-0 rounded-full"
+                              />
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 text-[9px] font-medium truncate">
+                            e.g. French-speaking dentist nearby...
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Smooth spring-pressed button visual with silky shimmer sweep */}
+                    <motion.div
+                      animate={{
+                        scale: phase === 'searching' ? 0.975 : 1,
+                      }}
+                      transition={PRO_SPRING}
+                      className={`relative overflow-hidden w-full py-2 text-white rounded-[14px] font-bold text-[10px] shadow-sm flex items-center justify-center gap-1.5 transition-colors duration-300 will-change-transform ${
+                        phase === 'searching'
+                          ? 'bg-[#0958d9] shadow-blue-500/25'
+                          : 'bg-brand-blue shadow-blue-500/15'
+                      }`}
+                    >
+                      {phase === 'searching' && (
+                        <motion.span
+                          initial={{ x: '-110%' }}
+                          animate={{ x: '220%' }}
+                          transition={{ duration: 0.72, ease: APPLE_EASE }}
+                          className="pointer-events-none absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-20deg]"
+                        />
+                      )}
+                      <Sparkles className="w-3 h-3 fill-white/15 relative z-10" />
+                      <span className="relative z-10">
+                        {phase === 'searching' ? 'Jane is matching pros...' : 'Find professionals'}
+                      </span>
+                    </motion.div>
+
+                    <div className="flex items-center justify-center gap-1 text-slate-400 font-bold text-[7.5px] tracking-wide">
+                      <Lock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                      <span>100% secure. Jane is here to help.</span>
+                    </div>
+                  </div>
+
+                  {/* Refine your search section matching ExploreView */}
+                  <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                    <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-widest">
+                      Refine your search
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="space-y-0.5">
+                        <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <Filter className="w-2.5 h-2.5 text-brand-blue shrink-0" />
+                          <span>Category</span>
+                        </p>
+                        <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[8.5px] font-bold text-slate-700">
+                          <span className="truncate">Health &amp; Dental</span>
+                          <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <Globe className="w-2.5 h-2.5 text-brand-blue shrink-0" />
+                          <span>Language</span>
+                        </p>
+                        <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1 text-[8.5px] font-bold text-slate-700">
+                          <span className="truncate">French</span>
+                          <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <MapPin className="w-2.5 h-2.5 text-rose-500 shrink-0" />
+                          <span className="truncate">Distance from me</span>
+                        </p>
+                        <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+                          <div className="relative flex items-center h-2">
+                            <div className="h-1 w-full rounded-full bg-slate-100 overflow-hidden">
+                              <div className="h-full w-3/5 rounded-full bg-rose-500" />
+                            </div>
+                            <span className="absolute left-[60%] -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-rose-500 border border-white shadow-xs" />
+                          </div>
+                          <div className="flex justify-center">
+                            <span className="text-[7.5px] font-extrabold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 leading-none">
+                              5km
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <Star className="w-2.5 h-2.5 text-brand-yellow fill-brand-yellow shrink-0" />
+                          <span>Rating</span>
+                        </p>
+                        <div className="px-2 py-1.5 bg-white rounded-xl border border-slate-200/80 shadow-2xs flex flex-col justify-between gap-1">
+                          <div className="flex items-center gap-0.5">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <Star
+                                key={s}
+                                className={`w-2.5 h-2.5 ${
+                                  s <= 4 ? 'text-brand-yellow fill-brand-yellow' : 'text-slate-200'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-[7.5px] font-bold text-slate-400 leading-none">4.0+</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Map preview right below filters */}
+                  <div className="space-y-1 pt-0.5">
+                    <div className="flex justify-end">
+                      <span className="inline-flex items-center gap-1 text-[7.5px] font-bold text-brand-blue bg-blue-50/80 px-2 py-0.5 rounded-full border border-blue-100/80 shadow-2xs">
+                        <Navigation className="w-2.5 h-2.5 text-brand-blue" />
+                        <span>Use my location</span>
+                      </span>
+                    </div>
+
+                    <div className="w-full h-[116px] rounded-[20px] overflow-hidden border border-slate-200/80 shadow-md relative bg-[#ECEEF0]">
+                      <svg
+                        viewBox="0 0 320 150"
+                        className="w-full h-full object-cover"
+                        preserveAspectRatio="xMidYMid slice"
+                        aria-hidden="true"
+                      >
+                        <rect width="320" height="150" fill="#F1F3F4" />
+                        <path
+                          d="M-10 38 C 65 24, 130 56, 200 44 C 255 34, 295 18, 335 28 L 335 56 C 292 48, 252 62, 198 70 C 128 80, 62 50, -10 62 Z"
+                          fill="#CBEAC5"
+                        />
+                        <rect x="24" y="88" width="46" height="32" rx="6" fill="#D5EED0" />
+                        <rect x="228" y="86" width="54" height="34" rx="8" fill="#D5EED0" />
+                        <rect x="86" y="76" width="38" height="22" rx="3" fill="#E6EAEF" />
+                        <rect x="134" y="78" width="42" height="26" rx="3" fill="#E6EAEF" />
+                        <rect x="184" y="76" width="34" height="22" rx="3" fill="#E6EAEF" />
+                        <g stroke="#FFFFFF" strokeWidth="4.5" strokeLinecap="round" fill="none">
+                          <path d="M0 72 L320 68" />
+                          <path d="M0 104 L320 108" />
+                          <path d="M78 0 L74 150" />
+                          <path d="M128 0 L132 150" />
+                          <path d="M180 0 L176 150" />
+                          <path d="M236 0 L242 150" />
+                        </g>
+                        <g stroke="#FDE68A" strokeWidth="6" strokeLinecap="round" fill="none">
+                          <path d="M-5 24 Q 110 18, 220 34 T 325 20" />
+                          <path d="M46 0 Q 62 72, 118 150" />
+                          <path d="M210 0 Q 204 75, 255 150" />
+                        </g>
+                      </svg>
+
+                      {[
+                        { num: '1', top: '26%', left: '22%', color: '#0038FF' },
+                        { num: '2', top: '48%', left: '42%', color: '#0038FF' },
+                        { num: '3', top: '22%', left: '58%', color: '#0038FF' },
+                        { num: '4', top: '66%', left: '26%', color: '#0038FF' },
+                        { num: '5', top: '38%', left: '78%', color: '#94a3b8' },
+                      ].map((pin) => (
+                        <div
+                          key={pin.num}
+                          style={{ top: pin.top, left: pin.left }}
+                          className="absolute -translate-x-1/2 -translate-y-full drop-shadow-[0_3px_5px_rgba(10,15,44,0.3)]"
+                        >
+                          <div
+                            style={{ backgroundColor: pin.color }}
+                            className="w-5 h-5 rounded-full border-[1.5px] border-white flex items-center justify-center text-[8px] font-black text-white relative"
+                          >
+                            {pin.num}
+                            <span
+                              style={{ borderTopColor: pin.color }}
+                              className="absolute -bottom-[5px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[5px] border-l-transparent border-r-transparent"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Layer 2: Jane's Matched Results + Map Pins + Mockup Cards (non-clickable) */}
+                <motion.div
+                  initial={false}
+                  animate={{
+                    opacity: showResultsLayer ? 1 : 0,
+                    y: showResultsLayer ? 0 : 20,
+                    scale: showResultsLayer ? 1 : 0.98,
+                  }}
+                  transition={{ duration: 0.48, ease: APPLE_EASE }}
+                  className="absolute inset-0 space-y-2 text-left pt-0.5 will-change-transform"
+                >
+                  {/* Active Jane Search Banner matching ExploreView */}
+                  <div className="rounded-2xl bg-blue-50/75 border border-blue-100 px-2.5 py-2 space-y-1">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-900 border border-blue-200/80">
+                        <Sparkles className="w-2.5 h-2.5 text-brand-blue" />
+                        <span>Jane&apos;s Search</span>
+                      </span>
+                      <span className="text-[8px] font-bold text-brand-blue">3 matches</span>
+                    </div>
+                    <p className="text-[9px] font-semibold text-slate-700 truncate">
+                      &ldquo;{DEMO_SEARCH_QUERY}&rdquo;
+                    </p>
+                  </div>
+
+                  {/* Matched Results Map Strip with spring-animated numbered pins */}
+                  <div className="w-full h-[96px] rounded-[18px] overflow-hidden border border-slate-200/80 shadow-xs relative bg-[#ECEEF0]">
+                    <svg
+                      viewBox="0 0 320 120"
+                      className="w-full h-full object-cover"
+                      preserveAspectRatio="xMidYMid slice"
+                      aria-hidden="true"
+                    >
+                      <rect width="320" height="120" fill="#F1F3F4" />
+                      <path
+                        d="M-10 30 C 65 18, 130 48, 200 36 C 255 26, 295 14, 335 24 L 335 48 C 292 40, 252 52, 198 60 C 128 68, 62 42, -10 52 Z"
+                        fill="#CBEAC5"
+                      />
+                      <rect x="24" y="72" width="48" height="28" rx="6" fill="#D5EED0" />
+                      <rect x="90" y="64" width="44" height="22" rx="3" fill="#E6EAEF" />
+                      <rect x="148" y="68" width="46" height="24" rx="3" fill="#E6EAEF" />
+                      <rect x="212" y="62" width="48" height="26" rx="3" fill="#E6EAEF" />
+                      <g stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" fill="none">
+                        <path d="M0 58 L320 56" />
+                        <path d="M0 90 L320 92" />
+                        <path d="M82 0 L78 120" />
+                        <path d="M140 0 L144 120" />
+                        <path d="M202 0 L198 120" />
+                        <path d="M262 0 L268 120" />
+                      </g>
+                      <g stroke="#FDE68A" strokeWidth="5.5" strokeLinecap="round" fill="none">
+                        <path d="M-5 20 Q 110 14, 220 28 T 325 18" />
+                        <path d="M52 0 Q 68 60, 118 120" />
+                      </g>
+                    </svg>
+
+                    {MOCK_PRO_RESULTS.map((pro, idx) => {
+                      const hasSelection = phase === 'selecting' || phase === 'modal';
+                      const isHighlighted = hasSelection && idx === 0;
+                      return (
+                        <div
+                          key={pro.id}
+                          style={{ top: pro.pinPos.top, left: pro.pinPos.left }}
+                          className="absolute -translate-x-1/2 -translate-y-full z-10"
+                        >
+                          <motion.div
+                            initial={false}
+                            animate={{
+                              scale: !showResultsLayer ? 0.4 : isHighlighted ? 1.24 : 1,
+                              opacity: !showResultsLayer ? 0 : hasSelection && !isHighlighted ? 0.58 : 1,
+                            }}
+                            transition={{
+                              ...PIN_SPRING,
+                              delay: showResultsLayer && phase === 'results' ? 0.08 + idx * 0.06 : 0,
+                            }}
+                            className="drop-shadow-[0_3px_6px_rgba(10,15,44,0.28)] will-change-transform block"
+                          >
+                            <div
+                              className={`w-5 h-5 rounded-full border-[1.5px] border-white flex items-center justify-center text-[8px] font-black text-white relative transition-colors duration-300 ${
+                                isHighlighted ? 'bg-emerald-500' : 'bg-[#0038FF]'
+                              }`}
+                            >
+                              {pro.pinNumber}
+                              <span
+                                className={`absolute -bottom-[5px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[5px] border-l-transparent border-r-transparent transition-colors duration-300 ${
+                                  isHighlighted ? 'border-t-emerald-500' : 'border-t-[#0038FF]'
+                                }`}
+                              />
+                            </div>
+                          </motion.div>
+                        </div>
+                      );
+                    })}
+
+                    <div className="absolute top-[64%] left-[14%] -translate-x-1/2 -translate-y-1/2">
+                      <span className="block w-4 h-4 rounded-full bg-brand-blue/20 flex items-center justify-center">
+                        <span className="block w-2 h-2 rounded-full bg-brand-blue border border-white shadow-2xs" />
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 3 Mockup Pro Result Cards with smooth spring cascade & Dr. Clara selection */}
+                  <div className="space-y-1.5">
+                    {MOCK_PRO_RESULTS.map((pro, idx) => {
+                      const hasSelection = phase === 'selecting' || phase === 'modal';
+                      const isSelected = hasSelection && idx === 0;
+                      const isPressing = phase === 'selecting' && idx === 0;
+
+                      return (
+                        <motion.div
+                          key={pro.id}
+                          initial={false}
+                          animate={{
+                            opacity: !showResultsLayer ? 0 : hasSelection && !isSelected ? 0.68 : 1,
+                            y: showResultsLayer ? 0 : 16,
+                            scale: isPressing ? 0.975 : 1,
+                          }}
+                          transition={{
+                            ...PRO_SPRING,
+                            delay: showResultsLayer && phase === 'results' ? 0.06 + idx * 0.065 : 0,
+                          }}
+                          className={`w-full relative rounded-2xl p-2 border text-left transition-colors duration-300 flex items-center gap-2 will-change-transform ${
+                            isSelected
+                              ? 'bg-blue-50/75 border-brand-blue shadow-[0_0_0_2px_rgba(0,56,255,0.16)]'
+                              : 'bg-white border-emerald-200/80 shadow-2xs'
+                          }`}
+                        >
+                          {/* Numbered Pin Badge */}
+                          <span
+                            className={`w-4 h-4 rounded-full text-[7.5px] font-black text-white flex items-center justify-center shrink-0 transition-colors duration-300 ${
+                              isSelected ? 'bg-emerald-500' : 'bg-brand-blue'
+                            }`}
+                          >
+                            {pro.pinNumber}
+                          </span>
+
+                          {/* Avatar */}
+                          <div className="w-9 h-9 rounded-xl overflow-hidden border border-slate-200/80 shrink-0 bg-slate-50 flex items-center justify-center">
+                            {pro.image ? (
+                              <img
+                                src={pro.image}
+                                alt={pro.name}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span
+                                className={`w-full h-full flex items-center justify-center text-[10px] font-extrabold ${pro.avatarTint}`}
+                              >
+                                {pro.initials}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Details */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <p className="text-[10px] font-bold text-brand-navy truncate leading-tight">
+                                {pro.name}
+                              </p>
+                              <span className="inline-flex items-center gap-0.5 text-[8px] font-bold text-amber-900 bg-amber-50 border border-amber-200/80 px-1 py-0.5 rounded-md shrink-0 tabular-nums leading-none">
+                                <Star className="w-2 h-2 text-amber-500 fill-amber-500" />
+                                {pro.rating}
+                              </span>
+                            </div>
+
+                            <p className="text-[8px] text-slate-500 truncate mt-0.5">{pro.company}</p>
+
+                            <div className="flex items-center justify-between gap-1 mt-1">
+                              <span className="text-[7.5px] font-semibold text-emerald-700 inline-flex items-center gap-0.5 truncate">
+                                <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                <span className="truncate">{pro.languages.slice(0, 2).join(' · ')}</span>
+                              </span>
+                              <span className="text-[7.5px] font-bold text-slate-400 shrink-0 tabular-nums">
+                                {pro.distance}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Soft tactile ripple ring during selection */}
+                          <AnimatePresence>
+                            {isPressing && (
+                              <motion.span
+                                initial={{ scale: 0.45, opacity: 0.8 }}
+                                animate={{ scale: 2.1, opacity: 0 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.62, ease: APPLE_EASE }}
+                                className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 border-brand-blue/80 bg-brand-blue/15 will-change-transform"
+                              />
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              </div>
+            </AppScreenFrame>
+          </motion.div>
+        </motion.div>
+      </div>
+
+      {/* Overlapping Dr. Clara Moreau detail modal springing smoothly open */}
+      <div className="relative z-20 -mt-16 ml-auto sm:mt-0 sm:absolute sm:right-0 sm:bottom-3 w-[290px] sm:w-[322px] min-h-[340px] sm:min-h-0 pointer-events-none">
+        <AnimatePresence mode="wait">
+          {showModal && (
+            <motion.div
+              key={MOCK_PRO_PROFILE.id}
+              initial={{ opacity: 0, scale: 0.9, x: -34, y: 18 }}
+              animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+              exit={{
+                opacity: 0,
+                scale: 0.93,
+                x: -22,
+                y: 12,
+                transition: { duration: 0.36, ease: APPLE_EASE },
+              }}
+              transition={MODAL_SPRING}
+              style={{ transformOrigin: 'left center' }}
+              className="will-change-transform"
+            >
+              {renderModalCard(MOCK_PRO_PROFILE)}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+});
 
 export function WebLandingPage({
   allArticles,
@@ -632,21 +1469,11 @@ export function WebLandingPage({
     </div>
   );
 
-  // Floating Pro Modal mockup faithfully replicating ProfessionalDetailView 1-to-1
-  const renderProModalOverlayCard = () => (
-    <div
-      onClick={() => onNavigate('explore')}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onNavigate('explore');
-        }
-      }}
-      className="rounded-[24px] bg-white border-2 border-emerald-500 p-3.5 shadow-[0_26px_65px_rgba(10,15,44,0.22)] space-y-2.5 relative overflow-hidden text-left hover:-translate-y-0.5 transition-transform cursor-pointer"
-    >
-      {/* Top-right modal action buttons matching ProfessionalDetailView (Heart, Share, Close X) */}
+
+  // Floating Pro Modal mockup faithfully replicating ProfessionalDetailView 1-to-1 (non-clickable)
+  const renderProModalOverlayCard = (pro: MockProItem = MOCK_PRO_PROFILE) => (
+    <div className="rounded-[24px] bg-white border-2 border-emerald-500 p-3.5 shadow-[0_26px_65px_rgba(10,15,44,0.22)] space-y-2.5 relative overflow-hidden text-left">
+      {/* Top-right modal action icons matching ProfessionalDetailView (Heart, Share, Close X) */}
       <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
         <span className="w-5.5 h-5.5 rounded-full bg-rose-50 border border-rose-200 text-rose-500 flex items-center justify-center shadow-2xs">
           <Heart className="w-2.5 h-2.5 fill-rose-500" />
@@ -663,19 +1490,25 @@ export function WebLandingPage({
       <div className="space-y-2">
         <div className="flex items-center gap-2.5 pr-18">
           <div className="w-12 h-12 rounded-2xl bg-slate-50 p-0.5 overflow-hidden border border-slate-200 shadow-xs shrink-0">
-            <img
-              src={MOCK_PRO_PROFILE.image}
-              alt={MOCK_PRO_PROFILE.name}
-              referrerPolicy="no-referrer"
-              className="w-full h-full object-cover rounded-[12px]"
-            />
+            {pro.image ? (
+              <img
+                src={pro.image}
+                alt={pro.name}
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover rounded-[12px]"
+              />
+            ) : (
+              <div className={`w-full h-full rounded-[12px] flex items-center justify-center text-sm font-black ${pro.avatarTint}`}>
+                {pro.initials}
+              </div>
+            )}
           </div>
           <div className="min-w-0">
             <p className="text-[13px] font-black text-slate-900 font-display tracking-tight leading-tight truncate">
-              {MOCK_PRO_PROFILE.name}
+              {pro.name}
             </p>
             <p className="text-[9.5px] font-semibold text-slate-500 truncate mt-0.5">
-              {MOCK_PRO_PROFILE.company}
+              {pro.company}
             </p>
           </div>
         </div>
@@ -684,12 +1517,12 @@ export function WebLandingPage({
         <div className="flex flex-wrap items-center gap-1 text-[8px]">
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-brand-blue/5 text-brand-blue rounded-lg font-bold border border-brand-blue/15 shadow-2xs">
             <Briefcase className="w-2.5 h-2.5 shrink-0" />
-            <span>{MOCK_PRO_PROFILE.category}</span>
+            <span>{pro.category}</span>
           </span>
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-900 rounded-lg font-bold border border-amber-200 shadow-2xs tabular-nums">
             <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500 shrink-0" />
             <span>
-              {MOCK_PRO_PROFILE.rating} ({MOCK_PRO_PROFILE.reviewsCount})
+              {pro.rating} ({pro.reviewsCount})
             </span>
           </span>
           <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-800 rounded-lg font-bold border border-emerald-200/80 shadow-2xs">
@@ -702,11 +1535,11 @@ export function WebLandingPage({
         <div className="flex flex-wrap items-center gap-1 text-[7.5px]">
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-bold bg-cyan-500/10 text-cyan-800 border border-cyan-500/25 shadow-2xs">
             <Zap className="w-2.5 h-2.5 text-cyan-600 shrink-0" />
-            <span>{MOCK_PRO_PROFILE.qualities[0]}</span>
+            <span>{pro.qualities[0]}</span>
           </span>
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg font-bold bg-emerald-500/10 text-emerald-800 border border-emerald-500/25 shadow-2xs">
             <Award className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-            <span>{MOCK_PRO_PROFILE.qualities[1]}</span>
+            <span>{pro.qualities[1]}</span>
           </span>
         </div>
       </div>
@@ -719,7 +1552,7 @@ export function WebLandingPage({
             <span className="w-4.5 h-4.5 rounded-md bg-cyan-50 border border-cyan-200/70 text-cyan-600 flex items-center justify-center shrink-0">
               <Phone className="w-2.5 h-2.5" />
             </span>
-            <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.phone}</span>
+            <span className="text-slate-600 font-medium truncate tabular-nums">{pro.phone}</span>
           </div>
 
           <div className="flex items-center gap-1.5 min-w-0">
@@ -728,14 +1561,14 @@ export function WebLandingPage({
                 <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.284l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.768-5.764-5.768zm3.393 8.305c-.103.285-.514.508-.717.559-.204.051-.433.08-.949-.131-.458-.187-1.019-.441-1.607-.949-1.076-.933-1.637-1.745-1.89-2.072-.252-.326-.451-.626-.451-.95 0-.324.162-.515.252-.619a.78.78 0 01.56-.25c.108 0 .193.003.275.008.086.005.158-.026.242.176.103.243.348.846.381.907.031.066.012.164-.033.254-.045.089-.089.141-.166.233-.075.093-.119.16-.062.259.057.098.254.417.545.679.375.337.69.441.791.488a.386.386 0 00.274-.012c.081-.048.348-.381.442-.48.093-.099.191-.12.302-.078.113.042.712.335.836.398.125.062.203.09.231.144.03.051.03.303-.074.588zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.662 1.435 5.193L2 22l4.904-1.287A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.634 0-3.167-.433-4.493-1.192l-.322-.185-2.855.748.761-2.78-.204-.324C4.12 15.003 3.627 13.541 3.627 12c0-4.617 3.756-8.373 8.373-8.373 4.617 0 8.373 3.756 8.373 8.373 0 4.617-3.756 8.373-8.373 8.373z" />
               </svg>
             </span>
-            <span className="text-slate-600 font-medium truncate tabular-nums">{MOCK_PRO_PROFILE.whatsapp}</span>
+            <span className="text-slate-600 font-medium truncate tabular-nums">{pro.whatsapp}</span>
           </div>
 
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="w-4.5 h-4.5 rounded-md bg-blue-50 border border-blue-200/70 text-brand-blue flex items-center justify-center shrink-0">
               <Mail className="w-2.5 h-2.5" />
             </span>
-            <span className="text-slate-600 font-medium truncate">{MOCK_PRO_PROFILE.email}</span>
+            <span className="text-slate-600 font-medium truncate">{pro.email}</span>
           </div>
 
           <div className="flex items-start gap-1.5 min-w-0 pt-0.5">
@@ -743,7 +1576,7 @@ export function WebLandingPage({
               <Globe className="w-2.5 h-2.5" />
             </span>
             <div className="flex flex-wrap items-center gap-0.5 min-w-0">
-              {MOCK_PRO_PROFILE.languages.map((lang) => (
+              {pro.languages.map((lang) => (
                 <span
                   key={lang}
                   className="text-[7px] bg-white text-slate-700 font-semibold px-1 py-0.5 rounded border border-slate-200/80 shadow-2xs leading-none"
@@ -762,7 +1595,7 @@ export function WebLandingPage({
               <MapPin className="w-2.5 h-2.5" />
             </span>
             <span className="text-[7.5px] text-slate-600 font-medium leading-tight underline decoration-slate-300 underline-offset-2 line-clamp-2">
-              {MOCK_PRO_PROFILE.location}
+              {pro.location}
             </span>
           </div>
 
@@ -799,7 +1632,7 @@ export function WebLandingPage({
           </span>
         </div>
         <p className="text-[8px] text-slate-700 leading-relaxed line-clamp-2">
-          {MOCK_PRO_PROFILE.about}
+          {pro.about}
         </p>
       </div>
 
@@ -811,7 +1644,7 @@ export function WebLandingPage({
             Testimonials
           </span>
           <span className="text-[7px] bg-slate-100 border border-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full font-bold font-mono leading-none">
-            {MOCK_PRO_PROFILE.reviewsCount}
+            {pro.reviewsCount}
           </span>
         </div>
 
@@ -820,7 +1653,7 @@ export function WebLandingPage({
             <div className="space-y-0.5 min-w-0">
               <div className="flex items-center gap-1 min-w-0">
                 <span className="text-[8.5px] font-bold text-slate-900 truncate">
-                  {MOCK_PRO_PROFILE.review.author}
+                  {pro.review.author}
                 </span>
                 <span className="w-3.5 h-3.5 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
                   <MessageSquare className="w-2 h-2" />
@@ -833,11 +1666,11 @@ export function WebLandingPage({
               </div>
             </div>
             <span className="text-[7px] font-semibold text-slate-400 font-mono tracking-tight shrink-0">
-              {MOCK_PRO_PROFILE.review.date}
+              {pro.review.date}
             </span>
           </div>
           <p className="text-[8px] text-slate-600 leading-snug italic line-clamp-2">
-            &ldquo;{MOCK_PRO_PROFILE.review.comment}&rdquo;
+            &ldquo;{pro.review.comment}&rdquo;
           </p>
         </div>
       </div>
@@ -1235,7 +2068,14 @@ export function WebLandingPage({
                   className="font-display font-bold tracking-tight text-brand-navy leading-[1.08] [text-wrap:balance]"
                   style={{ fontSize: 'clamp(2.25rem, 4.2vw, 3.65rem)' }}
                 >
-                  Discover better, <span className="text-brand-blue">belong faster.</span>
+                  <LetterReveal
+                    immediate
+                    stagger={0.022}
+                    segments={[
+                      { text: 'Discover better, ' },
+                      { text: 'belong faster.', className: 'text-brand-blue' },
+                    ]}
+                  />
                 </h1>
 
                 <div className="py-1">
@@ -1276,7 +2116,12 @@ export function WebLandingPage({
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/80 via-brand-navy/30 to-brand-blue/15" />
 
-                <div className="relative z-10 h-full flex flex-col items-center justify-center p-5 sm:p-8">
+                <motion.div
+                  initial={{ opacity: 0, y: 26, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.85, delay: 0.14, ease: APPLE_EASE }}
+                  className="relative z-10 h-full flex flex-col items-center justify-center p-5 sm:p-8"
+                >
                   <AppScreenFrame
                     idSuffix="hero"
                     activeTab={heroPhoneTab}
@@ -1295,7 +2140,7 @@ export function WebLandingPage({
                     {heroPhoneTab === 'guides' && renderGuidesScreenContent()}
                     {heroPhoneTab === 'marketplace' && renderStuffScreenContent()}
                   </AppScreenFrame>
-                </div>
+                </motion.div>
               </div>
             </div>
           </div>
@@ -1309,7 +2154,12 @@ export function WebLandingPage({
             <div className="lg:col-span-5 space-y-7">
               <div className="space-y-3.5">
                 <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-brand-navy leading-[1.12] [text-wrap:balance]">
-                  <span className="text-brand-blue">Trusted pros</span>, matched in seconds.
+                  <LetterReveal
+                    segments={[
+                      { text: 'Trusted pros', className: 'text-brand-blue' },
+                      { text: ', matched in seconds.' },
+                    ]}
+                  />
                 </h2>
                 <p className="text-base text-slate-500 leading-[1.65]">
                   Ask Jane in your own words to find community-recommended specialists who speak your language.
@@ -1344,23 +2194,9 @@ export function WebLandingPage({
             </div>
 
             <div className="lg:col-span-7">
-              <div className="relative mx-auto max-w-[590px] py-2">
-                {/* Real Jane Search phone screen with filters & map */}
-                <div className="relative z-10 sm:-translate-x-16 lg:-translate-x-20">
-                  <AppScreenFrame
-                    idSuffix="find-pros"
-                    activeTab="explore"
-                    onTabClick={handleScreenNav}
-                  >
-                    {renderFindProsScreenContent()}
-                  </AppScreenFrame>
-                </div>
-
-                {/* Slightly overlapping Pro detail modal mockup */}
-                <div className="relative z-20 -mt-16 ml-auto sm:mt-0 sm:absolute sm:right-0 sm:bottom-3 w-[290px] sm:w-[322px]">
-                  {renderProModalOverlayCard()}
-                </div>
-              </div>
+              <AnimatedFindProsShowcase
+                renderModalCard={renderProModalOverlayCard}
+              />
             </div>
           </div>
         </div>
@@ -1383,7 +2219,13 @@ export function WebLandingPage({
             <div className="lg:col-span-5 order-1 lg:order-2 space-y-7">
               <div className="space-y-3.5">
                 <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-brand-navy leading-[1.12] [text-wrap:balance]">
-                  Curated <span className="text-orange-500">weekly plans</span> around you.
+                  <LetterReveal
+                    segments={[
+                      { text: 'Curated ' },
+                      { text: 'weekly plans', className: 'text-orange-500' },
+                      { text: ' around you.' },
+                    ]}
+                  />
                 </h2>
                 <p className="text-base text-slate-500 leading-[1.65]">
                   Discover local meetups, markets, concerts, and weekend outings in one clear calendar.
@@ -1427,7 +2269,12 @@ export function WebLandingPage({
             <div className="lg:col-span-5 space-y-7">
               <div className="space-y-3.5">
                 <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-brand-navy leading-[1.12] [text-wrap:balance]">
-                  <span className="text-emerald-600">Clear playbooks</span> to settle in faster.
+                  <LetterReveal
+                    segments={[
+                      { text: 'Clear playbooks', className: 'text-emerald-600' },
+                      { text: ' to settle in faster.' },
+                    ]}
+                  />
                 </h2>
                 <p className="text-base text-slate-500 leading-[1.65]">
                   Step-by-step local guides written from real experience so nothing gets lost in translation.
@@ -1486,8 +2333,12 @@ export function WebLandingPage({
                 return (
                   <div className="relative mx-auto max-w-[600px] py-2">
                     {/* Back / Upper-Left Floating Article Modal */}
-                    <button
+                    <motion.button
                       type="button"
+                      initial={{ opacity: 0, y: 34, scale: 0.97 }}
+                      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                      viewport={{ once: true, amount: 0.22 }}
+                      transition={{ duration: 0.72, ease: APPLE_EASE }}
                       onClick={() =>
                         onNavigate(
                           'guides',
@@ -1563,11 +2414,15 @@ export function WebLandingPage({
                           </span>
                         </div>
                       </div>
-                    </button>
+                    </motion.button>
 
                     {/* Front / Lower-Right Slightly Overlapping Article Modal */}
-                    <button
+                    <motion.button
                       type="button"
+                      initial={{ opacity: 0, y: 48, scale: 0.96 }}
+                      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                      viewport={{ once: true, amount: 0.2 }}
+                      transition={{ duration: 0.78, delay: 0.18, ease: APPLE_EASE }}
                       onClick={() =>
                         onNavigate(
                           'guides',
@@ -1643,7 +2498,7 @@ export function WebLandingPage({
                           </span>
                         </div>
                       </div>
-                    </button>
+                    </motion.button>
                   </div>
                 );
               })()}
@@ -1656,7 +2511,13 @@ export function WebLandingPage({
       <section id="section-stuff" className="py-20 sm:py-24">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-8 xl:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
-            <div className="lg:col-span-7 order-2 lg:order-1 flex justify-center">
+            <motion.div
+              initial={{ opacity: 0, y: 36, scale: 0.97 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true, amount: 0.25 }}
+              transition={{ duration: 0.75, ease: APPLE_EASE }}
+              className="lg:col-span-7 order-2 lg:order-1 flex justify-center"
+            >
               <AppScreenFrame
                 idSuffix="stuff"
                 activeTab="marketplace"
@@ -1664,12 +2525,17 @@ export function WebLandingPage({
               >
                 {renderStuffScreenContent()}
               </AppScreenFrame>
-            </div>
+            </motion.div>
 
             <div className="lg:col-span-5 order-1 lg:order-2 space-y-7">
               <div className="space-y-3.5">
                 <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-brand-navy leading-[1.12] [text-wrap:balance]">
-                  <span className="text-purple-600">Buy and Sell</span> locally within your community.
+                  <LetterReveal
+                    segments={[
+                      { text: 'Buy and Sell', className: 'text-purple-600' },
+                      { text: ' locally within your community.' },
+                    ]}
+                  />
                 </h2>
                 <p className="text-base text-slate-500 leading-[1.65]">
                   Trade bikes, furniture, kids&apos; gear, and home essentials inside a trusted local community.
@@ -1713,7 +2579,13 @@ export function WebLandingPage({
             <div className="lg:col-span-5 space-y-7">
               <div className="space-y-3.5">
                 <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-brand-navy leading-[1.12] [text-wrap:balance]">
-                  Stay in the loop with <span className="text-amber-500">smart alerts</span>.
+                  <LetterReveal
+                    segments={[
+                      { text: 'Stay in the loop with ' },
+                      { text: 'smart alerts', className: 'text-amber-500' },
+                      { text: '.' },
+                    ]}
+                  />
                 </h2>
                 <p className="text-base text-slate-500 leading-[1.65]">
                   Get timely, zero-spam push notifications whenever new events, fresh local guides, or newly recommended pros arrive in your city.
@@ -1761,11 +2633,15 @@ export function WebLandingPage({
                     offsetClass: 'sm:ml-auto',
                     icon: UserPlus,
                   },
-                ].map((notif) => {
+                ].map((notif, idx) => {
                   const CategoryIcon = notif.icon;
                   return (
-                    <div
+                    <motion.div
                       key={notif.id}
+                      initial={{ opacity: 0, y: 28, scale: 0.97 }}
+                      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                      viewport={{ once: true, amount: 0.3 }}
+                      transition={{ duration: 0.68, delay: idx * 0.18, ease: APPLE_EASE }}
                       className={`w-full sm:max-w-[468px] text-left rounded-[22px] bg-white border ${notif.accentBorder} p-4 sm:p-5 shadow-[0_14px_38px_rgba(10,15,44,0.08)] ${notif.offsetClass}`}
                     >
                       <div className="flex items-start gap-3.5">
@@ -1805,7 +2681,7 @@ export function WebLandingPage({
                           </p>
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
@@ -1875,7 +2751,11 @@ export function WebLandingPage({
                 iOS &amp; Android <span aria-hidden="true" className="mx-2 text-white/30">·</span> Free Download
               </p>
               <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight leading-[1.12] [text-wrap:balance]">
-                Take your city in your pocket.
+                <LetterReveal
+                  segments={[
+                    { text: 'Take your city in your pocket.' },
+                  ]}
+                />
               </h2>
               <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
                 Save pros, get event alerts, and chat with neighbors on the go.
