@@ -2112,16 +2112,31 @@ Ensure each event contains:
   const httpServer = http.createServer(app);
   let viteServer: Awaited<ReturnType<typeof createViteServer>> | null = null;
 
-  // Vite middleware for development
+  // Vite middleware for development (initialized asynchronously so port 3000 binds immediately)
   if (process.env.NODE_ENV !== "production") {
-    viteServer = await createViteServer({
+    const viteReadyPromise = createViteServer({
       server: {
         middlewareMode: true,
         hmr: process.env.DISABLE_HMR === "true" ? false : { server: httpServer },
       },
       appType: "spa",
+    }).then((server) => {
+      viteServer = server;
+      return server;
     });
-    app.use(viteServer.middlewares);
+
+    viteReadyPromise.catch((err) => {
+      console.error("[server] Failed to initialize Vite dev middleware:", err);
+    });
+
+    app.use(async (req, res, next) => {
+      try {
+        const vite = viteServer || (await viteReadyPromise);
+        vite.middlewares(req, res, next);
+      } catch (err) {
+        next(err);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath, { dotfiles: 'allow' }));

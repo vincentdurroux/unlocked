@@ -135,6 +135,90 @@ const EventPosterImage: React.FC<{ src?: string; alt: string }> = ({ src, alt })
   );
 };
 
+interface EventSlideCardProps {
+  event: Event;
+  formattedDate: string;
+  virtualIdx: number;
+  registerCardRef: (idx: number, el: HTMLDivElement | null) => void;
+  registerRingRef: (idx: number, el: HTMLDivElement | null) => void;
+  registerBadgeActiveRef: (idx: number, el: HTMLSpanElement | null) => void;
+  onCardClick: (event: Event) => void;
+}
+
+const EventSlideCard = React.memo<EventSlideCardProps>(({
+  event,
+  formattedDate,
+  virtualIdx,
+  registerCardRef,
+  registerRingRef,
+  registerBadgeActiveRef,
+  onCardClick,
+}) => {
+  return (
+    <div
+      ref={(el) => registerCardRef(virtualIdx, el)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onCardClick(event);
+      }}
+      className="shrink-0 snap-center w-[205px] h-[290px] sm:w-[240px] sm:h-[345px] rounded-2xl overflow-hidden cursor-pointer bg-slate-800 border-2 border-slate-200/80 shadow-sm relative group/card select-none z-10 will-change-transform transform-gpu"
+      style={{ contain: 'layout paint' }}
+    >
+      {/* Reliable Poster Background Image with preload cache & fallback */}
+      <EventPosterImage src={event.image} alt={event.title} />
+
+      {/* Continuous GPU-driven active focus ring & warm glow */}
+      <div
+        ref={(el) => registerRingRef(virtualIdx, el)}
+        className="absolute inset-0 rounded-[14px] ring-2 ring-inset ring-orange-500 shadow-[inset_0_0_24px_rgba(249,115,22,0.18)] pointer-events-none z-30 will-change-[opacity]"
+        style={{ opacity: 0 }}
+      />
+
+      {/* Deep gradient at the bottom for crystal-clear readability with full titles */}
+      <div className="absolute bottom-0 left-0 right-0 h-44 sm:h-52 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent pointer-events-none" />
+
+      {/* Top Timing Badge — smooth GPU crossfade between inactive white pill and active orange pill */}
+      <div className="absolute top-2.5 left-2.5 z-20 pointer-events-none">
+        <div className="relative inline-grid">
+          <span className="col-start-1 row-start-1 inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md border bg-white/95 text-slate-800 border-slate-200">
+            {formattedDate}
+          </span>
+          <span
+            ref={(el) => registerBadgeActiveRef(virtualIdx, el)}
+            aria-hidden="true"
+            className="col-start-1 row-start-1 inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md border bg-orange-500 text-white border-orange-400 will-change-[opacity]"
+            style={{ opacity: 0 }}
+          >
+            {formattedDate}
+          </span>
+        </div>
+      </div>
+
+      {/* Free Badge if applicable */}
+      {event.is_free && (
+        <div className="absolute top-2.5 right-2.5 z-20 pointer-events-none">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-extrabold shadow-md bg-emerald-500 text-white">
+            Free
+          </span>
+        </div>
+      )}
+
+      {/* Bottom Content: Category & Full Title */}
+      <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-3.5 z-20 pointer-events-none text-left space-y-1">
+        <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider block truncate">
+          {event.category}
+        </span>
+
+        <h4 className="font-bold font-display text-white text-[12px] sm:text-[13px] leading-snug drop-shadow-md break-words">
+          {event.title}
+        </h4>
+      </div>
+    </div>
+  );
+});
+
+EventSlideCard.displayName = 'EventSlideCard';
+
 export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProps> = ({
   events,
   onNavigate,
@@ -142,10 +226,20 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [isDraggingMouse, setIsDraggingMouse] = useState(false);
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedEventForModal, setSelectedEventForModal] = useState<Event | null>(null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const ringRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const badgeActiveRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const metricsRef = useRef<{ centers: number[]; stride: number; containerWidth: number }>({
+    centers: [],
+    stride: 240,
+    containerWidth: 0,
+  });
+
   const currentIndexRef = useRef<number>(0);
   const rawScrollIndexRef = useRef<number>(0);
   const isPointerDownRef = useRef<boolean>(false);
@@ -156,6 +250,12 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   const lastManualInteractRef = useRef<number>(0);
   const touchStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const touchDraggedRef = useRef<boolean>(false);
+  const mouseDragRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; dragged: boolean }>({
+    active: false,
+    startX: 0,
+    startScrollLeft: 0,
+    dragged: false,
+  });
 
   // Keyboard accessibility and body scroll lock when modal is open
   useEffect(() => {
@@ -232,7 +332,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   }, [events, currentDate]);
 
   const count = activeEvents.length;
-  const setCount = count <= 1 ? 1 : count <= 3 ? 5 : 3;
+  const setCount = count <= 1 ? 1 : count <= 4 ? 5 : 3;
   const middleSetIndex = Math.floor(setCount / 2);
 
   const eventsKey = useMemo(
@@ -249,6 +349,12 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     }
     return list;
   }, [activeEvents, setCount]);
+
+  // Pre-compute formatted dates once per activeEvents update
+  const formattedDates = useMemo(
+    () => activeEvents.map((ev) => formatEventDate(ev.start_date, ev.end_date, ev.date)),
+    [activeEvents]
+  );
 
   // Preload & decode unique event poster images up-front so swiped cards appear instantaneously
   useEffect(() => {
@@ -275,34 +381,152 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
 
+  const registerCardRef = useRef((idx: number, el: HTMLDivElement | null) => {
+    cardRefs.current[idx] = el;
+  }).current;
+
+  const registerRingRef = useRef((idx: number, el: HTMLDivElement | null) => {
+    ringRefs.current[idx] = el;
+  }).current;
+
+  const registerBadgeActiveRef = useRef((idx: number, el: HTMLSpanElement | null) => {
+    badgeActiveRefs.current[idx] = el;
+  }).current;
+
+  const handleCardClick = useRef((event: Event) => {
+    if (touchDraggedRef.current || mouseDragRef.current.dragged) {
+      touchDraggedRef.current = false;
+      mouseDragRef.current.dragged = false;
+      return;
+    }
+    setSelectedEventForModal(event);
+  }).current;
+
+  // Measure card center positions ONCE on layout/resize — zero layout reads during scroll frames
+  const measureMetrics = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const children = container.children;
+    const centers: number[] = new Array(children.length);
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i] as HTMLElement;
+      centers[i] = child.offsetLeft + child.offsetWidth / 2;
+    }
+    const stride =
+      centers.length >= 2
+        ? Math.max(1, centers[1] - centers[0])
+        : children[0]
+          ? (children[0] as HTMLElement).offsetWidth + 16
+          : 240;
+
+    metricsRef.current = {
+      centers,
+      stride,
+      containerWidth: container.clientWidth,
+    };
+  };
+
+  // Pure GPU compositor pass: updates transform/opacity/ring smoothly at 60/120fps with zero React re-renders
+  const applyCardVisuals = (scrollLeftOverride?: number) => {
+    const container = scrollContainerRef.current;
+    if (!container || count === 0) return;
+
+    let { centers, stride, containerWidth } = metricsRef.current;
+    if (centers.length !== repeatedEvents.length || containerWidth === 0) {
+      measureMetrics();
+      ({ centers, stride, containerWidth } = metricsRef.current);
+      if (centers.length === 0) return;
+    }
+
+    const scrollLeft = scrollLeftOverride !== undefined ? scrollLeftOverride : container.scrollLeft;
+    const viewportCenter = scrollLeft + containerWidth / 2;
+
+    let minDistance = Infinity;
+    let centeredVirtualIndex = rawScrollIndexRef.current;
+
+    for (let i = 0; i < centers.length; i++) {
+      const dist = Math.abs(centers[i] - viewportCenter);
+      if (dist < minDistance) {
+        minDistance = dist;
+        centeredVirtualIndex = i;
+      }
+
+      const cardEl = cardRefs.current[i];
+      if (!cardEl) continue;
+
+      const normalizedDist = Math.min(1, dist / stride);
+      // Smooth bell-curve focus (1 at exact center, 0 once one full stride away)
+      const focus = 1 - normalizedDist * normalizedDist * (3 - 2 * normalizedDist);
+      const scale = 0.935 + 0.065 * focus;
+      const translateY = 4 - 8 * focus;
+      const opacity = 0.72 + 0.28 * focus;
+
+      cardEl.style.transform = `translate3d(0, ${translateY.toFixed(2)}px, 0) scale(${scale.toFixed(4)})`;
+      cardEl.style.opacity = opacity.toFixed(3);
+
+      const ringEl = ringRefs.current[i];
+      if (ringEl) {
+        const ringAlpha = Math.max(0, Math.min(1, (focus - 0.45) / 0.55));
+        ringEl.style.opacity = ringAlpha.toFixed(3);
+      }
+
+      const badgeEl = badgeActiveRefs.current[i];
+      if (badgeEl) {
+        const badgeAlpha = Math.max(0, Math.min(1, (focus - 0.35) / 0.65));
+        badgeEl.style.opacity = badgeAlpha.toFixed(3);
+      }
+    }
+
+    if (centeredVirtualIndex !== rawScrollIndexRef.current) {
+      rawScrollIndexRef.current = centeredVirtualIndex;
+      const normalizedIndex = ((centeredVirtualIndex % count) + count) % count;
+      if (normalizedIndex !== currentIndexRef.current) {
+        currentIndexRef.current = normalizedIndex;
+        setCurrentIndex(normalizedIndex);
+      }
+    }
+  };
+
   const getCenteredScrollLeftForVirtualIndex = (vIndex: number): number | null => {
     const container = scrollContainerRef.current;
     if (!container) return null;
-    const targetChild = container.children[vIndex] as HTMLElement | undefined;
-    if (!targetChild) return null;
-    const targetCenter = targetChild.offsetLeft + targetChild.offsetWidth / 2;
-    return Math.max(0, targetCenter - container.clientWidth / 2);
+    if (metricsRef.current.centers.length !== repeatedEvents.length || metricsRef.current.containerWidth === 0) {
+      measureMetrics();
+    }
+    const center = metricsRef.current.centers[vIndex];
+    if (center === undefined) return null;
+    return Math.max(0, center - metricsRef.current.containerWidth / 2);
   };
 
-  // Silently re-center into middle set ONLY when scrolling has completely settled.
-  // Because card active styling uses (virtualIdx % count === currentIndex), this shift produces
-  // zero React re-renders and zero visual flicker.
-  const normalizeToMiddleSet = () => {
+  // Edge-only silent loop recentering: NEVER interrupts mid-set scrolling or iOS inertial momentum.
+  // Only teleports back to the middle buffer set when the user has scrolled near the outer track ends.
+  const normalizeToMiddleSet = (force = false) => {
     const container = scrollContainerRef.current;
-    if (!container || count <= 1 || isPointerDownRef.current || isAnimatingScrollRef.current) return;
+    if (!container || count <= 1 || isPointerDownRef.current || isAnimatingScrollRef.current || mouseDragRef.current.active) return;
 
     const currentIdx = rawScrollIndexRef.current;
+    const isNearOuterEdge = currentIdx < count || currentIdx >= (setCount - 1) * count;
+    if (!force && !isNearOuterEdge) return;
+
     const normalized = ((currentIdx % count) + count) % count;
     const targetIdx = middleSetIndex * count + normalized;
 
     if (targetIdx !== currentIdx) {
-      const targetLeft = getCenteredScrollLeftForVirtualIndex(targetIdx);
+      const { centers } = metricsRef.current;
+      const currentCenter = centers[currentIdx];
+      const targetCenter = centers[targetIdx];
+      const targetLeft =
+        currentCenter !== undefined && targetCenter !== undefined
+          ? Math.max(0, container.scrollLeft + (targetCenter - currentCenter))
+          : getCenteredScrollLeftForVirtualIndex(targetIdx);
+
       if (targetLeft !== null) {
         container.style.scrollSnapType = 'none';
         container.scrollLeft = targetLeft;
         rawScrollIndexRef.current = targetIdx;
+        applyCardVisuals(targetLeft);
         requestAnimationFrame(() => {
-          if (scrollContainerRef.current && !isAnimatingScrollRef.current) {
+          if (scrollContainerRef.current && !isAnimatingScrollRef.current && !mouseDragRef.current.active) {
             scrollContainerRef.current.style.scrollSnapType = '';
           }
         });
@@ -317,13 +541,13 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     }
     if (isAnimatingScrollRef.current) {
       isAnimatingScrollRef.current = false;
-      if (scrollContainerRef.current) {
+      if (scrollContainerRef.current && !mouseDragRef.current.active) {
         scrollContainerRef.current.style.scrollSnapType = '';
       }
     }
   };
 
-  // Silky 60/120fps rAF eased scroll for auto-rotation & arrows (avoids iOS scroll-snap vs smooth-scroll fighting)
+  // Silky 60/120fps rAF quartic ease-out scroll for auto-rotation, arrows, and pagination dots
   const scrollToVirtualIndex = (vIndex: number, smooth = true) => {
     const container = scrollContainerRef.current;
     if (!container || count === 0) return;
@@ -334,16 +558,22 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
 
     cancelProgrammaticScroll();
 
-    if (!smooth) {
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    if (!smooth || prefersReducedMotion) {
       container.style.scrollSnapType = 'none';
       container.scrollLeft = targetLeft;
       rawScrollIndexRef.current = clampedTarget;
       const norm = ((clampedTarget % count) + count) % count;
       if (norm !== currentIndexRef.current) {
+        currentIndexRef.current = norm;
         setCurrentIndex(norm);
       }
+      applyCardVisuals(targetLeft);
       requestAnimationFrame(() => {
-        if (scrollContainerRef.current && !isAnimatingScrollRef.current) {
+        if (scrollContainerRef.current && !isAnimatingScrollRef.current && !mouseDragRef.current.active) {
           scrollContainerRef.current.style.scrollSnapType = '';
         }
       });
@@ -353,27 +583,30 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     const startLeft = container.scrollLeft;
     const distance = targetLeft - startLeft;
     if (Math.abs(distance) < 1) {
+      applyCardVisuals(targetLeft);
       normalizeToMiddleSet();
       return;
     }
 
-    const duration = 520;
+    const duration = Math.min(560, Math.max(380, 440 + Math.abs(distance) * 0.14));
     const startTime = performance.now();
     isAnimatingScrollRef.current = true;
     container.style.scrollSnapType = 'none';
 
     const step = (now: number) => {
-      if (!scrollContainerRef.current || isPointerDownRef.current) {
+      if (!scrollContainerRef.current || isPointerDownRef.current || mouseDragRef.current.active) {
         cancelProgrammaticScroll();
         return;
       }
 
       const elapsed = now - startTime;
       const progress = Math.min(1, elapsed / duration);
-      // Smooth cubic ease-out
-      const eased = 1 - Math.pow(1 - progress, 3);
+      // Apple-style quartic ease-out for effortless deceleration
+      const eased = 1 - Math.pow(1 - progress, 4);
+      const nextLeft = startLeft + distance * eased;
 
-      scrollContainerRef.current.scrollLeft = startLeft + distance * eased;
+      scrollContainerRef.current.scrollLeft = nextLeft;
+      applyCardVisuals(nextLeft);
 
       if (progress < 1) {
         animRafRef.current = requestAnimationFrame(step);
@@ -385,9 +618,11 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         rawScrollIndexRef.current = clampedTarget;
         const norm = ((clampedTarget % count) + count) % count;
         if (norm !== currentIndexRef.current) {
+          currentIndexRef.current = norm;
           setCurrentIndex(norm);
         }
-        requestAnimationFrame(() => normalizeToMiddleSet());
+        applyCardVisuals(targetLeft);
+        normalizeToMiddleSet();
       }
     };
 
@@ -397,17 +632,21 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
   // Center strictly on middle set start card upon mounting or when events list updates
   useEffect(() => {
     if (count === 0 || !scrollContainerRef.current) return;
+    cardRefs.current.length = repeatedEvents.length;
+    ringRefs.current.length = repeatedEvents.length;
+    badgeActiveRefs.current.length = repeatedEvents.length;
 
     const timer = requestAnimationFrame(() => {
+      measureMetrics();
       const initialVirtualIndex = count > 1 ? middleSetIndex * count : 0;
       scrollToVirtualIndex(initialVirtualIndex, false);
       setCurrentIndex(0);
     });
 
     return () => cancelAnimationFrame(timer);
-  }, [eventsKey, count, middleSetIndex]);
+  }, [eventsKey, count, middleSetIndex, repeatedEvents.length]);
 
-  // Keep active card centered if container width changes (e.g., mobile rotation or layout settle)
+  // Keep cached metrics & active card centered if container width changes
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || count === 0 || typeof ResizeObserver === 'undefined') return;
@@ -418,6 +657,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       const nextWidth = scrollContainerRef.current.clientWidth;
       if (Math.abs(nextWidth - lastWidth) > 2) {
         lastWidth = nextWidth;
+        measureMetrics();
         scrollToVirtualIndex(rawScrollIndexRef.current, false);
       }
     });
@@ -425,67 +665,43 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     return () => ro.disconnect();
   }, [count, repeatedEvents.length]);
 
-  // Listen for native scrollend (modern iOS Safari & Android Chrome) for instant zero-jank loop recentering
+  // Listen for native scrollend (modern iOS Safari & Android Chrome) for zero-jank edge recentering
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || count <= 1) return;
     const onScrollEnd = () => {
-      if (!isPointerDownRef.current && !isAnimatingScrollRef.current) {
+      if (!isPointerDownRef.current && !isAnimatingScrollRef.current && !mouseDragRef.current.active) {
         if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
+        applyCardVisuals();
         normalizeToMiddleSet();
       }
     };
     container.addEventListener('scrollend', onScrollEnd, { passive: true });
     return () => container.removeEventListener('scrollend', onScrollEnd);
-  }, [count, middleSetIndex]);
+  }, [count, middleSetIndex, setCount]);
 
-  // Lightweight scroll listener: only triggers React state when active event index actually changes
+  // Lightweight zero-layout-thrash scroll listener
   const handleScroll = () => {
     if (scrollIdleTimerRef.current) {
       clearTimeout(scrollIdleTimerRef.current);
     }
 
-    if (!isAnimatingScrollRef.current && !isPointerDownRef.current) {
+    if (!isAnimatingScrollRef.current && !isPointerDownRef.current && !mouseDragRef.current.active) {
+      const supportsScrollEnd = typeof window !== 'undefined' && 'onscrollend' in window;
       scrollIdleTimerRef.current = setTimeout(() => {
         normalizeToMiddleSet();
-      }, 280);
+      }, supportsScrollEnd ? 550 : 420);
     }
 
-    if (scrollRafRef.current) return;
+    if (scrollRafRef.current || isAnimatingScrollRef.current) return;
 
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null;
-      const container = scrollContainerRef.current;
-      if (!container || count === 0) return;
-
-      const containerCenter = container.scrollLeft + container.clientWidth / 2;
-      const children = container.children;
-      if (children.length === 0) return;
-
-      let minDistance = Infinity;
-      let centeredVirtualIndex = rawScrollIndexRef.current;
-
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i] as HTMLElement;
-        const childCenter = child.offsetLeft + child.offsetWidth / 2;
-        const dist = Math.abs(childCenter - containerCenter);
-        if (dist < minDistance) {
-          minDistance = dist;
-          centeredVirtualIndex = i;
-        }
-      }
-
-      if (centeredVirtualIndex !== rawScrollIndexRef.current) {
-        rawScrollIndexRef.current = centeredVirtualIndex;
-        const normalizedIndex = ((centeredVirtualIndex % count) + count) % count;
-        if (normalizedIndex !== currentIndexRef.current) {
-          setCurrentIndex(normalizedIndex);
-        }
-      }
+      applyCardVisuals();
     });
   };
 
-  // Step forward or backward cleanly from middle set so we never hit a track edge
+  // Step forward or backward cleanly so we never hit a track edge
   const stepCarousel = (delta: 1 | -1) => {
     if (count <= 1) return;
     const currentIdx = rawScrollIndexRef.current;
@@ -499,10 +715,37 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         scrollContainerRef.current.style.scrollSnapType = 'none';
         scrollContainerRef.current.scrollLeft = resetLeft;
         rawScrollIndexRef.current = baseIdx;
+        applyCardVisuals(resetLeft);
       }
     }
 
     scrollToVirtualIndex(baseIdx + delta, true);
+  };
+
+  // Smooth shortest-path jump when tapping pagination dots
+  const jumpToEventIndex = (targetNormIdx: number) => {
+    if (count <= 1) return;
+    const currentIdx = rawScrollIndexRef.current;
+    const currentNorm = ((currentIdx % count) + count) % count;
+    if (targetNormIdx === currentNorm) return;
+
+    let diff = targetNormIdx - currentNorm;
+    if (diff > count / 2) diff -= count;
+    if (diff < -count / 2) diff += count;
+
+    let baseIdx = currentIdx;
+    if (baseIdx + diff < 1 || baseIdx + diff >= repeatedEvents.length - 1) {
+      baseIdx = middleSetIndex * count + currentNorm;
+      const resetLeft = getCenteredScrollLeftForVirtualIndex(baseIdx);
+      if (resetLeft !== null && scrollContainerRef.current) {
+        scrollContainerRef.current.style.scrollSnapType = 'none';
+        scrollContainerRef.current.scrollLeft = resetLeft;
+        rawScrollIndexRef.current = baseIdx;
+        applyCardVisuals(resetLeft);
+      }
+    }
+
+    scrollToVirtualIndex(baseIdx + diff, true);
   };
 
   // Auto-rotation every 6 seconds in continuous infinite loop
@@ -510,7 +753,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
     if (count <= 1 || isPaused || selectedEventForModal) return;
 
     const autoScrollTimer = setInterval(() => {
-      if (!scrollContainerRef.current || isPointerDownRef.current || isAnimatingScrollRef.current) return;
+      if (!scrollContainerRef.current || isPointerDownRef.current || isAnimatingScrollRef.current || mouseDragRef.current.active) return;
       if (Date.now() - lastManualInteractRef.current < 4500) return;
       stepCarousel(1);
     }, 6000);
@@ -557,7 +800,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
       <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-slate-100/40 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header: This Weekend's Events + Weekend date range + All events link */}
-      <div className="relative z-10 flex items-center justify-between gap-3 mb-3 w-full">
+      <div className="relative z-10 flex items-center justify-between gap-3 mb-2 w-full">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white shadow-md shadow-orange-500/20 shrink-0">
             <Calendar className="w-4 h-4 stroke-[2.2]" />
@@ -588,14 +831,65 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
         </button>
       </div>
 
-      {/* Hardware-accelerated Native Scroll-Snap Track */}
-      <div className="relative z-10 w-full flex-1 flex items-center py-2 overflow-hidden min-h-[340px]">
+      {/* Hardware-accelerated Native Scroll-Snap Track with 60/120fps Continuous Focus */}
+      <div className="relative z-10 w-full flex-1 flex items-center py-1 overflow-hidden min-h-[320px]">
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          onPointerDown={() => {
+          onPointerDown={(e) => {
             lastManualInteractRef.current = Date.now();
             cancelProgrammaticScroll();
+            if (e.pointerType === 'mouse' && e.button === 0 && scrollContainerRef.current) {
+              mouseDragRef.current = {
+                active: true,
+                startX: e.clientX,
+                startScrollLeft: scrollContainerRef.current.scrollLeft,
+                dragged: false,
+              };
+              scrollContainerRef.current.style.scrollSnapType = 'none';
+              setIsDraggingMouse(true);
+            }
+          }}
+          onPointerMove={(e) => {
+            if (!mouseDragRef.current.active || !scrollContainerRef.current) return;
+            const dx = e.clientX - mouseDragRef.current.startX;
+            if (Math.abs(dx) > 5) {
+              mouseDragRef.current.dragged = true;
+            }
+            const nextLeft = mouseDragRef.current.startScrollLeft - dx;
+            scrollContainerRef.current.scrollLeft = nextLeft;
+            applyCardVisuals(nextLeft);
+          }}
+          onPointerUp={() => {
+            if (!mouseDragRef.current.active) return;
+            const wasDragged = mouseDragRef.current.dragged;
+            mouseDragRef.current.active = false;
+            setIsDraggingMouse(false);
+            lastManualInteractRef.current = Date.now();
+            if (scrollContainerRef.current) {
+              scrollContainerRef.current.style.scrollSnapType = '';
+            }
+            if (wasDragged) {
+              scrollToVirtualIndex(rawScrollIndexRef.current, true);
+              setTimeout(() => {
+                mouseDragRef.current.dragged = false;
+              }, 80);
+            }
+          }}
+          onPointerLeave={() => {
+            if (!mouseDragRef.current.active) return;
+            const wasDragged = mouseDragRef.current.dragged;
+            mouseDragRef.current.active = false;
+            setIsDraggingMouse(false);
+            if (scrollContainerRef.current) {
+              scrollContainerRef.current.style.scrollSnapType = '';
+            }
+            if (wasDragged) {
+              scrollToVirtualIndex(rawScrollIndexRef.current, true);
+              setTimeout(() => {
+                mouseDragRef.current.dragged = false;
+              }, 80);
+            }
           }}
           onWheel={() => {
             lastManualInteractRef.current = Date.now();
@@ -620,90 +914,43 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
               touchDraggedRef.current = true;
             }
           }}
-          onTouchEnd={() => { 
-            isPointerDownRef.current = false; 
+          onTouchEnd={() => {
+            isPointerDownRef.current = false;
             lastManualInteractRef.current = Date.now();
             setIsPaused(false);
             if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
+            const supportsScrollEnd = typeof window !== 'undefined' && 'onscrollend' in window;
             scrollIdleTimerRef.current = setTimeout(() => {
               normalizeToMiddleSet();
-            }, 300);
+            }, supportsScrollEnd ? 550 : 420);
           }}
           onTouchCancel={() => {
             isPointerDownRef.current = false;
             setIsPaused(false);
           }}
-          className="w-full flex items-center gap-3.5 sm:gap-5 overflow-x-auto snap-x snap-mandatory py-3 px-[calc(50%-102.5px)] sm:px-[calc(50%-120px)] [&::-webkit-scrollbar]:hidden"
+          className={cn(
+            "w-full flex items-center gap-3.5 sm:gap-5 overflow-x-auto snap-x snap-mandatory overscroll-x-contain py-3 px-[calc(50%-102.5px)] sm:px-[calc(50%-120px)] [&::-webkit-scrollbar]:hidden",
+            isDraggingMouse ? "cursor-grabbing" : "md:cursor-grab"
+          )}
           style={{
             WebkitOverflowScrolling: 'touch',
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
+            willChange: 'scroll-position',
           }}
         >
-          {repeatedEvents.map((event, virtualIdx) => {
-            const formattedDate = formatEventDate(event.start_date, event.end_date, event.date);
-            const isCenterCard = count > 0 && (virtualIdx % count) === currentIndex;
-
-            return (
-              <div
-                key={`${event.id || 'evt'}-${virtualIdx}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (touchDraggedRef.current) {
-                    touchDraggedRef.current = false;
-                    return;
-                  }
-                  setSelectedEventForModal(event);
-                }}
-                className={cn(
-                  "shrink-0 snap-center w-[205px] h-[290px] sm:w-[240px] sm:h-[345px] rounded-2xl overflow-hidden cursor-pointer bg-slate-800 border-2 relative group/card select-none z-10 transition-[opacity,transform] duration-200 ease-out",
-                  isCenterCard
-                    ? "opacity-100 border-orange-500 shadow-lg shadow-orange-500/20 -translate-y-1"
-                    : "opacity-75 border-slate-200/80 shadow-sm translate-y-0"
-                )}
-              >
-                {/* Reliable Poster Background Image with preload cache & fallback */}
-                <EventPosterImage src={event.image} alt={event.title} />
-
-                {/* Deep gradient at the bottom for crystal-clear readability with full titles */}
-                <div className="absolute bottom-0 left-0 right-0 h-44 sm:h-52 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent pointer-events-none" />
-
-                {/* Top Timing Badge */}
-                <div className="absolute top-2.5 left-2.5 z-20 pointer-events-none">
-                  <span 
-                    className={cn(
-                      "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black shadow-md border transition-colors duration-200",
-                      isCenterCard 
-                        ? "bg-orange-500 text-white border-orange-400" 
-                        : "bg-white/95 text-slate-800 border-slate-200"
-                    )}
-                  >
-                    {formattedDate}
-                  </span>
-                </div>
-
-                {/* Free Badge if applicable */}
-                {event.is_free && (
-                  <div className="absolute top-2.5 right-2.5 z-20 pointer-events-none">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-extrabold shadow-md bg-emerald-500 text-white">
-                      Free
-                    </span>
-                  </div>
-                )}
-
-                {/* Bottom Content: Category & Full Title */}
-                <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-3.5 z-20 pointer-events-none text-left space-y-1">
-                  <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider block truncate">
-                    {event.category}
-                  </span>
-
-                  <h4 className="font-bold font-display text-white text-[12px] sm:text-[13px] leading-snug drop-shadow-md break-words">
-                    {event.title}
-                  </h4>
-                </div>
-              </div>
-            );
-          })}
+          {repeatedEvents.map((event, virtualIdx) => (
+            <EventSlideCard
+              key={`${event.id || 'evt'}-${virtualIdx}`}
+              event={event}
+              formattedDate={formattedDates[virtualIdx % count]}
+              virtualIdx={virtualIdx}
+              registerCardRef={registerCardRef}
+              registerRingRef={registerRingRef}
+              registerBadgeActiveRef={registerBadgeActiveRef}
+              onCardClick={handleCardClick}
+            />
+          ))}
         </div>
 
         {/* Desktop hover navigation arrows */}
@@ -717,7 +964,7 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                 lastManualInteractRef.current = Date.now();
                 stepCarousel(-1);
               }}
-              className="hidden md:flex items-center justify-center absolute left-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/85 backdrop-blur shadow-sm text-slate-500 hover:text-orange-600 transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
+              className="hidden md:flex items-center justify-center absolute left-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/90 backdrop-blur shadow-sm text-slate-500 hover:text-orange-600 hover:scale-105 active:scale-95 transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -729,13 +976,38 @@ export const LandingEventHighlightsCard: React.FC<LandingEventHighlightsCardProp
                 lastManualInteractRef.current = Date.now();
                 stepCarousel(1);
               }}
-              className="hidden md:flex items-center justify-center absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/85 backdrop-blur shadow-sm text-slate-500 hover:text-orange-600 transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
+              className="hidden md:flex items-center justify-center absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/90 backdrop-blur shadow-sm text-slate-500 hover:text-orange-600 hover:scale-105 active:scale-95 transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </>
         )}
       </div>
+
+      {/* Subtle interactive pagination dots */}
+      {count > 1 && (
+        <div className="relative z-10 flex items-center justify-center gap-1.5 pt-2">
+          {activeEvents.slice(0, 7).map((ev, idx) => {
+            const isDotActive = count <= 7 ? idx === currentIndex : idx === currentIndex % 7;
+            return (
+              <button
+                key={ev.id || idx}
+                type="button"
+                aria-label={`Event ${idx + 1}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  lastManualInteractRef.current = Date.now();
+                  jumpToEventIndex(idx);
+                }}
+                className={cn(
+                  "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
+                  isDotActive ? "w-5 bg-orange-500" : "w-1.5 bg-amber-300/75 hover:bg-orange-300"
+                )}
+              />
+            );
+          })}
+        </div>
+      )}
 
 
 

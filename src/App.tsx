@@ -15136,7 +15136,7 @@ function MeetLocalProCard({
   onPrevPartner: (e: React.MouseEvent) => void;
 }) {
   const count = items.length;
-  const setCount = count <= 1 ? 1 : count <= 2 ? 5 : 3;
+  const setCount = count <= 1 ? 1 : count <= 3 ? 5 : 3;
   const middleSetIndex = Math.floor(setCount / 2);
 
   const repeatedItems = useMemo(() => {
@@ -15152,8 +15152,10 @@ function MeetLocalProCard({
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
+  const [isDraggingMouse, setIsDraggingMouse] = useState(false);
 
   const trackRef = useRef<HTMLDivElement>(null);
+  const slideWidthRef = useRef(0);
   const currentIndexRef = useRef(0);
   const rawVirtualIdxRef = useRef(0);
   const isTouchingRef = useRef(false);
@@ -15164,6 +15166,12 @@ function MeetLocalProCard({
   const lastManualInteractRef = useRef(0);
   const touchStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const touchDraggedRef = useRef(false);
+  const mouseDragRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; dragged: boolean }>({
+    active: false,
+    startX: 0,
+    startScrollLeft: 0,
+    dragged: false,
+  });
 
   useEffect(() => {
     currentIndexRef.current = currentIndex;
@@ -15184,13 +15192,23 @@ function MeetLocalProCard({
     }
     if (isAnimatingRef.current) {
       isAnimatingRef.current = false;
-      if (trackRef.current) {
+      if (trackRef.current && !mouseDragRef.current.active) {
         trackRef.current.style.scrollSnapType = '';
       }
     }
   };
 
+  const getSlideWidth = (): number => {
+    if (slideWidthRef.current > 0) return slideWidthRef.current;
+    const track = trackRef.current;
+    if (!track) return 0;
+    slideWidthRef.current = track.clientWidth;
+    return slideWidthRef.current;
+  };
+
   const getSlideLeft = (vIndex: number): number | null => {
+    const width = getSlideWidth();
+    if (width > 0) return vIndex * width;
     const track = trackRef.current;
     if (!track) return null;
     const slide = track.children[vIndex] as HTMLElement | undefined;
@@ -15198,21 +15216,29 @@ function MeetLocalProCard({
     return slide.offsetLeft;
   };
 
-  const normalizeToMiddleSet = () => {
+  // Edge-only silent loop recentering: never interrupts mid-set scrolling or iOS momentum
+  const normalizeToMiddleSet = (force = false) => {
     const track = trackRef.current;
-    if (!track || count <= 1 || isTouchingRef.current || isAnimatingRef.current) return;
+    if (!track || count <= 1 || isTouchingRef.current || isAnimatingRef.current || mouseDragRef.current.active) return;
     const currentIdx = rawVirtualIdxRef.current;
+    const isNearOuterEdge = currentIdx < count || currentIdx >= (setCount - 1) * count;
+    if (!force && !isNearOuterEdge) return;
+
     const norm = ((currentIdx % count) + count) % count;
     const targetIdx = middleSetIndex * count + norm;
 
     if (targetIdx !== currentIdx) {
-      const targetLeft = getSlideLeft(targetIdx);
+      const width = getSlideWidth();
+      const targetLeft =
+        width > 0
+          ? Math.max(0, track.scrollLeft + (targetIdx - currentIdx) * width)
+          : getSlideLeft(targetIdx);
       if (targetLeft !== null) {
         track.style.scrollSnapType = 'none';
         track.scrollLeft = targetLeft;
         rawVirtualIdxRef.current = targetIdx;
         requestAnimationFrame(() => {
-          if (trackRef.current && !isAnimatingRef.current) {
+          if (trackRef.current && !isAnimatingRef.current && !mouseDragRef.current.active) {
             trackRef.current.style.scrollSnapType = '';
           }
         });
@@ -15230,16 +15256,21 @@ function MeetLocalProCard({
 
     cancelAnimation();
 
-    if (!smooth) {
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    if (!smooth || prefersReducedMotion) {
       track.style.scrollSnapType = 'none';
       track.scrollLeft = targetLeft;
       rawVirtualIdxRef.current = clamped;
       const norm = ((clamped % count) + count) % count;
       if (norm !== currentIndexRef.current) {
+        currentIndexRef.current = norm;
         setCurrentIndex(norm);
       }
       requestAnimationFrame(() => {
-        if (trackRef.current && !isAnimatingRef.current) {
+        if (trackRef.current && !isAnimatingRef.current && !mouseDragRef.current.active) {
           trackRef.current.style.scrollSnapType = '';
         }
       });
@@ -15253,18 +15284,19 @@ function MeetLocalProCard({
       return;
     }
 
-    const duration = 380;
+    const duration = Math.min(500, Math.max(360, 410 + Math.abs(distance) * 0.1));
     const startTime = performance.now();
     isAnimatingRef.current = true;
     track.style.scrollSnapType = 'none';
 
     const step = (now: number) => {
-      if (!trackRef.current || isTouchingRef.current) {
+      if (!trackRef.current || isTouchingRef.current || mouseDragRef.current.active) {
         cancelAnimation();
         return;
       }
       const progress = Math.min(1, (now - startTime) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
+      // Smooth Apple-style quartic ease-out
+      const eased = 1 - Math.pow(1 - progress, 4);
       trackRef.current.scrollLeft = startLeft + distance * eased;
 
       if (progress < 1) {
@@ -15277,9 +15309,10 @@ function MeetLocalProCard({
         rawVirtualIdxRef.current = clamped;
         const norm = ((clamped % count) + count) % count;
         if (norm !== currentIndexRef.current) {
+          currentIndexRef.current = norm;
           setCurrentIndex(norm);
         }
-        requestAnimationFrame(() => normalizeToMiddleSet());
+        normalizeToMiddleSet();
       }
     };
 
@@ -15290,6 +15323,9 @@ function MeetLocalProCard({
   useEffect(() => {
     if (count === 0 || !trackRef.current) return;
     const raf = requestAnimationFrame(() => {
+      if (trackRef.current) {
+        slideWidthRef.current = trackRef.current.clientWidth;
+      }
       const startVIdx = count > 1 ? middleSetIndex * count : 0;
       scrollToVirtual(startVIdx, false);
       setCurrentIndex(0);
@@ -15301,12 +15337,12 @@ function MeetLocalProCard({
   useEffect(() => {
     const track = trackRef.current;
     if (!track || count === 0 || typeof ResizeObserver === 'undefined') return;
-    let lastWidth = track.clientWidth;
+    slideWidthRef.current = track.clientWidth;
     const ro = new ResizeObserver(() => {
       if (!trackRef.current || isTouchingRef.current || isAnimatingRef.current) return;
       const nextWidth = trackRef.current.clientWidth;
-      if (Math.abs(nextWidth - lastWidth) > 2) {
-        lastWidth = nextWidth;
+      if (Math.abs(nextWidth - slideWidthRef.current) > 2) {
+        slideWidthRef.current = nextWidth;
         scrollToVirtual(rawVirtualIdxRef.current, false);
       }
     });
@@ -15319,35 +15355,38 @@ function MeetLocalProCard({
     const track = trackRef.current;
     if (!track || count <= 1) return;
     const onScrollEnd = () => {
-      if (!isTouchingRef.current && !isAnimatingRef.current) {
+      if (!isTouchingRef.current && !isAnimatingRef.current && !mouseDragRef.current.active) {
         if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
         normalizeToMiddleSet();
       }
     };
     track.addEventListener('scrollend', onScrollEnd, { passive: true });
     return () => track.removeEventListener('scrollend', onScrollEnd);
-  }, [count, middleSetIndex]);
+  }, [count, middleSetIndex, setCount]);
 
   const handleScroll = () => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    if (!isAnimatingRef.current && !isTouchingRef.current) {
+    if (!isAnimatingRef.current && !isTouchingRef.current && !mouseDragRef.current.active) {
+      const supportsScrollEnd = typeof window !== 'undefined' && 'onscrollend' in window;
       idleTimerRef.current = setTimeout(() => {
         normalizeToMiddleSet();
-      }, 240);
+      }, supportsScrollEnd ? 550 : 420);
     }
 
-    if (scrollRafRef.current) return;
+    if (scrollRafRef.current || isAnimatingRef.current) return;
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = null;
       const track = trackRef.current;
-      if (!track || count === 0 || track.clientWidth === 0) return;
+      const width = getSlideWidth();
+      if (!track || count === 0 || width === 0) return;
 
-      const vIdx = Math.round(track.scrollLeft / track.clientWidth);
+      const vIdx = Math.round(track.scrollLeft / width);
       const clamped = Math.max(0, Math.min(repeatedItems.length - 1, vIdx));
       if (clamped !== rawVirtualIdxRef.current) {
         rawVirtualIdxRef.current = clamped;
         const norm = ((clamped % count) + count) % count;
         if (norm !== currentIndexRef.current) {
+          currentIndexRef.current = norm;
           setCurrentIndex(norm);
         }
       }
@@ -15375,16 +15414,77 @@ function MeetLocalProCard({
     if (count <= 1) return;
     const currentIdx = rawVirtualIdxRef.current;
     const currentNorm = ((currentIdx % count) + count) % count;
-    const diff = targetNormIdx - currentNorm;
-    if (diff === 0) return;
-    scrollToVirtual(currentIdx + diff, true);
+    if (targetNormIdx === currentNorm) return;
+
+    let diff = targetNormIdx - currentNorm;
+    if (diff > count / 2) diff -= count;
+    if (diff < -count / 2) diff += count;
+
+    let baseIdx = currentIdx;
+    if (baseIdx + diff < 1 || baseIdx + diff >= repeatedItems.length - 1) {
+      baseIdx = middleSetIndex * count + currentNorm;
+      const resetLeft = getSlideLeft(baseIdx);
+      if (resetLeft !== null && trackRef.current) {
+        trackRef.current.style.scrollSnapType = 'none';
+        trackRef.current.scrollLeft = resetLeft;
+        rawVirtualIdxRef.current = baseIdx;
+      }
+    }
+    scrollToVirtual(baseIdx + diff, true);
+  };
+
+  const handleTrackPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    lastManualInteractRef.current = Date.now();
+    cancelAnimation();
+    if (e.pointerType === 'mouse' && e.button === 0 && trackRef.current && count > 1) {
+      mouseDragRef.current = {
+        active: true,
+        startX: e.clientX,
+        startScrollLeft: trackRef.current.scrollLeft,
+        dragged: false,
+      };
+      trackRef.current.style.scrollSnapType = 'none';
+      setIsDraggingMouse(true);
+    }
+  };
+
+  const handleTrackPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!mouseDragRef.current.active || !trackRef.current) return;
+    const dx = e.clientX - mouseDragRef.current.startX;
+    if (Math.abs(dx) > 6) {
+      mouseDragRef.current.dragged = true;
+    }
+    trackRef.current.scrollLeft = mouseDragRef.current.startScrollLeft - dx;
+  };
+
+  const finishTrackPointerDrag = () => {
+    if (!mouseDragRef.current.active || !trackRef.current) return;
+    const wasDragged = mouseDragRef.current.dragged;
+    const dragDelta = trackRef.current.scrollLeft - mouseDragRef.current.startScrollLeft;
+    mouseDragRef.current.active = false;
+    setIsDraggingMouse(false);
+    lastManualInteractRef.current = Date.now();
+    trackRef.current.style.scrollSnapType = '';
+
+    if (wasDragged) {
+      const width = getSlideWidth() || 320;
+      const startIdx = Math.round(mouseDragRef.current.startScrollLeft / width);
+      let targetIdx = Math.round(trackRef.current.scrollLeft / width);
+      if (targetIdx === startIdx && Math.abs(dragDelta) > Math.min(48, width * 0.14)) {
+        targetIdx = startIdx + (dragDelta > 0 ? 1 : -1);
+      }
+      scrollToVirtual(targetIdx, true);
+      setTimeout(() => {
+        mouseDragRef.current.dragged = false;
+      }, 80);
+    }
   };
 
   // Auto-rotate every 15 seconds (pauses when hovering, touching, or modal expanded)
   useEffect(() => {
     if (count <= 1 || isHovered || expandedLandingProId || expandedLandingPartner) return;
     const timer = setInterval(() => {
-      if (isTouchingRef.current || isAnimatingRef.current) return;
+      if (isTouchingRef.current || isAnimatingRef.current || mouseDragRef.current.active) return;
       if (Date.now() - lastManualInteractRef.current < 5000) return;
       stepSlide(1);
     }, 15000);
@@ -15409,10 +15509,10 @@ function MeetLocalProCard({
         <div
           ref={trackRef}
           onScroll={handleScroll}
-          onPointerDown={() => {
-            lastManualInteractRef.current = Date.now();
-            cancelAnimation();
-          }}
+          onPointerDown={handleTrackPointerDown}
+          onPointerMove={handleTrackPointerMove}
+          onPointerUp={finishTrackPointerDrag}
+          onPointerLeave={finishTrackPointerDrag}
           onTouchStart={(e) => {
             isTouchingRef.current = true;
             touchDraggedRef.current = false;
@@ -15430,16 +15530,25 @@ function MeetLocalProCard({
             isTouchingRef.current = false;
             lastManualInteractRef.current = Date.now();
             if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-            idleTimerRef.current = setTimeout(() => normalizeToMiddleSet(), 260);
+            const supportsScrollEnd = typeof window !== 'undefined' && 'onscrollend' in window;
+            idleTimerRef.current = setTimeout(() => normalizeToMiddleSet(), supportsScrollEnd ? 550 : 420);
           }}
           onTouchCancel={() => {
             isTouchingRef.current = false;
           }}
-          className="flex h-full overflow-x-auto snap-x snap-mandatory [&::-webkit-scrollbar]:hidden rounded-3xl"
-          style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          className={cn(
+            "flex h-full overflow-x-auto snap-x snap-mandatory overscroll-x-contain [&::-webkit-scrollbar]:hidden rounded-3xl",
+            isDraggingMouse ? "cursor-grabbing" : count > 1 ? "md:cursor-grab" : ""
+          )}
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            willChange: 'scroll-position',
+          }}
         >
           {repeatedItems.map((item, vIdx) => (
-            <div key={`${item.key}-${vIdx}`} className="w-full shrink-0 snap-center snap-always h-full">
+            <div key={`${item.key}-${vIdx}`} className="w-full shrink-0 snap-center snap-always h-full transform-gpu">
               {item.type === 'partner' ? (
                 <PartnerHighlightCard
                   partner={item.partner}
@@ -15449,8 +15558,9 @@ function MeetLocalProCard({
                   onNextPartner={onNextPartner}
                   onPrevPartner={onPrevPartner}
                   onToggleExpand={() => {
-                    if (touchDraggedRef.current) {
+                    if (touchDraggedRef.current || mouseDragRef.current.dragged) {
                       touchDraggedRef.current = false;
+                      mouseDragRef.current.dragged = false;
                       return;
                     }
                     onToggleExpandPartner();
@@ -15459,8 +15569,9 @@ function MeetLocalProCard({
               ) : (
                 <div
                   onClick={() => {
-                    if (touchDraggedRef.current) {
+                    if (touchDraggedRef.current || mouseDragRef.current.dragged) {
                       touchDraggedRef.current = false;
+                      mouseDragRef.current.dragged = false;
                       return;
                     }
                     onSelectPro(String(item.pro.id));
@@ -15656,10 +15767,10 @@ function MeetLocalProCard({
         <div
           ref={trackRef}
           onScroll={handleScroll}
-          onPointerDown={() => {
-            lastManualInteractRef.current = Date.now();
-            cancelAnimation();
-          }}
+          onPointerDown={handleTrackPointerDown}
+          onPointerMove={handleTrackPointerMove}
+          onPointerUp={finishTrackPointerDrag}
+          onPointerLeave={finishTrackPointerDrag}
           onWheel={() => {
             lastManualInteractRef.current = Date.now();
             cancelAnimation();
@@ -15683,18 +15794,23 @@ function MeetLocalProCard({
             isTouchingRef.current = false;
             lastManualInteractRef.current = Date.now();
             if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+            const supportsScrollEnd = typeof window !== 'undefined' && 'onscrollend' in window;
             idleTimerRef.current = setTimeout(() => {
               normalizeToMiddleSet();
-            }, 260);
+            }, supportsScrollEnd ? 550 : 420);
           }}
           onTouchCancel={() => {
             isTouchingRef.current = false;
           }}
-          className="-mx-6 sm:-mx-7 flex flex-1 items-center overflow-x-auto snap-x snap-mandatory [&::-webkit-scrollbar]:hidden"
+          className={cn(
+            "-mx-6 sm:-mx-7 flex flex-1 items-center overflow-x-auto snap-x snap-mandatory overscroll-x-contain [&::-webkit-scrollbar]:hidden",
+            isDraggingMouse ? "cursor-grabbing" : count > 1 ? "md:cursor-grab" : ""
+          )}
           style={{
             WebkitOverflowScrolling: 'touch',
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
+            willChange: 'scroll-position',
           }}
         >
           {repeatedItems.map((item, vIdx) => {
@@ -15703,13 +15819,14 @@ function MeetLocalProCard({
               <div
                 key={`${item.key}-${vIdx}`}
                 onClick={() => {
-                  if (touchDraggedRef.current) {
+                  if (touchDraggedRef.current || mouseDragRef.current.dragged) {
                     touchDraggedRef.current = false;
+                    mouseDragRef.current.dragged = false;
                     return;
                   }
                   onSelectPro(String(item.pro.id));
                 }}
-                className="w-full shrink-0 snap-center snap-always px-6 sm:px-7 py-2 flex flex-col items-center justify-center text-center cursor-pointer select-none"
+                className="w-full shrink-0 snap-center snap-always px-6 sm:px-7 py-2 flex flex-col items-center justify-center text-center cursor-pointer select-none transform-gpu"
               >
                 {item.type === 'testimony' ? (
                   <div className="space-y-4 flex flex-col items-center justify-center w-full">
@@ -15963,11 +16080,18 @@ function HomeView({
 
   const [sec2Idx, setSec2Idx] = useState(0);
   const [sec3Idx, setSec3Idx] = useState(0);
+  const [sec3Direction, setSec3Direction] = useState<1 | -1>(1);
   const [sec4Idx, setSec4Idx] = useState(0);
+  const [isGuideHovered, setIsGuideHovered] = useState(false);
+  const guideTouchStartRef = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
+  const guideDidSwipeRef = useRef(false);
+  const guideLastInteractRef = useRef(0);
 
   const [partnerCarouselIdx, setPartnerCarouselIdx] = useState(0);
+  const [partnerDirection, setPartnerDirection] = useState<1 | -1>(1);
   const partnerTouchStartRef = useRef<{ x: number; y: number; time: number }>({ x: 0, y: 0, time: 0 });
   const partnerDidSwipeRef = useRef(false);
+  const partnerLastInteractRef = useRef(0);
   const [expandedLandingProId, setExpandedLandingProId] = useState<string | null>(null);
   const [expandedLandingPartner, setExpandedLandingPartner] = useState(false);
 
@@ -15975,6 +16099,8 @@ function HomeView({
   useEffect(() => {
     if (expandedLandingPartner || activePartners.length <= 1) return;
     const timer = setInterval(() => {
+      if (Date.now() - partnerLastInteractRef.current < 5000) return;
+      setPartnerDirection(1);
       setPartnerCarouselIdx(prev => (prev + 1) % activePartners.length);
     }, 10000);
     return () => clearInterval(timer);
@@ -16023,13 +16149,43 @@ function HomeView({
     });
   }, [allPros, highlightedProIds]);
 
-  // Auto-rotate "Tips of the Week" guide carousel every 15 seconds
+  // Preload active partner & highlighted guide images so carousel transitions never flash blank
   useEffect(() => {
+    activePartners.forEach((partner) => {
+      if (!partner.logo_url) return;
+      const img = new Image();
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.onload = () => img.decode?.().catch(() => {});
+      img.src = partner.logo_url;
+    });
+  }, [activePartners.length]);
+
+  useEffect(() => {
+    if (!allArticles || allArticles.length === 0) return;
+    const highlighted = allArticles.filter(
+      (art) => (art.is_highlighted === true || (art.is_highlighted as any) === 'true' || (art.is_highlighted as any) === 1) && art.isOnline !== false
+    );
+    highlighted.forEach((art) => {
+      if (!art.imageUrl) return;
+      const img = new Image();
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.onload = () => img.decode?.().catch(() => {});
+      img.src = art.imageUrl;
+    });
+  }, [allArticles]);
+
+  // Auto-rotate "Tips of the Week" guide carousel every 15 seconds (pauses on hover or recent swipe)
+  useEffect(() => {
+    if (isGuideHovered) return;
     const timer = setInterval(() => {
+      if (Date.now() - guideLastInteractRef.current < 5000) return;
+      setSec3Direction(1);
       setSec3Idx(prev => prev + 1);
     }, 15000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isGuideHovered]);
 
   // Body scroll lock and Escape key listener when pro modal is open
   useEffect(() => {
@@ -16266,7 +16422,7 @@ function HomeView({
             if (activePartners.length > 0 && partnerMode === 'partner' && currentPartner) {
               return (
                 <div
-                  className="h-full touch-pan-y"
+                  className="h-full touch-pan-y overscroll-x-contain relative overflow-hidden rounded-3xl"
                   onTouchStart={(e) => {
                     partnerTouchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
                     partnerDidSwipeRef.current = false;
@@ -16279,9 +16435,12 @@ function HomeView({
                     const isQuickFlick = Math.abs(dx) > 20 && elapsed < 220;
                     if ((Math.abs(dx) > 32 || isQuickFlick) && Math.abs(dx) > Math.abs(dy) * 1.15) {
                       partnerDidSwipeRef.current = true;
+                      partnerLastInteractRef.current = Date.now();
                       if (dx < 0) {
+                        setPartnerDirection(1);
                         setPartnerCarouselIdx(prev => (prev + 1) % activePartners.length);
                       } else {
+                        setPartnerDirection(-1);
                         setPartnerCarouselIdx(prev => (prev - 1 + activePartners.length) % activePartners.length);
                       }
                       setTimeout(() => {
@@ -16290,33 +16449,54 @@ function HomeView({
                     }
                   }}
                 >
-                  <PartnerHighlightCard
-                    partner={currentPartner}
-                    isExpanded={expandedLandingPartner}
-                    totalPartners={activePartners.length}
-                    currentIndex={partnerCarouselIdx % activePartners.length}
-                    onNextPartner={(e) => {
-                      e.stopPropagation();
-                      setPartnerCarouselIdx(prev => (prev + 1) % activePartners.length);
-                    }}
-                    onPrevPartner={(e) => {
-                      e.stopPropagation();
-                      setPartnerCarouselIdx(prev => (prev - 1 + activePartners.length) % activePartners.length);
-                    }}
-                    onToggleExpand={() => {
-                      if (partnerDidSwipeRef.current) {
-                        partnerDidSwipeRef.current = false;
-                        return;
-                      }
-                      setExpandedLandingPartner(prev => !prev);
-                      setExpandedLandingProId(null);
-                      if (!expandedLandingPartner) {
-                        setTimeout(() => {
-                          document.getElementById('landing-expanded-partner-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        }, 120);
-                      }
-                    }}
-                  />
+                  <AnimatePresence mode="popLayout" initial={false} custom={partnerDirection}>
+                    <motion.div
+                      key={currentPartner.id || partnerCarouselIdx}
+                      custom={partnerDirection}
+                      variants={{
+                        enter: (dir: number) => ({ opacity: 0, x: dir * 28 }),
+                        center: { opacity: 1, x: 0 },
+                        exit: (dir: number) => ({ opacity: 0, x: dir * -28 }),
+                      }}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+                      className="h-full w-full will-change-transform transform-gpu"
+                    >
+                      <PartnerHighlightCard
+                        partner={currentPartner}
+                        isExpanded={expandedLandingPartner}
+                        totalPartners={activePartners.length}
+                        currentIndex={partnerCarouselIdx % activePartners.length}
+                        onNextPartner={(e) => {
+                          e.stopPropagation();
+                          partnerLastInteractRef.current = Date.now();
+                          setPartnerDirection(1);
+                          setPartnerCarouselIdx(prev => (prev + 1) % activePartners.length);
+                        }}
+                        onPrevPartner={(e) => {
+                          e.stopPropagation();
+                          partnerLastInteractRef.current = Date.now();
+                          setPartnerDirection(-1);
+                          setPartnerCarouselIdx(prev => (prev - 1 + activePartners.length) % activePartners.length);
+                        }}
+                        onToggleExpand={() => {
+                          if (partnerDidSwipeRef.current) {
+                            partnerDidSwipeRef.current = false;
+                            return;
+                          }
+                          setExpandedLandingPartner(prev => !prev);
+                          setExpandedLandingProId(null);
+                          if (!expandedLandingPartner) {
+                            setTimeout(() => {
+                              document.getElementById('landing-expanded-partner-section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            }, 120);
+                          }
+                        }}
+                      />
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
               );
             }
@@ -16555,11 +16735,44 @@ function HomeView({
             const activeIndex = sec3Idx % section3Items.length;
             const featuredArticle = section3Items[activeIndex];
 
+            const stepGuide = (delta: 1 | -1) => {
+              if (section3Items.length <= 1) return;
+              guideLastInteractRef.current = Date.now();
+              setSec3Direction(delta);
+              setSec3Idx((activeIndex + delta + section3Items.length) % section3Items.length);
+            };
+
             return (
               <div 
-                className="flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-teal-50/25 to-emerald-50/15 border border-teal-100/90 hover:border-teal-500/40 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full min-h-[480px] md:col-span-2 lg:col-span-1 md:max-w-md lg:max-w-none md:mx-auto lg:mx-0 w-full"
+                className="flex flex-col justify-between p-6 sm:p-7 rounded-3xl bg-gradient-to-b from-white via-teal-50/25 to-emerald-50/15 border border-teal-100/90 hover:border-teal-500/40 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden h-full min-h-[480px] md:col-span-2 lg:col-span-1 md:max-w-md lg:max-w-none md:mx-auto lg:mx-0 w-full touch-pan-y overscroll-x-contain"
                 id="discover-card-guide"
-                onClick={() => onNavigate('guides', { guideId: featuredArticle.id })}
+                onMouseEnter={() => setIsGuideHovered(true)}
+                onMouseLeave={() => setIsGuideHovered(false)}
+                onTouchStart={(e) => {
+                  guideTouchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
+                  guideDidSwipeRef.current = false;
+                }}
+                onTouchEnd={(e) => {
+                  if (section3Items.length <= 1) return;
+                  const dx = e.changedTouches[0].clientX - guideTouchStartRef.current.x;
+                  const dy = e.changedTouches[0].clientY - guideTouchStartRef.current.y;
+                  const elapsed = Date.now() - guideTouchStartRef.current.time;
+                  const isQuickFlick = Math.abs(dx) > 20 && elapsed < 220;
+                  if ((Math.abs(dx) > 32 || isQuickFlick) && Math.abs(dx) > Math.abs(dy) * 1.15) {
+                    guideDidSwipeRef.current = true;
+                    stepGuide(dx < 0 ? 1 : -1);
+                    setTimeout(() => {
+                      guideDidSwipeRef.current = false;
+                    }, 250);
+                  }
+                }}
+                onClick={() => {
+                  if (guideDidSwipeRef.current) {
+                    guideDidSwipeRef.current = false;
+                    return;
+                  }
+                  onNavigate('guides', { guideId: featuredArticle.id });
+                }}
               >
                 {/* Subtle soft ambient light */}
                 <div className="absolute -top-20 -right-20 w-52 h-52 bg-teal-200/20 rounded-full blur-3xl pointer-events-none" />
@@ -16585,83 +16798,106 @@ function HomeView({
                     </div>
                   </div>
 
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.div
-                      key={activeIndex}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -12 }}
-                      transition={{ duration: 0.25, ease: 'easeOut' }}
-                      className="space-y-3.5 flex-1 flex flex-col justify-between"
-                    >
-                      <div className="space-y-3.5 text-left flex-1 flex flex-col">
-                        {/* Clear, vibrant image with category overlay */}
-                        <div className="aspect-[16/10] w-full rounded-2xl overflow-hidden bg-slate-100 relative border border-teal-100/80 shadow-md">
-                          <img 
-                            src={featuredArticle.imageUrl || "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=600&q=80"} 
-                            alt={featuredArticle.title} 
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 brightness-100 contrast-[1.02]"
-                            referrerPolicy="no-referrer"
-                          />
-                          {(featuredArticle.is_updated_2026 || featuredArticle.tag === '2026 UPDATE' || (typeof featuredArticle.title === 'string' && featuredArticle.title.includes('2026 UPDATE'))) && (
-                            <div className="absolute top-2.5 left-2.5 z-10">
-                              <span className="text-[10px] bg-rose-500 text-white font-black px-2.5 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1.5 shadow-md shadow-rose-500/40">
-                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                                2026 UPDATE
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* ONLY the hooking excerpt displayed under the image (entire text shown, no truncation) */}
-                        <div className="py-2 flex-1 flex flex-col justify-center">
-                          <p className="text-sm sm:text-[14.5px] text-slate-700 font-medium leading-relaxed italic before:content-['“'] after:content-['”']">
-                            {(featuredArticle.excerpt || '').replace(/(\s*\.{3}|\s*…)+$/, '')}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Clean Footer */}
-                      <div className="pt-3 border-t border-teal-100/70 flex items-center justify-between mt-auto w-full">
-                        {section3Items.length > 1 && (
-                          <div className="flex items-center gap-1.5">
-                            {section3Items.slice(0, 6).map((_, idx) => (
-                              <span 
-                                key={idx}
-                                className={cn(
-                                  "h-1.5 rounded-full transition-all duration-300",
-                                  idx === activeIndex ? "w-5 bg-teal-600" : "w-1.5 bg-teal-200"
-                                )}
-                              />
-                            ))}
+                  <div className="relative flex-1 flex flex-col overflow-hidden">
+                    <AnimatePresence mode="popLayout" initial={false} custom={sec3Direction}>
+                      <motion.div
+                        key={activeIndex}
+                        custom={sec3Direction}
+                        variants={{
+                          enter: (dir: number) => ({ opacity: 0, x: dir * 28 }),
+                          center: { opacity: 1, x: 0 },
+                          exit: (dir: number) => ({ opacity: 0, x: dir * -28 }),
+                        }}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                        className="space-y-3.5 flex-1 flex flex-col justify-between will-change-transform transform-gpu"
+                      >
+                        <div className="space-y-3.5 text-left flex-1 flex flex-col">
+                          {/* Clear, vibrant image with category overlay */}
+                          <div className="aspect-[16/10] w-full rounded-2xl overflow-hidden bg-slate-100 relative border border-teal-100/80 shadow-md">
+                            <img 
+                              src={featuredArticle.imageUrl || "https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=600&q=80"} 
+                              alt={featuredArticle.title} 
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 brightness-100 contrast-[1.02]"
+                              referrerPolicy="no-referrer"
+                              decoding="async"
+                              draggable={false}
+                            />
+                            {(featuredArticle.is_updated_2026 || featuredArticle.tag === '2026 UPDATE' || (typeof featuredArticle.title === 'string' && featuredArticle.title.includes('2026 UPDATE'))) && (
+                              <div className="absolute top-2.5 left-2.5 z-10">
+                                <span className="text-[10px] bg-rose-500 text-white font-black px-2.5 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1.5 shadow-md shadow-rose-500/40">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                  2026 UPDATE
+                                </span>
+                              </div>
+                            )}
                           </div>
-                        )}
-                        <div className="text-[11px] font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform ml-auto">
-                          <span>Read full guide</span>
-                          <span>→</span>
+
+                          {/* ONLY the hooking excerpt displayed under the image (entire text shown, no truncation) */}
+                          <div className="py-2 flex-1 flex flex-col justify-center">
+                            <p className="text-sm sm:text-[14.5px] text-slate-700 font-medium leading-relaxed italic before:content-['“'] after:content-['”']">
+                              {(featuredArticle.excerpt || '').replace(/(\s*\.{3}|\s*…)+$/, '')}
+                            </p>
+                          </div>
                         </div>
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Clean Footer (pinned outside slide transition so dots glide smoothly in place) */}
+                  <div className="pt-3 border-t border-teal-100/70 flex items-center justify-between mt-auto w-full">
+                    {section3Items.length > 1 && (
+                      <div className="flex items-center gap-1.5">
+                        {section3Items.slice(0, 6).map((_, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            aria-label={`Guide ${idx + 1}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (idx === activeIndex) return;
+                              guideLastInteractRef.current = Date.now();
+                              setSec3Direction(idx > activeIndex ? 1 : -1);
+                              setSec3Idx(idx);
+                            }}
+                            className={cn(
+                              "h-1.5 rounded-full transition-all duration-300 cursor-pointer",
+                              idx === activeIndex ? "w-5 bg-teal-600" : "w-1.5 bg-teal-200 hover:bg-teal-300"
+                            )}
+                          />
+                        ))}
                       </div>
-                    </motion.div>
-                  </AnimatePresence>
+                    )}
+                    <div className="text-[11px] font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform ml-auto">
+                      <span>Read full guide</span>
+                      <span>→</span>
+                    </div>
+                  </div>
                 </div>
 
                 {section3Items.length >= 2 && (
                   <>
                     <button 
+                      type="button"
+                      aria-label="Previous guide"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSec3Idx((activeIndex - 1 + section3Items.length) % section3Items.length);
+                        stepGuide(-1);
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-teal-600 hover:border-teal-200 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
+                      className="hidden md:flex items-center justify-center absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/90 backdrop-blur shadow-sm text-slate-400 hover:text-teal-600 hover:scale-105 active:scale-95 transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button 
+                      type="button"
+                      aria-label="Next guide"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSec3Idx((activeIndex + 1) % section3Items.length);
+                        stepGuide(1);
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/80 backdrop-blur shadow-sm text-slate-400 hover:text-teal-600 hover:border-teal-200 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-30"
+                      className="hidden md:flex items-center justify-center absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white/90 backdrop-blur shadow-sm text-slate-400 hover:text-teal-600 hover:scale-105 active:scale-95 transition-all opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
