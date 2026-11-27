@@ -1306,17 +1306,128 @@ class OneSignalService {
   }
 
   /**
+   * Local user preference key for explicitly disabling push notifications on this device
+   */
+  private getOptOutStorageKey(userId?: string): string {
+    const cleanId = (userId || this.currentUserId || '').trim();
+    return cleanId ? `unlocked_push_opt_out_${cleanId}` : 'unlocked_push_opt_out';
+  }
+
+  /**
+   * Check whether the user explicitly disabled push notifications in Settings on this device
+   */
+  isPushOptedOut(userId?: string): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      const cleanId = (userId || this.currentUserId || '').trim();
+      if (cleanId && localStorage.getItem(`unlocked_push_opt_out_${cleanId}`) === '1') {
+        return true;
+      }
+      return localStorage.getItem('unlocked_push_opt_out') === '1';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /**
+   * Persist or clear the user's explicit push opt-out preference on this device
+   */
+  setPushOptOut(optedOut: boolean, userId?: string): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = this.getOptOutStorageKey(userId);
+      if (optedOut) {
+        localStorage.setItem(key, '1');
+      } else {
+        localStorage.removeItem(key);
+        localStorage.removeItem('unlocked_push_opt_out');
+      }
+    } catch (_) {}
+  }
+
+  /**
+   * Return normalized push status for Settings UI across iOS WKWebView, Android TWA, and Web browsers
+   */
+  async getPushStatus(userId?: string): Promise<{
+    enabled: boolean;
+    permission: 'granted' | 'denied' | 'default' | 'unsupported';
+    isIOSNative: boolean;
+    optedOut: boolean;
+  }> {
+    if (typeof window === 'undefined') {
+      return { enabled: false, permission: 'unsupported', isIOSNative: false, optedOut: false };
+    }
+
+    const dev = this.getDeviceInfo();
+    const isIOSNative = dev.isIOSWebView || dev.hasIOSPushBridge;
+    const optedOut = this.isPushOptedOut(userId);
+
+    if (isIOSNative) {
+      let state = this.nativePushPermissionState;
+      const queried = await this.queryNativePushPermissionState(1200).catch(() => state);
+      if (queried && queried !== 'unknown') {
+        state = queried;
+      }
+      if (state === 'denied') {
+        return { enabled: false, permission: 'denied', isIOSNative: true, optedOut };
+      }
+      const isGranted = state === 'granted' || (state === 'unknown' && Boolean(this.nativeSubscriptionId));
+      return {
+        enabled: !optedOut && isGranted,
+        permission: isGranted ? 'granted' : 'default',
+        isIOSNative: true,
+        optedOut
+      };
+    }
+
+    if (!('Notification' in window)) {
+      return { enabled: false, permission: 'unsupported', isIOSNative: false, optedOut };
+    }
+
+    const perm = Notification.permission;
+    if (perm === 'denied') {
+      return { enabled: false, permission: 'denied', isIOSNative: false, optedOut };
+    }
+    if (perm !== 'granted') {
+      return { enabled: false, permission: 'default', isIOSNative: false, optedOut };
+    }
+    if (optedOut) {
+      return { enabled: false, permission: 'granted', isIOSNative: false, optedOut: true };
+    }
+
+    const windowOS = (window as any).OneSignal;
+    const explicitOptIn = OneSignal.User?.PushSubscription?.optedIn ?? windowOS?.User?.PushSubscription?.optedIn;
+    if (explicitOptIn === false) {
+      return { enabled: false, permission: 'granted', isIOSNative: false, optedOut: true };
+    }
+
+    return { enabled: true, permission: 'granted', isIOSNative: false, optedOut: false };
+  }
+
+  /**
    * Check if user is currently subscribed to OneSignal push
    */
-  async isSubscribed(): Promise<boolean> {
+  async isSubscribed(userId?: string): Promise<boolean> {
     if (typeof window === 'undefined') return false;
+    if (this.isPushOptedOut(userId)) return false;
+
     const dev = this.getDeviceInfo();
     if (dev.isIOSWebView || dev.hasIOSPushBridge) {
+      if (this.nativePushPermissionState === 'denied') return false;
       if (this.nativeSubscriptionId) return true;
       if (this.nativePushPermissionState === 'granted') return true;
-      if (this.nativePushPermissionState === 'denied') return false;
       const state = await this.queryNativePushPermissionState(1200);
       return state === 'granted';
+    }
+
+    if ('Notification' in window && Notification.permission !== 'granted') {
+      return false;
+    }
+
+    const windowOS = (window as any).OneSignal;
+    const explicitOptIn = OneSignal.User?.PushSubscription?.optedIn ?? windowOS?.User?.PushSubscription?.optedIn;
+    if (explicitOptIn === false) {
+      return false;
     }
 
     const subId = await this.getSubscriptionId();
@@ -1326,11 +1437,11 @@ class OneSignalService {
       if (!this.isInitialized) {
         await this.init();
       }
-      const windowOS = (window as any).OneSignal;
-      const optIn = OneSignal.User?.PushSubscription?.optedIn ?? windowOS?.User?.PushSubscription?.optedIn;
+      const postWindowOS = (window as any).OneSignal;
+      const optIn = OneSignal.User?.PushSubscription?.optedIn ?? postWindowOS?.User?.PushSubscription?.optedIn;
       const permission = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ||
                          OneSignal.Notifications?.permission ||
-                         windowOS?.Notifications?.permission;
+                         postWindowOS?.Notifications?.permission;
       return !!optIn && !!permission;
     } catch (err) {
       console.warn('[OneSignal] Error checking subscription:', err);
@@ -1395,6 +1506,9 @@ class OneSignalService {
 
     const windowAny = window as any;
     const dev = this.getDeviceInfo();
+
+    // User explicitly requested enabling push: clear any local opt-out flag first
+    this.setPushOptOut(false, userId);
 
     // 1. Native iOS WKWebView path (Xcode / PWABuilder):
     // Strictly use native message handlers (push-permission-request + push-permission-state)
@@ -1636,6 +1750,40 @@ class OneSignalService {
   }
 
   /**
+   * Remove this device's Subscription ID from profiles.onesignal_player_id when opting out
+   */
+  private async removeUserSubscriptionId(userId: string, subIdToRemove: string): Promise<void> {
+    if (!userId || !subIdToRemove || !isSupabaseConfigured) return;
+    const cleanRemove = subIdToRemove.trim();
+    const key = `${userId.trim()}:${cleanRemove}`;
+    this.persistedSupabaseKeys.delete(key);
+    this.syncedServerLinkKeys.delete(key);
+    try {
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('onesignal_player_id')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const existingRaw = (existingProfile as any)?.onesignal_player_id || '';
+      const remaining = String(existingRaw)
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter((s: string) => s.length > 0 && s !== cleanRemove)
+        .join(',');
+
+      if (remaining !== existingRaw) {
+        await supabase.from('profiles').update({
+          onesignal_player_id: remaining || null,
+          updated_at: new Date().toISOString()
+        } as any).eq('id', userId);
+      }
+    } catch (_) {
+      // Safe fallback if profile column is unavailable
+    }
+  }
+
+  /**
    * Run full diagnostics on the current Push & OneSignal environment (iOS WKWebView & Web)
    */
   async getDiagnostics() {
@@ -1768,18 +1916,61 @@ class OneSignalService {
   }
 
   /**
-   * Unsubscribe / opt-out user from push notifications
+   * Unsubscribe / opt-out user from push notifications on this device
    */
-  async unsubscribe(): Promise<boolean> {
+  async unsubscribe(userId?: string): Promise<boolean> {
+    const targetUserId = (userId || this.currentUserId || '').trim();
+    this.setPushOptOut(true, targetUserId || undefined);
+
+    const windowAny = typeof window !== 'undefined' ? (window as any) : null;
+    const dev = this.getDeviceInfo();
+    const isIOSNative = dev.isIOSWebView || dev.hasIOSPushBridge;
+
+    // Remove this device's subscription ID from Supabase profiles so direct pushes stop targeting this device
     try {
-      if (!this.isInitialized) {
-        await this.init();
+      const currentSubId =
+        this.nativeSubscriptionId ||
+        this.getCurrentSubscriptionId() ||
+        windowAny?.OneSignal?.User?.PushSubscription?.id ||
+        null;
+      if (targetUserId && currentSubId) {
+        await this.removeUserSubscriptionId(targetUserId, currentSubId);
       }
-      await OneSignal.User.PushSubscription.optOut();
+    } catch (_) {}
+
+    if (isIOSNative) {
+      // Unlink external_id in the native iOS OneSignal SDK so user-targeted notifications stop arriving
+      try {
+        await this.logoutUser();
+      } catch (_) {}
+      // Also notify optional native opt-out handlers if exposed by the wrapper
+      try {
+        const handlers = windowAny?.webkit?.messageHandlers;
+        if (handlers?.['push-opt-out']) {
+          handlers['push-opt-out'].postMessage({ optedOut: true });
+        } else if (handlers?.oneSignal) {
+          handlers.oneSignal.postMessage({ action: 'unsubscribe' });
+        }
+      } catch (_) {}
+      return true;
+    }
+
+    try {
+      const activeAppId = this.getAppId();
+      if (this.isOriginAllowedForAppId(activeAppId)) {
+        if (!this.isInitialized) {
+          await this.init();
+        }
+        if (OneSignal.User?.PushSubscription?.optOut) {
+          await OneSignal.User.PushSubscription.optOut();
+        } else if (windowAny?.OneSignal?.User?.PushSubscription?.optOut) {
+          await windowAny.OneSignal.User.PushSubscription.optOut();
+        }
+      }
       return true;
     } catch (err) {
-      console.error('[OneSignal] Error opting out:', err);
-      return false;
+      console.warn('[OneSignal] Error opting out (local opt-out still applied):', err);
+      return true;
     }
   }
 
@@ -1789,6 +1980,10 @@ class OneSignalService {
   async loginUser(userId: string, tags?: Record<string, string>): Promise<void> {
     if (!userId || typeof userId !== 'string' || !userId.trim()) return;
     const cleanUserId = userId.trim();
+    if (this.isPushOptedOut(cleanUserId)) {
+      this.currentUserId = cleanUserId;
+      return;
+    }
     this.currentUserId = cleanUserId;
     this.lastLoginAttemptUserId = cleanUserId;
 

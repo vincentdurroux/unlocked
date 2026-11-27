@@ -40,6 +40,7 @@ import {
   Euro,
   Heart,
   Bell,
+  BellOff,
   Lock,
   CreditCard,
   Gift,
@@ -1830,20 +1831,22 @@ function FeedbackReferralSection({ currentUser, userProfile, onProfileUpdate }: 
 
   if (hasAnswered && !submitted) {
     return (
-      <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-4 text-left">
-        <div className="flex items-center gap-2 border-b border-slate-50 pb-3">
-          <Sparkles className="w-5 h-5 text-emerald-600" />
-          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">How did you hear about us?</h3>
+      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/60 shadow-2xs space-y-4 text-left">
+        <div className="flex items-center gap-3 pb-3 border-b border-slate-100/80">
+          <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <h3 className="font-bold font-display text-brand-navy text-base tracking-tight">How did you hear about us?</h3>
         </div>
-        <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 flex items-center justify-between">
+        <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/60 flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold text-slate-500">Recorded response:</p>
-            <p className="text-sm font-bold text-slate-900 mt-0.5">{userProfile.referral_source}</p>
+            <p className="text-xs font-medium text-slate-400">Recorded response</p>
+            <p className="text-sm font-semibold text-slate-800 mt-0.5">{userProfile.referral_source}</p>
             {userProfile.referral_source_detail && (
-              <p className="text-xs text-slate-600 italic mt-0.5">&ldquo;{userProfile.referral_source_detail}&rdquo;</p>
+              <p className="text-xs text-slate-500 italic mt-0.5">&ldquo;{userProfile.referral_source_detail}&rdquo;</p>
             )}
           </div>
-          <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
+          <span className="text-xs font-semibold text-emerald-600 shrink-0">
             Thank you! ✨
           </span>
         </div>
@@ -1853,34 +1856,36 @@ function FeedbackReferralSection({ currentUser, userProfile, onProfileUpdate }: 
 
   if (submitted) {
     return (
-      <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-4 text-center">
-        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-          <Check className="w-6 h-6 stroke-[3]" />
+      <div className="bg-white rounded-3xl p-6 border border-slate-200/60 shadow-2xs space-y-3 text-center">
+        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto">
+          <Check className="w-6 h-6 stroke-[2.5]" />
         </div>
-        <h3 className="text-base font-bold text-slate-900">Thank you for letting us know!</h3>
+        <h3 className="text-base font-bold font-display text-brand-navy">Thank you for letting us know!</h3>
         <p className="text-xs text-slate-500">Your response has been saved successfully.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-100/85 shadow-sm space-y-3.5 text-left">
-      <div className="flex items-center gap-2 border-b border-slate-50 pb-2.5">
-        <Sparkles className="w-4 h-4 text-emerald-600" />
-        <h3 className="font-bold text-slate-800 text-xs sm:text-sm tracking-wider uppercase">How did you hear about us?</h3>
+    <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/60 shadow-2xs space-y-4 text-left">
+      <div className="flex items-center gap-3 pb-3 border-b border-slate-100/80">
+        <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+          <Sparkles className="w-4 h-4" />
+        </div>
+        <h3 className="font-bold font-display text-brand-navy text-base tracking-tight">How did you hear about us?</h3>
       </div>
-      <p className="text-xs text-slate-500 leading-snug">
+      <p className="text-xs text-slate-500 leading-relaxed">
         You can let us know how you discovered MyCityUnlocked so we can welcome more members from your community!
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="space-y-1.5 pr-0.5">
+      <form onSubmit={handleSubmit} className="space-y-3.5">
+        <div className="space-y-2">
           {REFERRAL_OPTIONS.map((opt) => {
             const Icon = opt.icon;
             const isSelected = selectedOption === opt.id;
 
             return (
-              <div key={opt.id} className="space-y-1">
+              <div key={opt.id} className="space-y-1.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -1889,30 +1894,30 @@ function FeedbackReferralSection({ currentUser, userProfile, onProfileUpdate }: 
                       setDetailText('');
                     }
                   }}
-                  className={`w-full text-left py-2 px-2.5 sm:px-3 rounded-xl border transition-all flex items-center gap-2.5 cursor-pointer ${
+                  className={`w-full text-left py-2.5 px-3.5 rounded-2xl border transition-all flex items-center gap-3 cursor-pointer ${
                     isSelected 
-                      ? 'bg-emerald-50/90 border-emerald-400 shadow-xs ring-1 ring-emerald-400/30' 
-                      : 'bg-white hover:bg-slate-50 border-slate-200/70'
+                      ? 'bg-brand-blue/[0.04] border-brand-blue/40 shadow-2xs' 
+                      : 'bg-white hover:bg-slate-50/70 border-slate-200/60'
                   }`}
                 >
                   <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border transition-colors ${
-                    isSelected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white'
+                    isSelected ? 'border-brand-blue bg-brand-blue text-white' : 'border-slate-300 bg-white'
                   }`}>
                     {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                   </div>
 
-                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                    isSelected ? 'bg-emerald-600/10 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                    isSelected ? 'bg-brand-blue/10 text-brand-blue' : 'bg-slate-100/90 text-slate-500'
                   }`}>
                     <Icon className="w-3.5 h-3.5" />
                   </div>
 
                   <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                    <p className={`text-xs sm:text-[13px] font-bold truncate leading-tight ${isSelected ? 'text-slate-950' : 'text-slate-800'}`}>
+                    <p className={`text-sm font-medium truncate leading-tight ${isSelected ? 'text-brand-navy font-semibold' : 'text-slate-700'}`}>
                       {opt.label}
                     </p>
                     {opt.description && (
-                      <span className="hidden sm:inline text-[10px] text-slate-400 truncate font-normal">
+                      <span className="hidden sm:inline text-[11px] text-slate-400 truncate font-normal">
                         {opt.description}
                       </span>
                     )}
@@ -1922,9 +1927,9 @@ function FeedbackReferralSection({ currentUser, userProfile, onProfileUpdate }: 
                 {/* Dynamic Detail Input appearing directly underneath this selected card */}
                 {isSelected && opt.requiresDetail && (
                   <div className="px-1 pt-0.5 pb-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                    <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
-                      <label className="block text-[11px] font-bold text-emerald-950">
-                        {opt.detailLabel || 'Please specify:'} <span className="text-emerald-600">*</span>
+                    <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3 space-y-1.5">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        {opt.detailLabel || 'Please specify:'} <span className="text-brand-blue">*</span>
                       </label>
                       <input
                         type="text"
@@ -1933,7 +1938,7 @@ function FeedbackReferralSection({ currentUser, userProfile, onProfileUpdate }: 
                         value={detailText}
                         onChange={(e) => setDetailText(e.target.value)}
                         placeholder={opt.detailPlaceholder || 'Type your answer here...'}
-                        className="w-full px-3 py-1.5 rounded-lg border border-emerald-300 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium shadow-2xs"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-all font-medium"
                       />
                     </div>
                   </div>
@@ -1943,15 +1948,15 @@ function FeedbackReferralSection({ currentUser, userProfile, onProfileUpdate }: 
           })}
         </div>
 
-        <div className="pt-1.5 flex justify-end">
+        <div className="pt-2 flex justify-end">
           <button
             type="submit"
             disabled={isSubmitDisabled}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-xs"
+            className="px-5 py-2.5 bg-brand-blue hover:bg-brand-blue/90 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold rounded-2xl transition-all cursor-pointer flex items-center gap-2 shadow-sm shadow-brand-blue/15"
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
                 <span>Saving...</span>
               </>
             ) : (
@@ -3473,8 +3478,14 @@ export default function App() {
 
 
 
-      // 4. Onboarding Face ID / Biometric unlock suggestion for newly signed-up users on supported devices
-      if (currentUser?.id && !dismissedNotificationIds.includes('onboarding-biometric-setup')) {
+      // 4. Onboarding Face ID / Biometric unlock suggestion for newly signed-up users (strictly after profile is completed)
+      const isProfileCompleted =
+        Boolean(userProfile?.full_name && userProfile.full_name.trim().length > 0) &&
+        activeView !== 'complete-profile' &&
+        activeView !== 'login' &&
+        activeView !== 'update-password';
+
+      if (currentUser?.id && isProfileCompleted && !dismissedNotificationIds.includes('onboarding-biometric-setup')) {
         try {
           const rawJoinedAt = currentUser?.created_at || (userProfile as any)?.created_at || null;
           const joinedAtMs = rawJoinedAt ? new Date(rawJoinedAt).getTime() : NaN;
@@ -3532,9 +3543,8 @@ export default function App() {
       list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setAnnouncementsList(list);
 
-      // Check if there is a fresh unread notification to show an in-app toast preview (LOGGED-IN ONLY)
-      const isBlockingAuthView = activeView === 'complete-profile' || activeView === 'login' || activeView === 'update-password';
-      if (currentUser && !isBlockingAuthView && list.length > 0) {
+      // Check if there is a fresh unread notification to show an in-app toast preview (LOGGED-IN & COMPLETED PROFILE ONLY)
+      if (currentUser && isProfileCompleted && list.length > 0) {
         const latest = list[0];
         const isLocallyRead = readAnnouncementIdsRef.current.includes(String(latest.id));
         const isDismissed = dismissedNotificationIds.includes(String(latest.id));
@@ -3588,20 +3598,20 @@ export default function App() {
     };
   }, [authLoading, currentUser]);
 
-  // Refresh notifications when arriving on home after profile completion or when native biometric state changes
+  // Refresh notifications once profile is completed (and when arriving on home or native biometric state changes)
   useEffect(() => {
     if (!currentUser?.id) return;
     const handleBiometricChanged = () => {
       fetchAnnouncementsFromDbRef.current();
     };
     window.addEventListener(biometricLockService.eventName, handleBiometricChanged);
-    if (activeView === 'home') {
+    if (activeView === 'home' && userProfile?.full_name?.trim()) {
       fetchAnnouncementsFromDbRef.current();
     }
     return () => {
       window.removeEventListener(biometricLockService.eventName, handleBiometricChanged);
     };
-  }, [currentUser?.id, activeView]);
+  }, [currentUser?.id, activeView, userProfile?.full_name]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -25006,54 +25016,59 @@ function FeedbackSubPage({ currentUser, userProfile, onProfileUpdate, onBack }: 
 
   if (submitted) {
     return (
-      <div className="flex flex-col items-center justify-center text-center space-y-6 py-12 px-4 max-w-md mx-auto">
-        <div className="w-16 h-16 bg-emerald-50 border border-emerald-100 text-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/10">
-          <CheckCircle2 className="w-10 h-10 text-emerald-500" />
+      <div className="max-w-xl mx-auto py-8">
+        <div className="bg-white rounded-3xl border border-slate-200/60 shadow-2xs p-8 flex flex-col items-center justify-center text-center space-y-5">
+          <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
+            <CheckCircle2 className="w-7 h-7" />
+          </div>
+          <div className="space-y-2 max-w-sm">
+            <h3 className="text-xl font-bold text-brand-navy font-display tracking-tight">Thank you for your feedback!</h3>
+            <p className="text-slate-500 text-sm leading-relaxed">
+              Your insights have been saved successfully and help us improve the Unlocked experience for everyone.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onBack}
+            className="px-6 py-3 bg-brand-blue text-white text-sm font-semibold rounded-2xl transition-all shadow-sm shadow-brand-blue/15 hover:bg-brand-blue/90 cursor-pointer"
+          >
+            Back to Profile
+          </button>
         </div>
-        <div className="space-y-2">
-          <h3 className="text-xl font-bold text-slate-900 font-display">Thank you for your feedback!</h3>
-          <p className="text-slate-500 text-xs sm:text-sm leading-relaxed">
-            Your insights have been saved successfully and help us improve the Unlocked experience for everyone.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onBack}
-          className="px-6 py-3 bg-brand-blue text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md shadow-brand-blue/10 hover:bg-blue-600"
-        >
-          Back to Profile
-        </button>
       </div>
     );
   }
 
   return (
-    <>
-      <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto pb-10">
-        <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-6 text-left">
-          <div className="flex items-center gap-2 border-b border-slate-50 pb-3">
-            <MessageSquare className="w-5 h-5 text-[#00C2A8]" />
-            <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">Share Your Experience</h3>
+    <div className="max-w-xl mx-auto space-y-5 pb-10">
+      <form onSubmit={handleSubmit}>
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/60 shadow-2xs space-y-5 text-left">
+          <div className="flex items-center gap-3 pb-3.5 border-b border-slate-100/80">
+            <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
+              <MessageSquare className="w-4 h-4" />
+            </div>
+            <h3 className="font-bold font-display text-brand-navy text-base tracking-tight">Share Your Experience</h3>
           </div>
 
           {error && (
-            <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3">
-              <AlertCircle className={`w-5 h-5 shrink-0 text-rose-500 ${!suggestedSql ? 'animate-bounce' : ''}`} />
+            <div className="p-4 bg-rose-50/80 border border-rose-200/70 rounded-2xl flex items-start gap-3">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
               <div className="space-y-3 w-full">
-                <p className="text-xs font-bold tracking-tight text-rose-700">{error}</p>
+                <p className="text-xs font-semibold text-rose-700">{error}</p>
                 {suggestedSql && (
-                  <div className="space-y-2 bg-white/50 p-3 rounded-xl border border-rose-100 mt-2">
-                    <p className="text-[10px] text-rose-600 font-bold uppercase tracking-wider">Solution: Run this in Supabase SQL Editor</p>
+                  <div className="space-y-2 bg-white p-3 rounded-xl border border-rose-100 mt-2">
+                    <p className="text-xs text-rose-600 font-semibold">Solution: Run this in Supabase SQL Editor</p>
                     <pre className="p-3 bg-slate-900 text-slate-100 text-[10px] font-mono rounded-lg overflow-x-auto whitespace-pre select-all">
                       {suggestedSql}
                     </pre>
-                    <p className="text-[9px] text-slate-500 italic">This will grant permission to the public role to submit feedback forms.</p>
+                    <p className="text-[11px] text-slate-500 italic">This will grant permission to the public role to submit feedback forms.</p>
                     <button 
+                      type="button"
                       onClick={() => {
                         navigator.clipboard.writeText(suggestedSql);
                         alert('SQL command copied to clipboard!');
                       }}
-                      className="w-full py-2 bg-brand-blue text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-brand-blue-dark transition-colors shadow-sm"
+                      className="w-full py-2 bg-brand-blue text-white text-xs font-semibold rounded-xl hover:bg-brand-blue/90 transition-colors cursor-pointer"
                     >
                       Copy Fix-it SQL
                     </button>
@@ -25064,9 +25079,9 @@ function FeedbackSubPage({ currentUser, userProfile, onProfileUpdate, onBack }: 
           )}
 
           {/* Categories Selection */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Type of Feedback</label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="space-y-2.5">
+            <label className="text-xs font-semibold text-slate-500 block">Type of Feedback</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {categories.map((cat) => {
                 const Icon = cat.icon;
                 const isSelected = category === cat.id;
@@ -25075,14 +25090,14 @@ function FeedbackSubPage({ currentUser, userProfile, onProfileUpdate, onBack }: 
                     key={cat.id}
                     type="button"
                     onClick={() => setCategory(cat.id)}
-                    className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all active:scale-95 ${
+                    className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer ${
                       isSelected 
-                        ? `${cat.color} ring-2 ring-offset-2 ring-rose-500/10 scale-[1.02] shadow-sm` 
-                        : 'border-slate-100 bg-white text-slate-600 hover:bg-slate-50'
+                        ? `${cat.color} shadow-2xs` 
+                        : 'border-slate-200/70 bg-white text-slate-600 hover:bg-slate-50/70'
                     }`}
                   >
-                    <Icon className="w-5 h-5 shrink-0" />
-                    <span className="text-xs font-bold tracking-tight">{cat.label}</span>
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="text-xs font-semibold tracking-tight whitespace-nowrap">{cat.label}</span>
                   </button>
                 );
               })}
@@ -25090,38 +25105,38 @@ function FeedbackSubPage({ currentUser, userProfile, onProfileUpdate, onBack }: 
           </div>
 
           {/* Comment Input */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex justify-between">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-500 flex items-center justify-between">
               <span>Comments / Feedback</span>
-              <span className="text-slate-300 font-mono">{comment.length}/500</span>
+              <span className="text-slate-400 font-mono tabular-nums text-[11px]">{comment.length}/500</span>
             </label>
             <textarea
               value={comment}
               onChange={(e) => setComment(e.target.value.slice(0, 500))}
               placeholder="Tell us what you like"
               rows={5}
-              className="w-full px-4 py-3 bg-white border border-slate-200 focus:ring-2 focus:ring-rose-500/15 focus:border-[#00C2A8] rounded-2xl text-sm font-medium text-slate-700 outline-none transition-all placeholder:text-slate-300 resize-none leading-relaxed"
+              className="w-full px-4 py-3 bg-slate-50/60 focus:bg-white border border-slate-200/80 focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue rounded-2xl text-sm font-medium text-slate-700 outline-none transition-all placeholder:text-slate-400 resize-none leading-relaxed"
             />
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-3 justify-end pt-2 border-t border-slate-50">
+          <div className="flex gap-2.5 justify-end pt-3 border-t border-slate-100/80">
             <button
               type="button"
               onClick={onBack}
-              className="px-6 py-3 bg-slate-50 hover:bg-slate-100 text-slate-500 text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
+              className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200/80 text-slate-600 text-sm font-semibold rounded-2xl transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting || !comment.trim()}
-              className="px-6 py-3 bg-[#00C2A8] hover:bg-[#00ad95] disabled:bg-slate-205 text-white text-xs font-extrabold uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 shadow-md shadow-teal-500/10 disabled:opacity-50"
+              className="px-5 py-2.5 bg-brand-blue hover:bg-brand-blue/90 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold rounded-2xl transition-all flex items-center gap-2 shadow-sm shadow-brand-blue/15 cursor-pointer disabled:shadow-none"
             >
               {submitting ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Submitting...
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Submitting...</span>
                 </>
               ) : (
                 'Submit Feedback'
@@ -25132,19 +25147,18 @@ function FeedbackSubPage({ currentUser, userProfile, onProfileUpdate, onBack }: 
       </form>
 
       {/* HOW DID YOU HEAR ABOUT US SECTION IN FEEDBACK */}
-      <div className="max-w-2xl mx-auto pb-16">
-        <FeedbackReferralSection currentUser={currentUser} userProfile={userProfile} onProfileUpdate={onProfileUpdate} />
-      </div>
-      <div className="text-center mt-12 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Need help?</p>
+      <FeedbackReferralSection currentUser={currentUser} userProfile={userProfile} onProfileUpdate={onProfileUpdate} />
+
+      <div className="text-center pt-4 pb-6">
+        <p className="text-xs font-medium text-slate-400 mb-1.5">Need help?</p>
         <a 
           href="mailto:hello@mycityunlocked.app" 
-          className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-blue transition-all group"
+          className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-blue transition-colors group"
         >
-          <span className="text-sm font-medium border-b border-slate-200 group-hover:border-brand-blue/30 pb-0.5">hello@mycityunlocked.app</span>
+          <span className="text-sm font-medium border-b border-slate-200 group-hover:border-brand-blue/40 pb-0.5">hello@mycityunlocked.app</span>
         </a>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -25408,6 +25422,141 @@ function ProfileView({
     biometricLockService.setNativeIosEnabled(nextEnabled, nativeIosFaceId.type);
     setNativeIosFaceId((prev) => ({ ...prev, enabled: nextEnabled }));
   };
+
+  // Push Notifications toggle state (Settings)
+  const [pushStatus, setPushStatus] = useState<{
+    enabled: boolean;
+    permission: 'granted' | 'denied' | 'default' | 'unsupported';
+    isIOSNative: boolean;
+    optedOut: boolean;
+  }>({
+    enabled: false,
+    permission: 'default',
+    isIOSNative: false,
+    optedOut: false,
+  });
+  const [isLoadingPushStatus, setIsLoadingPushStatus] = useState(true);
+  const [isUpdatingPush, setIsUpdatingPush] = useState(false);
+  const [showConfirmDisablePush, setShowConfirmDisablePush] = useState(false);
+  const [pushMessage, setPushMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || activeSubPage !== 'Settings') return;
+    let isMounted = true;
+
+    const refreshPushStatus = async () => {
+      try {
+        const status = await oneSignalService.getPushStatus(currentUser?.id);
+        if (isMounted) {
+          setPushStatus(status);
+        }
+      } catch (err) {
+        console.warn('[Settings] Error loading push notification status:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingPushStatus(false);
+        }
+      }
+    };
+
+    refreshPushStatus();
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        refreshPushStatus();
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
+  }, [activeSubPage, currentUser?.id]);
+
+  const confirmDisablePushNotifications = async () => {
+    if (isUpdatingPush || !currentUser?.id) return;
+    setPushMessage(null);
+    setIsUpdatingPush(true);
+
+    try {
+      await oneSignalService.unsubscribe(currentUser.id);
+      const updated = await oneSignalService.getPushStatus(currentUser.id);
+      setPushStatus(updated);
+      setShowConfirmDisablePush(false);
+      setPushMessage({
+        type: 'info',
+        text: 'Push notifications disabled on this device.',
+      });
+    } catch (err) {
+      console.warn('[Settings] Error disabling push notifications:', err);
+      setPushMessage({
+        type: 'error',
+        text: 'Could not disable push notifications on this device.',
+      });
+    } finally {
+      setIsUpdatingPush(false);
+    }
+  };
+
+  const handleTogglePushNotifications = async () => {
+    if (isUpdatingPush || isLoadingPushStatus || !currentUser?.id) return;
+    if (pushStatus.permission === 'unsupported') return;
+
+    if (pushStatus.enabled) {
+      setShowConfirmDisablePush(true);
+      return;
+    }
+
+    setPushMessage(null);
+    setIsUpdatingPush(true);
+
+    try {
+      if (pushStatus.permission === 'denied') {
+        setPushMessage({
+          type: 'error',
+          text: pushStatus.isIOSNative
+            ? 'Notifications are currently blocked by iOS. Open iPhone Settings → MyCityUnlocked → Notifications and turn on Allow Notifications, then return here.'
+            : 'Notifications are blocked in your browser or device settings. Allow notifications for MyCityUnlocked in settings, then try again.',
+        });
+        return;
+      }
+
+      const granted = await oneSignalService.subscribe(currentUser.id);
+      const updated = await oneSignalService.getPushStatus(currentUser.id);
+      setPushStatus(updated);
+
+      if (granted || updated.enabled) {
+        setPushMessage({
+          type: 'success',
+          text: 'Push notifications enabled on this device.',
+        });
+      } else if (updated.permission === 'denied') {
+        setPushMessage({
+          type: 'error',
+          text: updated.isIOSNative
+            ? 'Notifications are blocked by iOS. Open iPhone Settings → MyCityUnlocked → Notifications and turn on Allow Notifications.'
+            : 'Notifications are blocked in your browser or device settings. Allow notifications for MyCityUnlocked in settings, then try again.',
+        });
+      } else {
+        setPushMessage({
+          type: 'info',
+          text: 'Notification permission was not granted. Tap the switch again whenever you are ready.',
+        });
+      }
+    } catch (err) {
+      console.warn('[Settings] Error updating push notifications:', err);
+      setPushMessage({
+        type: 'error',
+        text: 'Could not update push notification settings on this device.',
+      });
+    } finally {
+      setIsUpdatingPush(false);
+    }
+  };
+
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -25873,24 +26022,22 @@ function ProfileView({
       <AnimatePresence>
         {activeSubPage === 'My Account' && (
           <ProfileSubPage key="subpage-my-account" title="My Account" onBack={() => setActiveSubPage(null)}>
-            <div className="space-y-6 max-w-2xl mx-auto pb-10">
-              {/* Profile Card Header Redesign */}
-              <div className="bg-gradient-to-r from-brand-blue/10 via-brand-blue/5 to-slate-50 border border-brand-blue/10 rounded-3xl p-6 relative overflow-hidden flex flex-col sm:flex-row items-center sm:items-start gap-6 shadow-sm">
-                <div className="absolute right-0 top-0 w-32 h-32 bg-brand-blue/5 rounded-full blur-3xl -z-10" />
-                
+            <div className="space-y-5 max-w-2xl mx-auto pb-10">
+              {/* Profile Card Header */}
+              <div className="bg-white border border-slate-200/60 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row items-center sm:items-center gap-5 shadow-2xs">
                 {/* Clickable Avatar to trigger update */}
                 <div 
                   onClick={handleAvatarClick}
-                  className="relative w-20 h-20 rounded-full bg-white border-4 border-white shadow-md overflow-hidden flex items-center justify-center shrink-0 cursor-pointer group"
+                  className="relative w-20 h-20 rounded-full bg-brand-blue/10 ring-4 ring-slate-50 shadow-xs overflow-hidden flex items-center justify-center shrink-0 cursor-pointer group"
                   title="Click to change avatar logo"
                 >
                   {userProfile?.avatar_url ? (
-                    <img src={userProfile.avatar_url} alt="" className="w-full h-full object-cover group-hover:opacity-40 transition-opacity" />
+                    <img src={userProfile.avatar_url} alt="" className="w-full h-full object-cover group-hover:opacity-60 transition-opacity" />
                   ) : (
-                    <User className="w-10 h-10 text-brand-blue group-hover:opacity-40 transition-opacity" />
+                    <User className="w-9 h-9 text-brand-blue group-hover:opacity-60 transition-opacity" />
                   )}
                   
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/20">
                     {isUpdatingAvatar ? (
                       <Loader2 className="w-5 h-5 text-white animate-spin" />
                     ) : (
@@ -25899,21 +26046,21 @@ function ProfileView({
                   </div>
                   
                   {!isUpdatingAvatar && (
-                    <div className="absolute bottom-1 right-1 p-1 bg-white rounded-full shadow-xs border border-slate-100 text-brand-blue">
+                    <div className="absolute bottom-0.5 right-0.5 p-1 bg-white rounded-full shadow-xs border border-slate-100 text-brand-blue">
                       <Camera className="w-2.5 h-2.5" />
                     </div>
                   )}
                 </div>
 
-                <div className="text-center sm:text-left flex-1 space-y-2">
+                <div className="text-center sm:text-left flex-1 min-w-0 space-y-1.5">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 justify-center sm:justify-start">
                     {isEditingNameInline ? (
-                      <div className="flex items-center gap-2 mt-1 mx-auto sm:mx-0">
+                      <div className="flex items-center gap-2 mx-auto sm:mx-0">
                         <input 
                           type="text" 
                           value={editName} 
                           onChange={(e) => setEditName(e.target.value)} 
-                          className="px-3 py-1 bg-white border border-slate-200 focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue rounded-xl text-sm font-semibold text-slate-700 outline-none transition-all shadow-2xs" 
+                          className="px-3.5 py-1.5 bg-slate-50/60 focus:bg-white border border-slate-200/80 focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue rounded-xl text-sm font-semibold text-slate-800 outline-none transition-all" 
                           placeholder="Your full name"
                           autoFocus
                           onKeyDown={async (e) => {
@@ -25938,6 +26085,7 @@ function ProfileView({
                           }}
                         />
                         <button 
+                          type="button"
                           disabled={isSavingProfile || !editName.trim()}
                           onClick={async () => {
                             if (!currentUser) return;
@@ -25955,7 +26103,7 @@ function ProfileView({
                               setIsSavingProfile(false);
                             }
                           }}
-                          className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center shrink-0"
+                          className="p-2 bg-brand-blue text-white rounded-xl hover:bg-brand-blue/90 transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center shrink-0"
                           title="Save Name"
                         >
                           {isSavingProfile ? (
@@ -25965,8 +26113,9 @@ function ProfileView({
                           )}
                         </button>
                         <button 
+                          type="button"
                           onClick={() => setIsEditingNameInline(false)}
-                          className="p-1.5 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                          className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200/80 transition-colors cursor-pointer flex items-center justify-center shrink-0"
                           title="Cancel"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -25974,15 +26123,16 @@ function ProfileView({
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 justify-center sm:justify-start">
-                        <h3 className="text-xl font-bold font-display text-brand-navy">
+                        <h3 className="text-xl sm:text-2xl font-bold font-display text-brand-navy tracking-tight truncate">
                           {userProfile?.full_name || userEmail.split('@')[0]}
                         </h3>
                         <button 
+                          type="button"
                           onClick={() => {
                             setEditName(userProfile?.full_name || "");
                             setIsEditingNameInline(true);
                           }}
-                          className="p-1 hover:bg-brand-blue/10 rounded-lg text-slate-400 hover:text-brand-blue transition-all cursor-pointer shrink-0"
+                          className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-brand-blue transition-colors cursor-pointer shrink-0"
                           title="Edit full name"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
@@ -25990,14 +26140,14 @@ function ProfileView({
                       </div>
                     )}
                     {isAdmin && (
-                      <span className="inline-flex self-center items-center gap-1 px-2.5 py-0.5 bg-brand-blue text-white text-[9px] font-black uppercase tracking-widest rounded-full">
-                        <ShieldCheck className="w-3 h-3" /> Admin
+                      <span className="inline-flex self-center items-center gap-1 text-brand-blue text-xs font-semibold">
+                        <ShieldCheck className="w-3.5 h-3.5" /> Admin
                       </span>
                     )}
                   </div>
-                  <p className="text-xs font-semibold text-slate-500 flex items-center justify-center sm:justify-start gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-slate-400" />
-                    {userEmail}
+                  <p className="text-xs font-medium text-slate-400 flex items-center justify-center sm:justify-start gap-1.5 truncate">
+                    <Mail className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                    <span className="truncate">{userEmail}</span>
                   </p>
                 </div>
               </div>
@@ -26005,90 +26155,93 @@ function ProfileView({
               {/* Stats & Quick Navigation Row */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <button 
+                  type="button"
                   onClick={() => setMyAccountTab('favorites')}
                   className={cn(
-                    "p-3.5 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
-                    myAccountTab === 'favorites' ? "border-rose-300 ring-2 ring-rose-500/5 bg-rose-50/10" : "border-slate-100/90 hover:border-rose-100"
+                    "p-4 bg-white border rounded-3xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-2 active:scale-[0.98] shadow-2xs",
+                    myAccountTab === 'favorites' ? "border-rose-300/80 bg-rose-50/20 shadow-xs" : "border-slate-200/60 hover:bg-slate-50/70"
                   )}
                 >
-                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'favorites' ? "bg-rose-50 text-rose-500" : "bg-slate-50 text-slate-400")}>
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'favorites' ? "bg-rose-50 text-rose-500" : "bg-slate-100/80 text-slate-400")}>
                     <Heart className={cn("w-4 h-4", myAccountTab === 'favorites' && "fill-rose-500")} />
                   </div>
                   <div>
-                    <div className="text-lg font-black text-slate-800 leading-none">{favoriteProIds.length + favoriteEventIds.length + favoriteAdIds.length}</div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Favorites</div>
+                    <div className="text-lg font-bold font-display text-brand-navy tabular-nums leading-none">{favoriteProIds.length + favoriteEventIds.length + favoriteAdIds.length}</div>
+                    <div className="text-xs font-medium text-slate-500 mt-1">Favorites</div>
                   </div>
                 </button>
 
                 <button 
+                  type="button"
                   onClick={() => setMyAccountTab('items')}
                   className={cn(
-                    "p-3.5 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
-                    myAccountTab === 'items' ? "border-purple-300 ring-2 ring-purple-500/5 bg-purple-50/10" : "border-slate-100/90 hover:border-purple-100"
+                    "p-4 bg-white border rounded-3xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-2 active:scale-[0.98] shadow-2xs",
+                    myAccountTab === 'items' ? "border-purple-300/80 bg-purple-50/20 shadow-xs" : "border-slate-200/60 hover:bg-slate-50/70"
                   )}
                 >
-                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'items' ? "bg-purple-50 text-purple-600" : "bg-slate-50 text-slate-400")}>
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'items' ? "bg-purple-50 text-purple-600" : "bg-slate-100/80 text-slate-400")}>
                     <Shirt className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-lg font-black text-slate-800 leading-none">
+                    <div className="text-lg font-bold font-display text-brand-navy tabular-nums leading-none">
                       {myAds.length + (adDrafts?.length || 0)}
                     </div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                    <div className="text-xs font-medium text-slate-500 mt-1">
                       My Items{adDrafts && adDrafts.length > 0 ? ` (${adDrafts.length} draft)` : ''}
                     </div>
                   </div>
                 </button>
 
                 <button 
+                  type="button"
                   onClick={() => setMyAccountTab('testimonies')}
                   className={cn(
-                    "p-3.5 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
-                    myAccountTab === 'testimonies' ? "border-brand-blue/30 ring-2 ring-brand-blue/5 bg-brand-blue/5" : "border-slate-100/90 hover:border-brand-blue/10"
+                    "p-4 bg-white border rounded-3xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-2 active:scale-[0.98] shadow-2xs",
+                    myAccountTab === 'testimonies' ? "border-brand-blue/40 bg-brand-blue/[0.03] shadow-xs" : "border-slate-200/60 hover:bg-slate-50/70"
                   )}
                 >
-                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'testimonies' ? "bg-brand-blue/10 text-brand-blue" : "bg-slate-50 text-slate-400")}>
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'testimonies' ? "bg-brand-blue/10 text-brand-blue" : "bg-slate-100/80 text-slate-400")}>
                     <Star className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-lg font-black text-slate-800 leading-none">{myTestimonies.length}</div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">My Reviews</div>
+                    <div className="text-lg font-bold font-display text-brand-navy tabular-nums leading-none">{myTestimonies.length}</div>
+                    <div className="text-xs font-medium text-slate-500 mt-1">My Reviews</div>
                   </div>
                 </button>
 
                 <button 
+                  type="button"
                   onClick={() => setMyAccountTab('chats')}
                   className={cn(
-                    "p-3.5 bg-white border rounded-2xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 hover:-translate-y-0.5 active:scale-95 shadow-2xs",
-                    myAccountTab === 'chats' ? "border-sky-300 ring-2 ring-sky-500/5 bg-sky-50/10" : "border-slate-100/90 hover:border-sky-100"
+                    "p-4 bg-white border rounded-3xl text-center transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-2 active:scale-[0.98] shadow-2xs",
+                    myAccountTab === 'chats' ? "border-sky-300/80 bg-sky-50/20 shadow-xs" : "border-slate-200/60 hover:bg-slate-50/70"
                   )}
                 >
-                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'chats' ? "bg-sky-50 text-sky-600" : "bg-slate-50 text-slate-400")}>
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center transition-colors", myAccountTab === 'chats' ? "bg-sky-50 text-sky-600" : "bg-slate-100/80 text-slate-400")}>
                     <MessageSquare className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-lg font-black text-slate-800 leading-none flex items-center justify-center gap-1">
+                    <div className="text-lg font-bold font-display text-brand-navy tabular-nums leading-none flex items-center justify-center gap-1.5">
                       <span>{activeConversations.length}</span>
                       {archivedConversations.length > 0 && (
-                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1 py-0.2 rounded-md">
+                        <span className="text-[11px] font-medium text-amber-600">
                           +{archivedConversations.length} arch.
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Chats</div>
+                    <div className="text-xs font-medium text-slate-500 mt-1">Chats</div>
                   </div>
                 </button>
               </div>
 
-
               {/* Success/Error Alerts */}
               {msg && (
                 <div className={cn(
-                  "p-4 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2",
-                  msg.type === 'success' ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-rose-50 text-rose-600 border border-rose-100"
+                  "px-4 py-3.5 rounded-2xl flex items-center gap-3 border",
+                  msg.type === 'success' ? "bg-emerald-50/80 text-emerald-700 border-emerald-200/70" : "bg-rose-50/80 text-rose-700 border-rose-200/70"
                 )}>
-                  {msg.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-                  <p className="text-sm font-bold tracking-tight">{msg.text}</p>
+                  {msg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                  <p className="text-xs font-semibold">{msg.text}</p>
                 </div>
               )}
 
@@ -26102,16 +26255,18 @@ function ProfileView({
                     exit={{ opacity: 0, y: -10 }}
                     className="space-y-4"
                   >
-                    <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
-                      <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-                        <div className="flex items-center gap-2">
-                          <Shirt className="w-5 h-5 text-purple-600" />
-                          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Items</h3>
+                    <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/60 shadow-2xs space-y-5">
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-100/80 pb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                            <Shirt className="w-4 h-4" />
+                          </div>
+                          <h3 className="font-bold font-display text-brand-navy text-base tracking-tight">My Items</h3>
                         </div>
                         <button
                           type="button"
                           onClick={() => onOpenCreateAd?.()}
-                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                          className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>Post an Ad</span>
@@ -26120,20 +26275,17 @@ function ProfileView({
 
                       {/* Drafts Section */}
                       {adDrafts && adDrafts.length > 0 && (
-                        <div className="space-y-3 pb-3 border-b border-slate-100">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                <span>Saved Drafts ({adDrafts.length})</span>
-                              </h4>
-                            </div>
-                            <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                        <div className="space-y-3 pb-4 border-b border-slate-100/80">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="text-xs font-semibold text-slate-700">
+                              Saved Drafts ({adDrafts.length})
+                            </h4>
+                            <span className="text-xs text-amber-600 font-medium">
                               Unpublished
                             </span>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {adDrafts.map((draft) => {
                               const img = (draft.images && draft.images[0]) || null;
                               return (
@@ -26143,32 +26295,32 @@ function ProfileView({
                                     setActiveSubPage(null);
                                     onResumeDraft ? onResumeDraft(draft) : onOpenCreateAd?.(draft);
                                   }}
-                                  className="p-3.5 bg-amber-50/40 hover:bg-amber-50/80 rounded-2xl border border-amber-200/80 flex flex-col justify-between gap-3 group transition-all cursor-pointer shadow-2xs hover:shadow-md"
+                                  className="p-3.5 bg-amber-50/35 hover:bg-amber-50/65 rounded-2xl border border-amber-200/70 flex flex-col justify-between gap-3 group transition-colors cursor-pointer"
                                 >
                                   <div className="flex gap-3 items-start">
-                                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-amber-100/60 border border-amber-200/60 shrink-0 relative flex items-center justify-center">
+                                    <div className="w-15 h-15 rounded-xl overflow-hidden bg-amber-100/50 border border-amber-200/50 shrink-0 relative flex items-center justify-center">
                                       {img ? (
                                         <img src={img} alt={draft.title} className="w-full h-full object-cover" />
                                       ) : (
-                                        <FileText className="w-6 h-6 text-amber-500" />
+                                        <FileText className="w-5 h-5 text-amber-500" />
                                       )}
-                                      <span className="absolute top-1 left-1 px-1.5 py-0.5 bg-amber-600 text-white text-[8px] font-black uppercase rounded tracking-wider">
+                                      <span className="absolute top-1 left-1 px-1.5 py-0.5 bg-amber-600 text-white text-[9px] font-semibold rounded-md">
                                         Draft
                                       </span>
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center justify-between gap-1 mb-0.5">
-                                        <span className="text-xs font-extrabold text-amber-800">
+                                        <span className="text-xs font-bold text-amber-800 tabular-nums">
                                           {draft.price ? formatDisplayPrice(draft.price) : 'Price not set'}
                                         </span>
-                                        <span className="text-[9px] text-slate-400 font-medium truncate">
+                                        <span className="text-[11px] text-slate-400 font-medium truncate">
                                           {formatRelativeTime(draft.saved_at)}
                                         </span>
                                       </div>
-                                      <h4 className="text-xs font-bold text-slate-900 truncate">
+                                      <h4 className="text-sm font-semibold text-brand-navy truncate">
                                         {draft.title || 'Untitled Listing'}
                                       </h4>
-                                      <p className="text-[11px] text-slate-500 truncate">
+                                      <p className="text-xs text-slate-500 truncate">
                                         {draft.category || 'General'} · {draft.location || 'Valencia'}
                                       </p>
                                     </div>
@@ -26179,28 +26331,28 @@ function ProfileView({
                                           setActiveSubPage(null);
                                           onResumeDraft ? onResumeDraft(draft) : onOpenCreateAd?.(draft);
                                         }}
-                                        className="p-1.5 bg-white hover:bg-amber-100 text-amber-700 rounded-xl border border-amber-200 transition-colors cursor-pointer"
+                                        className="p-1.5 bg-white hover:bg-amber-50 text-amber-700 rounded-xl border border-amber-200/80 transition-colors cursor-pointer"
                                         title="Resume editing"
                                       >
-                                        <Edit2 className="w-4 h-4" />
+                                        <Edit2 className="w-3.5 h-3.5" />
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => onDeleteDraft?.(draft.id)}
-                                        className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                                        className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl border border-slate-200/80 transition-colors cursor-pointer"
                                         title="Delete draft"
                                       >
-                                        <Trash2 className="w-4 h-4" />
+                                        <Trash2 className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
                                   </div>
 
-                                  <div className="pt-2 border-t border-amber-200/60 flex items-center justify-between text-[11px]">
-                                    <span className="text-amber-800 font-semibold flex items-center gap-1">
+                                  <div className="pt-2 border-t border-amber-200/50 flex items-center justify-between text-xs">
+                                    <span className="text-amber-800 font-medium flex items-center gap-1">
                                       <RotateCcw className="w-3 h-3 text-amber-600" />
                                       Click to resume
                                     </span>
-                                    <span className="text-amber-700 font-bold group-hover:translate-x-0.5 transition-transform">
+                                    <span className="text-amber-700 font-semibold group-hover:translate-x-0.5 transition-transform">
                                       Edit & Publish →
                                     </span>
                                   </div>
@@ -26212,20 +26364,20 @@ function ProfileView({
                       )}
 
                       {confirmDeleteDraftId && (
-                        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-                          <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center">
+                        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+                          <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl border border-slate-100 text-center">
                             <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
-                              <Trash2 className="w-6 h-6" />
+                              <Trash2 className="w-5 h-5" />
                             </div>
                             <div className="space-y-1">
-                              <h4 className="font-black text-slate-900 text-lg">Delete Draft?</h4>
-                              <p className="text-xs text-slate-500">Are you sure you want to delete this saved draft? This cannot be undone.</p>
+                              <h4 className="font-bold font-display text-brand-navy text-lg">Delete Draft?</h4>
+                              <p className="text-xs text-slate-500 leading-relaxed">Are you sure you want to delete this saved draft? This cannot be undone.</p>
                             </div>
-                            <div className="flex gap-2 pt-2">
+                            <div className="flex gap-2.5 pt-2">
                               <button
                                 type="button"
                                 onClick={() => setConfirmDeleteDraftId(null)}
-                                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                               >
                                 Cancel
                               </button>
@@ -26235,7 +26387,7 @@ function ProfileView({
                                   onDeleteDraft?.(confirmDeleteDraftId);
                                   setConfirmDeleteDraftId(null);
                                 }}
-                                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+                                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                               >
                                 Delete
                               </button>
@@ -26249,12 +26401,12 @@ function ProfileView({
                           <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
                         </div>
                       ) : myAds.length === 0 && (!adDrafts || adDrafts.length === 0) ? (
-                        <div className="py-12 text-center space-y-3 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 p-6">
+                        <div className="py-10 text-center space-y-3 bg-slate-50/60 rounded-2xl border border-slate-200/60 p-6">
                           <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto">
-                            <Shirt className="w-6 h-6" />
+                            <Shirt className="w-5 h-5" />
                           </div>
                           <div className="space-y-1">
-                            <p className="font-bold text-slate-800 text-sm">No items posted yet</p>
+                            <p className="font-semibold text-brand-navy text-sm">No items posted yet</p>
                             <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
                               List your pre-loved clothing, school uniforms, or household items for sale or free in Valencia!
                             </p>
@@ -26262,7 +26414,7 @@ function ProfileView({
                           <button
                             type="button"
                             onClick={() => onOpenCreateAd?.()}
-                            className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                            className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer inline-flex items-center gap-1.5"
                           >
                             <Plus className="w-4 h-4" />
                             <span>Post your first item</span>
@@ -26271,11 +26423,11 @@ function ProfileView({
                       ) : (
                         <div className="space-y-3">
                           {adDrafts && adDrafts.length > 0 && myAds.length > 0 && (
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 pt-1">
+                            <h4 className="text-xs font-semibold text-slate-600 pt-1">
                               Published Listings ({myAds.length})
                             </h4>
                           )}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                           {myAds.map((ad) => {
                             const img = ad.image_url || (ad.images && ad.images[0]);
                             const isDeleting = deletingAdId === ad.id;
@@ -26289,39 +26441,40 @@ function ProfileView({
                                   setActiveSubPage(null);
                                   onSelectAd?.(ad);
                                 }}
-                                className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200 flex flex-col justify-between gap-3 group transition-all hover:bg-white hover:shadow-sm cursor-pointer"
+                                className="p-3.5 bg-slate-50/50 hover:bg-white rounded-2xl border border-slate-200/60 flex flex-col justify-between gap-3 group transition-all hover:shadow-2xs cursor-pointer"
                               >
                                 <div className="flex gap-3 items-start">
-                                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-200 shrink-0 relative">
+                                  <div className="w-15 h-15 rounded-xl overflow-hidden bg-slate-100 shrink-0 relative">
                                     {img ? (
                                       <img src={img} alt={ad.title} className={cn("w-full h-full object-cover", currentAdStatus === 'sold' && "grayscale-[40%]")} />
                                     ) : (
                                       <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                        <Shirt className="w-6 h-6" />
+                                        <Shirt className="w-5 h-5" />
                                       </div>
                                     )}
                                     {currentAdStatus === 'sold' && (
-                                      <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
-                                        <span className="text-[9px] font-black text-white uppercase bg-rose-600 px-1 py-0.5 rounded">Sold</span>
+                                      <div className="absolute inset-0 bg-slate-900/45 flex items-center justify-center">
+                                        <span className="text-[10px] font-bold text-white bg-rose-600 px-1.5 py-0.5 rounded-md">Sold</span>
                                       </div>
                                     )}
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <div className="flex items-center justify-between gap-1 mb-0.5">
-                                      <div className="text-xs font-extrabold text-purple-700">{formatDisplayPrice(ad.price)}</div>
+                                    <div className="flex items-center gap-1.5 mb-0.5 text-xs">
+                                      <span className="font-bold text-purple-700 tabular-nums">{formatDisplayPrice(ad.price)}</span>
+                                      <span className="text-slate-300" aria-hidden="true">·</span>
                                       <span className={cn(
-                                        "text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
+                                        "font-semibold",
                                         currentAdStatus === 'sold'
-                                          ? "bg-rose-100 text-rose-800 border border-rose-200"
+                                          ? "text-rose-600"
                                           : currentAdStatus === 'pending'
-                                            ? "bg-amber-100 text-amber-800 border border-amber-200"
-                                            : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                            ? "text-amber-600"
+                                            : "text-emerald-600"
                                       )}>
-                                        {currentAdStatus === 'sold' ? '🏷️ Sold' : currentAdStatus === 'pending' ? '⏳ Pending' : '✅ Active'}
+                                        {currentAdStatus === 'sold' ? 'Sold' : currentAdStatus === 'pending' ? 'Pending' : 'Active'}
                                       </span>
                                     </div>
-                                    <h4 className="text-xs font-bold text-slate-900 truncate">{ad.title}</h4>
-                                    <p className="text-[11px] text-slate-500 truncate">{ad.location || 'Valencia'} · {ad.category}</p>
+                                    <h4 className="text-sm font-semibold text-brand-navy truncate">{ad.title}</h4>
+                                    <p className="text-xs text-slate-500 truncate">{ad.location || 'Valencia'} · {ad.category}</p>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                                     <button
@@ -26330,36 +26483,36 @@ function ProfileView({
                                         setActiveSubPage(null);
                                         onEditAd?.(ad);
                                       }}
-                                      className="p-1.5 bg-white hover:bg-purple-50 text-slate-400 hover:text-purple-600 rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                                      className="p-1.5 bg-white hover:bg-purple-50 text-slate-400 hover:text-purple-600 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
                                       title="Edit item"
                                     >
-                                      <Edit2 className="w-4 h-4" />
+                                      <Edit2 className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setConfirmDeleteAdId(ad.id)}
                                       disabled={isDeleting}
-                                      className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                                      className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl border border-slate-200/70 transition-colors cursor-pointer"
                                       title="Delete item"
                                     >
-                                      {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                      {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                                     </button>
                                   </div>
                                 </div>
 
                                 {/* Seller Quick Status Buttons */}
-                                <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between gap-1" onClick={(e) => e.stopPropagation()}>
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status:</span>
+                                <div className="pt-2.5 border-t border-slate-200/60 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+                                  <span className="text-[11px] font-medium text-slate-400">Status</span>
                                   <div className="flex items-center gap-1">
                                     <button
                                       type="button"
                                       disabled={isUpdatingStatus}
                                       onClick={() => handleUpdateAdStatus(ad.id, 'available')}
                                       className={cn(
-                                        "px-2 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer",
+                                        "px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer",
                                         currentAdStatus === 'available'
                                           ? "bg-emerald-600 text-white border-emerald-600"
-                                          : "bg-white text-slate-600 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                          : "bg-white text-slate-600 border-slate-200/80 hover:bg-emerald-50 hover:text-emerald-700"
                                       )}
                                     >
                                       Active
@@ -26369,10 +26522,10 @@ function ProfileView({
                                       disabled={isUpdatingStatus}
                                       onClick={() => handleUpdateAdStatus(ad.id, 'pending')}
                                       className={cn(
-                                        "px-2 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer",
+                                        "px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer",
                                         currentAdStatus === 'pending'
                                           ? "bg-amber-500 text-white border-amber-500"
-                                          : "bg-white text-slate-600 border-slate-200 hover:bg-amber-50 hover:text-amber-700"
+                                          : "bg-white text-slate-600 border-slate-200/80 hover:bg-amber-50 hover:text-amber-700"
                                       )}
                                     >
                                       Pending
@@ -26382,10 +26535,10 @@ function ProfileView({
                                       disabled={isUpdatingStatus}
                                       onClick={() => handleUpdateAdStatus(ad.id, 'sold')}
                                       className={cn(
-                                        "px-2 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer",
+                                        "px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer",
                                         currentAdStatus === 'sold'
                                           ? "bg-rose-600 text-white border-rose-600"
-                                          : "bg-white text-slate-600 border-slate-200 hover:bg-rose-50 hover:text-rose-700"
+                                          : "bg-white text-slate-600 border-slate-200/80 hover:bg-rose-50 hover:text-rose-700"
                                       )}
                                     >
                                       Sold
@@ -26401,27 +26554,27 @@ function ProfileView({
                     </div>
 
                     {confirmDeleteAdId && (
-                      <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-                        <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-center">
+                      <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl border border-slate-100 text-center">
                           <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
-                            <Trash2 className="w-6 h-6" />
+                            <Trash2 className="w-5 h-5" />
                           </div>
                           <div className="space-y-1">
-                            <h4 className="font-black text-slate-900 text-lg">Delete Item?</h4>
-                            <p className="text-xs text-slate-500">Are you sure you want to remove this listing from the marketplace? This cannot be undone.</p>
+                            <h4 className="font-bold font-display text-brand-navy text-lg">Delete Item?</h4>
+                            <p className="text-xs text-slate-500 leading-relaxed">Are you sure you want to remove this listing from the marketplace? This cannot be undone.</p>
                           </div>
-                          <div className="flex gap-2 pt-2">
+                          <div className="flex gap-2.5 pt-2">
                             <button
                               type="button"
                               onClick={() => setConfirmDeleteAdId(null)}
-                              className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                              className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                             >
                               Cancel
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDeleteAd(confirmDeleteAdId)}
-                              className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+                              className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                             >
                               Delete
                             </button>
@@ -26440,7 +26593,7 @@ function ProfileView({
                     exit={{ opacity: 0, y: -10 }}
                     className="space-y-4"
                   >
-                    <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
+                    <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/60 shadow-2xs space-y-5">
                       {/* Header with Total Count and Subtitle */}
                       {(() => {
                         const totalFavorites = favoriteProIds.length + favoriteEventIds.length + favoriteAdIds.length;
@@ -26453,12 +26606,12 @@ function ProfileView({
                           if (savedPros.length === 0) {
                             if (!showEmpty) return null;
                             return (
-                              <div className="py-10 text-center space-y-3 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 p-6">
-                                <div className="w-12 h-12 bg-blue-50 text-brand-blue rounded-2xl flex items-center justify-center mx-auto">
-                                  <User className="w-6 h-6" />
+                              <div className="py-10 text-center space-y-3 bg-slate-50/60 rounded-2xl border border-slate-200/60 p-6">
+                                <div className="w-12 h-12 bg-brand-blue/10 text-brand-blue rounded-2xl flex items-center justify-center mx-auto">
+                                  <User className="w-5 h-5" />
                                 </div>
                                 <div className="space-y-1">
-                                  <p className="font-bold text-slate-800 text-sm">No favorite professionals saved yet</p>
+                                  <p className="font-semibold text-brand-navy text-sm">No favorite professionals saved yet</p>
                                   <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
                                     Browse verified local service providers, doctors, tutors, and handymen in Valencia and save your favorites here.
                                   </p>
@@ -26469,7 +26622,7 @@ function ProfileView({
                                     setActiveSubPage(null);
                                     onNavigate?.('explore');
                                   }}
-                                  className="px-4 py-2 bg-brand-blue hover:bg-blue-600 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer active:scale-95"
+                                  className="px-4 py-2 bg-brand-blue hover:bg-brand-blue/90 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer active:scale-95"
                                 >
                                   Explore Directory
                                 </button>
@@ -26484,30 +26637,33 @@ function ProfileView({
                                 return (
                                   <div key={pro.id} className="py-3.5 first:pt-0 last:pb-0 flex flex-col gap-3 group">
                                     <div className="flex items-center gap-3.5">
-                                      <div className="w-13 h-13 rounded-2xl bg-slate-100 overflow-hidden shrink-0 border border-slate-100 flex items-center justify-center">
+                                      <div className="w-12 h-12 rounded-2xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200/50 flex items-center justify-center">
                                         {pro.image ? (
                                           <img src={pro.image} alt={pro.name} className="w-full h-full object-cover" />
                                         ) : (
-                                          <User className="w-6 h-6 text-slate-300" />
+                                          <User className="w-5 h-5 text-slate-300" />
                                         )}
                                       </div>
                                       <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-brand-blue bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
+                                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                          <span className="font-medium text-brand-blue truncate">
                                             {pro.category || 'Professional'}
                                           </span>
                                           {typeof pro.rating === 'number' && pro.rating > 0 ? (
-                                            <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5">
-                                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                              {pro.rating}
-                                            </span>
+                                            <>
+                                              <span className="text-slate-300" aria-hidden="true">·</span>
+                                              <span className="font-semibold text-amber-600 flex items-center gap-0.5 tabular-nums shrink-0">
+                                                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                                {pro.rating}
+                                              </span>
+                                            </>
                                           ) : null}
                                         </div>
-                                        <h4 className="font-bold text-slate-900 group-hover:text-brand-blue transition-colors text-sm truncate mt-1">
+                                        <h4 className="font-semibold text-brand-navy group-hover:text-brand-blue transition-colors text-sm truncate mt-0.5">
                                           {pro.name}
                                         </h4>
                                         {pro.company_name && (
-                                          <p className="text-xs text-slate-500 font-medium truncate">{pro.company_name}</p>
+                                          <p className="text-xs text-slate-500 truncate">{pro.company_name}</p>
                                         )}
                                       </div>
                                       <div className="flex items-center gap-1.5 shrink-0">
@@ -26517,10 +26673,10 @@ function ProfileView({
                                             setExpandedFavProId(isExpanded ? null : String(pro.id));
                                           }}
                                           className={cn(
-                                            "px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer",
+                                            "px-3 py-1.5 text-xs font-semibold rounded-xl transition-colors cursor-pointer",
                                             isExpanded 
-                                              ? "bg-brand-blue text-white hover:bg-blue-600 shadow-sm"
-                                              : "bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-brand-blue"
+                                              ? "bg-brand-blue text-white hover:bg-brand-blue/90"
+                                              : "bg-slate-100/80 hover:bg-brand-blue/10 text-slate-600 hover:text-brand-blue"
                                           )}
                                         >
                                           {isExpanded ? 'Close' : 'View'}
@@ -26528,7 +26684,7 @@ function ProfileView({
                                         <button
                                           type="button"
                                           onClick={() => onToggleFavoritePro?.(pro.id)}
-                                          className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
+                                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
                                           title="Remove from favorites"
                                         >
                                           <Heart className="w-4 h-4 fill-rose-500" />
@@ -26537,7 +26693,7 @@ function ProfileView({
                                     </div>
 
                                     {isExpanded && (
-                                      <div className="mt-1 border border-slate-100 rounded-3xl overflow-hidden shadow-xs bg-slate-50/5 p-1">
+                                      <div className="mt-1 border border-slate-200/60 rounded-2xl overflow-hidden bg-slate-50/30 p-1">
                                         <DirectoryProCardItem
                                           pro={pro}
                                           index={0}
@@ -26565,12 +26721,12 @@ function ProfileView({
                           if (savedEvents.length === 0) {
                             if (!showEmpty) return null;
                             return (
-                              <div className="py-10 text-center space-y-3 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 p-6">
+                              <div className="py-10 text-center space-y-3 bg-slate-50/60 rounded-2xl border border-slate-200/60 p-6">
                                 <div className="w-12 h-12 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center mx-auto">
-                                  <Calendar className="w-6 h-6" />
+                                  <Calendar className="w-5 h-5" />
                                 </div>
                                 <div className="space-y-1">
-                                  <p className="font-bold text-slate-800 text-sm">No favorite events saved yet</p>
+                                  <p className="font-semibold text-brand-navy text-sm">No favorite events saved yet</p>
                                   <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
                                     Browse upcoming concerts, festivals, cultural tours and workshops in Valencia.
                                   </p>
@@ -26581,7 +26737,7 @@ function ProfileView({
                                     setActiveSubPage(null);
                                     onNavigate?.('events');
                                   }}
-                                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer active:scale-95"
+                                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer active:scale-95"
                                 >
                                   Explore Events
                                 </button>
@@ -26598,22 +26754,22 @@ function ProfileView({
                                     <img 
                                       src={event.image || 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=200'} 
                                       alt="" 
-                                      className="w-15 h-15 rounded-xl object-cover shrink-0 bg-slate-50 border border-slate-100" 
+                                      className="w-14 h-14 rounded-2xl object-cover shrink-0 bg-slate-100 border border-slate-200/50" 
                                       referrerPolicy="no-referrer"
                                     />
                                     <div className="flex-1 min-w-0">
-                                      <span className="text-[9px] font-extrabold uppercase tracking-widest text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100/50">
+                                      <p className="text-xs font-medium text-orange-600 truncate">
                                         {event.category || 'Event'}
-                                      </span>
-                                      <h4 className="font-bold text-slate-900 group-hover:text-orange-500 transition-colors text-sm truncate mt-1">
+                                      </p>
+                                      <h4 className="font-semibold text-brand-navy group-hover:text-orange-600 transition-colors text-sm truncate mt-0.5">
                                         {event.title}
                                       </h4>
-                                      <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                      <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5 truncate">
                                         <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                        <span>{formattedDate}</span>
+                                        <span className="truncate">{formattedDate}</span>
                                         {event.location && (
                                           <>
-                                            <span className="text-slate-300">•</span>
+                                            <span className="text-slate-300" aria-hidden="true">·</span>
                                             <span className="truncate max-w-[150px]">{event.location}</span>
                                           </>
                                         )}
@@ -26626,14 +26782,14 @@ function ProfileView({
                                           setActiveSubPage(null);
                                           onNavigate?.('events', { eventId: event.id });
                                         }}
-                                        className="px-3 py-1.5 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 text-[10px] font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                        className="px-3 py-1.5 bg-slate-100/80 hover:bg-orange-50 text-slate-600 hover:text-orange-600 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                                       >
                                         View
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => onToggleFavoriteEvent?.(event.id)}
-                                        className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-xl transition-all cursor-pointer"
+                                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
                                         title="Remove from favorites"
                                       >
                                         <Heart className="w-4 h-4 fill-rose-500" />
@@ -26646,20 +26802,18 @@ function ProfileView({
                           );
                         };
 
-
-
                         return (
                           <>
                             {/* Header Row */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100/80 pb-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100/80 flex items-center justify-center text-rose-500 shrink-0">
-                                  <Heart className="w-5 h-5 fill-rose-500" />
+                                <div className="w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
+                                  <Heart className="w-4 h-4 fill-rose-500" />
                                 </div>
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    <h3 className="font-bold text-slate-900 text-base tracking-tight font-display">My Favorites</h3>
-                                    <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-100/80 text-rose-700">
+                                    <h3 className="font-bold text-brand-navy text-base tracking-tight font-display">My Favorites</h3>
+                                    <span className="text-xs font-semibold text-slate-400 tabular-nums">
                                       {totalFavorites}
                                     </span>
                                   </div>
@@ -26670,27 +26824,22 @@ function ProfileView({
                               </div>
                             </div>
 
-                            {/* Intuitive Category Filter Selector (Grid layout, perfectly responsive) */}
-                            <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-100/80 rounded-2xl">
+                            {/* Segmented Category Filter Selector */}
+                            <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100/80 rounded-2xl">
                               {/* Tab: All */}
                               <button
                                 type="button"
                                 onClick={() => setFavSubTab('all')}
                                 className={cn(
-                                  "py-2.5 px-2 sm:px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between sm:justify-center gap-1 sm:gap-2 min-w-0",
+                                  "py-2 px-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-w-0",
                                   favSubTab === 'all'
-                                    ? "bg-white text-slate-900 shadow-2xs font-extrabold"
-                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
+                                    ? "bg-white text-brand-navy shadow-2xs"
+                                    : "text-slate-500 hover:text-brand-navy"
                                 )}
                               >
-                                <div className="flex items-center gap-1 min-w-0">
-                                  <LayoutGrid className={cn("w-3.5 h-3.5 shrink-0", favSubTab === 'all' ? "text-rose-500" : "text-slate-400")} />
-                                  <span className="truncate">All</span>
-                                </div>
-                                <span className={cn(
-                                  "text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0",
-                                  favSubTab === 'all' ? "bg-rose-50 text-rose-600" : "bg-slate-200/70 text-slate-600"
-                                )}>
+                                <LayoutGrid className={cn("w-3.5 h-3.5 shrink-0", favSubTab === 'all' ? "text-rose-500" : "text-slate-400")} />
+                                <span className="truncate">All</span>
+                                <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
                                   {totalFavorites}
                                 </span>
                               </button>
@@ -26700,20 +26849,15 @@ function ProfileView({
                                 type="button"
                                 onClick={() => setFavSubTab('pros')}
                                 className={cn(
-                                  "py-2.5 px-2 sm:px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between sm:justify-center gap-1 sm:gap-2 min-w-0",
+                                  "py-2 px-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-w-0",
                                   favSubTab === 'pros'
-                                    ? "bg-white text-slate-900 shadow-2xs font-extrabold"
-                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
+                                    ? "bg-white text-brand-navy shadow-2xs"
+                                    : "text-slate-500 hover:text-brand-navy"
                                 )}
                               >
-                                <div className="flex items-center gap-1 min-w-0">
-                                  <User className={cn("w-3.5 h-3.5 shrink-0", favSubTab === 'pros' ? "text-brand-blue" : "text-slate-400")} />
-                                  <span className="truncate">Pros</span>
-                                </div>
-                                <span className={cn(
-                                  "text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0",
-                                  favSubTab === 'pros' ? "bg-blue-50 text-brand-blue" : "bg-slate-200/70 text-slate-600"
-                                )}>
+                                <User className={cn("w-3.5 h-3.5 shrink-0", favSubTab === 'pros' ? "text-brand-blue" : "text-slate-400")} />
+                                <span className="truncate">Pros</span>
+                                <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
                                   {favoriteProIds.length}
                                 </span>
                               </button>
@@ -26723,20 +26867,15 @@ function ProfileView({
                                 type="button"
                                 onClick={() => setFavSubTab('events')}
                                 className={cn(
-                                  "py-2.5 px-2 sm:px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between sm:justify-center gap-1 sm:gap-2 min-w-0",
+                                  "py-2 px-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 min-w-0",
                                   favSubTab === 'events'
-                                    ? "bg-white text-slate-900 shadow-2xs font-extrabold"
-                                    : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
+                                    ? "bg-white text-brand-navy shadow-2xs"
+                                    : "text-slate-500 hover:text-brand-navy"
                                 )}
                               >
-                                <div className="flex items-center gap-1 min-w-0">
-                                  <Calendar className={cn("w-3.5 h-3.5 shrink-0", favSubTab === 'events' ? "text-orange-500" : "text-slate-400")} />
-                                  <span className="truncate">Events</span>
-                                </div>
-                                <span className={cn(
-                                  "text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0",
-                                  favSubTab === 'events' ? "bg-orange-50 text-orange-600" : "bg-slate-200/70 text-slate-600"
-                                )}>
+                                <Calendar className={cn("w-3.5 h-3.5 shrink-0", favSubTab === 'events' ? "text-orange-500" : "text-slate-400")} />
+                                <span className="truncate">Events</span>
+                                <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
                                   {favoriteEventIds.length}
                                 </span>
                               </button>
@@ -26746,24 +26885,24 @@ function ProfileView({
                             {favSubTab === 'all' && (
                               <div className="space-y-6 pt-1">
                                 {totalFavorites === 0 ? (
-                                  <div className="py-12 text-center space-y-4 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200 p-6">
-                                    <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto text-rose-400">
-                                      <Heart className="w-8 h-8" />
+                                  <div className="py-10 text-center space-y-4 bg-slate-50/60 rounded-2xl border border-slate-200/60 p-6">
+                                    <div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto text-rose-400">
+                                      <Heart className="w-7 h-7" />
                                     </div>
                                     <div className="space-y-1">
-                                      <p className="font-bold text-slate-800">No favorites saved yet</p>
+                                      <p className="font-semibold text-brand-navy">No favorites saved yet</p>
                                       <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
                                         You haven't saved any professionals or events yet. Tap the heart icon anywhere across the app to bookmark your top picks here!
                                       </p>
                                     </div>
-                                    <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                                    <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
                                       <button
                                         type="button"
                                         onClick={() => {
                                           setActiveSubPage(null);
                                           onNavigate?.('explore');
                                         }}
-                                        className="px-4 py-2 bg-brand-blue hover:bg-blue-600 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                                        className="px-4 py-2 bg-brand-blue hover:bg-brand-blue/90 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                                       >
                                         Browse Directory
                                       </button>
@@ -26773,7 +26912,7 @@ function ProfileView({
                                           setActiveSubPage(null);
                                           onNavigate?.('events');
                                         }}
-                                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                                       >
                                         Browse Events
                                       </button>
@@ -26784,17 +26923,17 @@ function ProfileView({
                                     {/* Pros Section */}
                                     {savedPros.length > 0 && (
                                       <div className="space-y-3">
-                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                                        <div className="flex items-center justify-between pb-2 border-b border-slate-100/80">
                                           <div className="flex items-center gap-2">
                                             <User className="w-4 h-4 text-brand-blue" />
-                                            <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                                            <h4 className="font-semibold text-brand-navy text-xs">
                                               Professionals ({savedPros.length})
                                             </h4>
                                           </div>
                                           <button
                                             type="button"
                                             onClick={() => setFavSubTab('pros')}
-                                            className="text-xs text-brand-blue font-bold hover:underline cursor-pointer"
+                                            className="text-xs text-brand-blue font-semibold hover:underline cursor-pointer"
                                           >
                                             View only pros →
                                           </button>
@@ -26806,17 +26945,17 @@ function ProfileView({
                                     {/* Events Section */}
                                     {savedEvents.length > 0 && (
                                       <div className="space-y-3">
-                                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                                        <div className="flex items-center justify-between pb-2 border-b border-slate-100/80">
                                           <div className="flex items-center gap-2">
                                             <Calendar className="w-4 h-4 text-orange-500" />
-                                            <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+                                            <h4 className="font-semibold text-brand-navy text-xs">
                                               Events ({savedEvents.length})
                                             </h4>
                                           </div>
                                           <button
                                             type="button"
                                             onClick={() => setFavSubTab('events')}
-                                            className="text-xs text-orange-600 font-bold hover:underline cursor-pointer"
+                                            className="text-xs text-orange-600 font-semibold hover:underline cursor-pointer"
                                           >
                                             View only events →
                                           </button>
@@ -26854,74 +26993,75 @@ function ProfileView({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                   >
-                    <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
-                      <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-                        <div className="flex items-center gap-2">
-                          <Star className="w-5 h-5 text-brand-yellow fill-brand-yellow" />
-                          <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">My Testimonials</h3>
+                    <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/60 shadow-2xs space-y-5">
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-100/80 pb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
+                            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                          </div>
+                          <h3 className="font-bold font-display text-brand-navy text-base tracking-tight">My Testimonials</h3>
                         </div>
-                        <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full">{myTestimonies.length} Left</span>
+                        <span className="text-xs font-medium text-slate-400 tabular-nums">{myTestimonies.length} Left</span>
                       </div>
 
                       {loadingTestimonies ? (
-                        <div className="py-8 flex justify-center text-slate-400">
-                          <Loader2 className="w-6 h-6 animate-spin" />
+                        <div className="py-10 flex justify-center text-slate-400">
+                          <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                         </div>
                       ) : myTestimonies.length === 0 ? (
-                        <div className="py-8 text-center text-slate-400 italic text-sm">
+                        <div className="py-10 text-center text-slate-400 text-sm">
                           You have not left any testimonials yet.
                         </div>
                       ) : (
-                        <div className="space-y-4">
+                        <div className="divide-y divide-slate-100/80">
                           {myTestimonies.map((review) => {
                             const associatedPro = allPros?.find((p) => String(p.id) === String(review.pro_id));
                             const isEditing = editingTestimonyId === review.id;
                             const isProcessing = deletingId === review.id;
                             
                             return (
-                              <div key={review.id} className={cn(
-                                "p-5 rounded-2xl border transition-all duration-300",
-                                review.status === 'pending' ? "bg-amber-50/30 border-amber-100" : 
-                                review.status === 'refused' ? "bg-rose-50/30 border-rose-100" : "bg-slate-50/55 border-slate-100"
-                              )}>
+                              <div key={review.id} className="py-4 first:pt-0 last:pb-0">
                                 <div className="flex justify-between items-start gap-4">
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-0.5">
-                                      <p className="font-bold text-slate-800 text-sm truncate">
+                                      <p className="font-semibold text-brand-navy text-sm truncate">
                                         {associatedPro ? associatedPro.name : 'Professional'}
                                       </p>
+                                      <span className="text-slate-300" aria-hidden="true">·</span>
                                       <span className={cn(
-                                        "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md",
-                                        review.status === 'approved' ? "bg-emerald-50 text-emerald-600" : 
-                                        review.status === 'refused' ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600 animate-pulse"
+                                        "text-xs font-medium capitalize shrink-0",
+                                        review.status === 'approved' ? "text-emerald-600" : 
+                                        review.status === 'refused' ? "text-rose-600" : "text-amber-600"
                                       )}>
                                         {review.status || 'pending'}
                                       </span>
                                     </div>
                                     {associatedPro?.profession && (
-                                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{associatedPro.profession}</p>
+                                      <p className="text-xs text-slate-400 font-medium">{associatedPro.profession}</p>
                                     )}
                                   </div>
                                   
                                   {!isEditing && (
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1.5 shrink-0">
                                       <button 
+                                        type="button"
                                         onClick={() => {
                                           setEditingTestimonyId(review.id);
                                           setEditTestimonyRating(review.rating);
                                           setEditTestimonyComment(review.comment);
                                         }}
                                         disabled={isProcessing}
-                                        className="h-8 px-3 bg-white text-slate-500 border border-slate-200 rounded-xl hover:text-brand-blue hover:border-brand-blue/30 text-[10px] font-bold uppercase tracking-wide transition-all active:scale-95 flex items-center justify-center disabled:opacity-50"
+                                        className="h-8 px-3 bg-slate-100/80 hover:bg-brand-blue/10 text-slate-600 hover:text-brand-blue rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center disabled:opacity-50"
                                       >
                                         Edit
                                       </button>
                                       <button 
+                                        type="button"
                                         onClick={() => setShowConfirmAction(prev => ({ ...prev, [review.id]: 'delete' }))}
                                         disabled={isProcessing}
                                         className={cn(
-                                          "h-8 w-8 border rounded-xl transition-all active:scale-95 flex items-center justify-center shrink-0",
-                                          isProcessing ? "bg-slate-50 border-slate-100 text-slate-300" : "bg-white border-slate-200 text-slate-400 hover:text-rose-500 hover:border-rose-100"
+                                          "h-8 w-8 rounded-xl transition-colors flex items-center justify-center shrink-0 cursor-pointer",
+                                          isProcessing ? "bg-slate-50 text-slate-300" : "bg-slate-100/80 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                                         )}
                                         title="Delete Review"
                                       >
@@ -26936,10 +27076,11 @@ function ProfileView({
                                 </div>
 
                                 {showConfirmAction[review.id] === 'delete' && (
-                                  <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100 flex flex-col gap-3 animate-in fade-in zoom-in-95 my-3">
-                                    <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest text-center">Delete this testimonial permanently?</p>
+                                  <div className="bg-rose-50/70 p-4 rounded-2xl border border-rose-200/70 flex flex-col gap-3 my-3">
+                                    <p className="text-xs font-semibold text-rose-700 text-center">Delete this testimonial permanently?</p>
                                     <div className="flex gap-2">
                                       <button
+                                        type="button"
                                         onClick={async () => {
                                           setDeletingId(review.id);
                                           try {
@@ -26958,14 +27099,15 @@ function ProfileView({
                                           }
                                         }}
                                         disabled={isProcessing}
-                                        className="flex-1 h-9 bg-rose-500 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-rose-600 transition-all disabled:opacity-50"
+                                        className="flex-1 h-9 bg-rose-600 text-white rounded-xl text-xs font-semibold hover:bg-rose-700 transition-colors cursor-pointer disabled:opacity-50"
                                       >
                                         {isProcessing ? 'Deleting...' : 'Yes, Delete'}
                                       </button>
                                       <button
+                                        type="button"
                                         onClick={() => setShowConfirmAction(prev => ({ ...prev, [review.id]: null }))}
                                         disabled={isProcessing}
-                                        className="flex-1 h-9 bg-white text-slate-400 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-slate-100 hover:bg-slate-50 transition-all"
+                                        className="flex-1 h-9 bg-white text-slate-600 rounded-xl text-xs font-semibold border border-slate-200/80 hover:bg-slate-50 transition-colors cursor-pointer"
                                       >
                                         Cancel
                                       </button>
@@ -26974,17 +27116,18 @@ function ProfileView({
                                 )}
 
                                 {isEditing ? (
-                                  <div className="space-y-3 pt-2 bg-white rounded-xl p-3 border border-slate-200">
-                                    <div className="flex items-center gap-1">
-                                      <label className="text-xs font-bold text-slate-500 animate-pulse">Rating:</label>
+                                  <div className="space-y-3 mt-3 bg-slate-50/80 rounded-2xl p-4 border border-slate-200/70">
+                                    <div className="flex items-center gap-2">
+                                      <label className="text-xs font-semibold text-slate-600">Rating:</label>
                                       <div className="flex items-center gap-0.5">
                                         {[1,2,3,4,5].map((s) => (
                                           <button 
-                                            key={s} 
+                                            key={s}
+                                            type="button"
                                             onClick={() => setEditTestimonyRating(s)}
-                                            className="p-0.5"
+                                            className="p-0.5 cursor-pointer"
                                           >
-                                            <Star className={cn("w-4 h-4", s <= editTestimonyRating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200")} />
+                                            <Star className={cn("w-4 h-4", s <= editTestimonyRating ? "text-amber-400 fill-amber-400" : "text-slate-200")} />
                                           </button>
                                         ))}
                                       </div>
@@ -26992,17 +27135,19 @@ function ProfileView({
                                     <textarea 
                                       value={editTestimonyComment}
                                       onChange={(e) => setEditTestimonyComment(e.target.value)}
-                                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-brand-blue/20"
-                                      rows={2}
+                                      className="w-full p-3 bg-white border border-slate-200/80 rounded-xl text-xs text-slate-700 outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue transition-all"
+                                      rows={3}
                                     />
                                     <div className="flex justify-end gap-2">
                                       <button 
+                                        type="button"
                                         onClick={() => setEditingTestimonyId(null)}
-                                        className="px-2.5 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold uppercase rounded-md"
+                                        className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200/80 text-slate-600 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                                       >
                                         Cancel
                                       </button>
                                       <button 
+                                        type="button"
                                         onClick={async () => {
                                           setIsUpdatingTestimony(true);
                                           try {
@@ -27017,36 +27162,36 @@ function ProfileView({
                                           }
                                         }}
                                         disabled={isUpdatingTestimony}
-                                        className="px-3 py-1 bg-brand-blue text-white text-[10px] font-bold uppercase tracking-wider rounded-md"
+                                        className="px-4 py-1.5 bg-brand-blue hover:bg-brand-blue/90 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                                       >
                                         {isUpdatingTestimony ? 'Saving...' : 'Save'}
                                       </button>
                                     </div>
                                   </div>
                                 ) : (
-                                  <div className="mt-3 space-y-2">
+                                  <div className="mt-2.5 space-y-2">
                                     <div className="flex items-center gap-0.5">
                                       {[...Array(5)].map((_, i) => (
                                         <Star 
                                           key={i} 
                                           className={cn(
-                                            "w-3 h-3", 
-                                            i < review.rating ? "text-brand-yellow fill-brand-yellow" : "text-slate-200"
+                                            "w-3.5 h-3.5", 
+                                            i < review.rating ? "text-amber-400 fill-amber-400" : "text-slate-200"
                                           )} 
                                         />
                                       ))}
                                     </div>
-                                    <p className="text-xs text-slate-600 leading-relaxed italic">
+                                    <p className="text-sm text-slate-600 leading-relaxed italic">
                                       "{review.comment}"
                                     </p>
                                     
                                     {review.status === 'refused' && review.refusal_reason && (
-                                      <div className="p-3 bg-rose-50 rounded-xl border border-rose-100 mt-2">
+                                      <div className="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200/70 mt-2">
                                         <div className="flex items-center gap-1.5 mb-1">
-                                          <XCircle className="w-3 h-3 text-rose-500" />
-                                          <span className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Reason for Refusal:</span>
+                                          <XCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                          <span className="text-xs font-semibold text-rose-700">Reason for Refusal</span>
                                         </div>
-                                        <p className="text-[11px] text-rose-500/80 leading-normal">{review.refusal_reason}</p>
+                                        <p className="text-xs text-rose-600 leading-relaxed">{review.refusal_reason}</p>
                                       </div>
                                     )}
                                   </div>
@@ -27067,15 +27212,15 @@ function ProfileView({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                   >
-                    <div className="bg-white rounded-3xl p-6 border border-slate-100/85 shadow-sm space-y-5">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-50 pb-4">
-                        <div className="flex items-center gap-2.5">
+                    <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/60 shadow-2xs space-y-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100/80 pb-4">
+                        <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
-                            <MessageSquare className="w-5 h-5" />
+                            <MessageSquare className="w-4 h-4" />
                           </div>
                           <div>
-                            <h3 className="font-bold text-slate-800 text-sm tracking-wider uppercase">Private Chats</h3>
-                            <p className="text-[11px] text-slate-400 font-medium">
+                            <h3 className="font-bold font-display text-brand-navy text-base tracking-tight">Private Chats</h3>
+                            <p className="text-xs text-slate-500">
                               {chatFilter === 'active' 
                                 ? "Your active conversations with community members."
                                 : "Archived conversations that you can view or restore at any time."}
@@ -27084,23 +27229,20 @@ function ProfileView({
                         </div>
 
                         {/* Filter Tabs: Active vs Archived */}
-                        <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl self-start sm:self-auto shrink-0">
+                        <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-2xl self-start sm:self-auto shrink-0">
                           <button
                             type="button"
                             onClick={() => setChatFilter('active')}
                             className={cn(
-                              "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                              "px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer",
                               chatFilter === 'active'
-                                ? "bg-white text-slate-800 shadow-xs"
-                                : "text-slate-500 hover:text-slate-800"
+                                ? "bg-white text-brand-navy shadow-2xs"
+                                : "text-slate-500 hover:text-brand-navy"
                             )}
                           >
-                            <MessageSquare className="w-3.5 h-3.5" />
+                            <MessageSquare className={cn("w-3.5 h-3.5", chatFilter === 'active' ? "text-sky-600" : "text-slate-400")} />
                             <span>Active</span>
-                            <span className={cn(
-                              "text-[10px] px-1.5 py-0.2 rounded-full font-extrabold",
-                              chatFilter === 'active' ? "bg-sky-50 text-sky-600" : "bg-slate-200/70 text-slate-500"
-                            )}>
+                            <span className="text-[11px] text-slate-400 tabular-nums">
                               {activeConversations.length}
                             </span>
                           </button>
@@ -27109,62 +27251,59 @@ function ProfileView({
                             type="button"
                             onClick={() => setChatFilter('archived')}
                             className={cn(
-                              "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                              "px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer",
                               chatFilter === 'archived'
-                                ? "bg-white text-slate-800 shadow-xs"
-                                : "text-slate-500 hover:text-slate-800"
+                                ? "bg-white text-brand-navy shadow-2xs"
+                                : "text-slate-500 hover:text-brand-navy"
                             )}
                           >
-                            <Archive className="w-3.5 h-3.5 text-amber-500" />
+                            <Archive className={cn("w-3.5 h-3.5", chatFilter === 'archived' ? "text-amber-500" : "text-slate-400")} />
                             <span>Archived</span>
-                            <span className={cn(
-                              "text-[10px] px-1.5 py-0.2 rounded-full font-extrabold",
-                              chatFilter === 'archived' ? "bg-amber-50 text-amber-600" : "bg-slate-200/70 text-slate-500"
-                            )}>
+                            <span className="text-[11px] text-slate-400 tabular-nums">
                               {archivedConversations.length}
                             </span>
                           </button>
                         </div>
                       </div>
 
-                      <div className="space-y-3">
+                      <div>
                         {loadingConversations ? (
-                          <div className="py-8 flex flex-col items-center justify-center text-slate-400 gap-2">
+                          <div className="py-10 flex flex-col items-center justify-center text-slate-400 gap-2">
                             <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                             <span className="text-xs font-medium">Loading conversations...</span>
                           </div>
                         ) : displayedConversations.length === 0 ? (
                           chatFilter === 'archived' ? (
-                            <div className="p-8 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 text-center space-y-2">
+                            <div className="p-8 bg-slate-50/60 rounded-2xl border border-slate-200/60 text-center space-y-2.5">
                               <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto">
-                                <Archive className="w-6 h-6" />
+                                <Archive className="w-5 h-5" />
                               </div>
-                              <p className="text-xs font-bold text-slate-700">No archived conversations</p>
-                              <p className="text-[11px] text-slate-400 leading-relaxed max-w-sm mx-auto">
+                              <p className="text-sm font-semibold text-brand-navy">No archived conversations</p>
+                              <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
                                 You have no archived conversations. You can archive any active conversation at any time to keep your inbox organized while retaining message history.
                               </p>
                               {activeConversations.length > 0 && (
                                 <button
                                   type="button"
                                   onClick={() => setChatFilter('active')}
-                                  className="mt-2 px-3.5 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                                  className="mt-2 px-4 py-2 bg-white border border-slate-200/80 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer inline-flex items-center gap-1.5"
                                 >
                                   <span>View active conversations ({activeConversations.length})</span>
                                 </button>
                               )}
                             </div>
                           ) : (
-                            <div className="p-6 bg-slate-50/60 rounded-2xl border border-slate-100/80 text-center space-y-2.5">
-                              <p className="text-xs font-bold text-slate-700">No active conversations yet</p>
+                            <div className="p-8 bg-slate-50/60 rounded-2xl border border-slate-200/60 text-center space-y-2.5">
+                              <p className="text-sm font-semibold text-brand-navy">No active conversations yet</p>
                               {archivedConversations.length > 0 ? (
-                                <div className="space-y-2">
-                                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                                <div className="space-y-3">
+                                  <p className="text-xs text-slate-500 leading-relaxed">
                                     All your conversations are currently archived ({archivedConversations.length}).
                                   </p>
                                   <button
                                     type="button"
                                     onClick={() => setChatFilter('archived')}
-                                    className="px-4 py-1.5 bg-brand-blue text-white rounded-xl text-xs font-bold hover:bg-blue-600 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                                    className="px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-semibold hover:bg-brand-blue/90 transition-colors cursor-pointer inline-flex items-center gap-1.5"
                                   >
                                     <Archive className="w-3.5 h-3.5" />
                                     <span>Access archived conversations ({archivedConversations.length})</span>
@@ -27172,7 +27311,7 @@ function ProfileView({
                                 </div>
                               ) : (
                                 <>
-                                  <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs mx-auto">
+                                  <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
                                     Discover professionals and browse reviews to connect directly with community members!
                                   </p>
                                   <button
@@ -27181,7 +27320,7 @@ function ProfileView({
                                       setActiveSubPage(null);
                                       onNavigate?.('explore');
                                     }}
-                                    className="px-4 py-1.5 bg-brand-blue text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all hover:bg-blue-600 active:scale-95 mt-1 cursor-pointer"
+                                    className="px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-semibold transition-colors hover:bg-brand-blue/90 active:scale-95 mt-1 cursor-pointer"
                                   >
                                     Discover Pros
                                   </button>
@@ -27190,91 +27329,94 @@ function ProfileView({
                             </div>
                           )
                         ) : (
-                          displayedConversations.map((conv) => {
-                            const otherName = conv.otherUser?.full_name || 'Community Member';
-                            const displayedName = formatName(otherName);
-                            const otherAvatar = conv.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayedName)}&background=random`;
-                            const isArchived = archivedConvIds.includes(conv.id);
-                            
-                            return (
-                              <div 
-                                key={conv.id} 
-                                onClick={() => {
-                                  if (onNavigate) {
-                                    setActiveSubPage(null);
-                                    onNavigate('messages', { chat: conv });
-                                  }
-                                }}
-                                className="p-3.5 sm:p-4 flex items-center gap-3 bg-slate-50/50 hover:bg-slate-50/90 border border-slate-100 rounded-2xl cursor-pointer transition-all active:scale-[0.99] group"
-                              >
-                                <div className="relative flex-shrink-0">
-                                  <img src={otherAvatar} alt="" className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-xs" />
-                                  {isArchived ? (
-                                    <div className="absolute -bottom-0.5 -right-0.5 bg-amber-500 text-white p-0.5 rounded-full border-2 border-white shadow-xs" title="Archived">
-                                      <Archive className="w-2.5 h-2.5" />
-                                    </div>
-                                  ) : (
-                                    <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white shadow-xs" />
-                                  )}
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                      <h4 className="text-xs font-bold text-slate-800 truncate">{displayedName}</h4>
-                                      {isArchived && (
-                                        <span className="text-[9px] font-extrabold px-1.5 py-0.2 bg-amber-50 text-amber-700 border border-amber-200/80 rounded-md shrink-0">
-                                          Archived
-                                        </span>
-                                      )}
-                                    </div>
-                                    <span className="text-[9px] text-slate-400 font-medium shrink-0 ml-2">
-                                      {conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : ''}
-                                    </span>
+                          <div className="divide-y divide-slate-100/80 -mx-2">
+                            {displayedConversations.map((conv) => {
+                              const otherName = conv.otherUser?.full_name || 'Community Member';
+                              const displayedName = formatName(otherName);
+                              const otherAvatar = conv.otherUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayedName)}&background=random`;
+                              const isArchived = archivedConvIds.includes(conv.id);
+                              
+                              return (
+                                <div 
+                                  key={conv.id} 
+                                  onClick={() => {
+                                    if (onNavigate) {
+                                      setActiveSubPage(null);
+                                      onNavigate('messages', { chat: conv });
+                                    }
+                                  }}
+                                  className="px-2 py-3.5 flex items-center gap-3.5 hover:bg-slate-50/70 rounded-2xl cursor-pointer transition-colors group"
+                                >
+                                  <div className="relative shrink-0">
+                                    <img src={otherAvatar} alt="" className="w-11 h-11 rounded-full object-cover ring-2 ring-white shadow-2xs" />
+                                    {isArchived && (
+                                      <div className="absolute -bottom-0.5 -right-0.5 bg-amber-500 text-white p-0.5 rounded-full border-2 border-white shadow-2xs" title="Archived">
+                                        <Archive className="w-2.5 h-2.5" />
+                                      </div>
+                                    )}
                                   </div>
-                                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                                    {isArchived ? "Archived conversation · Click to view messages" : "Click to open conversation"}
-                                  </p>
-                                </div>
 
-                                {/* Actions on the discussion */}
-                                <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                  {isArchived ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUnarchiveChat(conv.id)}
-                                      title="Unarchive this conversation"
-                                      className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 hover:text-brand-blue border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                                    >
-                                      <ArchiveRestore className="w-3.5 h-3.5 text-brand-blue" />
-                                      <span className="hidden sm:inline text-[11px]">Unarchive</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => setChatToArchive(conv)}
-                                      title="Archive this conversation"
-                                      className="p-2 bg-white hover:bg-amber-50 text-slate-400 hover:text-amber-600 border border-slate-200/80 hover:border-amber-200 rounded-xl transition-all shadow-2xs cursor-pointer"
-                                    >
-                                      <Archive className="w-4 h-4" />
-                                    </button>
-                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-center gap-2">
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <h4 className="text-sm font-semibold text-brand-navy group-hover:text-brand-blue transition-colors truncate">{displayedName}</h4>
+                                        {isArchived && (
+                                          <>
+                                            <span className="text-slate-300" aria-hidden="true">·</span>
+                                            <span className="text-xs font-medium text-amber-600 shrink-0">
+                                              Archived
+                                            </span>
+                                          </>
+                                        )}
+                                      </div>
+                                      <span className="text-[11px] text-slate-400 font-medium tabular-nums shrink-0">
+                                        {conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString([], {month: 'short', day: 'numeric'}) : ''}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 truncate mt-0.5">
+                                      {isArchived ? "Archived conversation · Click to view messages" : "Click to open conversation"}
+                                    </p>
+                                  </div>
 
-                                  <div 
-                                    onClick={() => {
-                                      if (onNavigate) {
-                                        setActiveSubPage(null);
-                                        onNavigate('messages', { chat: conv });
-                                      }
-                                    }}
-                                    className="p-1.5 text-slate-300 group-hover:text-slate-600 transition-colors"
-                                  >
-                                    <ChevronRight className="w-4 h-4" />
+                                  {/* Actions on the discussion */}
+                                  <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                    {isArchived ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUnarchiveChat(conv.id)}
+                                        title="Unarchive this conversation"
+                                        className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 hover:text-brand-blue border border-slate-200/80 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                                      >
+                                        <ArchiveRestore className="w-3.5 h-3.5 text-brand-blue" />
+                                        <span className="hidden sm:inline">Unarchive</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setChatToArchive(conv)}
+                                        title="Archive this conversation"
+                                        className="p-2 bg-slate-100/80 hover:bg-amber-50 text-slate-400 hover:text-amber-600 rounded-xl transition-colors cursor-pointer"
+                                      >
+                                        <Archive className="w-4 h-4" />
+                                      </button>
+                                    )}
+
+                                    <div 
+                                      onClick={() => {
+                                        if (onNavigate) {
+                                          setActiveSubPage(null);
+                                          onNavigate('messages', { chat: conv });
+                                        }
+                                      }}
+                                      className="p-1 text-slate-300 group-hover:text-brand-blue transition-colors"
+                                    >
+                                      <ChevronRight className="w-4 h-4" />
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            );
-                          })
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -27287,15 +27429,26 @@ function ProfileView({
 
         {activeSubPage === 'Settings' && (
           <ProfileSubPage key="subpage-settings" title="Settings" onBack={() => setActiveSubPage(null)}>
-            <div className="max-w-2xl mx-auto space-y-6">
-              {/* Chat Participation Section */}
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                {[
-                  { 
-                    title: 'Chat Participation', 
-                    desc: 'Allow receiving and sending chat messages',
-                    enabled: userProfile?.chat_enabled ?? true,
-                    action: async () => {
+            <div className="max-w-xl mx-auto space-y-5 pb-10">
+              {/* Preferences & Security Grouped Card */}
+              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-2xs overflow-hidden divide-y divide-slate-100/80">
+                {/* Chat Participation Row */}
+                <div className="px-4 sm:px-5 py-4 flex items-center justify-between gap-4">
+                  <div className="flex items-start gap-3.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 mt-0.5">
+                      <MessageCircle className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5 min-w-0">
+                      <p className="text-[15px] font-medium text-slate-800">Chat Participation</p>
+                      <p className="text-xs text-slate-500 leading-relaxed">Allow receiving and sending chat messages</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={userProfile?.chat_enabled ?? true}
+                    aria-label="Toggle Chat Participation"
+                    onClick={async () => {
                       if (userProfile) {
                         try {
                           const nextValue = userProfile.chat_enabled === undefined ? false : !userProfile.chat_enabled;
@@ -27308,43 +27461,104 @@ function ProfileView({
                           console.error('Error updating chat participation:', err);
                         }
                       }
-                    }
-                  }
-                ].map((item, i) => (
-                  <div key={i} className={cn(
-                    "p-6 flex items-center justify-between",
-                    i !== 0 && "border-b border-slate-50"
-                  )}>
-                    <div className="space-y-1">
-                      <p className="font-bold text-slate-900">{item.title}</p>
-                      <p className="text-xs text-slate-500">{item.desc}</p>
+                    }}
+                    className={cn(
+                      "w-12 h-6 rounded-full relative transition-colors cursor-pointer shrink-0",
+                      (userProfile?.chat_enabled ?? true) ? "bg-brand-blue" : "bg-slate-200"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all",
+                      (userProfile?.chat_enabled ?? true) ? "right-1" : "left-1"
+                    )} />
+                  </button>
+                </div>
+
+                {/* Push Notifications Row */}
+                <div className="px-4 sm:px-5 py-4 space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-start gap-3.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-brand-blue/10 text-brand-blue flex items-center justify-center shrink-0 mt-0.5">
+                        <Bell className="w-4 h-4" />
+                      </div>
+                      <div className="space-y-0.5 min-w-0">
+                        <p className="text-[15px] font-medium text-slate-800">Push Notifications</p>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Receive alerts for new messages, pro recommendations, and community events
+                        </p>
+                      </div>
                     </div>
-                    <div 
-                      onClick={item.action}
-                      className={cn(
-                      "w-12 h-6 rounded-full relative transition-colors",
-                      item.action ? "cursor-pointer" : "opacity-50 cursor-not-allowed",
-                      item.enabled ? "bg-brand-blue" : "bg-slate-200"
-                    )}>
-                      <div className={cn(
-                        "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all",
-                        item.enabled ? "right-1" : "left-1"
-                      )} />
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span
+                        className={cn(
+                          "text-xs font-semibold",
+                          isUpdatingPush || isLoadingPushStatus
+                            ? "text-slate-400"
+                            : pushStatus.enabled
+                              ? "text-emerald-600"
+                              : "text-slate-400"
+                        )}
+                      >
+                        {isLoadingPushStatus
+                          ? '...'
+                          : isUpdatingPush
+                            ? 'Updating...'
+                            : pushStatus.enabled
+                              ? 'Enabled'
+                              : 'Disabled'}
+                      </span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={pushStatus.enabled}
+                        aria-label="Toggle Push Notifications"
+                        disabled={isUpdatingPush || isLoadingPushStatus || pushStatus.permission === 'unsupported'}
+                        onClick={handleTogglePushNotifications}
+                        className={cn(
+                          "w-12 h-6 rounded-full relative transition-colors cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed",
+                          pushStatus.enabled ? "bg-brand-blue" : "bg-slate-200"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all",
+                          pushStatus.enabled ? "right-1" : "left-1"
+                        )} />
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
+                  {pushStatus.permission === 'unsupported' && (
+                    <p className="text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200/70 rounded-2xl px-3.5 py-2.5">
+                      Push notifications are not supported in this browser.
+                    </p>
+                  )}
+                  {pushMessage && (
+                    <p className={cn(
+                      "text-xs font-medium rounded-2xl px-3.5 py-2.5 border",
+                      pushMessage.type === 'success'
+                        ? "text-emerald-700 bg-emerald-50/80 border-emerald-200/70"
+                        : pushMessage.type === 'error'
+                          ? "text-amber-700 bg-amber-50/80 border-amber-200/70"
+                          : "text-slate-600 bg-slate-50 border-slate-200/70"
+                    )}>
+                      {pushMessage.text}
+                    </p>
+                  )}
+                </div>
 
-              {/* Biometric Sign-In (Passkey) Section */}
-              {passkeyStatus.supported && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                  <div className="p-6 space-y-3">
+                {/* Biometric Sign-In (Passkey) Row */}
+                {passkeyStatus.supported && (
+                  <div className="px-4 sm:px-5 py-4 space-y-3">
                     <div className="flex items-center justify-between gap-4">
-                      <div className="space-y-1">
-                        <p className="font-bold text-slate-900">Biometric Sign-In</p>
-                        <p className="text-xs text-slate-500">
-                          Sign in faster on this device using your fingerprint, face, or passkey
-                        </p>
+                      <div className="flex items-start gap-3.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
+                          <ShieldCheck className="w-4 h-4" />
+                        </div>
+                        <div className="space-y-0.5 min-w-0">
+                          <p className="text-[15px] font-medium text-slate-800">Biometric Sign-In</p>
+                          <p className="text-xs text-slate-500 leading-relaxed">
+                            Sign in faster on this device using your fingerprint, face, or passkey
+                          </p>
+                        </div>
                       </div>
                       <button
                         type="button"
@@ -27366,25 +27580,28 @@ function ProfileView({
                     </div>
                     {passkeyMessage && (
                       <p className={cn(
-                        "text-xs font-medium rounded-xl px-3 py-2 border",
+                        "text-xs font-medium rounded-2xl px-3.5 py-2.5 border",
                         passkeyMessage.type === 'success'
-                          ? "text-emerald-700 bg-emerald-50 border-emerald-200/80"
-                          : "text-amber-700 bg-amber-50 border-amber-200/80"
+                          ? "text-emerald-700 bg-emerald-50/80 border-emerald-200/70"
+                          : "text-amber-700 bg-amber-50/80 border-amber-200/70"
                       )}>
                         {passkeyMessage.text}
                       </p>
                     )}
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Optional Native iOS Face ID App Lock (only shown when Xcode faceIdSettings bridge is present) */}
-              {nativeIosFaceId.available && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                  <div className="p-6 flex items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <p className="font-bold text-slate-900">{nativeIosFaceId.label}</p>
-                      <p className="text-xs text-slate-500">{nativeIosFaceId.description}</p>
+                {/* Optional Native iOS Face ID App Lock Row */}
+                {nativeIosFaceId.available && (
+                  <div className="px-4 sm:px-5 py-4 flex items-center justify-between gap-4">
+                    <div className="flex items-start gap-3.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                        <Shield className="w-4 h-4" />
+                      </div>
+                      <div className="space-y-0.5 min-w-0">
+                        <p className="text-[15px] font-medium text-slate-800">{nativeIosFaceId.label}</p>
+                        <p className="text-xs text-slate-500 leading-relaxed">{nativeIosFaceId.description}</p>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -27403,31 +27620,36 @@ function ProfileView({
                       )} />
                     </button>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Change Password Section */}
-              <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-4">
-                <p className="font-bold text-slate-900">Change Password</p>
+              <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/60 shadow-2xs space-y-5">
+                <div className="flex items-center gap-3 pb-3.5 border-b border-slate-100/80">
+                  <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <p className="font-bold font-display text-brand-navy text-base tracking-tight">Change Password</p>
+                </div>
                 
                 <form onSubmit={handlePasswordUpdate} className="space-y-4">
                   {passwordError && (
-                    <div className="p-3 bg-red-50 text-red-700 text-xs font-semibold rounded-xl border border-red-100">
+                    <div className="p-3.5 bg-rose-50/80 text-rose-700 text-xs font-semibold rounded-2xl border border-rose-200/70">
                       {passwordError}
                     </div>
                   )}
                   {passwordSuccess && (
-                    <div className="p-3 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-xl border border-emerald-100">
+                    <div className="p-3.5 bg-emerald-50/80 text-emerald-700 text-xs font-semibold rounded-2xl border border-emerald-200/70">
                       {passwordSuccess}
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Current Password</label>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600">Current Password</label>
                     <input 
                       type="password" 
                       placeholder="••••••••" 
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-blue outline-none text-slate-800 font-medium" 
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50/60 focus:bg-white border border-slate-200/80 focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none text-sm text-slate-800 font-medium transition-all" 
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       disabled={isUpdatingPassword}
@@ -27436,12 +27658,12 @@ function ProfileView({
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">New Password</label>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600">New Password</label>
                     <input 
                       type="password" 
                       placeholder="••••••••" 
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-blue outline-none text-slate-800 font-medium" 
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50/60 focus:bg-white border border-slate-200/80 focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none text-sm text-slate-800 font-medium transition-all" 
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       disabled={isUpdatingPassword}
@@ -27449,12 +27671,12 @@ function ProfileView({
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Confirm New Password</label>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-600">Confirm New Password</label>
                     <input 
                       type="password" 
                       placeholder="••••••••" 
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-blue outline-none text-slate-800 font-medium" 
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50/60 focus:bg-white border border-slate-200/80 focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none text-sm text-slate-800 font-medium transition-all" 
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       disabled={isUpdatingPassword}
@@ -27465,7 +27687,7 @@ function ProfileView({
                   <button 
                     type="submit"
                     disabled={isUpdatingPassword}
-                    className="w-full py-4 bg-brand-blue text-white rounded-2xl font-bold shadow-lg shadow-brand-blue/20 mt-4 hover:bg-brand-blue/90 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="w-full py-3.5 bg-brand-blue text-white rounded-2xl font-semibold text-sm shadow-sm shadow-brand-blue/20 mt-2 hover:bg-brand-blue/90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     {isUpdatingPassword ? (
                       <>
@@ -27480,22 +27702,23 @@ function ProfileView({
               </div>
 
               {/* Discrete Delete Account */}
-              <div className="pt-4 border-t border-slate-100/70">
-                <div className="px-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="bg-white rounded-3xl px-4 sm:px-5 py-4 border border-slate-200/60 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-0.5">
-                    <p className="text-xs font-semibold text-slate-700">Close Account</p>
-                    <p className="text-[11px] text-slate-400 leading-normal">
+                    <p className="text-sm font-semibold text-slate-700">Close Account</p>
+                    <p className="text-xs text-slate-400 leading-relaxed">
                       Permanently remove your profile and archive your membership info securely.
                     </p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => {
                       setShowConfirmDelete(true);
                       setDeleteError(null);
                       setShowSqlInstruction(false);
                       setDeleteConfirmText("");
                     }}
-                    className="self-start sm:self-center px-3 py-1.5 hover:bg-rose-50/50 border border-slate-200 hover:border-rose-200 text-slate-500 hover:text-rose-600 font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all"
+                    className="self-start sm:self-center px-3.5 py-2 hover:bg-rose-50 border border-slate-200/80 hover:border-rose-200 text-slate-500 hover:text-rose-600 font-semibold text-xs rounded-xl transition-colors cursor-pointer whitespace-nowrap shrink-0"
                   >
                     Delete Account
                   </button>
@@ -27506,128 +27729,132 @@ function ProfileView({
           </ProfileSubPage>
         )}
 
-
-
         {activeSubPage === 'About MyCityUnlocked' && (
-          <ProfileSubPage key="subpage-about-mycityunlocked" title="About MyCityUnlocked" onBack={() => setActiveSubPage(null)} className="bg-white">
-            <div className="flex flex-col items-center space-y-12 py-6 px-1">
-              <Logo className="scale-125" />
-              
-              <div className="w-full text-slate-700 space-y-6 text-sm sm:text-base leading-relaxed font-sans text-left max-w-2xl mx-auto">
-                <div className="border-b border-slate-100 pb-5">
-                  <h3 className="text-lg font-bold font-display text-brand-navy mb-2">Welcome to MyCityUnlocked</h3>
-                  <p className="text-slate-600">
+          <ProfileSubPage key="subpage-about-mycityunlocked" title="About MyCityUnlocked" onBack={() => setActiveSubPage(null)}>
+            <div className="max-w-xl mx-auto space-y-5 pb-10">
+              {/* Centered Brand Lockup */}
+              <div className="flex flex-col items-center text-center pt-3 pb-2">
+                <Logo className="scale-110 sm:scale-125" />
+              </div>
+
+              {/* Editorial Story Card */}
+              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-2xs p-6 sm:p-8 text-slate-700 space-y-5 text-sm sm:text-[15px] leading-relaxed font-sans text-left">
+                <div className="border-b border-slate-100/80 pb-5">
+                  <h3 className="text-xl font-bold font-display text-brand-navy tracking-tight mb-1.5">Welcome to MyCityUnlocked</h3>
+                  <p className="text-slate-500">
                     Moving to a new city is exciting. It’s also overwhelming.
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  <p className="text-slate-600">
+                <div className="space-y-4 text-slate-600">
+                  <p>
                     Where do you find a trustworthy plumber? Which schools are worth considering? What should you do this weekend? How do you navigate local administration, healthcare, or housing? And perhaps most importantly, how do you start feeling at home?
                   </p>
                   
-                  <p className="text-slate-600">
+                  <p>
                     When we moved to Valencia, we quickly realized that the most valuable information wasn’t online. It lived inside WhatsApp groups, private conversations, neighbour recommendations, and community networks.
                   </p>
                 </div>
 
-                <div className="py-4 px-5 bg-slate-50 border border-slate-100/80 rounded-2xl space-y-3">
-                  <p className="font-semibold text-xs text-slate-400 uppercase tracking-wider mb-2">People were constantly asking the same questions:</p>
-                  <p className="italic text-[13px] text-slate-600 pl-3 border-l-2 border-slate-300">“Can anyone recommend a good electrician?”</p>
-                  <p className="italic text-[13px] text-slate-600 pl-3 border-l-2 border-slate-300">“Does anyone know a reliable lawyer?”</p>
-                  <p className="italic text-[13px] text-slate-600 pl-3 border-l-2 border-slate-300">“What are the best family activities this weekend?”</p>
-                  <p className="text-slate-500 text-xs font-medium pt-2">The answers were there, but they were scattered.</p>
+                <div className="p-5 bg-slate-50/80 border border-slate-200/60 rounded-2xl space-y-2.5">
+                  <p className="font-semibold text-xs text-slate-500 mb-1">People were constantly asking the same questions:</p>
+                  <p className="italic text-sm text-slate-700">“Can anyone recommend a good electrician?”</p>
+                  <p className="italic text-sm text-slate-700">“Does anyone know a reliable lawyer?”</p>
+                  <p className="italic text-sm text-slate-700">“What are the best family activities this weekend?”</p>
+                  <p className="text-slate-500 text-xs font-medium pt-2 border-t border-slate-200/60">The answers were there, but they were scattered.</p>
                 </div>
 
-                <div className="space-y-4">
-                  <p className="text-slate-600">
-                    That’s why we created <strong className="font-semibold text-slate-900">MyCityUnlocked</strong>.
+                <div className="space-y-4 text-slate-600">
+                  <p>
+                    That’s why we created <strong className="font-semibold text-brand-navy">MyCityUnlocked</strong>.
                   </p>
-                  <p className="italic bg-brand-blue/5 border-l-4 border-brand-blue p-4 rounded-r-xl text-slate-800 font-medium">
+                  <p className="italic bg-brand-blue/[0.04] border border-brand-blue/15 p-4 rounded-2xl text-brand-navy font-medium">
                     Our mission is simple: help international residents discover better, connect faster, and feel at home sooner.
                   </p>
-                  <p className="text-slate-600">
+                  <p>
                     At the heart of MyCityUnlocked is a carefully curated directory of professionals recommended by the community itself. We believe trust is earned through real experiences, not anonymous reviews. That’s why we focus on quality recommendations rather than endless listings.
                   </p>
-                  <p className="text-slate-600">
+                  <p>
                     But belonging to a city goes beyond finding the right service provider.
                   </p>
-                  <p className="text-slate-600">
+                  <p>
                     MyCityUnlocked also helps you discover local events and activities, explore the best of Valencia, and access practical guides designed to make everyday life easier. From administrative procedures and schools to healthcare, housing, and local tips, we bring together the information newcomers need most.
                   </p>
-                  <p className="text-slate-600">
+                  <p>
                     We are building more than a directory.
                   </p>
-                  <p className="text-slate-600">
+                  <p>
                     We are building a trusted local companion for international residents in Valencia and beyond.
                   </p>
-                  <p className="font-bold text-left py-3 text-brand-navy border-y border-slate-100/70 my-4 text-xs uppercase tracking-wider">
+                  <p className="font-semibold font-display text-brand-navy pt-4 border-t border-slate-100/80 text-sm tracking-tight">
                     Because when you discover better, you belong faster.
                   </p>
                 </div>
+              </div>
 
-                {/* Key pillars */}
-                <div className="space-y-4 pt-2">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0 text-emerald-600">
-                      <Rocket className="w-4 h-4 text-emerald-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">Our Mission</h4>
-                      <p className="text-slate-500 text-xs">Help international residents discover better, connect faster, and feel at home sooner.</p>
-                    </div>
+              {/* Key Pillars Grouped Card */}
+              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-2xs overflow-hidden divide-y divide-slate-100/80 text-left">
+                <div className="px-5 py-4 flex items-start gap-3.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0 text-emerald-600 mt-0.5">
+                    <Rocket className="w-4 h-4" />
                   </div>
-
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0 text-amber-650">
-                      <Star className="w-4 h-4 text-amber-500" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">How We Select Professionals</h4>
-                      <p className="text-slate-500 text-xs">We prioritize trusted recommendations and quality curation rather than volume.</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center flex-shrink-0 text-purple-600">
-                      <Users className="w-4 h-4 text-purple-600" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">Our Community</h4>
-                      <p className="text-slate-500 text-xs">Built for international residents, newcomers, and families in Valencia and surrounding areas.</p>
-                    </div>
+                  <div className="space-y-0.5">
+                    <h4 className="font-semibold text-brand-navy text-sm">Our Mission</h4>
+                    <p className="text-slate-500 text-xs leading-relaxed">Help international residents discover better, connect faster, and feel at home sooner.</p>
                   </div>
                 </div>
 
-                {/* Contact Section */}
-                <div className="mt-8 pt-6 border-t border-slate-100 bg-slate-50 rounded-2xl p-5 border border-slate-100 text-left space-y-3">
-                  <div className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center text-brand-blue">
-                    <Mail className="w-5 h-5 text-brand-blue" />
+                <div className="px-5 py-4 flex items-start gap-3.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center shrink-0 text-amber-500 mt-0.5">
+                    <Star className="w-4 h-4" />
                   </div>
-                  <h4 className="font-bold text-slate-900 text-sm">Let’s Talk</h4>
-                  <p className="text-xs text-slate-500 max-w-sm">
-                    Questions? Feedback? A recommendation we should know about? We’re all ears.
-                  </p>
-                  <a href="mailto:hello@mycityunlocked.app" className="text-sm font-bold text-brand-blue hover:underline cursor-pointer inline-block transition-all">
-                    hello@mycityunlocked.app
-                  </a>
-                  <p className="text-[10px] text-slate-400 font-medium">
-                    We read every message and love hearing from our community.
-                  </p>
+                  <div className="space-y-0.5">
+                    <h4 className="font-semibold text-brand-navy text-sm">How We Select Professionals</h4>
+                    <p className="text-slate-500 text-xs leading-relaxed">We prioritize trusted recommendations and quality curation rather than volume.</p>
+                  </div>
                 </div>
+
+                <div className="px-5 py-4 flex items-start gap-3.5">
+                  <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center shrink-0 text-purple-600 mt-0.5">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <h4 className="font-semibold text-brand-navy text-sm">Our Community</h4>
+                    <p className="text-slate-500 text-xs leading-relaxed">Built for international residents, newcomers, and families in Valencia and surrounding areas.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Section */}
+              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-2xs p-6 text-left space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-brand-blue/10 rounded-xl flex items-center justify-center text-brand-blue shrink-0">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <h4 className="font-bold font-display text-brand-navy text-base tracking-tight">Let’s Talk</h4>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed max-w-sm">
+                  Questions? Feedback? A recommendation we should know about? We’re all ears.
+                </p>
+                <a href="mailto:hello@mycityunlocked.app" className="text-sm font-semibold text-brand-blue hover:underline cursor-pointer inline-block transition-all">
+                  hello@mycityunlocked.app
+                </a>
+                <p className="text-[11px] text-slate-400 font-medium">
+                  We read every message and love hearing from our community.
+                </p>
               </div>
             </div>
           </ProfileSubPage>
         )}
 
         {activeSubPage === 'Legal' && (
-          <ProfileSubPage key="subpage-legal" title="Legal" onBack={() => setActiveSubPage(null)} className="bg-white">
-            <div className="flex flex-col items-center text-center space-y-8 py-8">
-              <Logo className="scale-125 mb-4" />
-              <div>
-                <p className="text-slate-400 text-xs font-mono uppercase tracking-widest">Version 1.0</p>
+          <ProfileSubPage key="subpage-legal" title="Legal" onBack={() => setActiveSubPage(null)}>
+            <div className="max-w-xl mx-auto space-y-6 pb-10">
+              <div className="flex flex-col items-center text-center pt-3 pb-1 space-y-2.5">
+                <Logo className="scale-110 sm:scale-125" />
+                <p className="text-slate-400 text-xs font-medium tabular-nums">Version 1.0</p>
               </div>
-              <div className="w-full space-y-2 px-2 max-w-2xl mx-auto">
+              <div className="bg-white rounded-3xl border border-slate-200/60 shadow-2xs overflow-hidden divide-y divide-slate-100/80">
                 {[
                   { title: 'Privacy Policy', key: 'privacy_policy' },
                   { title: 'Community Guidelines', key: 'community_guidelines' },
@@ -27636,12 +27863,20 @@ function ProfileView({
                   { title: 'Cookie Policy', key: 'cookie_policy' }
                 ].map((item, i) => (
                   <button 
-                    key={i} 
+                    key={i}
+                    type="button"
                     onClick={() => setSelectedDocKey(item.key)}
-                    className="w-full p-4 bg-white rounded-xl border border-slate-105 flex justify-between items-center hover:bg-slate-50 transition-colors text-left cursor-pointer"
+                    className="w-full px-4 sm:px-5 py-3.5 flex justify-between items-center gap-3 hover:bg-slate-50/70 active:bg-slate-100/60 transition-colors text-left cursor-pointer group"
                   >
-                    <span className="font-medium text-slate-700">{item.title}</span>
-                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <span className="text-[15px] font-medium text-slate-700 group-hover:text-brand-navy transition-colors truncate">
+                        {item.title}
+                      </span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-brand-blue transition-colors shrink-0" />
                   </button>
                 ))}
               </div>
@@ -27662,32 +27897,26 @@ function ProfileView({
 
         {selectedDocKey && (
           <ProfileSubPage key={`subpage-doc-${selectedDocKey}`} title={docTitle || "Document"} onBack={() => setSelectedDocKey(null)}>
-            <div className="max-w-2xl mx-auto py-4">
-              <button 
-                onClick={() => setSelectedDocKey(null)}
-                className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors font-medium mb-4 px-2 cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Legal
-              </button>
-              <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-100 shadow-sm">
+            <div className="max-w-2xl mx-auto pb-10">
+              <div className="bg-white rounded-3xl p-6 sm:p-9 border border-slate-200/60 shadow-2xs">
                 {isLoadingDoc ? (
-                  <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                    <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
-                    <p className="text-slate-400 text-sm font-semibold uppercase tracking-wider">Loading dynamic copy...</p>
+                  <div className="flex flex-col items-center justify-center py-20 space-y-3">
+                    <Loader2 className="w-7 h-7 text-brand-blue animate-spin" />
+                    <p className="text-slate-400 text-xs font-medium">Loading dynamic copy...</p>
                   </div>
                 ) : (
-                  <div className="text-slate-700 leading-relaxed font-sans space-y-6 text-sm sm:text-base">
+                  <div className="text-slate-700 leading-relaxed font-sans space-y-6 text-sm sm:text-[15px]">
                     <div className="markdown-body">
                       <SimpleMarkdown isPlain={true}>{docContent}</SimpleMarkdown>
                     </div>
-                    <div className="pt-6 border-t border-slate-100 flex justify-start">
+                    <div className="pt-6 border-t border-slate-100/80 flex justify-start">
                       <button 
+                        type="button"
                         onClick={() => setSelectedDocKey(null)}
-                        className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors font-medium cursor-pointer"
+                        className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-brand-navy transition-colors font-medium cursor-pointer"
                       >
                         <ArrowLeft className="w-4 h-4" />
-                        Back to Legal
+                        <span>Back to Legal</span>
                       </button>
                     </div>
                   </div>
@@ -27747,6 +27976,93 @@ function ProfileView({
             </div>
           )}
         </AnimatePresence>
+
+        {showConfirmDisablePush && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (!isUpdatingPush) {
+                  setShowConfirmDisablePush(false);
+                }
+              }}
+              className="absolute inset-0 bg-slate-950/75"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-3xl border border-slate-100 shadow-2xl overflow-hidden max-w-md w-full relative z-10 p-6 space-y-5 will-change-transform transform-gpu"
+            >
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                <div className="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center flex-shrink-0">
+                  <BellOff className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-lg font-display">Disable Push Notifications?</h3>
+                  <p className="text-xs text-amber-600 font-semibold">You may miss important local updates</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  If you turn off push notifications on this device, you will no longer receive instant alerts for:
+                </p>
+
+                <div className="space-y-2.5 text-xs text-slate-600 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <div className="flex gap-2.5 items-start">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-blue mt-1.5 shrink-0" />
+                    <span><strong className="text-slate-800">Events & Weekend Plans</strong>: New community events, meetups, and curated local highlights.</span>
+                  </div>
+                  <div className="flex gap-2.5 items-start">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-blue mt-1.5 shrink-0" />
+                    <span><strong className="text-slate-800">New Recommended Pros</strong>: Trusted English-speaking professionals and services added to your city.</span>
+                  </div>
+                  <div className="flex gap-2.5 items-start">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-blue mt-1.5 shrink-0" />
+                    <span><strong className="text-slate-800">Direct Messages</strong>: New chat messages and replies from members.</span>
+                  </div>
+                  <div className="flex gap-2.5 items-start">
+                    <span className="w-1.5 h-1.5 rounded-full bg-brand-blue mt-1.5 shrink-0" />
+                    <span><strong className="text-slate-800">Community Updates</strong>: Perks, tips, and important announcements from the team.</span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400">
+                  You can turn notifications back on anytime from Settings.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+                <button
+                  type="button"
+                  disabled={isUpdatingPush}
+                  onClick={() => setShowConfirmDisablePush(false)}
+                  className="flex-1 py-3 px-4 bg-brand-blue text-white rounded-2xl font-bold text-sm shadow-md shadow-brand-blue/20 hover:bg-brand-blue/90 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Keep Enabled
+                </button>
+                <button
+                  type="button"
+                  disabled={isUpdatingPush}
+                  onClick={confirmDisablePushNotifications}
+                  className="flex-1 py-3 px-4 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isUpdatingPush ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Disabling...</span>
+                    </>
+                  ) : (
+                    'Disable Notifications'
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         {showConfirmDelete && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -27969,23 +28285,30 @@ function ProfileSubPage({ title, onBack, children, className }: { title: string,
       initial={{ x: '100%' }}
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       {...swipeProps}
-      className={cn("fixed inset-0 z-[60] flex flex-col touch-pan-y", className || "bg-slate-50")}
+      className={cn("fixed inset-0 z-[60] flex flex-col touch-pan-y", className || "bg-[#F8FAFC]")}
     >
-      <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
-        <h2 className="text-xl font-semibold font-display text-brand-navy">{title}</h2>
-      </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
-        <div className="max-w-2xl mx-auto mb-5">
-          <button 
-            onClick={onBack} 
-            className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-900 font-semibold text-xs uppercase tracking-wider transition-colors group cursor-pointer"
+      <div
+        className="bg-white/90 backdrop-blur-md border-b border-slate-200/60 px-4 sm:px-6 pb-3 flex items-center shrink-0"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+      >
+        <div className="max-w-2xl mx-auto w-full flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Go back"
+            className="min-w-[40px] min-h-[40px] -ml-2 rounded-full flex items-center justify-center text-slate-600 hover:text-brand-navy hover:bg-slate-100/80 active:bg-slate-200/60 transition-colors cursor-pointer shrink-0"
           >
-            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-            <span>Back</span>
+            <ArrowLeft className="w-5 h-5" />
           </button>
+          <h2 className="text-lg sm:text-xl font-bold font-display text-brand-navy tracking-tight truncate text-center flex-1">
+            {title}
+          </h2>
+          <div className="w-10 shrink-0" aria-hidden="true" />
         </div>
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 pt-5 sm:pt-7 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
         {children}
       </div>
     </motion.div>

@@ -20,8 +20,8 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
   onSubscribed
 }) => {
   useEffect(() => {
-    // If the user is not signed up/in or is completing profile onboarding, do not auto-trigger the system prompt
-    if (!currentUserId || suppressPrompt) return;
+    // If the user is not signed up/in, is completing profile onboarding, or explicitly disabled push in Settings, do not auto-trigger
+    if (!currentUserId || suppressPrompt || oneSignalService.isPushOptedOut(currentUserId)) return;
 
     if (typeof window === 'undefined') return;
 

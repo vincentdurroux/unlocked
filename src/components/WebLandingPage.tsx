@@ -2203,7 +2203,7 @@ export function WebLandingPage({
                   <span className="text-amber-600">Share them with the community.</span>
                 </h3>
                 <p className="text-sm sm:text-[15px] text-slate-600 leading-relaxed">
-                  Your recommendation helps newcomers and neighbors find doctors, tradespeople, and specialists they can truly count on.
+                  Your recommendation helps newcomers and neighbors find trusted local pros they can count on—from landscapers to plumbers to doctors, lawyers, and everyone in between.
                 </p>
                 <p className="text-xs font-medium text-slate-500 pt-0.5">
                   Takes under 60 seconds <span aria-hidden="true">·</span> Reviewed before publishing <span aria-hidden="true">·</span> Free for everyone
