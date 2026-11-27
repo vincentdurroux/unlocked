@@ -109,64 +109,97 @@ export function HeaderWeatherWidget() {
     }
   };
 
-  // Determine user geolocation inside Valencian Community or default to Valencia
+  const hasAttemptedGeoRef = useRef(false);
+
+  const resolveAndFetchWeatherForCoords = async (lat: number, lng: number, isCancelledRef?: { current: boolean }) => {
+    const DEFAULT_LAT = 39.4699;
+    const DEFAULT_LNG = -0.3763;
+    const isInsideValencianCommunity = (lat >= 37.84 && lat <= 40.80) && (lng >= -1.55 && lng <= 0.70);
+
+    if (isInsideValencianCommunity) {
+      let detectedCity = 'Valencia';
+      try {
+        const geoRes = await fetch(
+          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
+        );
+        if (geoRes.ok) {
+          const geoData = await geoRes.json();
+          const placeName = geoData.locality || geoData.city || geoData.principalSubdivision;
+          if (placeName && placeName.trim()) {
+            detectedCity = placeName.trim();
+          }
+        }
+      } catch {
+        detectedCity = 'Valencia';
+      }
+
+      if (!isCancelledRef?.current) {
+        await fetchWeatherForCoords(lat, lng, detectedCity, true);
+      }
+      return true;
+    }
+
+    if (!isCancelledRef?.current) {
+      await fetchWeatherForCoords(DEFAULT_LAT, DEFAULT_LNG, 'Valencia', false);
+    }
+    return false;
+  };
+
+  const requestWeatherGeolocation = () => {
+    if (isGeolocated || hasAttemptedGeoRef.current || !navigator.geolocation) return;
+    hasAttemptedGeoRef.current = true;
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        try {
+          localStorage.setItem('unlocked_user_location', JSON.stringify({ lat, lng }));
+          localStorage.setItem('unlocked_has_real_location', 'true');
+        } catch (_) {}
+        await resolveAndFetchWeatherForCoords(lat, lng);
+      },
+      () => {
+        // Keep default Valencia weather quietly if user declines or geolocation times out
+      },
+      { timeout: 8000, maximumAge: 600000 }
+    );
+  };
+
+  // Use previously granted location inside Valencian Community if available, otherwise default directly to Valencia (never prompt GPS automatically on launch)
   useEffect(() => {
-    let isCancelled = false;
+    const cancelledRef = { current: false };
 
     const initWeather = async () => {
       const DEFAULT_LAT = 39.4699;
       const DEFAULT_LNG = -0.3763;
 
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            if (isCancelled) return;
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-
-            const isInsideValencianCommunity = (lat >= 37.84 && lat <= 40.80) && (lng >= -1.55 && lng <= 0.70);
-
-            if (isInsideValencianCommunity) {
-              let detectedCity = 'Valencia';
-              try {
-                const geoRes = await fetch(
-                  `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
-                );
-                if (geoRes.ok) {
-                  const geoData = await geoRes.json();
-                  const placeName = geoData.locality || geoData.city || geoData.principalSubdivision;
-                  if (placeName && placeName.trim()) {
-                    detectedCity = placeName.trim();
-                  }
-                }
-              } catch {
-                detectedCity = 'Valencia';
-              }
-
-              if (!isCancelled) {
-                fetchWeatherForCoords(lat, lng, detectedCity, true);
-              }
-            } else {
-              if (!isCancelled) {
-                fetchWeatherForCoords(DEFAULT_LAT, DEFAULT_LNG, 'Valencia', false);
-              }
+      let savedCoords: { lat: number; lng: number } | null = null;
+      try {
+        if (localStorage.getItem('unlocked_has_real_location') === 'true') {
+          const rawLoc = localStorage.getItem('unlocked_user_location');
+          if (rawLoc) {
+            const parsed = JSON.parse(rawLoc);
+            if (typeof parsed?.lat === 'number' && typeof parsed?.lng === 'number') {
+              savedCoords = { lat: parsed.lat, lng: parsed.lng };
             }
-          },
-          () => {
-            if (!isCancelled) {
-              fetchWeatherForCoords(DEFAULT_LAT, DEFAULT_LNG, 'Valencia', false);
-            }
-          },
-          { timeout: 8000, maximumAge: 600000 }
-        );
-      } else {
+          }
+        }
+      } catch (_) {}
+
+      if (savedCoords) {
+        await resolveAndFetchWeatherForCoords(savedCoords.lat, savedCoords.lng, cancelledRef);
+        return;
+      }
+
+      if (!cancelledRef.current) {
         fetchWeatherForCoords(DEFAULT_LAT, DEFAULT_LNG, 'Valencia', false);
       }
     };
 
     initWeather();
     return () => {
-      isCancelled = true;
+      cancelledRef.current = true;
     };
   }, []);
 
@@ -190,6 +223,14 @@ export function HeaderWeatherWidget() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const handleToggleWeather = () => {
+    const nextOpen = !isOpen;
+    setIsOpen(nextOpen);
+    if (nextOpen) {
+      requestWeatherGeolocation();
+    }
+  };
+
   const currentDetails = getWeatherDetails(weather.weatherCode);
   const CurrentIcon = currentDetails.icon;
 
@@ -198,7 +239,7 @@ export function HeaderWeatherWidget() {
       {/* Compact Minimal Trigger Button */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggleWeather}
         className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer select-none shrink-0"
         title={`${locationName} Weather`}
         aria-label={`${locationName} Weather`}
