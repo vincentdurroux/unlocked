@@ -355,6 +355,111 @@ function LetterReveal({
   );
 }
 
+/**
+ * Atmospheric "cloudy discovery" reveal for the hero brand logo:
+ * pure-white mist billows gently part over the logo ink while it emerges from soft blur
+ * inside a generously padded mask container so no rectangular bounds ever appear.
+ */
+function CloudyLogoReveal({
+  className,
+  imgClassName,
+}: {
+  className?: string;
+  imgClassName?: string;
+}) {
+  const prefersReducedMotion = useReducedMotion();
+  const [revealComplete, setRevealComplete] = useState(false);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setRevealComplete(true);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setRevealComplete(true);
+    }, 1900);
+    return () => window.clearTimeout(timer);
+  }, [prefersReducedMotion]);
+
+  if (prefersReducedMotion) {
+    return <Logo className={className} imgClassName={imgClassName} />;
+  }
+
+  return (
+    <div className="relative inline-block max-w-full pointer-events-none select-none">
+      {/* Generous transparent buffer (p-6 -m-6) prevents CSS mask/blur from ever clipping to a rectangle */}
+      <div className={revealComplete ? undefined : 'p-6 -m-6 cloudy-logo-mask'}>
+        <motion.div
+          initial={{
+            opacity: 0,
+            scale: 0.97,
+            y: 5,
+            filter: 'blur(10px)',
+          }}
+          animate={{
+            opacity: 1,
+            scale: 1,
+            y: 0,
+            filter: 'blur(0px)',
+          }}
+          transition={{
+            duration: 1.45,
+            delay: 0.05,
+            ease: APPLE_EASE,
+          }}
+          className={revealComplete ? undefined : 'will-change-transform'}
+        >
+          <Logo className={className} imgClassName={imgClassName} />
+        </motion.div>
+      </div>
+
+      {/* Pure-white cloud wisps (100% invisible on white canvas, softly veiling only the logo ink as they part) */}
+      {!revealComplete && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-4 z-10 select-none"
+        >
+          {/* Left-upper white cloud wisp drifting up-left */}
+          <motion.span
+            initial={{ opacity: 0.92, x: 6, y: 2, scale: 0.96 }}
+            animate={{ opacity: 0, x: -28, y: -12, scale: 1.2 }}
+            transition={{ duration: 1.4, delay: 0.06, ease: APPLE_EASE }}
+            className="absolute left-[0%] top-[6%] w-[44%] h-[82%] rounded-full blur-lg will-change-transform"
+            style={{
+              background:
+                'radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.98) 18%, rgba(255,255,255,0.75) 54%, rgba(255,255,255,0) 84%)',
+            }}
+          />
+
+          {/* Center white mist bank lifting upward */}
+          <motion.span
+            initial={{ opacity: 0.95, x: 0, y: 4, scale: 1 }}
+            animate={{ opacity: 0, x: 8, y: -16, scale: 1.26 }}
+            transition={{ duration: 1.5, delay: 0.14, ease: APPLE_EASE }}
+            className="absolute left-[24%] top-[4%] w-[48%] h-[88%] rounded-full blur-xl will-change-transform"
+            style={{
+              background:
+                'radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.98) 22%, rgba(255,255,255,0.72) 56%, rgba(255,255,255,0) 85%)',
+            }}
+          />
+
+          {/* Right white cloud wisp gliding rightward to uncover the golden star & arc */}
+          <motion.span
+            initial={{ opacity: 0.94, x: -10, y: 2, scale: 0.98 }}
+            animate={{ opacity: 0, x: 38, y: -8, scale: 1.24 }}
+            transition={{ duration: 1.6, delay: 0.22, ease: APPLE_EASE }}
+            className="absolute right-[0%] top-[8%] w-[46%] h-[84%] rounded-full blur-lg will-change-transform"
+            style={{
+              background:
+                'radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.98) 20%, rgba(255,255,255,0.74) 55%, rgba(255,255,255,0) 85%)',
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StoreBadge({
   store,
   variant = 'dark',
@@ -2089,7 +2194,7 @@ export function WebLandingPage({
             <div className="lg:col-span-6 space-y-8">
               <div className="space-y-4">
                 <div className="pb-1">
-                  <Logo
+                  <CloudyLogoReveal
                     className="items-start"
                     imgClassName="h-16 sm:h-20 md:h-[92px] lg:h-[104px] max-w-full"
                   />
@@ -2101,6 +2206,7 @@ export function WebLandingPage({
                 >
                   <LetterReveal
                     immediate
+                    delay={0.42}
                     stagger={0.022}
                     segments={[
                       { text: 'Discover better, ' },
