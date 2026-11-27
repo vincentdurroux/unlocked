@@ -1868,8 +1868,8 @@ Ensure each event contains:
           fr: messageStr,
           es: messageStr
         },
-        // Unified Launch URL for iOS, Android, and Web Push
-        url: targetUrl,
+        // Web/PWA & Android TWA Launch URL only (prevents OneSignal iOS SDK from opening Safari; iOS reads data.url internally)
+        web_url: targetUrl,
         priority: 10,
         isIos: enableIos,
         isAndroid: enableAndroid,
