@@ -3570,6 +3570,24 @@ export default function App() {
 
   fetchAnnouncementsFromDbRef.current = fetchAnnouncementsFromDb;
 
+  // Safety guard: never allow native iOS Face ID App Lock to remain enabled in Guest (signed-out) mode
+  useEffect(() => {
+    if (authLoading || currentUser) return;
+
+    const ensureDisabledForGuest = () => {
+      const nativeStatus = biometricLockService.getNativeIosFaceIdStatus();
+      if (nativeStatus.available && nativeStatus.enabled) {
+        biometricLockService.disableNativeIosLock();
+      }
+    };
+
+    ensureDisabledForGuest();
+    window.addEventListener(biometricLockService.eventName, ensureDisabledForGuest);
+    return () => {
+      window.removeEventListener(biometricLockService.eventName, ensureDisabledForGuest);
+    };
+  }, [authLoading, currentUser]);
+
   // Refresh notifications when arriving on home after profile completion or when native biometric state changes
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -14421,6 +14439,7 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
               <button
                 type="button"
                 onClick={async () => {
+                  biometricLockService.disableNativeIosLock();
                   try {
                     await authService.signOut();
                   } catch (e) {
@@ -25627,6 +25646,7 @@ function ProfileView({
 
   const handleLogout = async () => {
     try {
+      biometricLockService.disableNativeIosLock();
       await oneSignalService.logoutUser();
       await authService.signOut();
       localStorage.removeItem('keep_me_signed_in');
@@ -25678,6 +25698,8 @@ function ProfileView({
       }
 
       await authService.deleteOwnAccount();
+      biometricLockService.disableNativeIosLock({ clearPasskeyHint: true });
+      await oneSignalService.logoutUser().catch(() => {});
       await authService.signOut();
       localStorage.setItem('unlocked_account_deletion_success', 'Your account has been successfully deleted.');
       localStorage.removeItem('keep_me_signed_in');

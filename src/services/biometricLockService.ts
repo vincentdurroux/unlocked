@@ -175,6 +175,42 @@ export const biometricLockService = {
     } catch (_) {}
   },
 
+  disableNativeIosLock(options?: { clearPasskeyHint?: boolean }): void {
+    if (typeof window === 'undefined') return;
+    const win = window as any;
+    const ctx = getPlatformContext();
+    const currentType: 'faceId' | 'touchId' =
+      win.__mcuBiometricAuth?.type === 'touchId' ? 'touchId' : 'faceId';
+
+    try {
+      localStorage.removeItem(IOS_LOCK_KEY);
+      if (options?.clearPasskeyHint) {
+        localStorage.removeItem(PASSKEY_HINT_KEY);
+      }
+    } catch (_) {}
+
+    if (ctx.hasIosFaceIdBridge) {
+      win.__mcuBiometricAuth = {
+        ...(win.__mcuBiometricAuth || {}),
+        available: true,
+        type: currentType,
+        enabled: false,
+      };
+      try {
+        win.webkit?.messageHandlers?.faceIdSettings?.postMessage({ enabled: false });
+      } catch (err) {
+        console.warn('[Biometric] Could not disable faceIdSettings on iOS:', err);
+      }
+      try {
+        window.dispatchEvent(
+          new CustomEvent(LOCK_EVENT_NAME, {
+            detail: { available: true, enabled: false, type: currentType },
+          })
+        );
+      } catch (_) {}
+    }
+  },
+
   // ---- Server-Verified Passkey / Biometric Sign-In (Android PWABuilder TWA, Chrome, Safari, Desktop) ----
   async isPasskeySupported(): Promise<boolean> {
     if (typeof window === 'undefined') return false;
