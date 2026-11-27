@@ -4,6 +4,7 @@ import { oneSignalService } from '../services/oneSignalService';
 interface PushNotificationPromptProps {
   currentUserId?: string;
   isAdmin?: boolean;
+  suppressPrompt?: boolean;
   onSubscribed?: () => void;
 }
 
@@ -15,11 +16,12 @@ interface PushNotificationPromptProps {
  */
 export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
   currentUserId,
+  suppressPrompt = false,
   onSubscribed
 }) => {
   useEffect(() => {
-    // If the user is not signed up or signed in, do not request push permissions
-    if (!currentUserId) return;
+    // If the user is not signed up/in or is completing profile onboarding, do not auto-trigger the system prompt
+    if (!currentUserId || suppressPrompt) return;
 
     if (typeof window === 'undefined') return;
 
@@ -108,7 +110,7 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({
       window.removeEventListener('click', triggerSystemPrompt);
       window.removeEventListener('touchend', triggerSystemPrompt);
     };
-  }, [currentUserId, onSubscribed]);
+  }, [currentUserId, suppressPrompt, onSubscribed]);
 
   // Aucun élément visuel intrusif : on conserve le dialogue système natif générique
   return null;

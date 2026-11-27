@@ -7168,6 +7168,7 @@ export default function App() {
       <PushNotificationPrompt 
         currentUserId={currentUser?.id} 
         isAdmin={isAdmin}
+        suppressPrompt={activeView === 'complete-profile'}
       />
 
       {/* OneSignal SDK Verification Dialog (Mandatory AI Prompt Specification) */}
@@ -13870,7 +13871,72 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notificationChoice, setNotificationChoice] = useState<'enabled' | 'declined_os' | 'later' | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const dev = oneSignalService.getDeviceInfo();
+    const isIOSNative = dev.isIOSWebView || dev.hasIOSPushBridge;
+    if (isIOSNative) {
+      return oneSignalService.getCachedNativePushPermissionState() === 'granted' ? 'enabled' : null;
+    }
+    if ('Notification' in window && Notification.permission === 'granted') {
+      return 'enabled';
+    }
+    return null;
+  });
+  const [isRequestingPush, setIsRequestingPush] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    const dev = oneSignalService.getDeviceInfo();
+    if (dev.isIOSWebView || dev.hasIOSPushBridge) {
+      oneSignalService.queryNativePushPermissionState().then((state) => {
+        if (!active) return;
+        if (state === 'granted') {
+          setNotificationChoice('enabled');
+        }
+      }).catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    if (isRequestingPush || !currentUser?.id) return;
+    setIsRequestingPush(true);
+    setError(null);
+
+    try {
+      localStorage.setItem('unlocked_native_prompt_requested', Date.now().toString());
+    } catch (_) {}
+
+    try {
+      const granted = await oneSignalService.subscribe(currentUser.id);
+      const dev = oneSignalService.getDeviceInfo();
+      const isIOSNative = dev.isIOSWebView || dev.hasIOSPushBridge;
+      const isGrantedNow =
+        granted ||
+        (isIOSNative && oneSignalService.getCachedNativePushPermissionState() === 'granted') ||
+        (!isIOSNative && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted');
+
+      setNotificationChoice(isGrantedNow ? 'enabled' : 'declined_os');
+    } catch (err) {
+      console.warn('[ProfileSetup] Notification permission flow completed with notice:', err);
+      setNotificationChoice('declined_os');
+    } finally {
+      setIsRequestingPush(false);
+    }
+  };
+
+  const handleSkipNotifications = () => {
+    if (isRequestingPush) return;
+    try {
+      localStorage.setItem('unlocked_native_prompt_requested', Date.now().toString());
+    } catch (_) {}
+    setNotificationChoice('later');
+    setError(null);
+  };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -13892,6 +13958,10 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
     e.preventDefault();
     if (!fullName.trim()) {
       setError('Please enter your full name');
+      return;
+    }
+    if (!notificationChoice) {
+      setError('Please choose your notification preference to continue');
       return;
     }
 
@@ -13931,6 +14001,8 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
     }
   };
 
+  const canContinue = Boolean(fullName.trim()) && Boolean(notificationChoice) && !isLoading && !isRequestingPush;
+
   return (
     <div className="fixed inset-0 bg-white z-[110] flex flex-col overflow-y-auto no-scrollbar">
       {/* Decorative Background Elements */}
@@ -13940,14 +14012,14 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
       </div>
 
       <div className="relative flex-1 flex flex-col items-center justify-center p-6 pt-[calc(env(safe-area-inset-top,0px)+24px)] pb-[calc(env(safe-area-inset-bottom,0px)+24px)] min-h-screen">
-        <div className="w-full max-w-sm space-y-8">
+        <div className="w-full max-w-sm space-y-6">
           <div className="flex flex-col items-center text-center space-y-4">
             <Logo />
             <h2 className="text-2xl font-semibold text-brand-navy tracking-tight mt-6">Complete Your Profile</h2>
             <p className="text-slate-400 text-sm font-medium">Almost there! Tell us a bit more about yourself.</p>
           </div>
 
-          <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.04)] relative z-10">
+          <div className="bg-white p-7 sm:p-8 rounded-[40px] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.04)] relative z-10">
             {error && (
               <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 text-sm font-semibold flex items-center gap-3 mb-6">
                 <AlertCircle className="w-5 h-5 shrink-0" />
@@ -13955,9 +14027,9 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-8">
+            <form onSubmit={handleSubmit} className="space-y-6">
               {/* Avatar Upload */}
-              <div className="flex flex-col items-center space-y-4">
+              <div className="flex flex-col items-center space-y-3">
                 <div 
                   onClick={() => fileInputRef.current?.click()}
                   className="relative group cursor-pointer"
@@ -14004,10 +14076,105 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
                 </div>
               </div>
 
+              {/* Notifications Preference (Required Choice) */}
+              <div
+                className={cn(
+                  "rounded-2xl border p-4 space-y-3 transition-colors",
+                  notificationChoice === 'enabled'
+                    ? "bg-emerald-50/60 border-emerald-200/80"
+                    : "bg-slate-50/90 border-slate-200/80"
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={cn(
+                      "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
+                      notificationChoice === 'enabled'
+                        ? "bg-emerald-500 text-white"
+                        : "bg-brand-blue/10 text-brand-blue"
+                    )}
+                  >
+                    {notificationChoice === 'enabled' ? (
+                      <Check className="w-4 h-4 stroke-[2.5px]" />
+                    ) : (
+                      <Bell className="w-4 h-4" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-brand-navy leading-tight">
+                        Enable notifications
+                      </h3>
+                      {notificationChoice && (
+                        <span
+                          className={cn(
+                            "text-[10px] font-semibold uppercase tracking-wider shrink-0",
+                            notificationChoice === 'enabled' ? "text-emerald-600" : "text-slate-500"
+                          )}
+                        >
+                          {notificationChoice === 'enabled' ? 'Active' : 'Saved'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Receive alerts for private messages, curated weekend events in Valencia, and trusted local recommendations. No spam, ever.
+                    </p>
+                  </div>
+                </div>
+
+                {notificationChoice === 'enabled' ? (
+                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-white/80 border border-emerald-200/70 rounded-xl px-3 py-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Notifications enabled! You're all set.</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      disabled={isRequestingPush}
+                      onClick={handleEnableNotifications}
+                      className="h-10 px-3 rounded-xl bg-brand-blue hover:bg-brand-blue/90 text-white font-semibold text-xs transition-all active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-brand-blue/20"
+                    >
+                      {isRequestingPush ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Bell className="w-3.5 h-3.5 shrink-0" />
+                      )}
+                      <span>Enable</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isRequestingPush}
+                      onClick={handleSkipNotifications}
+                      className={cn(
+                        "h-10 px-3 rounded-xl border font-semibold text-xs transition-all active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-1.5 cursor-pointer",
+                        notificationChoice === 'later'
+                          ? "bg-slate-800 border-slate-800 text-white"
+                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100/70"
+                      )}
+                    >
+                      {notificationChoice === 'later' && <Check className="w-3.5 h-3.5 shrink-0" />}
+                      <span>Not now</span>
+                    </button>
+                  </div>
+                )}
+
+                {!notificationChoice && (
+                  <p className="text-[11px] font-medium text-slate-400 text-center">
+                    Choose an option above to unlock Continue
+                  </p>
+                )}
+                {notificationChoice === 'declined_os' && (
+                  <p className="text-[11px] font-medium text-slate-500">
+                    Preference saved. You can enable notifications anytime in your device settings.
+                  </p>
+                )}
+              </div>
+
               <button 
-                disabled={isLoading}
+                disabled={!canContinue}
                 type="submit"
-                className="w-full h-14 bg-brand-blue text-white rounded-2xl font-semibold text-sm uppercase tracking-widest shadow-xl shadow-brand-blue/20 hover:shadow-2xl hover:shadow-brand-blue/30 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-3"
+                className="w-full h-14 bg-brand-blue text-white rounded-2xl font-semibold text-sm uppercase tracking-widest shadow-xl shadow-brand-blue/20 hover:shadow-2xl hover:shadow-brand-blue/30 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-3 cursor-pointer"
               >
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -16709,7 +16876,21 @@ function MapCenterController({ center, resetTrigger }: { center: { lat: number; 
   return null;
 }
 
-function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professional[], onSelectPro: (pro: Professional) => void, center: { lat: number, lng: number }, resetTrigger?: number }) {
+function ProMap({
+  pros,
+  onSelectPro,
+  center,
+  resetTrigger,
+  userLocation,
+  isSignedIn = false
+}: {
+  pros: Professional[];
+  onSelectPro: (pro: Professional) => void;
+  center: { lat: number; lng: number };
+  resetTrigger?: number;
+  userLocation?: { lat: number; lng: number } | null;
+  isSignedIn?: boolean;
+}) {
   const hasValidKey = Boolean(GOOGLE_MAPS_KEY) && GOOGLE_MAPS_KEY.length > 10;
 
   if (!hasValidKey) {
@@ -16751,40 +16932,119 @@ function ProMap({ pros, onSelectPro, center, resetTrigger }: { pros: Professiona
           internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
         >
           <MapCenterController center={center} resetTrigger={resetTrigger} />
-          {pros.map((pro, index) => pro.coordinates && (
-            <AdvancedMarker
-              key={pro.id}
-              position={pro.coordinates}
-              onClick={() => {
-                console.log('Marker clicked:', pro.name);
-                onSelectPro(pro);
-              }}
-              title={pro.name}
-            >
-              <div 
-                className="relative group/pin cursor-pointer"
-                onClick={(e) => {
-                  // Fallback for mobile if AdvancedMarker onClick is flaky
-                  e.stopPropagation();
+          {pros.map((pro, index) => {
+            if (!pro.coordinates) return null;
+            const isRecommended = pro.is_recommended !== false;
+            const showRecommendedTag = isSignedIn && isRecommended;
+            let distanceLabel = '';
+            if (showRecommendedTag && userLocation) {
+              const distKm = calculateGeoDistance(
+                userLocation.lat,
+                userLocation.lng,
+                pro.coordinates.lat,
+                pro.coordinates.lng
+              );
+              if (Number.isFinite(distKm) && distKm >= 0 && distKm < 500) {
+                distanceLabel = `${distKm.toFixed(1)} km`;
+              }
+            }
+            const metaLine = [pro.category, distanceLabel].filter(Boolean).join(' · ');
+
+            return (
+              <AdvancedMarker
+                key={pro.id}
+                position={pro.coordinates}
+                zIndex={isRecommended ? 20 : 10}
+                onClick={() => {
+                  console.log('Marker clicked:', pro.name);
                   onSelectPro(pro);
                 }}
+                title={isSignedIn ? pro.name : 'Recommended Pro'}
               >
-                <Pin 
-                  background={pro.is_recommended !== false ? '#0038FF' : '#94a3b8'} 
-                  borderColor={'#fff'} 
-                  glyphColor={'#fff'}
-                  glyph={(index + 1).toString()}
-                />
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-white rounded-lg shadow-xl border border-slate-100 whitespace-nowrap opacity-0 group-hover/pin:opacity-100 transition-opacity pointer-events-none z-50">
-                  <p className="text-[10px] font-bold text-brand-navy">{pro.name}</p>
-                  {pro.company_name && (
-                    <p className="text-[9px] text-slate-600 font-medium italic">{pro.company_name}</p>
+                <div
+                  className="relative group/pin cursor-pointer flex flex-col items-center"
+                  onClick={(e) => {
+                    // Fallback for mobile if AdvancedMarker onClick is flaky
+                    e.stopPropagation();
+                    onSelectPro(pro);
+                  }}
+                >
+                  {showRecommendedTag && (
+                    <div className="mb-1.5 rounded-xl bg-white/95 backdrop-blur-md border border-brand-blue/50 shadow-[0_8px_20px_rgba(0,56,255,0.16)] px-1.5 py-1.5 flex items-center gap-1.5 text-left relative max-w-[154px] sm:max-w-[172px] transition-transform duration-200 group-hover/pin:scale-[1.04]">
+                      <div className="w-7 h-7 rounded-lg overflow-hidden border border-slate-200/80 shrink-0 bg-slate-50 flex items-center justify-center">
+                        {pro.image ? (
+                          <img
+                            src={pro.image}
+                            alt={pro.name}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-[10px] font-bold text-brand-blue">
+                            {(pro.name || 'P').charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1 pr-0.5">
+                        <p className="text-[8px] font-bold leading-none text-brand-blue truncate">
+                          Recommended Pro
+                        </p>
+                        <p className="text-[10px] sm:text-[10.5px] font-bold text-brand-navy truncate leading-tight mt-0.5 flex items-center gap-0.5">
+                          <span className="truncate">{pro.name}</span>
+                          <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                        </p>
+                        {metaLine && (
+                          <p className="text-[8.5px] text-slate-500 truncate leading-tight tabular-nums">
+                            {metaLine}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Crisp speech-bubble pointer anchoring tag directly to pin */}
+                      <span
+                        aria-hidden="true"
+                        className="absolute -bottom-[4px] left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 bg-white border-r border-b border-brand-blue/50"
+                      />
+                    </div>
                   )}
-                  <p className="text-[8px] text-slate-400 font-medium whitespace-nowrap mt-0.5">Touch to see details</p>
+
+                  {/* Custom HTML street map pin (avoids Google <Pin> overriding AdvancedMarker custom JSX content) */}
+                  <div className="relative flex items-center justify-center mb-[5px]">
+                    <div
+                      className={cn(
+                        "w-6.5 h-6.5 rounded-full border-2 border-white flex items-center justify-center relative transition-transform duration-200 group-hover/pin:scale-110",
+                        isRecommended
+                          ? "bg-[#0038FF] shadow-[0_6px_16px_rgba(0,56,255,0.32)]"
+                          : "bg-slate-400 shadow-[0_4px_12px_rgba(10,15,44,0.22)]"
+                      )}
+                    >
+                      <span className="text-[10px] font-bold text-white leading-none tabular-nums">
+                        {index + 1}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "absolute -bottom-[5px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4.5px] border-r-[4.5px] border-t-[5.5px] border-l-transparent border-r-transparent",
+                          isRecommended ? "border-t-[#0038FF]" : "border-t-slate-400"
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {isSignedIn && !isRecommended && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-white rounded-lg shadow-xl border border-slate-100 whitespace-nowrap opacity-0 group-hover/pin:opacity-100 transition-opacity pointer-events-none z-50">
+                      <p className="text-[10px] font-bold text-brand-navy">{pro.name}</p>
+                      {pro.company_name && (
+                        <p className="text-[9px] text-slate-600 font-medium italic">{pro.company_name}</p>
+                      )}
+                      <p className="text-[8px] text-slate-400 font-medium whitespace-nowrap mt-0.5">Touch to see details</p>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </AdvancedMarker>
-          ))}
+              </AdvancedMarker>
+            );
+          })}
         </Map>
       </APIProvider>
     </div>
@@ -19188,6 +19448,8 @@ function computeProSearchScore(pro: any, searchStr: string): number {
                  onSelectPro={(pro) => scrollToPro(pro)} 
                  center={mapCenter || userLocation || { lat: 39.4699, lng: -0.3763 }} 
                  resetTrigger={mapCenterTrigger}
+                 userLocation={hasRealLocation ? userLocation : null}
+                 isSignedIn={Boolean(currentUser)}
                />
             </motion.div>
           </div>
