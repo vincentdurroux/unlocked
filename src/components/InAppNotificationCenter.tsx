@@ -489,6 +489,7 @@ interface InAppNotificationCenterProps {
   onClearAll?: () => void;
   onNavigate?: (view: any, params?: any) => void;
   onAddPro?: () => void;
+  onOpenBiometricSetup?: () => void;
 }
 
 export function InAppNotificationCenter({
@@ -504,7 +505,8 @@ export function InAppNotificationCenter({
   onDismissNotification,
   onClearAll,
   onNavigate,
-  onAddPro
+  onAddPro,
+  onOpenBiometricSetup
 }: InAppNotificationCenterProps) {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [showOlder, setShowOlder] = useState(false);
@@ -745,7 +747,9 @@ export function InAppNotificationCenter({
                         onMarkAsRead(String(item.id));
                         onClose();
                         
-                        if (isWeekendNotification(item)) {
+                        if (item.type === 'biometric_setup' || item.cta_type === 'biometric_setup' || String(item.id) === 'onboarding-biometric-setup') {
+                          onOpenBiometricSetup?.();
+                        } else if (isWeekendNotification(item)) {
                           onNavigate?.('home', { focusSection: 'weekend-events' });
                         } else if (isEventNotification(item)) {
                           const targetEventId = extractEventIdFromNotification(item);

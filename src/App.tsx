@@ -3010,6 +3010,76 @@ export default function App() {
   const [showAddPro, setShowAddPro] = useState(false);
   const [showAddAd, setShowAddAd] = useState(false);
   const [showReferralModal, setShowReferralModal] = useState(false);
+  const [biometricPromptModal, setBiometricPromptModal] = useState<{
+    mode: 'ios_native' | 'passkey';
+    type: 'faceId' | 'touchId' | 'passkey';
+    label: string;
+  } | null>(null);
+  const [isEnablingBiometricFromPrompt, setIsEnablingBiometricFromPrompt] = useState(false);
+  const [biometricPromptError, setBiometricPromptError] = useState<string | null>(null);
+
+  const openBiometricSetupPrompt = React.useCallback(async () => {
+    setBiometricPromptError(null);
+    const nativeIos = biometricLockService.getNativeIosFaceIdStatus();
+    if (nativeIos.available) {
+      setBiometricPromptModal({
+        mode: 'ios_native',
+        type: nativeIos.type,
+        label: nativeIos.type === 'touchId' ? 'Touch ID' : 'Face ID'
+      });
+      return;
+    }
+    const passkeySupported = await biometricLockService.isPasskeySupported();
+    if (passkeySupported) {
+      setBiometricPromptModal({
+        mode: 'passkey',
+        type: 'passkey',
+        label: 'Biometric Sign-In'
+      });
+      return;
+    }
+    handleNavigateRef.current?.('profile');
+  }, []);
+
+  const handleConfirmEnableBiometric = async () => {
+    if (!biometricPromptModal || isEnablingBiometricFromPrompt) return;
+    setBiometricPromptError(null);
+    setIsEnablingBiometricFromPrompt(true);
+
+    try {
+      if (biometricPromptModal.mode === 'ios_native') {
+        const iosType = biometricPromptModal.type === 'touchId' ? 'touchId' : 'faceId';
+        biometricLockService.setNativeIosEnabled(true, iosType);
+        handleDismissNotification('onboarding-biometric-setup');
+        setBiometricPromptModal(null);
+        setGlobalAlert({
+          type: 'success',
+          text: `${biometricPromptModal.label} Lock enabled!`
+        });
+        setTimeout(() => setGlobalAlert(null), 4000);
+        fetchAnnouncementsFromDbRef.current();
+      } else {
+        await biometricLockService.registerPasskey();
+        handleDismissNotification('onboarding-biometric-setup');
+        setBiometricPromptModal(null);
+        setGlobalAlert({
+          type: 'success',
+          text: 'Biometric Sign-In enabled on this device!'
+        });
+        setTimeout(() => setGlobalAlert(null), 4000);
+        fetchAnnouncementsFromDbRef.current();
+      }
+    } catch (err: any) {
+      const name = String(err?.name || '');
+      if (name === 'NotAllowedError' || name === 'AbortError') {
+        setBiometricPromptError('Setup cancelled. You can try again or enable it later in Profile → Settings.');
+      } else {
+        setBiometricPromptError(err?.message || 'Could not enable biometric unlock on this device.');
+      }
+    } finally {
+      setIsEnablingBiometricFromPrompt(false);
+    }
+  };
 
   // Trigger referral source survey modal on the home page for new signups
   useEffect(() => {
@@ -3288,10 +3358,24 @@ export default function App() {
       }
 
       if (!annError && annData && annData.length > 0) {
+        const rawUserJoinedAt = currentUser?.created_at || (userProfile as any)?.created_at || null;
+        const userJoinedAtMs = rawUserJoinedAt ? new Date(rawUserJoinedAt).getTime() : NaN;
+
         const parsedAnns = annData
           .filter(ann => ann.is_active !== false)
           .map(ann => parseAnnouncement(ann))
-          .filter(ann => !ann.target_user_id || String(ann.target_user_id) === String(currentUser.id));
+          .filter(ann => {
+            if (ann.target_user_id) {
+              return String(ann.target_user_id) === String(currentUser.id);
+            }
+            if (!isNaN(userJoinedAtMs)) {
+              const annTimeMs = new Date(ann.updated_at || ann.created_at).getTime();
+              if (!isNaN(annTimeMs) && annTimeMs < userJoinedAtMs) {
+                return false;
+              }
+            }
+            return true;
+          });
 
         // Deduplicate announcements created within 15 seconds with identical title & content
         const dedupedAnns: any[] = [];
@@ -3389,11 +3473,68 @@ export default function App() {
 
 
 
+      // 4. Onboarding Face ID / Biometric unlock suggestion for newly signed-up users on supported devices
+      if (currentUser?.id && !dismissedNotificationIds.includes('onboarding-biometric-setup')) {
+        try {
+          const rawJoinedAt = currentUser?.created_at || (userProfile as any)?.created_at || null;
+          const joinedAtMs = rawJoinedAt ? new Date(rawJoinedAt).getTime() : NaN;
+          const isRecentSignup =
+            sessionStorage.getItem('mycity_just_signed_up') === 'true' ||
+            localStorage.getItem('mycity_new_signup_' + currentUser.id) === 'true' ||
+            (!isNaN(joinedAtMs) && Date.now() - joinedAtMs < 7 * 24 * 60 * 60 * 1000);
+
+          if (isRecentSignup) {
+            const nativeIos = biometricLockService.getNativeIosFaceIdStatus();
+            let biometricItem: InAppNotification | null = null;
+
+            if (nativeIos.available && !nativeIos.enabled) {
+              const bioLabel = nativeIos.type === 'touchId' ? 'Touch ID' : 'Face ID';
+              biometricItem = {
+                id: 'onboarding-biometric-setup',
+                title: `Unlock with ${bioLabel}`,
+                content: `Protect your account and unlock MyCityUnlocked instantly with ${bioLabel}. Tap to enable.`,
+                icon: 'shield',
+                type: 'biometric_setup',
+                cta_type: 'biometric_setup',
+                target_user_id: currentUser.id,
+                created_at: rawJoinedAt || new Date().toISOString(),
+                updated_at: rawJoinedAt || new Date().toISOString()
+              };
+            } else if (!nativeIos.available) {
+              const passkeySupported = await biometricLockService.isPasskeySupported();
+              if (passkeySupported) {
+                const passkeyStatus = await biometricLockService.getPasskeyStatus();
+                if (passkeyStatus.supported && !passkeyStatus.enabled) {
+                  biometricItem = {
+                    id: 'onboarding-biometric-setup',
+                    title: 'Unlock with Face ID or Biometrics',
+                    content: 'Sign in faster on this device using Face ID, fingerprint, or passkey. Tap to enable.',
+                    icon: 'shield',
+                    type: 'biometric_setup',
+                    cta_type: 'biometric_setup',
+                    target_user_id: currentUser.id,
+                    created_at: rawJoinedAt || new Date().toISOString(),
+                    updated_at: rawJoinedAt || new Date().toISOString()
+                  };
+                }
+              }
+            }
+
+            if (biometricItem) {
+              list = [biometricItem, ...list];
+            }
+          }
+        } catch (bioNotifErr) {
+          console.warn('Notice checking biometric onboarding notification:', bioNotifErr);
+        }
+      }
+
       list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setAnnouncementsList(list);
 
       // Check if there is a fresh unread notification to show an in-app toast preview (LOGGED-IN ONLY)
-      if (currentUser && list.length > 0) {
+      const isBlockingAuthView = activeView === 'complete-profile' || activeView === 'login' || activeView === 'update-password';
+      if (currentUser && !isBlockingAuthView && list.length > 0) {
         const latest = list[0];
         const isLocallyRead = readAnnouncementIdsRef.current.includes(String(latest.id));
         const isDismissed = dismissedNotificationIds.includes(String(latest.id));
@@ -3428,6 +3569,21 @@ export default function App() {
   }
 
   fetchAnnouncementsFromDbRef.current = fetchAnnouncementsFromDb;
+
+  // Refresh notifications when arriving on home after profile completion or when native biometric state changes
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const handleBiometricChanged = () => {
+      fetchAnnouncementsFromDbRef.current();
+    };
+    window.addEventListener(biometricLockService.eventName, handleBiometricChanged);
+    if (activeView === 'home') {
+      fetchAnnouncementsFromDbRef.current();
+    }
+    return () => {
+      window.removeEventListener(biometricLockService.eventName, handleBiometricChanged);
+    };
+  }, [currentUser?.id, activeView]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -5559,7 +5715,9 @@ export default function App() {
                 handleMarkAnnouncementAsRead(String(item.id));
                 setToastNotification(null);
                 
-                if (isWeekendNotification(item)) {
+                if (item.type === 'biometric_setup' || item.cta_type === 'biometric_setup' || String(item.id) === 'onboarding-biometric-setup') {
+                  void openBiometricSetupPrompt();
+                } else if (isWeekendNotification(item)) {
                   handleNavigate('home', { focusSection: 'weekend-events' });
                 } else if (isEventNotification(item)) {
                   const targetEventId = extractEventIdFromNotification(item);
@@ -5768,6 +5926,9 @@ export default function App() {
                       } else {
                         setShowAddPro(true);
                       }
+                    }}
+                    onOpenBiometricSetup={() => {
+                      void openBiometricSetupPrompt();
                     }}
                   />
                 )}
@@ -7163,6 +7324,80 @@ export default function App() {
       )}
       </>
       )}
+
+      {/* Biometric / Face ID Quick Activation Modal (from onboarding notification) */}
+      <AnimatePresence>
+        {biometricPromptModal && (
+          <div
+            className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
+            onClick={() => !isEnablingBiometricFromPrompt && setBiometricPromptModal(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 space-y-5"
+            >
+              <div className="flex flex-col items-center text-center space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 shadow-xs">
+                  <ShieldCheck className="w-7 h-7 stroke-[2]" />
+                </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-lg font-bold text-brand-navy tracking-tight">
+                    {biometricPromptModal.mode === 'ios_native'
+                      ? `Enable ${biometricPromptModal.label}?`
+                      : 'Enable Biometric Sign-In?'}
+                  </h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    {biometricPromptModal.mode === 'ios_native'
+                      ? `Keep your account protected and unlock MyCityUnlocked instantly with ${biometricPromptModal.label} whenever you open the app.`
+                      : 'Sign in faster on this device using Face ID, fingerprint, or your passkey — without typing your password.'}
+                  </p>
+                </div>
+              </div>
+
+              {biometricPromptError && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-800 text-xs font-medium">
+                  {biometricPromptError}
+                </div>
+              )}
+
+              <div className="space-y-2.5">
+                <button
+                  type="button"
+                  disabled={isEnablingBiometricFromPrompt}
+                  onClick={handleConfirmEnableBiometric}
+                  className="w-full h-12 rounded-2xl bg-brand-blue hover:bg-brand-blue/90 text-white font-semibold text-xs uppercase tracking-widest shadow-lg shadow-brand-blue/20 active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isEnablingBiometricFromPrompt ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="w-4 h-4" />
+                  )}
+                  <span>
+                    {biometricPromptModal.mode === 'ios_native'
+                      ? `Enable ${biometricPromptModal.label}`
+                      : 'Enable Biometric Sign-In'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isEnablingBiometricFromPrompt}
+                  onClick={() => setBiometricPromptModal(null)}
+                  className="w-full h-11 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 text-slate-600 font-semibold text-xs transition-all cursor-pointer"
+                >
+                  Not now
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 text-center">
+                You can change this anytime in Profile → Settings.
+              </p>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Floating Push Notification Opt-in Prompt */}
       <PushNotificationPrompt 
