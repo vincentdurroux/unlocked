@@ -154,7 +154,7 @@ interface AdminNotificationHubProps {
   adminAnnouncements: any[];
   loadingAnnouncements: boolean;
   onRefetchAnnouncements: () => Promise<void>;
-  onSaveAnnouncement: (annData: any) => Promise<void>;
+  onSaveAnnouncement: (annData: any) => Promise<string | number | null | void>;
   onDeleteAnnouncement: (id: string | number) => Promise<void>;
   setMsg: (msg: { type: 'success' | 'error', text: string } | null) => void;
   notificationIcons: any[];
@@ -643,9 +643,10 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
 
       // 1. Save as In-App Bell notification if In-App or Both is selected
       let savedInBell = false;
+      let savedAnnouncementId: string | null = null;
       if (shouldSendInApp) {
         try {
-          await onSaveAnnouncement({
+          const createdAnnId = await onSaveAnnouncement({
             title: title.trim(),
             content: body.trim(),
             icon: resolvedIcon,
@@ -656,6 +657,9 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             cta_link: effectiveUrl,
             send_push: false
           });
+          if (createdAnnId !== null && createdAnnId !== undefined) {
+            savedAnnouncementId = String(createdAnnId);
+          }
           savedInBell = true;
           if (onRefetchAnnouncements) {
             await onRefetchAnnouncements();
@@ -680,6 +684,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             theme: themeId || effectiveType,
             focus: effectiveType === 'weekend' ? 'weekend-events' : undefined,
             target_id: targetId || undefined,
+            announcementId: savedAnnouncementId || undefined,
             eventId: effectiveType === 'event' && targetId ? String(targetId) : undefined,
             guideId: (effectiveType === 'article' || effectiveType === 'guide') && targetId ? String(targetId) : undefined,
             proId: effectiveType === 'pro' && targetId ? String(targetId) : undefined,
@@ -786,7 +791,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
     if (!annContent.trim()) return;
 
     try {
-      await onSaveAnnouncement({
+      const savedAnnId = await onSaveAnnouncement({
         id: editingAnnId,
         title: annTitle.trim() || 'Announcement',
         content: annContent.trim(),
@@ -821,6 +826,11 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
                 : derivedType === 'pro'
                   ? '/#explore'
                   : '/';
+          const pushCustomData: Record<string, any> = {
+            url: derivedUrl,
+            ...(savedAnnId !== null && savedAnnId !== undefined ? { announcementId: String(savedAnnId) } : {}),
+            ...(derivedType ? { type: derivedType, focus: derivedType === 'weekend' ? 'weekend-events' : undefined } : {})
+          };
           const res = await oneSignalService.sendServerNotification(
             annTitle.trim() || 'Unlocked Valencia 🌴',
             annContent.trim(),
@@ -828,7 +838,7 @@ export const AdminNotificationHub: React.FC<AdminNotificationHubProps> = ({
             targetUserIds,
             targetSubscriptionIds,
             undefined,
-            derivedType ? { type: derivedType, focus: derivedType === 'weekend' ? 'weekend-events' : undefined, url: derivedUrl } : undefined,
+            pushCustomData,
             ['ios', 'android', 'web']
           );
 

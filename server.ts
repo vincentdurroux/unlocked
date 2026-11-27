@@ -1787,6 +1787,25 @@ Ensure each event contains:
         const notifType = String(d.type || '').toLowerCase();
         const notifTheme = String(d.theme || '').toLowerCase();
         const notifFocus = String(d.focus || '').toLowerCase();
+        const annId = d.announcementId || d.annId || '';
+        const convId = d.conversationId || d.convId || '';
+
+        const appendTrackingParams = (builtUrl: string): string => {
+          if (!annId && !convId) return builtUrl;
+          const hashIdx = builtUrl.indexOf('#');
+          const beforeHash = hashIdx >= 0 ? builtUrl.slice(0, hashIdx) : builtUrl;
+          const hashPart = hashIdx >= 0 ? builtUrl.slice(hashIdx) : '';
+          const additions: string[] = [];
+          if (annId && !/[?&]annId=/i.test(beforeHash)) {
+            additions.push(`annId=${encodeURIComponent(String(annId))}`);
+          }
+          if (convId && !/[?&]convId=/i.test(beforeHash)) {
+            additions.push(`convId=${encodeURIComponent(String(convId))}`);
+          }
+          if (additions.length === 0) return builtUrl;
+          const sep = beforeHash.includes('?') ? '&' : '?';
+          return `${beforeHash}${sep}${additions.join('&')}${hashPart}`;
+        };
 
         const urlEventMatch = safeRaw.match(/[?&]eventId=([^&#]+)/i) || safeRaw.match(/\/events?\/([^/?#]+)/i);
         const urlGuideMatch = safeRaw.match(/[?&](?:guideId|articleId)=([^&#]+)/i) || safeRaw.match(/\/(?:guides?|articles?)\/([^/?#]+)/i);
@@ -1806,9 +1825,9 @@ Ensure each event contains:
           (urlProMatch?.[1] ? decodeURIComponent(urlProMatch[1]) : '') ||
           (d.target_id && (notifType === 'pro' || notifTheme.startsWith('pro')) ? String(d.target_id) : '');
 
-        if (eventId) return `${baseUrl}/?eventId=${encodeURIComponent(String(eventId))}#events`;
-        if (guideId) return `${baseUrl}/?guideId=${encodeURIComponent(String(guideId))}#guides`;
-        if (proId) return `${baseUrl}/?proId=${encodeURIComponent(String(proId))}#explore`;
+        if (eventId) return appendTrackingParams(`${baseUrl}/?eventId=${encodeURIComponent(String(eventId))}#events`);
+        if (guideId) return appendTrackingParams(`${baseUrl}/?guideId=${encodeURIComponent(String(guideId))}#guides`);
+        if (proId) return appendTrackingParams(`${baseUrl}/?proId=${encodeURIComponent(String(proId))}#explore`);
 
         if (
           notifFocus === 'weekend-events' ||
@@ -1818,29 +1837,29 @@ Ensure each event contains:
           /focus=weekend/i.test(safeRaw) ||
           /weekend-events/i.test(safeRaw)
         ) {
-          return `${baseUrl}/?focus=weekend-events`;
+          return appendTrackingParams(`${baseUrl}/?focus=weekend-events`);
         }
 
         if (notifType === 'event' || /#events\b/i.test(safeRaw) || /^\/?events\b/i.test(safeRaw)) {
-          return `${baseUrl}/?view=events#events`;
+          return appendTrackingParams(`${baseUrl}/?view=events#events`);
         }
         if (notifType === 'guide' || notifType === 'article' || /#guides\b/i.test(safeRaw) || /^\/?(?:guides|articles)\b/i.test(safeRaw)) {
-          return `${baseUrl}/?view=guides#guides`;
+          return appendTrackingParams(`${baseUrl}/?view=guides#guides`);
         }
         if (notifType === 'pro' || /#(?:explore|directory)\b/i.test(safeRaw) || /^\/?(?:explore|directory)\b/i.test(safeRaw)) {
-          return `${baseUrl}/?view=explore#explore`;
+          return appendTrackingParams(`${baseUrl}/?view=explore#explore`);
         }
         if (notifType === 'chat' || notifType === 'message' || /#messages\b/i.test(safeRaw)) {
-          return `${baseUrl}/?view=messages#messages`;
+          return appendTrackingParams(`${baseUrl}/?view=messages#messages`);
         }
         if (notifType === 'marketplace' || /#marketplace\b/i.test(safeRaw)) {
-          return `${baseUrl}/?view=marketplace#marketplace`;
+          return appendTrackingParams(`${baseUrl}/?view=marketplace#marketplace`);
         }
 
         if (safeRaw.startsWith('http://') || safeRaw.startsWith('https://')) {
-          return safeRaw;
+          return appendTrackingParams(safeRaw);
         }
-        return `${baseUrl}${safeRaw.startsWith('/') ? '' : '/'}${safeRaw}`;
+        return appendTrackingParams(`${baseUrl}${safeRaw.startsWith('/') ? '' : '/'}${safeRaw}`);
       };
 
       const targetUrl = buildCanonicalTargetUrl(rawUrl, customData);

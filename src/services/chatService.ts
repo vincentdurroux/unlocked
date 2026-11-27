@@ -346,7 +346,15 @@ export const chatService = {
           smartTruncate(`Message from ${senderName}`, 50),
           truncatedContent,
           `/#messages`,
-          [otherId]
+          [otherId],
+          undefined,
+          undefined,
+          {
+            type: 'chat',
+            conversationId: String(conversationId),
+            target_id: String(conversationId),
+            url: '/#messages'
+          }
         ).catch(pushErr => {
           console.warn('[ChatService] Push notification trigger notice:', pushErr);
         });

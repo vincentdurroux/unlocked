@@ -2493,7 +2493,24 @@ export default function App() {
     } catch (_) {}
   }, []);
 
-  // Extract sharing & push notification parameters (?eventId, ?proId, ?guideId, ?focus=weekend-events, ?view=...) on mount and URL changes
+  const [pendingPushReadTarget, setPendingPushReadTarget] = useState<{
+    announcementId?: string;
+    conversationId?: string;
+    eventId?: string;
+    guideId?: string;
+    proId?: string;
+    isWeekend?: boolean;
+    notifType?: string;
+    view?: string;
+    launchUrl?: string;
+    title?: string;
+    body?: string;
+    fromPushClick?: boolean;
+    refetched?: boolean;
+    createdAt: number;
+  } | null>(null);
+
+  // Extract sharing & push notification parameters (?eventId, ?proId, ?guideId, ?focus=weekend-events, ?view=..., ?annId=..., ?convId=...) on mount and URL changes
   const checkAndApplyUrlDeepLinks = React.useCallback(() => {
     const params = new URLSearchParams(window.location.search);
 
@@ -2503,6 +2520,8 @@ export default function App() {
     }
     const hashParams = new URLSearchParams(hashSearch);
 
+    const rawAnnId = params.get('annId') || hashParams.get('annId') || undefined;
+    const rawConvId = params.get('convId') || hashParams.get('convId') || undefined;
     const rawEventId = params.get('eventId') || hashParams.get('eventId');
     const cleanEventId = extractCleanId(rawEventId);
     const rawProId = params.get('proId') || hashParams.get('proId');
@@ -2521,6 +2540,15 @@ export default function App() {
       setInitialEventId(cleanEventId);
       setDeepLinkTrigger(c => c + 1);
       setActiveView('events');
+      setPendingPushReadTarget({
+        announcementId: rawAnnId,
+        conversationId: rawConvId,
+        eventId: cleanEventId,
+        notifType: 'event',
+        launchUrl: window.location.href,
+        fromPushClick: Boolean(rawAnnId || rawConvId),
+        createdAt: Date.now()
+      });
       return true;
     } else if (cleanProId) {
       markDeepLinkActivity();
@@ -2530,6 +2558,15 @@ export default function App() {
       setInitialProId(cleanProId);
       setDeepLinkTrigger(c => c + 1);
       setActiveView('explore');
+      setPendingPushReadTarget({
+        announcementId: rawAnnId,
+        conversationId: rawConvId,
+        proId: cleanProId,
+        notifType: 'pro',
+        launchUrl: window.location.href,
+        fromPushClick: Boolean(rawAnnId || rawConvId),
+        createdAt: Date.now()
+      });
       return true;
     } else if (cleanGuideId) {
       markDeepLinkActivity();
@@ -2539,6 +2576,15 @@ export default function App() {
       setInitialGuideId(cleanGuideId);
       setDeepLinkTrigger(c => c + 1);
       setActiveView('guides');
+      setPendingPushReadTarget({
+        announcementId: rawAnnId,
+        conversationId: rawConvId,
+        guideId: cleanGuideId,
+        notifType: 'guide',
+        launchUrl: window.location.href,
+        fromPushClick: Boolean(rawAnnId || rawConvId),
+        createdAt: Date.now()
+      });
       return true;
     } else if (focusParam === 'weekend-events' || focusParam === 'weekend' || hashRaw.includes('weekend-events')) {
       markDeepLinkActivity();
@@ -2548,6 +2594,15 @@ export default function App() {
       requestHomeFocus('weekend-events');
       setDeepLinkTrigger(c => c + 1);
       setActiveView('home');
+      setPendingPushReadTarget({
+        announcementId: rawAnnId,
+        conversationId: rawConvId,
+        isWeekend: true,
+        notifType: 'weekend',
+        launchUrl: window.location.href,
+        fromPushClick: true,
+        createdAt: Date.now()
+      });
       try {
         window.history.replaceState({ view: 'home' }, '', window.location.pathname);
       } catch (_) {}
@@ -2568,7 +2623,32 @@ export default function App() {
       setTimeout(() => { isProgrammaticNavigationRef.current = false; }, 250);
       setDeepLinkTrigger(c => c + 1);
       setActiveView(resolvedView);
+      setPendingPushReadTarget({
+        announcementId: rawAnnId,
+        conversationId: rawConvId,
+        view: resolvedView,
+        notifType: resolvedView === 'messages'
+          ? 'chat'
+          : resolvedView === 'events'
+            ? 'event'
+            : resolvedView === 'guides'
+              ? 'guide'
+              : resolvedView === 'explore'
+                ? 'pro'
+                : resolvedView,
+        launchUrl: window.location.href,
+        fromPushClick: true,
+        createdAt: Date.now()
+      });
       return true;
+    } else if (rawAnnId || rawConvId) {
+      setPendingPushReadTarget({
+        announcementId: rawAnnId,
+        conversationId: rawConvId,
+        launchUrl: window.location.href,
+        fromPushClick: true,
+        createdAt: Date.now()
+      });
     } else if (
       hashRaw === '#events' ||
       hashRaw === '#guides' ||
@@ -2689,6 +2769,35 @@ export default function App() {
         if (authLoading && isProtectedTarget) {
           pendingAuthPushDetailRef.current = detail;
         }
+
+        const urlAnnMatch = rawLaunchUrl.match(/[?&]annId=([^&#]+)/i);
+        const targetAnnouncementId =
+          data.announcementId ||
+          data.annId ||
+          (urlAnnMatch?.[1] ? decodeURIComponent(urlAnnMatch[1]) : undefined);
+
+        const urlConvMatch = rawLaunchUrl.match(/[?&]convId=([^&#]+)/i);
+        const targetConversationId =
+          data.conversationId ||
+          data.convId ||
+          (urlConvMatch?.[1] ? decodeURIComponent(urlConvMatch[1]) : undefined) ||
+          (data.target_id && (notifType === 'chat' || notifType === 'message' || launchView === 'messages' || launchUrl.includes('#messages')) ? String(data.target_id) : undefined);
+
+        setPendingPushReadTarget({
+          announcementId: targetAnnouncementId ? String(targetAnnouncementId) : undefined,
+          conversationId: targetConversationId ? String(targetConversationId) : undefined,
+          eventId: targetEventId ? String(targetEventId) : undefined,
+          guideId: targetGuideId ? String(targetGuideId) : undefined,
+          proId: targetProId ? String(targetProId) : undefined,
+          isWeekend: isWeekendPush,
+          notifType: notifType || undefined,
+          view: launchView || undefined,
+          launchUrl: rawLaunchUrl || undefined,
+          title: headingText || undefined,
+          body: bodyText || undefined,
+          fromPushClick: true,
+          createdAt: Date.now()
+        });
 
         setShowNotificationsModal(false);
 
@@ -3034,6 +3143,8 @@ export default function App() {
       return [];
     }
   });
+  const readAnnouncementIdsRef = useRef<string[]>(readAnnouncementIds);
+  readAnnouncementIdsRef.current = readAnnouncementIds;
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('unlocked_dismissed_announcements');
@@ -3284,7 +3395,7 @@ export default function App() {
       // Check if there is a fresh unread notification to show an in-app toast preview (LOGGED-IN ONLY)
       if (currentUser && list.length > 0) {
         const latest = list[0];
-        const isLocallyRead = readAnnouncementIds.includes(String(latest.id));
+        const isLocallyRead = readAnnouncementIdsRef.current.includes(String(latest.id));
         const isDismissed = dismissedNotificationIds.includes(String(latest.id));
         const isChat = latest.type === 'chat' || String(latest.id).startsWith('chat-');
         const isUnread = isChat ? (latest.is_read === false) : (!isLocallyRead && !isDismissed);
@@ -3486,20 +3597,45 @@ export default function App() {
     } catch (_) {}
   }, [unreadCount]);
 
-  const handleMarkAnnouncementAsRead = async (id: string) => {
-    const strId = String(id);
-    const updated = Array.from(new Set([...readAnnouncementIds, strId]));
+  const markAnnouncementsAsRead = React.useCallback(async (ids: string[]) => {
+    const targetIds = Array.from(new Set(ids.map((id) => String(id)).filter(Boolean)));
+    if (targetIds.length === 0) return;
+
+    const prevRead = readAnnouncementIdsRef.current;
+    const updated = Array.from(new Set([...prevRead, ...targetIds]));
+    const hasNewReadId = updated.length !== prevRead.length;
+    const chatIds = targetIds.filter((id) => id.startsWith('chat-'));
+
+    if (!hasNewReadId && chatIds.length === 0) {
+      // Still dismiss any active toast for these notifications
+      setToastNotification((prev) => (prev && targetIds.includes(String(prev.id)) ? null : prev));
+      return;
+    }
+
+    readAnnouncementIdsRef.current = updated;
     setReadAnnouncementIds(updated);
 
-    // If this is a chat notification, also mark the conversation's messages as read
-    if (strId.startsWith('chat-') && currentUser?.id) {
-      const convId = strId.replace('chat-', '');
-      chatService.markMessagesAsRead(convId, currentUser.id);
-      setUnreadConversations(prev => prev.filter(cId => cId !== convId));
-      setAnnouncementsList(prev => prev.map(item => {
-        if (item.id === strId) return { ...item, is_read: true };
-        return item;
-      }));
+    // Dismiss any matching in-app toast & suppress re-popping it
+    setToastNotification((prev) => (prev && targetIds.includes(String(prev.id)) ? null : prev));
+    try {
+      targetIds.forEach((strId) => {
+        if (currentUser?.id) {
+          localStorage.setItem(`unlocked_seen_toast_${currentUser.id}_${strId}`, '1');
+        }
+        localStorage.setItem(`unlocked_seen_toast_${strId}`, '1');
+      });
+    } catch (_) {}
+
+    // If any are chat notifications, also mark the conversations' messages as read
+    if (chatIds.length > 0 && currentUser?.id) {
+      const convIds = chatIds.map((c) => c.replace('chat-', '')).filter(Boolean);
+      convIds.forEach((convId) => {
+        chatService.markMessagesAsRead(convId, currentUser.id);
+      });
+      setUnreadConversations((prev) => prev.filter((cId) => !convIds.includes(cId)));
+      setAnnouncementsList((prev) =>
+        prev.map((item) => (chatIds.includes(String(item.id)) ? { ...item, is_read: true } : item))
+      );
     }
 
     try {
@@ -3527,7 +3663,180 @@ export default function App() {
         console.warn('Error syncing read announcement to cloud account:', err);
       }
     }
+  }, [currentUser]);
+
+  const handleMarkAnnouncementAsRead = async (id: string) => {
+    await markAnnouncementsAsRead([id]);
   };
+
+  // Automatically mark the corresponding in-app notification as read when arriving from a push notification / deep-link
+  useEffect(() => {
+    if (!pendingPushReadTarget) return;
+
+    if (Date.now() - pendingPushReadTarget.createdAt > 60000) {
+      setPendingPushReadTarget(null);
+      return;
+    }
+
+    if (!currentUser?.id) return;
+
+    // Fast path: exact announcementId or conversationId carried by the push payload or URL
+    if (pendingPushReadTarget.announcementId) {
+      void markAnnouncementsAsRead([String(pendingPushReadTarget.announcementId)]);
+      setPendingPushReadTarget(null);
+      return;
+    }
+    if (pendingPushReadTarget.conversationId) {
+      void markAnnouncementsAsRead([`chat-${String(pendingPushReadTarget.conversationId)}`]);
+      setPendingPushReadTarget(null);
+      return;
+    }
+
+    // Fallback matching against loaded announcements (for already-sent/legacy pushes without explicit annId/convId)
+    if (announcementsList.length === 0) return;
+
+    const currentReadSet = new Set(readAnnouncementIdsRef.current);
+    const isItemUnread = (item: any) => {
+      const strId = String(item.id);
+      const isChat = item.type === 'chat' || strId.startsWith('chat-');
+      return isChat ? item.is_read === false : !currentReadSet.has(strId);
+    };
+
+    const unreadItems = announcementsList.filter(isItemUnread);
+    const normalizeText = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const extractParamFromLink = (link: string, regex: RegExp) => {
+      const m = String(link || '').match(regex);
+      return m?.[1] ? decodeURIComponent(m[1]) : '';
+    };
+
+    let matchedIds: string[] = [];
+
+    // 1. Exact entity ID match (eventId / guideId / proId)
+    if (pendingPushReadTarget.eventId) {
+      const targetId = String(pendingPushReadTarget.eventId);
+      matchedIds = unreadItems
+        .filter((a) => {
+          const link = String(a.cta_link || '');
+          const linkEventId =
+            extractParamFromLink(link, /[?&]eventId=([^&#]+)/i) ||
+            extractParamFromLink(link, /\/events?\/([^/?#]+)/i);
+          return String(a.target_id || '') === targetId || linkEventId === targetId;
+        })
+        .map((a) => String(a.id));
+    } else if (pendingPushReadTarget.guideId) {
+      const targetId = String(pendingPushReadTarget.guideId);
+      matchedIds = unreadItems
+        .filter((a) => {
+          const link = String(a.cta_link || '');
+          const linkGuideId =
+            extractParamFromLink(link, /[?&](?:guideId|articleId)=([^&#]+)/i) ||
+            extractParamFromLink(link, /\/(?:guides?|articles?)\/([^/?#]+)/i);
+          return String(a.target_id || '') === targetId || linkGuideId === targetId;
+        })
+        .map((a) => String(a.id));
+    } else if (pendingPushReadTarget.proId) {
+      const targetId = String(pendingPushReadTarget.proId);
+      matchedIds = unreadItems
+        .filter((a) => {
+          const link = String(a.cta_link || '');
+          const linkProId =
+            extractParamFromLink(link, /[?&]proId=([^&#]+)/i) ||
+            extractParamFromLink(link, /\/(?:pros?|explore)\/([^/?#]+)/i);
+          return String(a.target_id || '') === targetId || linkProId === targetId;
+        })
+        .map((a) => String(a.id));
+    }
+
+    // 2. Title / body text match from push notification payload
+    if (matchedIds.length === 0 && (pendingPushReadTarget.title || pendingPushReadTarget.body)) {
+      const targetTitle = normalizeText(pendingPushReadTarget.title);
+      const targetBody = normalizeText(pendingPushReadTarget.body).replace(/\.\.\.$/, '');
+      matchedIds = unreadItems
+        .filter((a) => {
+          const annTitle = normalizeText(a.title);
+          const annBody = normalizeText(a.content);
+          const titleMatches = Boolean(targetTitle && annTitle && annTitle === targetTitle);
+          const bodyMatches = Boolean(
+            targetBody &&
+            annBody &&
+            (annBody === targetBody || annBody.startsWith(targetBody) || targetBody.startsWith(annBody))
+          );
+          if (targetTitle && targetBody) return titleMatches && bodyMatches;
+          return titleMatches || bodyMatches;
+        })
+        .map((a) => String(a.id));
+    }
+
+    // 3. Weekend digest push match
+    if (matchedIds.length === 0 && pendingPushReadTarget.isWeekend) {
+      matchedIds = unreadItems
+        .filter((a) => {
+          const ctaType = String(a.cta_type || '').toLowerCase();
+          const icon = String(a.icon || '').toLowerCase();
+          const link = String(a.cta_link || '').toLowerCase();
+          return ctaType === 'weekend' || icon === 'weekend' || link.includes('weekend');
+        })
+        .map((a) => String(a.id));
+    }
+
+    // 4. Chat message push match
+    if (
+      matchedIds.length === 0 &&
+      (pendingPushReadTarget.notifType === 'chat' ||
+        pendingPushReadTarget.notifType === 'message' ||
+        pendingPushReadTarget.view === 'messages')
+    ) {
+      const unreadChats = unreadItems.filter(
+        (a) => a.type === 'chat' || String(a.id).startsWith('chat-')
+      );
+      if (unreadChats.length > 0) {
+        const pushTitle = normalizeText(pendingPushReadTarget.title);
+        const bySender = pushTitle
+          ? unreadChats.filter((c) => {
+              const annTitle = normalizeText(c.title);
+              return annTitle && (pushTitle.includes(annTitle) || annTitle.includes(pushTitle));
+            })
+          : [];
+        matchedIds = (bySender.length > 0 ? bySender : unreadChats).map((a) => String(a.id));
+      }
+    }
+
+    // 5. Generic section push match (latest unread notification for the target section)
+    if (matchedIds.length === 0 && pendingPushReadTarget.fromPushClick) {
+      const secType = String(pendingPushReadTarget.notifType || pendingPushReadTarget.view || '').toLowerCase();
+      const normalizedSec =
+        secType === 'events' ? 'event' :
+        secType === 'guides' || secType === 'article' ? 'guide' :
+        secType === 'explore' || secType === 'directory' ? 'pro' :
+        secType;
+
+      if (normalizedSec) {
+        const sectionMatch = unreadItems.find((a) => {
+          const ctaType = String(a.cta_type || '').toLowerCase();
+          const link = String(a.cta_link || '').toLowerCase();
+          if (normalizedSec === 'event') return ctaType === 'event' || link.includes('event');
+          if (normalizedSec === 'guide') return ctaType === 'guide' || ctaType === 'article' || link.includes('guide') || link.includes('article');
+          if (normalizedSec === 'pro') return ctaType === 'pro' || link.includes('explore') || link.includes('directory') || link.includes('proid=');
+          if (normalizedSec === 'marketplace') return ctaType === 'marketplace' || link.includes('marketplace');
+          return false;
+        });
+        if (sectionMatch) {
+          matchedIds = [String(sectionMatch.id)];
+        }
+      }
+    }
+
+    if (matchedIds.length > 0) {
+      void markAnnouncementsAsRead(matchedIds);
+      setPendingPushReadTarget(null);
+    } else if (pendingPushReadTarget.fromPushClick && !pendingPushReadTarget.refetched) {
+      // App may have resumed from background before the newly sent announcement was fetched
+      setPendingPushReadTarget((prev) => (prev ? { ...prev, refetched: true } : null));
+      fetchAnnouncementsFromDbRef.current();
+    } else {
+      setPendingPushReadTarget(null);
+    }
+  }, [currentUser?.id, announcementsList, pendingPushReadTarget, markAnnouncementsAsRead]);
 
   const handleMarkAllAnnouncementsAsRead = async () => {
     const allIds = announcementsList.map(a => String(a.id));
@@ -8621,9 +8930,10 @@ function AdminView({
 
     if (!contentToSave.trim()) {
       setMsg({ type: 'error', text: 'Please fill in the message.' });
-      return;
+      return null;
     }
     setSavingAnn(true);
+    let savedAnnouncementId: string | number | null = idToEdit || null;
     try {
       const iconTag = `[icon:${iconToSave}]`;
       const typeTag = rawCtaType ? `[type:${rawCtaType}]` : '';
@@ -8654,7 +8964,7 @@ function AdminView({
           if (fallbackErr) throw fallbackErr;
         }
       } else {
-        const { error } = await supabase
+        const { data: insertedRow, error } = await supabase
           .from('announcements')
           .insert([
             {
@@ -8662,17 +8972,26 @@ function AdminView({
               is_active: isActiveToSave,
               updated_at: nowIso
             }
-          ]);
+          ])
+          .select('id')
+          .maybeSingle();
         if (error) {
-          const { error: fallbackErr } = await supabase
+          const { data: fallbackRow, error: fallbackErr } = await supabase
             .from('announcements')
             .insert([
               {
                 content: formattedContent,
                 is_active: isActiveToSave
               }
-            ]);
+            ])
+            .select('id')
+            .maybeSingle();
           if (fallbackErr) throw fallbackErr;
+          if (fallbackRow?.id !== undefined && fallbackRow?.id !== null) {
+            savedAnnouncementId = fallbackRow.id;
+          }
+        } else if (insertedRow?.id !== undefined && insertedRow?.id !== null) {
+          savedAnnouncementId = insertedRow.id;
         }
       }
 
@@ -8704,6 +9023,21 @@ function AdminView({
                     : '/'
           );
 
+          const pushCustomData: Record<string, any> = {
+            url: derivedUrl,
+            ...(savedAnnouncementId !== null && savedAnnouncementId !== undefined ? { announcementId: String(savedAnnouncementId) } : {}),
+            ...(derivedType
+              ? {
+                  type: derivedType,
+                  focus: derivedType === 'weekend' ? 'weekend-events' : undefined,
+                  target_id: targetIdToSave || undefined,
+                  eventId: derivedType === 'event' && targetIdToSave ? targetIdToSave : undefined,
+                  guideId: (derivedType === 'guide' || derivedType === 'article') && targetIdToSave ? targetIdToSave : undefined,
+                  proId: derivedType === 'pro' && targetIdToSave ? targetIdToSave : undefined
+                }
+              : {})
+          };
+
           await oneSignalService.sendServerNotification(
             titleToSave.trim() || 'Unlocked Valencia',
             contentToSave.trim(),
@@ -8711,17 +9045,7 @@ function AdminView({
             targetUserIds,
             targetSubscriptionIds,
             undefined,
-            derivedType
-              ? {
-                  type: derivedType,
-                  focus: derivedType === 'weekend' ? 'weekend-events' : undefined,
-                  target_id: targetIdToSave || undefined,
-                  eventId: derivedType === 'event' && targetIdToSave ? targetIdToSave : undefined,
-                  guideId: (derivedType === 'guide' || derivedType === 'article') && targetIdToSave ? targetIdToSave : undefined,
-                  proId: derivedType === 'pro' && targetIdToSave ? targetIdToSave : undefined,
-                  url: derivedUrl
-                }
-              : undefined
+            pushCustomData
           );
           pushSuccess = true;
         } catch (pushErr: any) {
@@ -8773,9 +9097,11 @@ function AdminView({
       if (onRefetchAnnouncements) {
         await onRefetchAnnouncements();
       }
+      return savedAnnouncementId;
     } catch (err: any) {
       console.error('Error saving announcement:', err);
       setMsg({ type: 'error', text: 'Error saving announcement: ' + err.message });
+      return null;
     } finally {
       setSavingAnn(false);
     }
@@ -13340,7 +13666,7 @@ Wrap up your guide with a warm closing thought for newcomers settling into Valen
             setAnnFormIsActive(annData.is_active);
             setAnnFormCtaType(annData.cta_type);
             setEditingAnnId(annData.id || null);
-            await executeSaveAnnouncement(annData.send_push === true, annData);
+            return await executeSaveAnnouncement(annData.send_push === true, annData);
           }}
           onDeleteAnnouncement={handleDeleteAnnouncement}
           setMsg={setMsg}
