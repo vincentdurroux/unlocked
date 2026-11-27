@@ -3544,27 +3544,36 @@ export default function App() {
       setAnnouncementsList(list);
 
       // Check if there is a fresh unread notification to show an in-app toast preview (LOGGED-IN & COMPLETED PROFILE ONLY)
+      // Face ID / biometric onboarding suggestions stay strictly inside the notification bell (no floating banner)
       if (currentUser && isProfileCompleted && list.length > 0) {
-        const latest = list[0];
-        const isLocallyRead = readAnnouncementIdsRef.current.includes(String(latest.id));
-        const isDismissed = dismissedNotificationIds.includes(String(latest.id));
-        const isChat = latest.type === 'chat' || String(latest.id).startsWith('chat-');
-        const isUnread = isChat ? (latest.is_read === false) : (!isLocallyRead && !isDismissed);
-        const seenToastKey = `unlocked_seen_toast_${currentUser.id}_${latest.id}`;
-        const hasSeenToast = typeof localStorage !== 'undefined' ? Boolean(localStorage.getItem(seenToastKey)) : false;
-        
-        // Don't show intrusive popup toast if user is already reading/chatting in messages view
-        const shouldShowToast = isChat ? (activeView !== 'messages') : true;
+        const latest = list.find(
+          (item) =>
+            item.type !== 'biometric_setup' &&
+            item.cta_type !== 'biometric_setup' &&
+            String(item.id) !== 'onboarding-biometric-setup'
+        );
 
-        if (shouldShowToast && isUnread && !hasSeenToast) {
-          setToastNotification(latest);
-          try {
-            localStorage.setItem(seenToastKey, '1');
-          } catch (_) {}
-          // Auto-dismiss after 6s
-          setTimeout(() => {
-            setToastNotification((prev) => (prev && String(prev.id) === String(latest.id) ? null : prev));
-          }, 6000);
+        if (latest) {
+          const isLocallyRead = readAnnouncementIdsRef.current.includes(String(latest.id));
+          const isDismissed = dismissedNotificationIds.includes(String(latest.id));
+          const isChat = latest.type === 'chat' || String(latest.id).startsWith('chat-');
+          const isUnread = isChat ? (latest.is_read === false) : (!isLocallyRead && !isDismissed);
+          const seenToastKey = `unlocked_seen_toast_${currentUser.id}_${latest.id}`;
+          const hasSeenToast = typeof localStorage !== 'undefined' ? Boolean(localStorage.getItem(seenToastKey)) : false;
+          
+          // Don't show intrusive popup toast if user is already reading/chatting in messages view
+          const shouldShowToast = isChat ? (activeView !== 'messages') : true;
+
+          if (shouldShowToast && isUnread && !hasSeenToast) {
+            setToastNotification(latest);
+            try {
+              localStorage.setItem(seenToastKey, '1');
+            } catch (_) {}
+            // Auto-dismiss after 6s
+            setTimeout(() => {
+              setToastNotification((prev) => (prev && String(prev.id) === String(latest.id) ? null : prev));
+            }, 6000);
+          }
         }
       }
     } catch (err) {
@@ -14267,94 +14276,112 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
   const canContinue = Boolean(fullName.trim()) && Boolean(notificationChoice) && !isLoading && !isRequestingPush;
 
   return (
-    <div className="fixed inset-0 bg-white z-[110] flex flex-col overflow-y-auto no-scrollbar">
-      {/* Decorative Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[10%] -right-[10%] w-[40%] h-[40%] bg-brand-blue/5 rounded-full blur-3xl" />
-        <div className="absolute top-[20%] -left-[5%] w-[30%] h-[30%] bg-brand-yellow/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative flex-1 flex flex-col items-center justify-center p-6 pt-[calc(env(safe-area-inset-top,0px)+24px)] pb-[calc(env(safe-area-inset-bottom,0px)+24px)] min-h-screen">
-        <div className="w-full max-w-sm space-y-6">
-          <div className="flex flex-col items-center text-center space-y-4">
-            <Logo />
-            <h2 className="text-2xl font-semibold text-brand-navy tracking-tight mt-6">Complete Your Profile</h2>
-            <p className="text-slate-400 text-sm font-medium">Almost there! Tell us a bit more about yourself.</p>
+    <div className="fixed inset-0 bg-[#F8FAFC] z-[110] flex flex-col overflow-y-auto no-scrollbar">
+      <div className="flex-1 flex flex-col items-center justify-center px-5 py-8 pt-[calc(env(safe-area-inset-top,0px)+32px)] pb-[calc(env(safe-area-inset-bottom,0px)+32px)] min-h-full">
+        <div className="w-full max-w-md space-y-6">
+          {/* Calm Header */}
+          <div className="flex flex-col items-center text-center space-y-3">
+            <Logo imgClassName="h-9 sm:h-10 w-auto" />
+            <div className="space-y-1 pt-2">
+              <h2 className="font-display text-2xl sm:text-[26px] font-bold text-brand-navy tracking-tight [text-wrap:balance]">
+                Complete Your Profile
+              </h2>
+              <p className="text-sm text-slate-500 leading-relaxed max-w-xs mx-auto">
+                Almost there! Tell us a bit more about yourself.
+              </p>
+            </div>
           </div>
 
-          <div className="bg-white p-7 sm:p-8 rounded-[40px] border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.04)] relative z-10">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 text-sm font-semibold flex items-center gap-3 mb-6">
-                <AlertCircle className="w-5 h-5 shrink-0" />
-                {error}
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200/70 text-rose-700 text-[13px] font-medium flex items-start gap-2.5 leading-snug">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
+                <span>{error}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Avatar Upload */}
-              <div className="flex flex-col items-center space-y-3">
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="relative group cursor-pointer"
-                >
-                  <div className="w-24 h-24 rounded-[32px] bg-slate-50 border-2 border-dashed border-slate-200 overflow-hidden flex items-center justify-center group-hover:border-brand-blue group-hover:bg-brand-blue/5 transition-all">
-                    {avatarPreview ? (
-                      <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" />
-                    ) : (
-                      <Camera className="w-8 h-8 text-slate-300 group-hover:text-brand-blue transition-colors" />
-                    )}
-                  </div>
-                  <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-brand-blue text-white rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/20 group-hover:scale-110 transition-transform">
-                    <Plus className="w-4 h-4" />
-                  </div>
-                  <input 
+            {/* Grouped Surface Card matching Profile & Settings */}
+            <div className="bg-white rounded-3xl border border-slate-200/60 shadow-2xs overflow-hidden divide-y divide-slate-100/80">
+              {/* Section 1: Avatar + Full Name */}
+              <div className="p-6 space-y-5">
+                {/* Circular Avatar Upload */}
+                <div className="flex flex-col items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label={avatarPreview ? 'Change profile photo' : 'Upload profile photo'}
+                    className="relative group cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2"
+                  >
+                    <div className="w-22 h-22 sm:w-24 sm:h-24 rounded-full bg-slate-50 border border-slate-200/80 ring-4 ring-slate-100/80 overflow-hidden flex items-center justify-center group-hover:ring-brand-blue/15 group-hover:border-brand-blue/40 transition-all">
+                      {avatarPreview ? (
+                        <img
+                          src={avatarPreview}
+                          alt="Profile preview"
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <Camera className="w-7 h-7 text-slate-300 group-hover:text-brand-blue transition-colors" />
+                      )}
+                    </div>
+                    <span className="absolute bottom-0 right-0 w-8 h-8 bg-brand-blue text-white rounded-full border-2 border-white flex items-center justify-center shadow-sm group-hover:bg-brand-blue/90 transition-colors">
+                      <Plus className="w-4 h-4 stroke-[2.5px]" />
+                    </span>
+                  </button>
+                  <input
                     type="file"
                     ref={fileInputRef}
                     onChange={handleAvatarChange}
                     accept="image/*"
                     className="hidden"
                   />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs font-medium text-brand-blue hover:text-brand-blue/80 transition-colors cursor-pointer"
+                  >
+                    {avatarPreview ? 'Change profile photo' : 'Add profile photo'}
+                  </button>
                 </div>
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Profile Photo</span>
-              </div>
 
-              {/* Full Name Input */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 px-1">Full Name</label>
-                <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 group-focus-within:bg-brand-blue/5 transition-colors">
-                    <User className={cn(
-                      "w-5 h-5 transition-colors",
-                      fullName ? "text-brand-blue" : "text-slate-300"
-                    )} />
+                {/* Full Name Field */}
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="profile-setup-fullname"
+                    className="block text-[13px] font-semibold text-brand-navy px-0.5"
+                  >
+                    Full name
+                  </label>
+                  <div className="relative">
+                    <User
+                      className={cn(
+                        "w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors",
+                        fullName.trim() ? "text-brand-blue" : "text-slate-400"
+                      )}
+                    />
+                    <input
+                      id="profile-setup-fullname"
+                      required
+                      type="text"
+                      autoComplete="name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="John Doe"
+                      className="w-full h-12 bg-slate-50/80 border border-slate-200/80 rounded-2xl pl-10 pr-4 text-[15px] font-medium text-brand-navy placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-brand-blue focus:ring-4 focus:ring-brand-blue/10 transition-all"
+                    />
                   </div>
-                  <input 
-                    required
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="John Doe"
-                    className="w-full h-14 bg-slate-50 border border-slate-100 rounded-2xl pl-16 pr-4 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 transition-all placeholder:text-slate-300 text-sm"
-                  />
                 </div>
               </div>
 
-              {/* Notifications Preference (Required Choice) */}
-              <div
-                className={cn(
-                  "rounded-2xl border p-4 space-y-3 transition-colors",
-                  notificationChoice === 'enabled'
-                    ? "bg-emerald-50/60 border-emerald-200/80"
-                    : "bg-slate-50/90 border-slate-200/80"
-                )}
-              >
+              {/* Section 2: Notifications Preference (Required Choice) */}
+              <div className="p-6 space-y-4">
                 <div className="flex items-start gap-3">
                   <div
                     className={cn(
-                      "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
+                      "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 transition-colors",
                       notificationChoice === 'enabled'
-                        ? "bg-emerald-500 text-white"
-                        : "bg-brand-blue/10 text-brand-blue"
+                        ? "bg-emerald-50 text-emerald-600"
+                        : "bg-blue-50 text-brand-blue"
                     )}
                   >
                     {notificationChoice === 'enabled' ? (
@@ -14365,43 +14392,43 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
                   </div>
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-brand-navy leading-tight">
+                      <h3 className="text-[15px] font-semibold text-brand-navy leading-tight">
                         Enable notifications
                       </h3>
                       {notificationChoice && (
                         <span
                           className={cn(
-                            "text-[10px] font-semibold uppercase tracking-wider shrink-0",
-                            notificationChoice === 'enabled' ? "text-emerald-600" : "text-slate-500"
+                            "text-xs font-medium shrink-0",
+                            notificationChoice === 'enabled' ? "text-emerald-600" : "text-slate-400"
                           )}
                         >
                           {notificationChoice === 'enabled' ? 'Active' : 'Saved'}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 leading-relaxed">
+                    <p className="text-[13px] text-slate-500 leading-relaxed">
                       Receive alerts for private messages, curated weekend events in Valencia, and trusted local recommendations. No spam, ever.
                     </p>
                   </div>
                 </div>
 
                 {notificationChoice === 'enabled' ? (
-                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-white/80 border border-emerald-200/70 rounded-xl px-3 py-2">
+                  <div className="flex items-center gap-2.5 text-[13px] font-medium text-emerald-700 bg-emerald-50/75 rounded-2xl px-3.5 py-2.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Notifications enabled! You're all set.</span>
+                    <span>Notifications enabled! You&apos;re all set.</span>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2 pt-0.5">
+                  <div className="grid grid-cols-2 gap-2.5">
                     <button
                       type="button"
                       disabled={isRequestingPush}
                       onClick={handleEnableNotifications}
-                      className="h-10 px-3 rounded-xl bg-brand-blue hover:bg-brand-blue/90 text-white font-semibold text-xs transition-all active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shadow-brand-blue/20"
+                      className="min-h-[44px] px-4 rounded-2xl bg-brand-blue hover:bg-brand-blue/90 text-white font-semibold text-[13px] transition-all active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
                     >
                       {isRequestingPush ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
-                        <Bell className="w-3.5 h-3.5 shrink-0" />
+                        <Bell className="w-4 h-4 shrink-0" />
                       )}
                       <span>Enable</span>
                     </button>
@@ -14410,42 +14437,49 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
                       disabled={isRequestingPush}
                       onClick={handleSkipNotifications}
                       className={cn(
-                        "h-10 px-3 rounded-xl border font-semibold text-xs transition-all active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-1.5 cursor-pointer",
+                        "min-h-[44px] px-4 rounded-2xl font-semibold text-[13px] transition-all active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap",
                         notificationChoice === 'later'
-                          ? "bg-slate-800 border-slate-800 text-white"
-                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100/70"
+                          ? "bg-brand-navy text-white"
+                          : "bg-slate-100/90 hover:bg-slate-200/75 text-slate-700"
                       )}
                     >
-                      {notificationChoice === 'later' && <Check className="w-3.5 h-3.5 shrink-0" />}
+                      {notificationChoice === 'later' && <Check className="w-4 h-4 shrink-0" />}
                       <span>Not now</span>
                     </button>
                   </div>
                 )}
 
                 {!notificationChoice && (
-                  <p className="text-[11px] font-medium text-slate-400 text-center">
+                  <p className="text-xs text-slate-400 text-center">
                     Choose an option above to unlock Continue
                   </p>
                 )}
                 {notificationChoice === 'declined_os' && (
-                  <p className="text-[11px] font-medium text-slate-500">
+                  <p className="text-xs text-slate-500">
                     Preference saved. You can enable notifications anytime in your device settings.
                   </p>
                 )}
               </div>
+            </div>
 
-              <button 
-                disabled={!canContinue}
-                type="submit"
-                className="w-full h-14 bg-brand-blue text-white rounded-2xl font-semibold text-sm uppercase tracking-widest shadow-xl shadow-brand-blue/20 hover:shadow-2xl hover:shadow-brand-blue/30 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-3 cursor-pointer"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <>Continue <ArrowRight className="w-4 h-4" /></>
-                )}
-              </button>
+            {/* Primary CTA */}
+            <button
+              disabled={!canContinue}
+              type="submit"
+              className="w-full min-h-[52px] bg-brand-blue hover:bg-brand-blue/95 text-white rounded-2xl font-semibold text-[15px] shadow-sm shadow-brand-blue/15 active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <span>Continue</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
 
+            {/* Quiet Secondary Exit */}
+            <div className="flex justify-center pt-1">
               <button
                 type="button"
                 onClick={async () => {
@@ -14468,15 +14502,13 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
                   // Redirect to homepage & fully refresh
                   window.location.href = '/';
                 }}
-                className="w-full min-h-[48px] h-auto py-3.5 px-4 bg-rose-50/50 hover:bg-rose-100/50 border border-rose-200/80 text-rose-600 rounded-2xl font-bold uppercase tracking-widest text-[9.5px] sm:text-[10px] transition-all flex items-center justify-center gap-2 cursor-pointer mt-3"
+                className="min-h-[44px] px-4 py-2 rounded-xl text-[13px] font-medium text-slate-400 hover:text-rose-600 hover:bg-rose-50/70 transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <LogOut className="w-4 h-4 shrink-0" />
-                <span className="leading-tight text-center">
-                  Reset Session / Log Out
-                </span>
+                <LogOut className="w-3.5 h-3.5 shrink-0" />
+                <span>Reset Session / Log Out</span>
               </button>
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
       </div>
     </div>
