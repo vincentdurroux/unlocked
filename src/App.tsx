@@ -6212,6 +6212,7 @@ export default function App() {
                   </div>
                 }>
                   <AdminView 
+                    onBack={() => navigateTo('profile')}
                     onRefetchPros={refetchPros}
                     scrollToTop={scrollToTop}
                     currentUser={currentUser}
@@ -8897,8 +8898,10 @@ function AdminView({
   allPartners: propAllPartners,
   setAllPartners,
   partnerMode: propPartnerMode,
-  setPartnerMode
+  setPartnerMode,
+  onBack
 }: { 
+  onBack?: () => void,
   scrollToTop?: () => void, 
   onRefetchPros?: () => Promise<void>, 
   currentUser?: any, 
@@ -10636,7 +10639,29 @@ function AdminView({
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12 text-left w-full overflow-x-hidden">
+    <div className="w-full min-h-full">
+      {onBack && (
+        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-slate-200/60 px-4 sm:px-6 py-2.5 flex items-center">
+          <div className="max-w-4xl mx-auto w-full grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <div className="flex items-center justify-start">
+              <button
+                type="button"
+                onClick={onBack}
+                aria-label="Go back"
+                className="min-h-[40px] -ml-1.5 pl-1.5 pr-3 py-1.5 rounded-full inline-flex items-center gap-1.5 text-[14px] font-semibold text-brand-navy hover:bg-slate-100/80 active:bg-slate-200/70 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+              >
+                <ArrowLeft className="w-4 h-4 stroke-[2.25px] shrink-0" />
+                <span>Back</span>
+              </button>
+            </div>
+            <span className="text-[16px] sm:text-lg font-bold font-display text-brand-navy tracking-tight truncate text-center">
+              Admin Dashboard
+            </span>
+            <div aria-hidden="true" />
+          </div>
+        </div>
+      )}
+      <div className="max-w-4xl mx-auto px-4 md:px-6 py-6 md:py-10 text-left w-full overflow-x-hidden">
       <div className="flex flex-col mb-8 gap-6">
         <div className="space-y-1">
            <h2 className="text-xl md:text-2xl font-medium font-display text-brand-navy flex items-center gap-2">
@@ -14004,6 +14029,7 @@ Wrap up your guide with a warm closing thought for newcomers settling into Valen
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -27928,7 +27954,7 @@ function ProfileView({
         )}
 
         {selectedDocKey && (
-          <ProfileSubPage key={`subpage-doc-${selectedDocKey}`} title={docTitle || "Document"} onBack={() => setSelectedDocKey(null)}>
+          <ProfileSubPage key={`subpage-doc-${selectedDocKey}`} title={docTitle || "Document"} onBack={() => setSelectedDocKey(null)} className="z-[25] bg-[#F8FAFC]">
             <div className="max-w-2xl mx-auto pb-10">
               <div className="bg-white rounded-3xl p-6 sm:p-9 border border-slate-200/60 shadow-2xs">
                 {isLoadingDoc ? (
@@ -28305,11 +28331,24 @@ function useSwipeBack(onBack: () => void) {
 function ProfileSubPage({ title, onBack, children, className }: { title: string, onBack: () => void, children: React.ReactNode, className?: string, key?: string }) {
   const swipeProps = useSwipeBack(onBack);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [headerOffset, setHeaderOffset] = useState<number | null>(null);
 
   useLayoutEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 0;
     }
+
+    const updateHeaderOffset = () => {
+      const headerEl = document.querySelector('header');
+      if (headerEl) {
+        const rect = headerEl.getBoundingClientRect();
+        setHeaderOffset(Math.max(0, Math.round(rect.bottom)));
+      }
+    };
+
+    updateHeaderOffset();
+    window.addEventListener('resize', updateHeaderOffset);
+    return () => window.removeEventListener('resize', updateHeaderOffset);
   }, []);
 
   return (
@@ -28319,25 +28358,26 @@ function ProfileSubPage({ title, onBack, children, className }: { title: string,
       exit={{ x: '100%' }}
       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       {...swipeProps}
-      className={cn("fixed inset-0 z-[60] flex flex-col touch-pan-y", className || "bg-[#F8FAFC]")}
+      style={{ top: headerOffset !== null ? `${headerOffset}px` : 'calc(env(safe-area-inset-top, 0px) + 69px)' }}
+      className={cn("fixed inset-x-0 bottom-0 z-20 flex flex-col touch-pan-y", className || "bg-[#F8FAFC]")}
     >
-      <div
-        className="bg-white/90 backdrop-blur-md border-b border-slate-200/60 px-4 sm:px-6 pb-3 flex items-center shrink-0"
-        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
-      >
-        <div className="max-w-2xl mx-auto w-full flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Go back"
-            className="min-w-[40px] min-h-[40px] -ml-2 rounded-full flex items-center justify-center text-slate-600 hover:text-brand-navy hover:bg-slate-100/80 active:bg-slate-200/60 transition-colors cursor-pointer shrink-0"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h2 className="text-lg sm:text-xl font-bold font-display text-brand-navy tracking-tight truncate text-center flex-1">
+      <div className="bg-white/95 backdrop-blur-md border-b border-slate-200/60 px-4 sm:px-6 py-2.5 flex items-center shrink-0">
+        <div className="max-w-2xl mx-auto w-full grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <div className="flex items-center justify-start">
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Go back"
+              className="min-h-[40px] -ml-1.5 pl-1.5 pr-3 py-1.5 rounded-full inline-flex items-center gap-1.5 text-[14px] font-semibold text-brand-navy hover:bg-slate-100/80 active:bg-slate-200/70 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+            >
+              <ArrowLeft className="w-4 h-4 stroke-[2.25px] shrink-0" />
+              <span>Back</span>
+            </button>
+          </div>
+          <h2 className="text-[16px] sm:text-lg font-bold font-display text-brand-navy tracking-tight truncate text-center">
             {title}
           </h2>
-          <div className="w-10 shrink-0" aria-hidden="true" />
+          <div aria-hidden="true" />
         </div>
       </div>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 pt-5 sm:pt-7 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
