@@ -5796,8 +5796,8 @@ export default function App() {
       ) : (
         <>
       {/* Header */}
-      {activeView !== 'login' && !showWebPresentation && (
-        <header 
+      {activeView !== 'login' && activeView !== 'complete-profile' && !showWebPresentation && (
+        <header
           style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
           className="bg-white px-4 md:px-6 pb-2 md:pt-3 md:pb-3 flex justify-between items-center border-b border-slate-100 flex-shrink-0 z-30 relative"
         >
@@ -5981,7 +5981,7 @@ export default function App() {
         ref={mainRef} 
         className={cn(
           "flex-1 overflow-y-auto overflow-x-hidden no-scrollbar relative",
-          (activeView === 'login' || showWebPresentation) ? "pb-0" : "pb-24 xl:pb-0"
+          (activeView === 'login' || activeView === 'complete-profile' || showWebPresentation) ? "pb-0" : "pb-24 xl:pb-0"
         )}
       >
               <motion.div 
@@ -7285,7 +7285,7 @@ export default function App() {
           }}
         />
 
-        {activeView !== 'login' && !showWebPresentation && (
+        {activeView !== 'login' && activeView !== 'complete-profile' && !showWebPresentation && (
           <SEOFooter
             onNavigate={handleNavigate}
             onReturnToWebsite={!isNativeOrStandaloneApp && webSurfaceMode === 'app' ? handleReturnToWebPresentation : undefined}
@@ -7294,8 +7294,8 @@ export default function App() {
       </main>
 
       {/* Bottom Navigation */}
-      {activeView !== 'login' && !showWebPresentation && (
-        <nav 
+      {activeView !== 'login' && activeView !== 'complete-profile' && !showWebPresentation && (
+        <nav
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2px)' }}
           className="fixed bottom-0 left-0 right-0 w-full bg-white border-t border-slate-100 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.03)] xl:hidden after:content-[''] after:absolute after:top-full after:left-0 after:right-0 after:h-24 after:bg-white after:pointer-events-none"
         >
@@ -14276,9 +14276,9 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
   const canContinue = Boolean(fullName.trim()) && Boolean(notificationChoice) && !isLoading && !isRequestingPush;
 
   return (
-    <div className="fixed inset-0 bg-[#F8FAFC] z-[110] flex flex-col overflow-y-auto no-scrollbar">
-      <div className="flex-1 flex flex-col items-center justify-center px-5 py-8 pt-[calc(env(safe-area-inset-top,0px)+32px)] pb-[calc(env(safe-area-inset-bottom,0px)+32px)] min-h-full">
-        <div className="w-full max-w-md space-y-6">
+    <div className="fixed inset-0 bg-[#F8FAFC] z-[110] flex flex-col overflow-y-auto overscroll-contain no-scrollbar">
+      <div className="flex-1 flex flex-col items-center px-5 pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-[calc(env(safe-area-inset-bottom,0px)+40px)]">
+        <div className="w-full max-w-md space-y-6 my-auto">
           {/* Calm Header */}
           <div className="flex flex-col items-center text-center space-y-3">
             <Logo imgClassName="h-9 sm:h-10 w-auto" />
@@ -14502,7 +14502,7 @@ function ProfileSetupView({ currentUser, onComplete }: { currentUser: any, onCom
                   // Redirect to homepage & fully refresh
                   window.location.href = '/';
                 }}
-                className="min-h-[44px] px-4 py-2 rounded-xl text-[13px] font-medium text-slate-400 hover:text-rose-600 hover:bg-rose-50/70 transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                className="min-h-[44px] px-4 py-2 rounded-xl text-[13px] font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50/70 transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5 shrink-0" />
                 <span>Reset Session / Log Out</span>
