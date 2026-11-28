@@ -6,8 +6,12 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import { Resend } from "resend";
 import dotenv from "dotenv";
-import { tavily } from "@tavily/core";
 import passkeyHandler from "./api/passkey";
+import {
+  runEventsDiscoveryAgent,
+  verifySingleEventLive,
+  generateWeekendPushDraft,
+} from "./server/eventsAgent";
 
 dotenv.config();
 
@@ -310,26 +314,12 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
-  // Lazily initialize Tavily client for live real-time web event search
-  let tavilyClient: any = null;
-  const getTavilyClient = () => {
-    const apiKey = process.env.TAVILY_API_KEY;
-    if (!apiKey || !apiKey.trim()) {
-      return null;
-    }
-    if (!tavilyClient) {
-      tavilyClient = tavily({ apiKey: apiKey.trim() });
-    }
-    return tavilyClient;
-  };
-
-  // Status check for search providers (Tavily & Gemini)
+  // Status check for AI Events Agent configuration
   app.get("/api/search-config", (req, res) => {
-    const hasTavily = Boolean(process.env.TAVILY_API_KEY && process.env.TAVILY_API_KEY.trim());
     const hasGemini = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim());
     res.json({
-      tavily_configured: hasTavily,
-      gemini_configured: hasGemini
+      gemini_configured: hasGemini,
+      agent_mode: "live-valencia-web-grounding"
     });
   });
 
@@ -763,563 +753,143 @@ ${JSON.stringify(eventListBrief, null, 2)}`,
     }
   });
 
-  // Agentic AI real-time event discovery endpoint (Perplexity-style, zero-hallucination) with multi-model quota fallback
-  app.post("/api/search-events", async (req, res) => {
-    const { query, location, month, category, expatFocus, existingTitles, preferredModel } = req.body;
+  // Zero-Hallucination Autonomous Events Discovery Agent (Live Google Search Grounding + 4-Layer Verification)
+  app.post(["/api/search-events", "/api/events-agent/weekly-hunt"], async (req, res) => {
+    const isWeeklyHuntRoute = req.path.includes("weekly-hunt");
+    const {
+      mode,
+      query,
+      timeframe,
+      month,
+      category,
+      expatFocus,
+      existingTitles,
+      existingEvents,
+      preferredModel,
+    } = req.body || {};
 
-    if (!query || typeof query !== "string" || !query.trim()) {
-      return res.status(400).json({ error: "The 'query' parameter is required." });
+    const resolvedMode: "weekly_hunt" | "custom_search" =
+      isWeeklyHuntRoute || mode === "weekly_hunt" ? "weekly_hunt" : "custom_search";
+
+    if (resolvedMode === "custom_search" && (!query || typeof query !== "string" || !query.trim())) {
+      return res.status(400).json({ error: "Please enter a search query or run the Weekly Autonomous Hunt." });
     }
 
-    const searchLocation = location || "Valencia, Spain and surrounding Valencian Community (Ruzafa, El Carmen, Marina, Ciutat de les Arts i les Ciències, Palau de les Arts, IVAM, La Rambleta, Alboraya, El Saler, Sagunto)";
-    const targetMonth = month && month !== "All Months / Upcoming" ? month : "upcoming months";
-    const targetCategory = category && category !== "All Categories" ? category : null;
-    const isExpatFocus = Boolean(expatFocus);
-
-    const categoryDirective = targetCategory
-      ? `\n\nSTRICT CATEGORY TARGETING DIRECTIVE:\nFocus specifically on finding events that strictly belong to the category "${targetCategory}". Ensure every returned event is relevant to this category.`
-      : '';
-
-    const expatDirective = isExpatFocus
-      ? `\n\n🌍 SPECIAL EXPAT & INTERNATIONAL COMMUNITY FOCUS DIRECTIVE (CRITICAL):
-The user has activated the "Expat / International Community Focus" option.
-Prioritize events tailored for international residents, expats, digital nomads, and English/multilingual speakers in Valencia:
-- Expat meetups, international networking events, language exchanges (intercambios de idiomas), international quiz nights, and newcomer welcome gatherings.
-- Multilingual cultural shows, English-friendly / international theater or stand-up comedy, international music acts, indie festivals, open-air international markets, creative art/pottery workshops, and gastronomy/wine tastings.
-- Outdoor sports/runs, Turia group fitness, social dinners, and tech/startup networking meetups.
-- In the "description" section under "**🎯 Perfect for**", highlight expat-specific appeal (e.g. 🌍 **Expats & Newcomers in Valencia**, 🗣️ **English & Multilingual Speakers**, 🤝 **International Community & Networking**).`
-      : '';
-
-    const exclusionList = Array.isArray(existingTitles) && existingTitles.length > 0
-      ? `\n\nDATABASE DEDUPLICATION DIRECTIVE:\nDO NOT return events that are already saved in the database. Exclude any event with a title matching or similar to these existing database titles:\n${existingTitles.slice(0, 40).map((t: string) => `- "${t}"`).join('\n')}\nOnly return NEW undiscovered events.`
-      : '';
+    if (typeof query === "string" && query.length > 500) {
+      return res.status(400).json({ error: "Search query is too long (max 500 characters)." });
+    }
 
     try {
-      const sysInstruction = `You are an elite, real-time event discovery agent like Perplexity AI, specialized in finding VERIFIED, REAL, HIGH-PROFILE, AND RELEVANT upcoming events in Valencia (Spain) and the surrounding region.
-
-CRITICAL ZERO-HALLUCINATION & FACTUALITY DIRECTIVES:
-1. NEVER INVENT OR FABRICATE ANY EVENT, DATE, VENUE, ORGANIZER, ARTIST, OR TICKET DETAILS.
-2. Every single returned event MUST be strictly grounded in real-time Google Search web results for real events happening in Valencia during the requested timeframe: ${targetMonth}.${categoryDirective}${expatDirective}
-3. Conduct a DEEP AND THOROUGH SEARCH. Search for popular, famous, major, and culturally relevant events across key venues in Valencia, including:
-   - Performing Arts & Opera: Palau de les Arts Reina Sofía, Teatro Principal, Teatro Olympia, La Rambleta, Sala Off
-   - Classical & Music: Palau de la Música, Plaza de Toros, Marina de Valencia, Ciutat de les Arts i les Ciències
-   - Museums & Exhibitions: IVAM, Bombas Gens, CAIXAFORUM Valencia, MuVIM, Centro del Carmen (CCCC), Museo de Bellas Artes
-   - Fairs & Innovation: Feria Valencia, Veles e Vents, Roig Arena / Fonteta
-   - Gastronomy, Outdoor & Expat Meetups: Jardines del Real / Viveros, Jardín del Turia, Mercado de Colón, Ruzafa & El Carmen galleries, international pubs, language cafés
-4. EXHAUSTIVE DIVERSIFIED SEARCH REQUIREMENT (CRITICAL): Aim to discover 18 to 25 verified real events across ALL domains and categories (festivals, cultural exhibitions, museum shows at IVAM/Bombas Gens/Museo de Bellas Artes, local neighborhood events, sports tournaments/runs, concerts, theater, gastronomy fairs, expat meetups, and workshops) for ${targetMonth}. Do not restrict results to a single domain; ensure maximum diversity and volume across all categories.
-5. If no verified real event is found for a specific query, return an empty array [] in "events" and explain in "summary" in clear English.${exclusionList}
-
-TICKETING & PURCHASE URL DIRECTIVE (CRITICAL):
-- For events requiring payment / admission fee / tickets (e.g. concerts, theater, cooking classes, museum entry, festivals):
-  * "is_free": false
-  * "price": precise ticket price or range, e.g. "From 15€", "25€ - 65€", "55€ per person"
-  * "ticket_url": direct official ticketing website URL (e.g. lesarts.com, feverup.com, ivam.es, teatrolympia.com, entradas.com, ticketmaster.es, venue booking page)
-  * INSIDE the "description" under "### 💡 Good to know", ALWAYS include:
-    - 🎟️ **Tickets & Pricing**: **[price]** — [Buy Official Tickets]([ticket_url])
-  * INSIDE the "description" under "### 🔗 More info", ALWAYS include:
-    - 🎟️ **Official Ticket Purchase**: [Buy Tickets / Book Online]([ticket_url])
-- For free events:
-  * "is_free": true
-  * "price": "Free"
-  * "ticket_url": registration link if RSVP is required, or null
-
-FOR EACH REAL EVENT FOUND:
-- title: Complete official title of the event
-- start_date: Standardized date string, e.g., "OCT 15", "NOV 02", or "2026-10-15"
-- end_date: Standardized end date string ONLY if the event spans multiple distinct days, e.g., "OCT 18". CRITICAL: If the event takes place on a single day or if start_date and end_date are on the same day, end_date MUST be null (publish only start_date).
-- start_time: Formatted start time, e.g., "20:00" or "08:00 PM"
-- end_time: Formatted end time or null
-- location: Complete venue name and precise street address with postal code in Valencia (e.g., "Palau de les Arts Reina Sofía, Av. del Professor López Piñero 1, 46013 València")
-- category: One of "Art", "Theater", "Music", "Culture", "Tech", "Gastronomy", "Community", "Sports", "Workshops"
-- image: High quality real photo URL or relevant Unsplash image URL matching the specific theme
-- is_free: Boolean (true if 100% free admission, false if paid)
-- price: Formatted price string (e.g. "Free", "From 20€", "35€")
-- ticket_url: Official ticketing or booking URL if paid, or registration URL
-- description: A clear, engaging, and structured Markdown description formatted STRICTLY into these 5 canonical sections (using these exact headers):
-
-### 📝 Description
-[1-2 engaging introductory paragraphs presenting the event, its concept, theme, and key highlights.]
-
-### ✨ What to expect
-[2-3 engaging paragraphs describing the atmosphere, artists, program highlights, activities, and experience. Use natural, varied emojis and **bold** formatting for important names, artists, and highlights.]
-
-### 🎯 Perfect for
-- 🌍 [Target audience 1, e.g. Expats, newcomers, international residents in Valencia]
-- 👥 [Target audience 2, e.g. Culture seekers, families, music enthusiasts]
-- ✨ [Target audience 3, e.g. Anyone looking for a memorable evening in Valencia]
-
-### 💡 Good to know
-- 🎟️ **Tickets & Admission**: [Exact price or Free] — [Buy Official Tickets]([ticket_url]) (if paid)
-- 📍 **Venue & Location**: [Venue name, address, and directions]
-- ⏰ **Schedule & Timing**: [Doors open, start time, duration]
-- 🚇 **Public Transport & Access**: [Metro stations, bus lines, or parking tips]
-
-### 🔗 More info
-- 🌐 **Official Website**: [Venue / Organizer Official Page]([sources url or official website])
-- 🎟️ **Ticket Purchase / RSVP**: [Book Online]([ticket_url]) (if applicable)
-
-CRITICAL EMOJI & FORMATTING DIRECTIVE:
-- NEVER output duplicate or double emojis (e.g. NEVER write "🎶 🎶", "🎟️ 🎟️", or "✨ ✨"). Use each emoji at most once per line/item.
-- Always cleanly divide the content into the 5 sections above so each piece of information is placed in its dedicated box.
-- coordinates: Estimated GPS coordinates { lat: number, lng: number } in Valencia region
-- sources: List of 1-3 official website URLs and verified search source links for this event (e.g. { "title": "Official Venue Website", "url": "https://www.lesarts.com" })
-- verified_real: true`;
-
       const ai = getAiClient();
+      const result = await runEventsDiscoveryAgent(ai, {
+        mode: resolvedMode,
+        query: typeof query === "string" ? query.trim() : undefined,
+        timeframe: typeof timeframe === "string" ? timeframe : undefined,
+        month: typeof month === "string" ? month : undefined,
+        category: typeof category === "string" ? category : undefined,
+        expatFocus: Boolean(expatFocus),
+        existingTitles: Array.isArray(existingTitles) ? existingTitles.slice(0, 200) : [],
+        existingEvents: Array.isArray(existingEvents) ? existingEvents.slice(0, 200) : [],
+        preferredModel: typeof preferredModel === "string" ? preferredModel : "auto",
+      });
 
-      // Candidate models for search: gemini-4-hydrogen followed by gemini-3.1-flash-lite
-      const defaultChain = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
-      const candidateModels: string[] = [];
-      if (preferredModel && preferredModel !== "auto" && typeof preferredModel === "string") {
-        candidateModels.push(preferredModel);
-        defaultChain.forEach(m => {
-          if (m !== preferredModel) candidateModels.push(m);
+      return res.json(result);
+    } catch (error: any) {
+      console.error("[api/events-agent] Error:", error);
+      const errLower = String(error?.message || "").toLowerCase();
+      const is503 = error?.status === 503 || errLower.includes("503") || errLower.includes("high demand") || errLower.includes("unavailable");
+      if (is503) {
+        return res.status(503).json({
+          error: "Gemini is experiencing a brief demand spike. No unverified events were invented — please retry in a few seconds.",
         });
-      } else {
-        candidateModels.push(...defaultChain);
       }
+      const status = isQuotaOrRateLimitError(error) ? 429 : 500;
+      return res.status(status).json({
+        error:
+          status === 429
+            ? "AI quota temporarily reached. No unverified events were invented — please retry in a minute."
+            : error?.message || "Failed to run the Events Agent right now.",
+      });
+    }
+  });
 
-      let response: any = null;
-      let usedModel = candidateModels[0];
-      let fallbackTriggered = false;
-      let fallbackReason: string | null = null;
-      let lastError: any = null;
-      let tavilyDirectSources: any[] = [];
-      let searchEngineUsed = "google-search-grounding";
+  // Live Fact-Checker for a single event (checks official live web listings, cancellations, and link health)
+  app.post("/api/events-agent/verify-event", async (req, res) => {
+    const { title, start_date, end_date, start_time, location, price, ticket_url } = req.body || {};
 
-      // Check if Tavily Search is configured or requested
-      const hasTavilyKey = Boolean(process.env.TAVILY_API_KEY && process.env.TAVILY_API_KEY.trim());
-      const isTavilyRequested = preferredModel === "tavily" || req.body.searchEngine === "tavily";
-
-      // Helper function to run Tavily real-time event discovery across multi-site domain groups in Valencia & Valencian region
-      const executeTavilySearch = async () => {
-        const tvly = getTavilyClient();
-        if (!tvly) {
-          throw new Error("TAVILY_API_KEY is not configured.");
-        }
-        const expatKeywords = isExpatFocus ? "expats international meetup english community" : "";
-        const catKeywords = targetCategory ? `category ${targetCategory}` : "";
-        const baseSearchTerm = `agenda eventos valencia ${query} ${targetMonth} ${catKeywords} ${expatKeywords}`.trim();
-
-        // Comprehensive multi-site domain groups covering tourism, cultural venues, museums, ticketing & local magazines across Valencia region
-        const domainGroups = [
-          `site:visitvalencia.com OR site:comunitatvalenciana.com OR site:turisme.valencia.es OR site:cultural.valencia.es`,
-          `site:ivam.es OR site:palaudelamusica.com OR site:lesarts.com OR site:teatrolympia.com OR site:caixaforum.org OR site:larambleta.com OR site:teatroprincipalvalencia.com`,
-          `site:eventbrite.es OR site:valenciasecreta.com OR site:feverup.com OR site:lovevalencia.com OR site:lasprovincias.es OR site:levante-emv.com OR site:ticketmaster.es OR site:entradas.com`
-        ];
-
-        console.log(`[api/search-events] Executing multi-site parallel web searches via Tavily Search API across ${domainGroups.length} domain groups for Valencia & Valencian region...`);
-
-        const searchPromises = domainGroups.map(sitesFilter => {
-          const queryStr = `${baseSearchTerm} ${sitesFilter}`.trim();
-          return tvly.search(queryStr, {
-            searchDepth: "advanced",
-            maxResults: 25,
-            includeImages: true,
-            includeAnswer: true
-          }).catch(err => {
-            console.warn(`[api/search-events] Tavily group search warning:`, err?.message || err);
-            return { results: [], answer: "" };
-          });
-        });
-
-        const searchResponses = await Promise.all(searchPromises);
-        
-        // Collect and deduplicate results by URL
-        const seenUrls = new Set<string>();
-        const allTavilyResults: any[] = [];
-        let combinedAnswers = "";
-
-        searchResponses.forEach(res => {
-          if (res?.answer) {
-            combinedAnswers += res.answer + "\n";
-          }
-          if (Array.isArray(res?.results)) {
-            res.results.forEach((r: any) => {
-              if (r && r.url && !seenUrls.has(r.url)) {
-                seenUrls.add(r.url);
-                allTavilyResults.push(r);
-              }
-            });
-          }
-        });
-
-        console.log(`[api/search-events] Tavily collected a total of ${allTavilyResults.length} unique live web results across 18+ official Valencian sites.`);
-
-        if (allTavilyResults.length > 0) {
-          const formattedResults = allTavilyResults.map((r: any, idx: number) =>
-            `[Source ${idx + 1}] Title: ${r.title}\nURL: ${r.url}\nPublished Date: ${r.publishedDate || 'N/A'}\nSnippet / Content: ${r.content || ''}`
-          ).join("\n\n");
-
-          const promptWithTavily = `Here are VERIFIED, LIVE web search results retrieved from Tavily across 18+ official Valencia and Valencian Community websites for upcoming events in ${searchLocation} for "${targetMonth}" matching user query "${query}":
-
-${formattedResults}
-
-${combinedAnswers ? `Tavily Search Summary: ${combinedAnswers.trim()}\n\n` : ''}
-Based on these live web search results from multiple official Valencian sites, extract, structure, and deduplicate 18 to 25 verified upcoming events in Valencia according to the schema.
-Ensure each event contains:
-- Official title
-- Real start_date (standardized, e.g. "OCT 15", "NOV 02", or "YYYY-MM-DD") and end_date (null if single day)
-- Real start_time (e.g. "20:00")
-- Specific venue name and address in Valencia
-- Category ("Art", "Theater", "Music", "Culture", "Tech", "Gastronomy", "Community", "Sports", "Workshops")
-- Ticket pricing and official booking URL (from the Tavily search results)
-- Canonical 5-section markdown description (### 📝 Description, ### ✨ What to expect, ### 🎯 Perfect for, ### 💡 Good to know, ### 🔗 More info)
-- Verified sources pointing directly to the Tavily result URLs where the event was found.`;
-
-          const extractionResp = await ai.models.generateContent({
-            model: "gemini-3.1-flash-lite",
-            contents: promptWithTavily,
-            config: {
-              systemInstruction: sysInstruction,
-              temperature: 0.1
-            }
-          });
-
-          if (extractionResp && extractionResp.text) {
-            response = extractionResp;
-            usedModel = "Tavily AI Multi-Site Search Engine (18+ Sites) + Gemini Structuring";
-            searchEngineUsed = "tavily";
-            tavilyDirectSources = allTavilyResults.map((r: any) => ({
-              title: r.title || "Tavily Verified Web Source",
-              url: r.url
-            }));
-            console.log("[api/search-events] Successfully extracted events from multi-site Tavily results!");
-          }
-        }
-      };
-
-      // 1. If Tavily is requested, execute Tavily exclusively. If auto mode, try Tavily if key is present.
-      if (isTavilyRequested) {
-        if (!hasTavilyKey) {
-          return res.status(400).json({ 
-            error: "La clé d'API Tavily (TAVILY_API_KEY) n'est pas configurée. Veuillez ajouter votre clé dans vos variables d'environnement pour utiliser la recherche exclusive Tavily." 
-          });
-        }
-        try {
-          await executeTavilySearch();
-          if (!response) {
-            return res.status(404).json({
-              error: "Tavily n'a retourné aucun résultat web pour cette recherche."
-            });
-          }
-        } catch (tavilyErr: any) {
-          console.error("[api/search-events] Tavily search error:", tavilyErr);
-          return res.status(500).json({
-            error: `Erreur Tavily API : ${tavilyErr?.message || 'Erreur inconnue'}`
-          });
-        }
-      } else if (preferredModel === "auto" && hasTavilyKey) {
-        try {
-          await executeTavilySearch();
-        } catch (tavilyErr: any) {
-          console.warn("[api/search-events] Tavily search failed, falling back to Gemini Search Grounding:", tavilyErr?.message || tavilyErr);
-          fallbackTriggered = true;
-          fallbackReason = `Recherche Tavily temporairement indisponible (${tavilyErr?.message || 'erreur'}). Basculement automatique sur Google Search Grounding.`;
-        }
-      }
-
-      // 2. If Tavily did not run or returned no events (in auto mode), try Gemini models with Google Search Grounding
-      if (!response && !isTavilyRequested) {
-        for (let i = 0; i < candidateModels.length; i++) {
-          const currentModel = candidateModels[i];
-          if (currentModel === "tavily") continue; // Skip tavily inside gemini models loop
-          try {
-            console.log(`[api/search-events] Attempting search with model: ${currentModel} (attempt ${i + 1}/${candidateModels.length})`);
-          
-          const configObj: any = {
-            systemInstruction: sysInstruction,
-            temperature: 0.2
-          };
-
-
-
-          const promptText = `Find and list 18 to 25 verified upcoming events, festivals, museum exhibitions, cultural shows, sports events, and local happenings in ${searchLocation} for "${targetMonth}" matching request: "${query}" across all domains and categories. Return strictly a valid JSON object formatted as: {"summary": "...", "events": [{"title": "...", "start_date": "YYYY-MM-DD", "end_date": null, "start_time": "HH:MM", "location": "...", "category": "...", "description": "...", "ticket_url": "...", "price": "...", "is_free": false, "coordinates": {"lat": 39.4699, "lng": -0.3763}}]}. Output only the JSON object, with no conversational text.`;
-
-          response = await ai.models.generateContent({
-            model: currentModel,
-            contents: promptText,
-            config: configObj
-          });
-
-          usedModel = currentModel;
-          if (i > 0) {
-            fallbackTriggered = true;
-            fallbackReason = `Basculement automatique effectué car le modèle précédent a rencontré une limite de quota ou d'indisponibilité (${candidateModels[i - 1]} → ${currentModel})`;
-            console.log(`[api/search-events] Fallback succeeded with model: ${currentModel}`);
-          }
-          break; // Succeeded!
-        } catch (err: any) {
-          lastError = err;
-          const errMsg = err?.message || String(err);
-          const isQuota = isQuotaOrRateLimitError(err);
-          console.warn(`[api/search-events] Model ${currentModel} failed (quota/limit: ${isQuota}, error: ${errMsg}).`);
-
-          if (i < candidateModels.length - 1) {
-            const nextModel = candidateModels[i + 1];
-            console.log(`[api/search-events] Automatically trying fallback model: ${nextModel}...`);
-            fallbackTriggered = true;
-            continue;
-          }
-        }
-      }
+    if (!title || typeof title !== "string" || !title.trim()) {
+      return res.status(400).json({ error: "Event title is required for live verification." });
     }
 
-      // If all live web-grounded models fail due to search quotas, attempt AI knowledge search without search tool
-      if (!response) {
-        console.warn("[api/search-events] All grounded search attempts hit quotas. Attempting fallback knowledge-based AI generation (without Search tool)...");
-        try {
-          response = await ai.models.generateContent({
-            model: "gemini-3.1-flash-lite",
-            contents: `Generate real upcoming events, festivals, and concerts in ${searchLocation} for "${targetMonth}" matching request: "${query}". Return strictly a JSON object with a summary and an array of events with title, start_date (YYYY-MM-DD), location, category, description, and ticket_url.`,
-            config: {
-              systemInstruction: sysInstruction,
-              responseMimeType: "application/json",
-              temperature: 0.2
-            }
-          });
-          if (response?.text) {
-            usedModel = "gemini-3.1-flash-lite (knowledge-base)";
-            fallbackTriggered = true;
-            fallbackReason = "Recherche effectuée via la base de connaissances IA (les quotas Google Search Grounding étant temporairement atteints sur l'API externe).";
-          }
-        } catch (kbErr: any) {
-          console.warn("[api/search-events] Knowledge-based AI fallback also failed:", kbErr?.message);
-        }
-      }
-
-      if (!response) {
-        console.warn("[api/search-events] All candidate models failed due to quota/errors. Returning robust curated fallback events for Valencia.");
-        const fallbackValenciaEvents = [
-          {
-            title: "Valencia International Jazz Festival & Open-Air Concerts",
-            start_date: "2026-10-10",
-            end_date: "2026-10-12",
-            start_time: "20:00",
-            location: "Palau de la Música, Paseo de la Alameda 30, 46023 València",
-            category: "Music",
-            image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=1000",
-            is_free: false,
-            price: "From 18€",
-            ticket_url: "https://www.palaudelamusica.com",
-            description: "- 🎶 **Live Jazz Performances**: top international artists and local Spanish jazz ensembles.\n- 🎷 **Open-Air Jam Sessions**: vibrant evening gatherings around the Palau gardens.\n- 👥 **Atmosphere**: ideal for music lovers, expats, and locals enjoying cultural nights in Valencia.\n- 🎟️ **Tickets & Pricing**: from 18€ — [Buy Official Tickets](https://www.palaudelamusica.com)\n- ⏰ **Doors Open**: 45 minutes before concert time.",
-            coordinates: { lat: 39.4678, lng: -0.3635 },
-            verified_real: true,
-            sources: [{ title: "Palau de la Música Official", url: "https://www.palaudelamusica.com" }]
-          },
-          {
-            title: "Valencia Contemporary Art Exhibition at IVAM",
-            start_date: "2026-10-15",
-            end_date: "2026-11-15",
-            start_time: "10:00",
-            location: "IVAM (Institut Valencià d'Art Modern), C/ de Guillem de Castro 118, 46003 València",
-            category: "Art",
-            image: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&q=80&w=1000",
-            is_free: false,
-            price: "6€ (Free on Sundays)",
-            ticket_url: "https://www.ivam.es",
-            description: "- 🎨 **Modern Masterpieces**: groundbreaking contemporary installations and sculpture.\n- 🏛️ **Guided Tours**: expert curator-led tours in Spanish and English.\n- 🌍 **International Visitors**: multilingual audio guides available.\n- 🎟️ **Tickets & Pricing**: 6€ general admission — [Buy Official Tickets](https://www.ivam.es)\n- 🗓️ **Free Entry**: every Sunday from 15:00.",
-            coordinates: { lat: 39.4754, lng: -0.3835 },
-            verified_real: true,
-            sources: [{ title: "IVAM Official Website", url: "https://www.ivam.es" }]
-          },
-          {
-            title: "Ruzafa Gastronomy & Wine Tasting Evening",
-            start_date: "2026-10-18",
-            end_date: null,
-            start_time: "19:30",
-            location: "Mercado de Ruzafa, C/ de Trafalgar 21, 46006 València",
-            category: "Gastronomy",
-            image: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=1000",
-            is_free: false,
-            price: "35€ per person",
-            ticket_url: "https://www.feverup.com",
-            description: "- 🍷 **Wine Tasting**: selection of Valencian DO wines paired with artisan tapas.\n- 👨‍🍳 **Chef Masterclass**: live paella and local delicacy demonstrations.\n- 🤝 **Socializers**: meet new friends in the trendy Ruzafa district.\n- 🎟️ **Tickets & Pricing**: 35€ inclusive — [Buy Official Tickets](https://www.feverup.com)\n- ⏰ **Duration**: approx. 2.5 hours.",
-            coordinates: { lat: 39.4623, lng: -0.3751 },
-            verified_real: true,
-            sources: [{ title: "Fever Valencia Events", url: "https://www.feverup.com" }]
-          },
-          {
-            title: "Turia Park Sunset Social Run & Expat Meetup",
-            start_date: "2026-10-20",
-            end_date: null,
-            start_time: "18:30",
-            location: "Jardín del Turia (Meeting at Puente de las Flores), 46003 València",
-            category: "Sports",
-            image: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&q=80&w=1000",
-            is_free: true,
-            price: "Free",
-            ticket_url: null,
-            description: "- 🏃 **5K & 10K Group Run**: relaxed pace through Turia riverbed gardens.\n- 🤝 **Social Drinks**: post-run refreshments at a nearby terrace.\n- 🌍 **Expats & Newcomers**: integrate into the Valencia sports and international community.\n- 🎟️ **Admission**: 100% free, no registration required.\n- 💧 **Bring Water**: hydration stations at midpoint.",
-            coordinates: { lat: 39.4719, lng: -0.3712 },
-            verified_real: true,
-            sources: [{ title: "Valencia Runners Club", url: "https://www.valenciarunners.com" }]
-          }
-        ];
-
-        const formattedFallbackEvents = fallbackValenciaEvents.map((ev, idx) => ({
-          id: `fallback-event-${Date.now()}-${idx}`,
-          title: ev.title,
-          date: ev.start_date,
-          start_date: ev.start_date,
-          end_date: ev.end_date,
-          time: ev.start_time,
-          start_time: ev.start_time,
-          end_time: null,
-          location: ev.location,
-          category: ev.category,
-          image: ev.image,
-          description: ev.description,
-          coordinates: ev.coordinates,
-          verified_real: true,
-          ticket_url: ev.ticket_url,
-          price: ev.price,
-          is_free: ev.is_free,
-          sources: ev.sources
-        }));
-
-        return res.json({
-          summary: `Found ${formattedFallbackEvents.length} verified real events in Valencia for ${targetMonth} (Curated Offline Mode due to temporary Gemini quota limits).`,
-          events: formattedFallbackEvents,
-          search_groundings: [{ title: "Valencia Cultural Calendar", url: "https://www.visitvalencia.com" }],
-          model_used: "fallback-curated-mode",
-          fallback_triggered: true,
-          fallback_reason: "Automatic failover to verified Valencia events catalogue (Gemini API quotas temporarily reached)."
-        });
-      }
-
-      const parsed = extractJsonFromModelResponse(response.text || "{}");
-      const rawEvents = Array.isArray(parsed.events) ? parsed.events : [];
-
-      // Extract search grounding metadata sources from Gemini or Tavily response
-      const candidate = response.candidates?.[0];
-      const groundingChunks = candidate?.groundingMetadata?.groundingChunks || [];
-      const defaultSources = (tavilyDirectSources && tavilyDirectSources.length > 0)
-        ? tavilyDirectSources
-        : groundingChunks
-            .filter((chunk: any) => chunk.web?.uri)
-            .map((chunk: any) => ({
-              title: chunk.web?.title || "Google Search Grounding Source",
-              url: chunk.web?.uri
-            }));
-
-      const categoryFallbackImages: Record<string, string> = {
-        Art: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&q=80&w=1000",
-        Theater: "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&q=80&w=1000",
-        Music: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=1000",
-        Culture: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=1000",
-        Tech: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=1000",
-        Gastronomy: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=1000",
-        Sports: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&q=80&w=1000",
-        Community: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80&w=1000"
-      };
-
-      const isSameDay = (d1?: string | null, d2?: string | null): boolean => {
-        if (!d1 || !d2) return false;
-        const s1 = d1.trim().toLowerCase();
-        const s2 = d2.trim().toLowerCase();
-        if (s1 === s2) return true;
-
-        const clean1 = s1.replace(/,/g, '').replace(/\s+/g, ' ').trim();
-        const clean2 = s2.replace(/,/g, '').replace(/\s+/g, ' ').trim();
-        if (clean1 === clean2) return true;
-
-        const p1 = Date.parse(d1);
-        const p2 = Date.parse(d2);
-        if (!isNaN(p1) && !isNaN(p2)) {
-          const dt1 = new Date(p1);
-          const dt2 = new Date(p2);
-          return (
-            dt1.getFullYear() === dt2.getFullYear() &&
-            dt1.getMonth() === dt2.getMonth() &&
-            dt1.getDate() === dt2.getDate()
-          );
-        }
-        return false;
-      };
-
-      const cleanEventDescription = (rawDesc: string): string => {
-        if (!rawDesc) return "";
-        let desc = rawDesc;
-        // 1. Remove repeated consecutive emojis (supporting compound emojis & variation selectors \uFE0F)
-        desc = desc.replace(/([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]*\1)+/gu, '$1');
-        // 2. Remove duplicate emojis at bullet point starts (e.g. "- 🎟️ 🎟️", "• 🎶 🎶")
-        desc = desc.replace(/^([ \t]*[-*•]\s*)([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]+\2)+/gmu, '$1$2');
-        // 3. Remove duplicate emojis at line starts (e.g. "🎶 🎶 Jazz night")
-        desc = desc.replace(/^([ \t]*)([\p{Extended_Pictographic}\u2600-\u27BF](?:\uFE0F|\u200D[\p{Extended_Pictographic}\u2600-\u27BF]|[\u{1F3FB}-\u{1F3FF}])*)(?:[ \t]+\2)+/gmu, '$1$2');
-        // 4. Clean decorative sparkle + emoji at start of bullets (e.g. "• ✨ 🎶" -> "• 🎶")
-        desc = desc.replace(/^([ \t]*[-*•]\s*)✨\s+([\p{Extended_Pictographic}\u2600-\u27BF])/gmu, '$1$2');
-        // 5. Clean header duplicate sparkles (e.g. "### ✨ ✨ What to expect" -> "### ✨ What to expect")
-        desc = desc.replace(/^(#{1,6}\s*)✨\s+✨/gmu, '$1✨');
-        // 6. Clean double colons
-        desc = desc.replace(/:\s*:/g, ':');
-        // 7. Clean unwanted isolated trailing sparkles
-        desc = desc.replace(/\s+✨\s*(?=[.:,\n]|$)/g, ' ');
-        // 8. Consolidate extra blank lines
-        desc = desc.replace(/\n{3,}/g, '\n\n');
-        return desc.trim();
-      };
-
-      const formattedEvents = rawEvents.map((ev: any, idx: number) => {
-        const id = `ai-event-${Date.now()}-${idx}`;
-        const sources = (Array.isArray(ev.sources) && ev.sources.length > 0)
-          ? ev.sources
-          : defaultSources;
-
-        const fallbackImg = categoryFallbackImages[ev.category] || categoryFallbackImages.Culture;
-        const sDate = ev.start_date || "UPCOMING";
-        const eDate = (ev.end_date && !isSameDay(sDate, ev.end_date)) ? ev.end_date : null;
-
-        // Auto-extract or fallback ticket_url
-        let ticketUrl = ev.ticket_url;
-        if (!ticketUrl && sources && sources.length > 0) {
-          const ticketingSource = sources.find((s: any) => 
-            /ticket|entrada|billet|booking|fever|lesarts|eventbrite|ivam|palau/i.test(s.url || '') ||
-            /ticket|entrada|billet|booking|fever|lesarts|eventbrite|ivam|palau/i.test(s.title || '')
-          );
-          if (ticketingSource?.url) {
-            ticketUrl = ticketingSource.url;
-          }
-        }
-
-        const isFree = typeof ev.is_free === 'boolean' 
-          ? ev.is_free 
-          : (ev.price ? ev.price.toLowerCase().includes('free') || ev.price.toLowerCase().includes('gratis') : false);
-
-        return {
-          id,
-          title: ev.title,
-          date: sDate,
-          start_date: sDate,
-          end_date: eDate,
-          time: ev.start_time || "TBA",
-          start_time: ev.start_time || "TBA",
-          end_time: ev.end_time || null,
-          location: ev.location || "Valencia, Spain",
-          category: ev.category || "Culture",
-          image: (ev.image && ev.image.startsWith('http')) ? ev.image : fallbackImg,
-          description: cleanEventDescription(ev.description || ""),
-          coordinates: ev.coordinates && ev.coordinates.lat ? ev.coordinates : { lat: 39.4699, lng: -0.3763 },
-          verified_real: true,
-          ticket_url: ticketUrl || null,
-          price: ev.price || (isFree ? 'Free' : null),
-          is_free: isFree,
-          sources: sources.slice(0, 5)
-        };
+    try {
+      const ai = getAiClient();
+      const verdict = await verifySingleEventLive(ai, {
+        title: title.trim().slice(0, 240),
+        start_date: typeof start_date === "string" ? start_date : null,
+        end_date: typeof end_date === "string" ? end_date : null,
+        start_time: typeof start_time === "string" ? start_time : null,
+        location: typeof location === "string" ? location.slice(0, 240) : null,
+        price: typeof price === "string" ? price.slice(0, 120) : null,
+        ticket_url: typeof ticket_url === "string" ? ticket_url : null,
       });
-
-      return res.json({
-        summary: parsed.summary || `Found ${formattedEvents.length} verified real events in Valencia for ${targetMonth}.`,
-        events: formattedEvents,
-        search_groundings: defaultSources,
-        model_used: usedModel,
-        search_engine: searchEngineUsed,
-        fallback_triggered: fallbackTriggered,
-        fallback_reason: fallbackReason
-      });
+      return res.json(verdict);
     } catch (error: any) {
-      console.error("[api] Event Search AI error:", error);
-      return res.status(500).json({ error: error.message || "Failed to search events at this time." });
+      console.error("[api/events-agent/verify-event] Error:", error);
+      const errLower = String(error?.message || "").toLowerCase();
+      const is503 = error?.status === 503 || errLower.includes("503") || errLower.includes("high demand") || errLower.includes("unavailable");
+      if (is503) {
+        return res.status(503).json({ error: "Gemini is experiencing a brief demand spike. Please retry in a few seconds." });
+      }
+      const status = isQuotaOrRateLimitError(error) ? 429 : 500;
+      return res.status(status).json({
+        error:
+          status === 429
+            ? "AI quota temporarily reached. Please retry verification in a minute."
+            : error?.message || "Unable to verify this event live right now.",
+      });
+    }
+  });
+
+  // Weekend Push Notification Composer (grounded strictly in real published weekend events)
+  app.post("/api/events-agent/weekend-push", async (req, res) => {
+    const { events } = req.body || {};
+    if (!Array.isArray(events) || events.length === 0) {
+      return res.status(400).json({ error: "Provide at least one published upcoming weekend event." });
+    }
+
+    const sanitizedEvents = events
+      .filter((e: any) => e && typeof e.title === "string" && e.title.trim())
+      .slice(0, 10)
+      .map((e: any) => ({
+        title: String(e.title).trim().slice(0, 180),
+        start_date: typeof e.start_date === "string" ? e.start_date.slice(0, 40) : undefined,
+        category: typeof e.category === "string" ? e.category.slice(0, 60) : undefined,
+        location: typeof e.location === "string" ? e.location.slice(0, 140) : undefined,
+        is_free: Boolean(e.is_free),
+      }));
+
+    if (sanitizedEvents.length === 0) {
+      return res.status(400).json({ error: "No valid events provided." });
+    }
+
+    try {
+      const ai = getAiClient();
+      const draft = await generateWeekendPushDraft(ai, sanitizedEvents);
+      return res.json(draft);
+    } catch (error: any) {
+      console.error("[api/events-agent/weekend-push] Error:", error);
+      const errLower = String(error?.message || "").toLowerCase();
+      const is503 = error?.status === 503 || errLower.includes("503") || errLower.includes("high demand") || errLower.includes("unavailable");
+      if (is503) {
+        return res.status(503).json({ error: "Gemini is experiencing a brief demand spike. Please retry in a few seconds." });
+      }
+      const status = isQuotaOrRateLimitError(error) ? 429 : 500;
+      return res.status(status).json({
+        error:
+          status === 429
+            ? "AI quota temporarily reached. Please retry in a minute."
+            : error?.message || "Unable to generate weekend push draft right now.",
+      });
     }
   });
 

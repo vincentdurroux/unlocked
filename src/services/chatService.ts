@@ -8,6 +8,9 @@ export interface Conversation {
   participant_1: string;
   participant_2: string;
   last_message_at: string;
+  last_message_content?: string | null;
+  last_message_sender_id?: string | null;
+  unread_count?: number;
   is_blocked?: boolean;
   is_archived?: boolean;
   otherUser?: {
@@ -151,21 +154,40 @@ export const chatService = {
       
       if (!allConversations || allConversations.length === 0) return [];
 
-      // 2. Identify and filter out conversations with NO messages
-      // We check all messages for these conversation IDs
+      // 2. Identify active conversations AND extract last message preview + unread count in the same query
       const conversationIds = allConversations.map(c => c.id);
       const { data: messagesCheck, error: msgError } = await supabase
         .from('messages')
-        .select('conversation_id')
-        .in('conversation_id', conversationIds);
+        .select('conversation_id, content, created_at, sender_id, is_read')
+        .in('conversation_id', conversationIds)
+        .order('created_at', { ascending: false });
 
       if (msgError) {
         console.warn('Error checking messages for empty conversations:', msgError);
-        // If message check fails, we proceed with all conversations to be safe
       }
 
-      const activeConvIds = new Set((messagesCheck || []).map(m => m.conversation_id));
-      
+      const activeConvIds = new Set<string>();
+      const lastMsgByConv = new Map<string, { content: string; created_at: string; sender_id: string }>();
+      const unreadCountByConv = new Map<string, number>();
+
+      for (const m of messagesCheck || []) {
+        activeConvIds.add(m.conversation_id);
+        if (m.sender_id !== userId && m.is_read === false) {
+          unreadCountByConv.set(m.conversation_id, (unreadCountByConv.get(m.conversation_id) || 0) + 1);
+        }
+        const isHiddenLegacyIntro =
+          typeof m.content === 'string' &&
+          m.content.startsWith('Hello ') &&
+          m.content.includes('! I saw your review for ');
+        if (!lastMsgByConv.has(m.conversation_id) && !isHiddenLegacyIntro) {
+          lastMsgByConv.set(m.conversation_id, {
+            content: m.content || '',
+            created_at: m.created_at,
+            sender_id: m.sender_id,
+          });
+        }
+      }
+
       // Separate active vs empty
       const now = new Date();
       const activeConversations = allConversations.filter(c => {
@@ -183,14 +205,12 @@ export const chatService = {
       // 3. Trigger background cleanup for empty conversations (asynchronously)
       if (emptyConversationsToDelete.length > 0) {
         emptyConversationsToDelete.forEach(c => {
-          // We don't await this to keep the main fetch fast
           this.deleteConversationIfEmpty(c.id).catch(err => {
             console.warn(`[ChatService] Background cleanup of conversation ${c.id} failed:`, err);
           });
         });
       }
 
-      console.log(`Found ${activeConversations.length} active conversations (Filtered ${emptyConversationsToDelete.length} empty ones)`);
       if (activeConversations.length === 0) return [];
       
       // 4. Collect unique IDs of all participants for active conversations
@@ -201,7 +221,6 @@ export const chatService = {
       if (participantIds.length === 0) return [];
 
       // 5. Fetch their profiles
-      console.log(`Fetching ${participantIds.length} profiles for participants...`);
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
@@ -213,13 +232,18 @@ export const chatService = {
       
       const profileMap = new Map((profiles || []).map(p => [p.id, p]));
       
-      // 6. Match conversations with profiles and archive state
+      // 6. Match conversations with profiles, archive state, previews, and unread counts
       const archivedIds = new Set(this.getArchivedConversationIds(userId));
       return activeConversations.map(c => {
         const otherId = c.participant_1 === userId ? c.participant_2 : c.participant_1;
         const otherProfile = profileMap.get(otherId);
+        const lastMsg = lastMsgByConv.get(c.id);
         return {
           ...c,
+          last_message_at: lastMsg?.created_at || c.last_message_at,
+          last_message_content: lastMsg?.content ?? null,
+          last_message_sender_id: lastMsg?.sender_id ?? null,
+          unread_count: unreadCountByConv.get(c.id) || 0,
           is_archived: archivedIds.has(c.id),
           otherUser: otherProfile || { id: otherId, full_name: 'Unknown Member', email: '' }
         };
@@ -400,6 +424,72 @@ export const chatService = {
           if (onUpdateMessage) {
             onUpdateMessage(payload.new as Message);
           }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
+
+  // Ephemeral real-time typing indicator via Supabase Broadcast (zero DB writes)
+  createTypingChannel(
+    conversationId: string,
+    currentUserId: string,
+    onOtherUserTyping: (isTyping: boolean) => void
+  ) {
+    if (!isSupabaseConfigured || !conversationId || !currentUserId) {
+      return {
+        sendTyping: (_isTyping: boolean) => {},
+        unsubscribe: () => {},
+      };
+    }
+
+    const channel = supabase
+      .channel(`typing:${conversationId}`, {
+        config: { broadcast: { self: false } },
+      })
+      .on('broadcast', { event: 'typing' }, (payload) => {
+        const data = payload?.payload as { userId?: string; isTyping?: boolean } | undefined;
+        if (data?.userId && data.userId !== currentUserId) {
+          onOtherUserTyping(Boolean(data.isTyping));
+        }
+      })
+      .subscribe();
+
+    return {
+      sendTyping: (isTyping: boolean) => {
+        channel
+          .send({
+            type: 'broadcast',
+            event: 'typing',
+            payload: { userId: currentUserId, isTyping },
+          })
+          .catch(() => {});
+      },
+      unsubscribe: () => {
+        supabase.removeChannel(channel);
+      },
+    };
+  },
+
+  // Subscribe to any incoming message addressed to the current user (keeps sidebar previews live)
+  subscribeToIncomingMessages(userId: string, onIncoming: (message: Message) => void) {
+    if (!isSupabaseConfigured || !userId) return () => {};
+
+    const channel = supabase
+      .channel(`inbox:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `receiver_id=eq.${userId}`,
+        },
+        (payload) => {
+          onIncoming(payload.new as Message);
         }
       )
       .subscribe();
